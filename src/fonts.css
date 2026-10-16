@@ -1,0 +1,29 @@
+/*
+ * The portfolio's faces, latin subset only, self-hosted so the CSP keeps
+ * font-src 'self'. Paths are relative so Vite fingerprints them under the
+ * /tools/img-to-svg/ base. `optional` rather than `swap`: a tool UI that
+ * reflows mid-drag is worse than one that keeps the fallback for a visit.
+ */
+@font-face {
+  font-family: 'Archivo Variable';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: optional;
+  src: url('./assets/fonts/archivo-latin-wght-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono Variable';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: optional;
+  src: url('./assets/fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: normal;
+  font-weight: 400;
+  font-display: optional;
+  src: url('./assets/fonts/instrument-serif-latin-400-normal.woff2') format('woff2');
+}
