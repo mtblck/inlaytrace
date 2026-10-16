@@ -3,3 +3,4 @@ dist
 src/engine/vtracer/
 *.local
 .vercel
+*.tsbuildinfo
