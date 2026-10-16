@@ -1,0 +1,214 @@
+@import "tailwindcss";
+@import "./fonts.css";
+
+/* ---------------------------------------------------------------------------
+   Palette — copied from mb-portfolio/src/index.css so the tool reads as part of
+   mattblack.space when served under it. Warm paper and ink, one vermillion
+   accent used only for signal (the active control, the split handle, path
+   outlines), never as a fill behind text. `ink-faint` clears 4.5:1 on both
+   paper tones; it was measured there, so don't lighten it by eye.
+   --------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+  --c-paper: oklch(0.986 0.005 85);
+  --c-paper-sunk: oklch(0.962 0.007 82);
+  --c-ink: oklch(0.215 0.014 55);
+  --c-ink-muted: oklch(0.445 0.013 55);
+  --c-ink-faint: oklch(0.54 0.012 60);
+  --c-rule: oklch(0.892 0.009 72);
+  --c-rule-soft: oklch(0.935 0.007 76);
+  --c-accent: oklch(0.552 0.171 38);
+  --c-accent-ink: oklch(0.986 0.005 85);
+  --c-accent-dim: oklch(0.552 0.171 38 / 0.14);
+  --c-selection: oklch(0.552 0.171 38 / 0.18);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --c-paper: oklch(0.172 0.008 65);
+  --c-paper-sunk: oklch(0.212 0.009 65);
+  --c-ink: oklch(0.932 0.008 82);
+  --c-ink-muted: oklch(0.775 0.011 75);
+  --c-ink-faint: oklch(0.62 0.011 70);
+  --c-rule: oklch(0.305 0.011 70);
+  --c-rule-soft: oklch(0.248 0.01 68);
+  --c-accent: oklch(0.702 0.153 42);
+  --c-accent-ink: oklch(0.172 0.008 65);
+  --c-accent-dim: oklch(0.702 0.153 42 / 0.16);
+  --c-selection: oklch(0.702 0.153 42 / 0.22);
+}
+
+@theme inline {
+  --color-paper: var(--c-paper);
+  --color-paper-sunk: var(--c-paper-sunk);
+  --color-ink: var(--c-ink);
+  --color-ink-muted: var(--c-ink-muted);
+  --color-ink-faint: var(--c-ink-faint);
+  --color-rule: var(--c-rule);
+  --color-rule-soft: var(--c-rule-soft);
+  --color-accent: var(--c-accent);
+  --color-accent-ink: var(--c-accent-ink);
+  --color-accent-dim: var(--c-accent-dim);
+
+  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-sans: 'Archivo Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--c-paper);
+    color: var(--c-ink);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    font-synthesis-weight: none;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: var(--c-selection);
+  }
+  :focus-visible {
+    outline: 2px solid var(--c-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+  button:not(:disabled),
+  label[for],
+  [role='slider'] {
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  /* The working surface: a cutting-mat dot grid, so transparent areas of the
+     image and the edge of the sheet are both legible. */
+  .mat {
+    background-color: var(--c-paper-sunk);
+    background-image: radial-gradient(var(--c-rule) 1px, transparent 1.2px);
+    background-size: 16px 16px;
+  }
+
+  /* Transparent pixels in the source image show as a fine check, the
+     convention every image editor uses, rather than as the mat. */
+  .checker {
+    background-color: #fff;
+    background-image: conic-gradient(#e9e6e0 25%, #fff 0 50%, #e9e6e0 0 75%, #fff 0);
+    background-size: 12px 12px;
+  }
+
+  .vector > svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Outline view: every path as a hairline, the way a cutter or plotter will
+     see it. non-scaling-stroke keeps it one pixel at any zoom. */
+  .vector.outlines path {
+    fill: none !important;
+    stroke: var(--c-accent);
+    stroke-width: 1px;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .field-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--c-ink);
+  }
+  .field-hint {
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--c-ink-muted);
+  }
+  .num {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--c-ink-muted);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.25rem;
+    padding: 0 0.875rem;
+    border: 1px solid var(--c-rule);
+    border-radius: 6px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--c-ink);
+    background: var(--c-paper);
+    transition: border-color 120ms, background-color 120ms;
+  }
+  .btn:hover:not(:disabled) {
+    border-color: var(--c-ink-faint);
+  }
+  .btn:disabled {
+    opacity: 0.45;
+  }
+  .btn-primary {
+    background: var(--c-accent);
+    border-color: var(--c-accent);
+    color: var(--c-accent-ink);
+  }
+  .btn-primary:hover:not(:disabled) {
+    border-color: var(--c-accent);
+    filter: brightness(1.06);
+  }
+
+  /* Range inputs drawn to match the rules and accent rather than the
+     platform's blue. */
+  .range {
+    appearance: none;
+    width: 100%;
+    height: 1.25rem;
+    background: transparent;
+  }
+  .range::-webkit-slider-runnable-track {
+    height: 2px;
+    background: var(--c-rule);
+  }
+  .range::-moz-range-track {
+    height: 2px;
+    background: var(--c-rule);
+  }
+  .range::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -6px;
+    border-radius: 50%;
+    background: var(--c-paper);
+    border: 2px solid var(--c-ink);
+  }
+  .range::-moz-range-thumb {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--c-paper);
+    border: 2px solid var(--c-ink);
+  }
+  .range:focus-visible {
+    outline-offset: 4px;
+  }
+  .range:active::-webkit-slider-thumb {
+    border-color: var(--c-accent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}

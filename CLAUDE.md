@@ -1,22 +1,27 @@
 # img-to-svg
 
-Browser-based raster → SVG converter. Portfolio piece and personal tool, served
-at https://mattblack.space/tools/img-to-svg/. Follow the `portfolio-tool` skill
-for stack, hosting and portfolio-listing conventions.
+Browser-based raster → SVG converter at https://mattblack.space/tools/img-to-svg/.
+Portfolio piece and personal tool; follow the `portfolio-tool` skill for stack,
+hosting and portfolio conventions. README has the design notes and measurements.
+
+## Commands
+
+`npm test` · `npm run build` · `npm run preview` then `npm run verify [url]`
+(real-browser E2E; `CHROME_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome`
+in Claude's cloud sandbox, where the Playwright CDN is blocked).
 
 ## Load-bearing decisions
 
-- **Client-only by default.** Tracing and AI preprocessing run in the browser
-  (Web Worker + WASM/WebGPU). Images never leave the device unless the user picks
-  an explicitly labelled server mode.
-- **Engine: VTracer** (MIT/Apache). Do **not** bundle Potrace
-  (GPL) or anything `@imgly/*` (AGPL) into the client. AI weights must be
-  MIT/BSD/Apache — RMBG-1.4/2.0 are non-commercial.
-- **Paths:** Vite `base: '/tools/img-to-svg/'`, `build.outDir:
-  'dist/tools/img-to-svg'`, so the build works identically on its own Vercel
-  deployment and proxied through mb-portfolio.
-- **No Supabase.** A server step (paid "HD" API proxy) is a Vercel Function in
-  this project, with per-IP and global spend caps. Never put API keys in client code.
-- Vercel Functions cap bodies at 4.5 MB: downscale before sending.
-
-Background and the evidence for all of the above: `docs/research.md`.
+- **Client-only.** Tracing runs in a Web Worker (`src/engine/`). Images never leave the device.
+- **VTracer 1.0 via `scripts/vendor-vtracer.mjs`**, which rewrites the official Node
+  package's glue to browser ESM. Output in `src/engine/vtracer/` is generated and
+  gitignored. Bumping the package means re-checking that script's substitutions.
+- **Logo/Illustration palettes come from histogram peaks** (`src/lib/palette.ts`),
+  not VTracer's quantizer, which drifts flat colours. Poster keeps the quantizer.
+  Re-score any preset change against clean art before shipping; see README table.
+- **No GPL/AGPL in the bundle** (no Potrace, no `@imgly/*`); AI weights must be
+  MIT/BSD/Apache. Repo is MIT.
+- **Paths:** Vite `base` and `outDir` are both `/tools/img-to-svg/`, so the build
+  serves identically on its own Vercel URL and through mb-portfolio's rewrite.
+- **CSP** needs `'wasm-unsafe-eval'` + `worker-src 'self'`; `hosting:check` guards it.
+- No Supabase. A future paid "HD" mode is a Vercel Function with spend caps.
