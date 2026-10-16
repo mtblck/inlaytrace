@@ -25,3 +25,5 @@ in Claude's cloud sandbox, where the Playwright CDN is blocked).
   serves identically on its own Vercel URL and through mb-portfolio's rewrite.
 - **CSP** needs `'wasm-unsafe-eval'` + `worker-src 'self'`; `hosting:check` guards it.
 - No Supabase. A future paid "HD" mode is a Vercel Function with spend caps.
+- **Commit as `mtblck <105079242+mtblck@users.noreply.github.com>`.** Vercel blocks
+  deploys whose author email isn't linked to Matt's account (seen on mb-portfolio).
