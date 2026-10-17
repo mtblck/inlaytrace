@@ -12,8 +12,11 @@ MIT. This plan turns the project into something worth sharing:
 - the **app** (today's img-to-svg) as the hands-on demo and a real tool,
 - an **npm package** with install and usage docs,
 
-all on its own site rather than as a page under the portfolio. Decisions still
-open are marked **Decide**.
+all on its own site rather than as a page under the portfolio.
+
+**Decided (2026-10-17):** the brand is **Inlay**, and one name is used
+everywhere: **`inlaytrace`** for the npm package, the repo (`mtblck/inlaytrace`,
+renamed from img-to-svg and made public) and the domain (**inlaytrace.com**).
 
 ## What comparable projects do
 
@@ -53,8 +56,7 @@ better.)
 "Inlay: image to SVG, in your browser". The tracer has the brand; the app keeps
 the description.
 
-**Decide:** `inlaytrace` or `inlay-tracer`; own domain or `inlay.mattblack.space`
-(free, and keeps the portfolio link, but harder to share on its own).
+**Decided:** `inlaytrace`, on its own domain.
 
 ## Site structure
 
@@ -175,14 +177,14 @@ feature request), and a PR template.
 
 ## Order of work
 
-| Phase | Work | Needs Matt |
-| --- | --- | --- |
-| 0 | Decide names, domain, repo approach | Yes |
-| 1 | Restructure into `apps/` + `packages/`; rebrand the app; old URL keeps working | — |
-| 2 | Site: landing page, docs in Starlight, getting started, API reference | Review the wording |
-| 3 | Go public: history scan, issue review, community files, rename, flip public | Flip the switch |
-| 4 | Publish the package (#55): build, Changesets, trusted publishing, maybe a CLI | npm account and scope |
-| 5 | Domain, redirects, portfolio case study, Boards; announce | Buy the domain |
+| Phase | Work | Needs Matt | Ticket |
+| --- | --- | --- | --- |
+| 0 | Decide names, domain, repo approach | Done | — |
+| 1 | Restructure into `apps/` + `packages/`; rebrand the app; old URL keeps working | — | [#58](https://github.com/mtblck/img-to-svg/issues/58) |
+| 2 | Site: landing page, docs in Starlight, getting started, API reference | Review the wording | [#59](https://github.com/mtblck/img-to-svg/issues/59) |
+| 3 | Go public: history scan, issue review, community files, rename, flip public | Flip the switch | [#60](https://github.com/mtblck/img-to-svg/issues/60) |
+| 4 | Publish the package: build, Changesets, trusted publishing, maybe a CLI | npm account | [#55](https://github.com/mtblck/img-to-svg/issues/55) |
+| 5 | Domain, redirects, portfolio case study, Boards; announce | Buy the domain | [#61](https://github.com/mtblck/img-to-svg/issues/61) |
 
 ## Sources
 
