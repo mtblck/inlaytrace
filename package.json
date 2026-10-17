@@ -8,15 +8,16 @@
     "vendor": "node scripts/vendor-vtracer.mjs",
     "fonts": "node scripts/build-fonts.mjs",
     "dev": "npm run vendor && vite",
-    "build": "npm run vendor && npm run hosting:check && tsc -b && vite build",
+    "build": "npm run vendor && npm run hosting:check && tsc -b && tsc -p packages/inlay && vite build",
     "preview": "vite preview",
     "test": "npm run vendor && vitest run",
-    "lint": "tsc -b --noEmit",
+    "lint": "tsc -b --noEmit && tsc -p packages/inlay",
     "hosting:check": "node scripts/check-hosting.mjs",
     "verify": "node scripts/verify.mjs",
     "score": "node scripts/score.mjs"
   },
   "dependencies": {
+    "@mtblck/inlay": "0.1.0",
     "fflate": "0.8.3",
     "paper": "0.12.18",
     "react": "19.3.1",
@@ -39,5 +40,8 @@
   },
   "engines": {
     "node": ">=20"
-  }
+  },
+  "workspaces": [
+    "packages/*"
+  ]
 }

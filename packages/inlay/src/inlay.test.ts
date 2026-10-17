@@ -4,8 +4,8 @@
  * as single lines with sharp corners, and round things stay round.
  */
 import { describe, expect, it } from 'vitest'
-import { fitChain, pointAt, type Cubic } from '../lib/fit'
-import { parsePath, type Pt } from '../lib/pathdata'
+import { fitChain, pointAt, type Cubic } from './fit'
+import { parsePath, type Pt } from './path'
 import { gunzipSync } from 'fflate'
 import { SAMPLE_CAPS } from './fixtures/sample-caps'
 import { mergeLabels, otsu, traceInlay } from './inlay'

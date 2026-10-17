@@ -25,9 +25,9 @@
  * separate shapes, and each region is one <path> (its outline plus its holes,
  * wound oppositely so the default nonzero fill rule cuts the holes).
  */
-import { fitChain, isFlat, type Cubic, type FitOptions } from '../lib/fit'
-import { oklab, type Rgb } from '../lib/palette'
-import { serializePath, type PathNode, type Pt, type Subpath } from '../lib/pathdata'
+import { fitChain, isFlat, type Cubic, type FitOptions } from './fit'
+import { oklab, type Rgb } from './palette'
+import { serializePath, type PathNode, type Pt, type Subpath } from './path'
 
 export type InlayOptions = FitOptions & {
   /** Regions smaller than speckle × speckle pixels are merged into their surroundings. */
@@ -55,7 +55,24 @@ export type InlayOptions = FitOptions & {
 
 const VOID = -1 // outside the image, transparent pixels, and line art's paper
 
-export function traceInlay(rgba: ArrayLike<number>, w: number, h: number, o: InlayOptions): string {
+/** One filled shape: path data (M/L/C/Z, absolute, nonzero fill) and its colour. */
+export type InlayPath = { d: string; fill: string }
+/** A trace: the drawing's size in pixels and its shapes, largest first (paint order). */
+export type InlayResult = { width: number; height: number; paths: InlayPath[] }
+
+/** The trace as an SVG document. */
+export function toSvg(r: InlayResult): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${r.width}" height="${r.height}" viewBox="0 0 ${r.width} ${r.height}">\n${r.paths.map((p) => `<path d="${p.d}" fill="${p.fill}"/>`).join('\n')}\n</svg>\n`
+}
+
+/** Trace to an SVG string; `trace` gives the shapes as data. */
+export const traceInlay = (rgba: ArrayLike<number>, w: number, h: number, o: InlayOptions): string => toSvg(trace(rgba, w, h, o))
+
+/**
+ * Trace RGBA pixels (`w` × `h`, 4 bytes a pixel, as from canvas getImageData)
+ * into filled shapes that share their edges exactly.
+ */
+export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOptions): InlayResult {
   const { labels, colors, drawn } = o.mode === 'palette' ? labelPalette(rgba, w, h, o.palette) : labelBinary(rgba, w, h, o.threshold)
   if (o.mode === 'palette' && o.merge) mergeLabels(labels, colors, o.merge)
   // A lone pixel in pixel art is deliberate, not a stray.
@@ -74,14 +91,13 @@ export function traceInlay(rgba: ArrayLike<number>, w: number, h: number, o: Inl
   }
 
   const order = [...byComp.keys()].sort((a, b) => compArea[b] - compArea[a])
-  const paths: string[] = []
+  const paths: InlayPath[] = []
   for (const id of order) {
     const subs = assemble(byComp.get(id)!)
     if (!subs.length) continue
-    const d = serializePath(subs)
-    paths.push(`<path d="${d}" fill="${colors[compLabel[id]]}"/>`)
+    paths.push({ d: serializePath(subs), fill: colors[compLabel[id]] })
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">\n${paths.join('\n')}\n</svg>\n`
+  return { width: w, height: h, paths }
 }
 
 /**
