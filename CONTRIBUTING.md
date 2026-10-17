@@ -1,0 +1,72 @@
+# Contributing
+
+Thanks for looking. Inlay is a side project with one maintainer, so replies can
+take a few days. Bug reports with an image that shows the problem are the most
+useful thing you can send.
+
+## Reporting a bug
+
+Use the bug template. The tracer's output depends on the image, the preset and
+the settings, so a report needs all three. If you can't share the image
+publicly, a crop or a similar image that shows the same problem works; an
+image attached to an issue is public.
+
+## Setting up
+
+Node 22 and npm. One install covers everything (npm workspaces):
+
+```bash
+npm install
+npm run dev          # the app: http://localhost:5173/tools/img-to-svg/
+npm run site:dev     # the landing page and docs: http://localhost:4321/
+npm test             # the app's and the package's tests, plus every preset through the real tracer
+npm run build        # vendors VTracer, checks hosting config, type-checks, builds the site and the app
+npm run preview      # serves the build as Vercel will: routes, redirects, security headers
+npm run verify       # end-to-end in a real browser (needs `preview` running)
+npm run score        # trace the sample, score each preset against the clean art
+npm run site:assets  # re-measure the landing page's evidence
+```
+
+Run every command from the repo root.
+
+`verify` takes an optional URL, so the same checks run against a deployment:
+`npm run verify -- https://mattblack.space/tools/img-to-svg/`. Set
+`CHROME_PATH` to use an installed Chromium, `SHOTS=dir` to save screenshots,
+and `FIXTURE=path` to also trace and edit an image of your own. It covers the
+editor (overlays, node drag, marquees, move, scale, nudges, undo, mirror
+symmetry measured on the exported SVG, the shortcuts panel) and then the site
+(its security policy, the landing page's animation and links, docs search, dark
+mode, phone width). It fails on any console error or CSP violation.
+
+## Changing the tracer
+
+Anything in `packages/inlay` that changes output, or a preset in
+`apps/app/src/engine/presets.ts`:
+
+1. `npm run score` before and after. Say what changed in the PR (wrong pixels,
+   nodes, size). A change that looks better on one image can be worse on the
+   sample; the score is the referee.
+2. Check more than one JPEG quality. Encoders differ between browsers, and
+   flaws have hidden at one quality and shown at another (see
+   [measuring quality](docs/how-it-works/measuring-quality.md)).
+3. `npm run site:assets` and commit `apps/site/src/data/sample.json`, so the
+   landing page's numbers stay true.
+
+Keep `packages/inlay` free of DOM and app imports; it runs in Node and workers.
+
+## Docs
+
+The docs are Markdown in `docs/`. The site copies them in at build time
+(`scripts/sync-docs.mjs`), so edit `docs/`, never `apps/site/src/content/`.
+Record measured numbers, not adjectives.
+
+## Pull requests
+
+- Open it as a draft while you're working; mark it ready when it's done.
+- CI runs the tests, the build and the browser checks.
+- Commit messages: an imperative subject, then a body saying why and how you
+  checked it.
+- Licences: MIT, BSD or Apache only. No GPL or AGPL code in the bundle.
+
+By contributing you agree that your work is released under the
+[MIT licence](LICENSE), and to follow the [code of conduct](CODE_OF_CONDUCT.md).

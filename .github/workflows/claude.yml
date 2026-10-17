@@ -1,7 +1,9 @@
 name: Claude
 
 # On-demand: mention @claude in a PR or issue comment (e.g. "@claude explain this
-# again", "@claude fix the failing test"). Only users with write access trigger it.
+# again", "@claude fix the failing test"). Only the owner and collaborators trigger it:
+# the repo is public, and the action's own write-access check runs only after a
+# runner has started. The `if` below stops anyone else before that.
 on:
   issue_comment:
     types: [created]
@@ -10,7 +12,9 @@ on:
 
 jobs:
   claude:
-    if: contains(github.event.comment.body, '@claude')
+    if: >-
+      contains(github.event.comment.body, '@claude') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

@@ -30,6 +30,6 @@ fills and paint order are kept.
 The booleans are [paper.js](http://paperjs.org) (MIT), loaded only the first
 time you open the Mirror tool: 72 KB gzipped, against an 89 KB app. The unit
 tests run the same build, and the browser tests render the exported SVG and
-compare each half pixel by pixel: 0.0% of pixels differ on Matt's robot logo.
+compare each half pixel by pixel: 0.0% of pixels differ on a symmetrical logo.
 
 Mirroring is a shape edit, so afterwards changing a trace setting asks first.

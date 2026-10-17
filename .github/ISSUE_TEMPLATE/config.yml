@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/mtblck/inlaytrace/security/advisories/new
+    about: Report it privately, not as an issue.
+  - name: Docs
+    url: https://github.com/mtblck/inlaytrace/tree/main/docs
+    about: How it works, every feature, and the package API.

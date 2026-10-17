@@ -3,7 +3,7 @@
 Image → SVG in the browser (`apps/app`, live at https://mattblack.space/tools/img-to-svg/)
 and the tracer behind it, `inlaytrace` (`packages/inlay`). Being prepared to go public
 as `mtblck/inlaytrace` on inlaytrace.com: see `docs/launch-plan.md` and tickets #58–#61, #55.
-Until then follow the `portfolio-tool` skill for hosting. README has the design notes and measurements.
+Until then follow the `portfolio-tool` skill for hosting. `docs/design-notes.md` has the design notes and measurements; README is the public front door.
 One npm workspace: run every command from the repo root.
 
 ## Commands
@@ -35,7 +35,7 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
   gitignored. Bumping the package means re-checking that script's substitutions.
 - **Logo/Illustration palettes come from histogram peaks** (`packages/inlay/src/palette.ts`),
   not VTracer's quantizer, which drifts flat colours. Poster keeps the quantizer.
-  Re-score any preset change against clean art before shipping; see README table.
+  Re-score any preset change against clean art before shipping; see the table in `docs/design-notes.md`.
 - **No GPL/AGPL in the bundle** (no Potrace, no `@imgly/*`); AI weights must be
   MIT/BSD/Apache. Repo is MIT.
 - **Paths:** Vite `base` is `/tools/img-to-svg/` and the build goes to the root's `dist/tools/img-to-svg`,
@@ -48,5 +48,5 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
   until a geometric edit detaches it, then settings changes must confirm. paper.js is
   lazy-loaded for mirror only; keep it out of the main chunk.
 - No Supabase. A future paid "HD" mode is a Vercel Function with spend caps.
-- **Commit as `mtblck <105079242+mtblck@users.noreply.github.com>`.** Vercel blocks
+- **Claude commits for Matt as `mtblck <105079242+mtblck@users.noreply.github.com>`.** Vercel blocks
   deploys whose author email isn't linked to Matt's account (seen on mb-portfolio).

@@ -1,0 +1,40 @@
+name: Bug report
+description: Something traced badly, or the app or package misbehaved.
+labels: [type:bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The trace depends on the image, the preset and the settings, so a report needs all three. Anything attached here is public: if you can't share the image, a crop or a similar image that shows the same problem works.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead. A screenshot of the Difference view helps.
+    validations:
+      required: true
+  - type: textarea
+    id: image
+    attributes:
+      label: The image
+      description: Drag it in here. If it's a tracing problem, this is the most useful thing you can send.
+    validations:
+      required: true
+  - type: dropdown
+    id: preset
+    attributes:
+      label: Preset
+      options: [Logo, Illustration, Line art, Poster, Pixel art, "Not applicable (the package, or not a tracing problem)"]
+    validations:
+      required: true
+  - type: textarea
+    id: settings
+    attributes:
+      label: Settings
+      description: Colours, smoothing, corners, speckle, or the options you passed to `trace()`.
+      placeholder: "Colours 8, smoothing 1.5, corners 45°"
+  - type: input
+    id: where
+    attributes:
+      label: Browser or runtime
+      placeholder: "Firefox 141 on macOS, or Node 22"

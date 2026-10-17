@@ -20,7 +20,12 @@ concurrency:
 
 jobs:
   review:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    # PRs from forks never get the token anyway; this skips them outright, so a
+    # stranger's PR can't spend review runs or put text in front of the reviewer.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.draft == false &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
