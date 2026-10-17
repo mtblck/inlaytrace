@@ -11,6 +11,7 @@ This repo holds both:
 
 | Path | What |
 | --- | --- |
+| `apps/site` | The landing page and the docs site (Astro, Starlight); the docs come from `docs/` |
 | `apps/app` | The app: trace, compare, edit and export (React, Vite) |
 | `packages/inlay` | The tracer, published as `inlaytrace` (pure TypeScript, no DOM) |
 | `docs` | How it works, every feature, roadmap; also shown on the project board |
@@ -53,9 +54,11 @@ The longer write-up lives in [`docs/`](docs/overview.md), and on Matt's Boards:
 npm install        # one install for the app and the package (npm workspaces)
 npm run dev        # the app: http://localhost:5173/tools/img-to-svg/
 npm test           # the app's and the package's tests, plus every preset through the real tracer
-npm run build      # vendors the tracer, checks hosting config, type-checks, builds
-npm run preview    # serves the build with the production security headers
+npm run site:dev   # the landing page and docs: http://localhost:4321/
+npm run build      # vendors the tracer, checks hosting config, type-checks, builds the site and the app
+npm run preview    # serves the build as Vercel will: routes, redirects, security headers
 npm run verify     # end-to-end in a real browser (needs `preview` running)
+npm run site:assets # re-measure the landing page's evidence (after a tracer change)
 npm run score      # trace the sample, score each preset against the clean art
 ```
 
@@ -66,6 +69,9 @@ and `FIXTURE=path` to also trace and edit an image of your own. The editor
 checks (overlays, node drag, smooth handles, node and shape marquees, move,
 scale, typed size, nudges, select all, undo/redo, mirror symmetry measured on
 the exported SVG, the discard prompt, the shortcuts panel) run on the built-in sample and on the fixture.
+It then checks the site at the same origin: the landing page's CSP, the
+settling pieces and reduced motion, its links, a docs page, docs search under
+the CSP, dark mode, and no sideways scroll on a phone.
 
 ## Design notes
 
@@ -212,13 +218,35 @@ downloaded at 31 KB.
 **Paths are the same on both hosts.** The app builds to `dist/tools/img-to-svg` (at the repo root, which Vercel serves)
 with a matching Vite `base`, so assets live at `/tools/img-to-svg/assets/…` on
 this project's own Vercel URL *and* through mattblack.space's rewrite. The
-portfolio proxies the path without translating it.
+portfolio proxies the path without translating it. The site builds to the rest
+of `dist/` (landing page at `/`, docs at `/docs/…`) and goes first, because
+Astro empties its output folder.
 
-**The CSP is tested, not trusted.** The tracer needs `'wasm-unsafe-eval'` and a
-worker allowance. Without them the page loads, accepts a drop, and never traces.
-`npm run hosting:check` fails the build if either goes missing; `vite preview`
-serves the real headers from `vercel.json`; and `verify` fails on any CSP
-violation in the console.
+**One copy of each doc.** `docs/*.md` is the source: Boards reads it, and
+`scripts/sync-docs.mjs` copies it into Starlight at build time (title from the
+first heading, `order` to sidebar order, `.md` links to site URLs). Planning
+notes such as the launch plan are left out.
+
+**The landing page's evidence is measured.** `npm run site:assets` traces the
+app's sample as the app receives it (640 px JPEG) with Inlay and with VTracer as
+the old Logo preset ran it, scores both against the clean art at 4×, and writes
+the shapes and numbers the page draws. The close-up is pinned to the left peak:
+the window where VTracer is most wrong by pixel count is a gentle curve where the
+two look the same, and the page's claim is about corners and straight edges. On
+this sample VTracer's shared edges stay within 0.06 px of each other, so the page
+does not claim it leaves gaps.
+
+**The CSP is tested, not trusted.** There are two, and Vercel applies every
+matching header block, so they're scoped never to overlap. The app's needs
+`'wasm-unsafe-eval'` and a worker allowance: without them the page loads,
+accepts a drop, and never traces. The site's is `script-src 'self'` plus
+`'wasm-unsafe-eval'` for search (Pagefind) and the sha256 of each inline script
+Starlight writes (theme, sidebar). `npm run hosting:check` fails the build if any
+of that goes missing; after the build, `--dist` hashes every inline script in
+the site and fails on one the CSP doesn't list (so a Starlight update fails the
+build, not the docs) or on any inline script in the app. `npm run preview`
+(`scripts/serve.mjs`) serves `dist/` with `vercel.json`'s redirects, rewrites
+and headers, and `verify` fails on any CSP violation in the console.
 
 **Untrusted output stays out of the markup.** The trace is shown inline (the
 overlays and hit targets need real DOM paths), so every `d`, `fill` and `transform` is

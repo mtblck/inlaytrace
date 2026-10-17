@@ -7,8 +7,12 @@ import { fileURLToPath } from 'node:url'
 // `vite preview` serves the production headers from vercel.json, so a CSP that
 // would block the WebAssembly tracer fails locally instead of only on Vercel.
 const vercel = JSON.parse(readFileSync(new URL('../../vercel.json', import.meta.url), 'utf8'))
+// The headers every path gets, then the app's own CSP (the site has another).
+type HeaderBlock = { source: string; headers: { key: string; value: string }[] }
 const productionHeaders: Record<string, string> = Object.fromEntries(
-  vercel.headers[0].headers.map((h: { key: string; value: string }) => [h.key, h.value]),
+  (vercel.headers as HeaderBlock[])
+    .filter((b) => b.source === '/(.*)' || b.source === '/tools/img-to-svg/(.*)')
+    .flatMap((b) => b.headers.map((h) => [h.key, h.value])),
 )
 
 /**

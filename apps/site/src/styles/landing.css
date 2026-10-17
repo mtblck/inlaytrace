@@ -1,0 +1,407 @@
+/*
+ * Inlay's landing page. A cutting mat (deep green, its grid), cool white paper,
+ * ink, and a registration-mark yellow used only for the main action and focus.
+ * One family, Archivo, with real code in JetBrains Mono.
+ */
+:root {
+  --mat: #23443a;
+  --mat-deep: #1b352d;
+  --mat-line: #33584b;
+  --mat-line-strong: #4c7565;
+  --paper: #f5f6f2;
+  --paper-sunk: #e8ece9;
+  --ink: #16201c;
+  --ink-soft: #4a5a53;
+  --rule: #d2d9d4;
+  --mark: #f2c230;
+  --link: #23614c;
+  /* Yellow on paper is 1.5:1, too faint for a focus ring; ink in light, yellow in dark and on the mat. */
+  --focus: var(--ink);
+  --page: var(--paper);
+  --text: var(--ink);
+  --text-soft: var(--ink-soft);
+  --line: var(--rule);
+  --sunk: var(--paper-sunk);
+  color-scheme: light dark;
+}
+/* Dark by preference, unless the docs' theme menu chose light; or dark when it chose dark. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --page: #131e1a;
+    --text: #eef2ee;
+    --text-soft: #b3c0b8;
+    --line: #2c3d35;
+    --sunk: #1b2a24;
+    --link: #f2c230;
+    --focus: var(--mark);
+  }
+}
+:root[data-theme='dark'] {
+  --page: #131e1a;
+  --text: #eef2ee;
+  --text-soft: #b3c0b8;
+  --line: #2c3d35;
+  --sunk: #1b2a24;
+  --link: #f2c230;
+  --focus: var(--mark);
+  color-scheme: dark;
+}
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+html {
+  background: var(--page);
+  color: var(--text);
+  font-family: 'Archivo Variable', system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+body {
+  margin: 0;
+}
+a {
+  color: var(--link);
+  text-underline-offset: 0.18em;
+}
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+code,
+pre {
+  font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+  font-size: 0.86rem;
+}
+
+/* ---- Frame ---------------------------------------------------------------- */
+.top,
+main,
+.foot {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-inline: 24px;
+}
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: 20px;
+}
+.wordmark {
+  color: var(--text);
+  font-weight: 800;
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+.top nav {
+  display: flex;
+  gap: 24px;
+}
+.top nav a {
+  color: var(--text-soft);
+  text-decoration: none;
+}
+.top nav a:hover {
+  color: var(--text);
+}
+
+/* ---- Hero ---------------------------------------------------------------- */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 56px;
+  align-items: center;
+  padding-block: 40px 72px;
+}
+h1 {
+  margin: 0;
+  font-size: clamp(2.6rem, 5.4vw, 4.6rem);
+  font-weight: 820;
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+  max-width: 11ch;
+}
+.lede {
+  margin: 24px 0 0;
+  font-size: 1.12rem;
+  color: var(--text-soft);
+  max-width: 34em;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 32px;
+}
+.button {
+  display: inline-block;
+  padding: 12px 20px;
+  border-radius: 6px;
+  background: var(--mark);
+  color: var(--ink);
+  font-weight: 650;
+  text-decoration: none;
+}
+.button:hover {
+  background: #f7d35a;
+}
+.button.secondary {
+  background: transparent;
+  color: var(--text);
+  box-shadow: inset 0 0 0 1.5px var(--text);
+}
+.button.secondary:hover {
+  background: var(--sunk);
+}
+.install {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: var(--sunk);
+}
+.install .soon {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+.copy {
+  border: 0;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.fine {
+  margin-top: 16px;
+  color: var(--text-soft);
+  font-size: 0.88rem;
+}
+
+/* The cutting mat: a 1 cm-ish grid with a heavier line every fifth. */
+.mat {
+  margin: 0;
+  padding: 28px;
+  border-radius: 10px;
+  background-color: var(--mat);
+  background-image:
+    linear-gradient(var(--mat-line-strong) 1px, transparent 1px),
+    linear-gradient(90deg, var(--mat-line-strong) 1px, transparent 1px),
+    linear-gradient(var(--mat-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--mat-line) 1px, transparent 1px);
+  background-size:
+    120px 120px,
+    120px 120px,
+    24px 24px,
+    24px 24px;
+  background-position: -1px -1px;
+}
+.board {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.piece {
+  transform: translate(0, 0);
+  transition: transform 1.1s cubic-bezier(0.2, 0.7, 0.15, 1);
+}
+.board.apart .piece {
+  transform: translate(var(--dx), var(--dy));
+  transition: none;
+}
+.mat figcaption {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: baseline;
+  margin-top: 18px;
+  color: #cfdcd4;
+  font-size: 0.85rem;
+}
+.mat :focus-visible {
+  outline-color: var(--mark);
+}
+.replay {
+  flex-shrink: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--mark);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+@media (prefers-reduced-motion: reduce) {
+  .piece,
+  .board.apart .piece {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ---- Sections ------------------------------------------------------------- */
+section + section {
+  border-top: 1px solid var(--line);
+}
+.evidence,
+.ways {
+  padding-block: 64px;
+}
+h2 {
+  margin: 0;
+  font-size: clamp(1.7rem, 3vw, 2.3rem);
+  font-weight: 760;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.section-lede {
+  margin: 14px 0 0;
+  color: var(--text-soft);
+  max-width: 40em;
+}
+.trio {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 36px;
+}
+.trio figure {
+  margin: 0;
+}
+.trio svg {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.trio .node {
+  fill: var(--mark);
+  stroke: var(--ink);
+  stroke-width: 0.12;
+}
+.trio figcaption {
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
+.trio figcaption span {
+  color: var(--text-soft);
+}
+
+.numbers {
+  margin-top: 40px;
+  border-collapse: collapse;
+  min-width: min(100%, 520px);
+  font-variant-numeric: tabular-nums;
+}
+.numbers caption {
+  text-align: left;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  padding-bottom: 10px;
+}
+.numbers th,
+.numbers td {
+  padding: 10px 16px 10px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.numbers thead th {
+  font-weight: 650;
+}
+.numbers tbody th {
+  font-weight: 450;
+  color: var(--text-soft);
+}
+.numbers td:nth-child(2) {
+  font-weight: 700;
+}
+
+.two {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 48px;
+  margin-top: 32px;
+}
+h3 {
+  margin: 0 0 10px;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+.two p {
+  max-width: 34em;
+}
+pre {
+  margin: 0 0 14px;
+  padding: 18px 20px;
+  border-radius: 8px;
+  background: var(--mat-deep);
+  color: #e6eee9;
+  overflow-x: auto;
+  line-height: 1.6;
+}
+
+.foot {
+  /* Its rule spans the content, like the sections' rules, not the padding. */
+  width: calc(100% - 48px);
+  max-width: 1072px;
+  padding-inline: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  padding-block: 32px 48px;
+  border-top: 1px solid var(--line);
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+.foot a + a {
+  margin-left: 18px;
+}
+
+/* ---- Small screens --------------------------------------------------------- */
+@media (max-width: 860px) {
+  .hero,
+  .two {
+    /* minmax(0, …): a plain 1fr grows to fit the code block and the page scrolls sideways. */
+    grid-template-columns: minmax(0, 1fr);
+    gap: 36px;
+  }
+  .mat {
+    padding: 16px;
+  }
+  .trio {
+    grid-template-columns: 1fr 1fr;
+  }
+  .trio figure:first-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 480px) {
+  html {
+    font-size: 16px;
+  }
+  .top,
+  main {
+    padding-inline: 16px;
+  }
+  .foot {
+    width: calc(100% - 32px);
+  }
+  .mat figcaption {
+    flex-direction: column;
+  }
+}

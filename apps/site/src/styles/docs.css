@@ -1,0 +1,34 @@
+/*
+ * Starlight in Inlay's colours: cutting-mat green, cool white, ink, and a
+ * registration-mark yellow. Links are green on light and yellow on dark, where
+ * each has the contrast for text.
+ */
+:root {
+  --sl-font: 'Archivo Variable', system-ui, sans-serif;
+  --sl-font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+  --sl-color-accent-low: #1b352d;
+  --sl-color-accent: #f2c230;
+  --sl-color-accent-high: #f7dc7d;
+  --sl-color-white: #eef2ee;
+  --sl-color-gray-1: #d7dfd9;
+  --sl-color-gray-2: #b3c0b8;
+  --sl-color-gray-3: #7f9187;
+  --sl-color-gray-4: #4f6158;
+  --sl-color-gray-5: #2c3d35;
+  --sl-color-gray-6: #1b2a24;
+  --sl-color-black: #131e1a;
+}
+:root[data-theme='light'] {
+  --sl-color-accent-low: #d8e6dd;
+  --sl-color-accent: #23614c;
+  --sl-color-accent-high: #163d30;
+  --sl-color-white: #16201c;
+  --sl-color-gray-1: #24302b;
+  --sl-color-gray-2: #3a4842;
+  --sl-color-gray-3: #5b6a63;
+  --sl-color-gray-4: #8d9a93;
+  --sl-color-gray-5: #c9d1cc;
+  --sl-color-gray-6: #e8ece9;
+  --sl-color-gray-7: #f1f4f1;
+  --sl-color-black: #f8f9f6;
+}

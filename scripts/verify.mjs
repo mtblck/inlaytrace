@@ -1,9 +1,13 @@
 /**
  * End-to-end check in a real browser, against a running build.
  *
- *   npm run build && npx vite preview --port 4173 &
+ *   npm run build && npm run preview &
  *   npm run verify                                   # local preview
  *   npm run verify -- https://mattblack.space/tools/img-to-svg/
+ *
+ * Checks the app at the URL, then the site (landing page and docs) at that
+ * URL's origin. Under mattblack.space the origin is the portfolio, so the site
+ * checks are skipped there; SITE=<origin> runs them against another host.
  *
  * Env: CHROME_PATH (use an installed Chromium), SHOTS (directory for
  * screenshots), FIXTURE (an image file to trace in addition to the sample).
@@ -545,6 +549,7 @@ const response = await page.goto(url)
 check(response?.ok(), `page loads (${response?.status()})`)
 const csp = response?.headers()['content-security-policy'] ?? ''
 check(csp.includes("'wasm-unsafe-eval'"), 'CSP allows WebAssembly')
+check(/worker-src[^;]*'self'/.test(csp) && !csp.includes("'sha256-"), "the app gets its own CSP (workers allowed), not the site's")
 await shot(page, '01-empty')
 
 await page.getByRole('button', { name: 'Try a sample' }).click()
@@ -872,6 +877,79 @@ check(overflow <= 0, `no horizontal scroll on a phone (${overflow}px)`)
 await shot(mobile, '09-mobile')
 await mobile.getByRole('tab', { name: /Edit/ }).click()
 await shot(mobile, '10-mobile-edit')
+
+// ---- The site: landing page and docs ----------------------------------------
+const siteOrigin = process.env.SITE ?? (new URL(url).hostname.endsWith('mattblack.space') ? null : new URL('/', url).href)
+if (siteOrigin) {
+  console.log(`\n  site ${siteOrigin}\n`)
+  const landing = await newPage({ width: 1440, height: 900 })
+  // Record the board's class changes from the start, to see the pieces settle.
+  await landing.addInitScript(() => {
+    window.__apart = []
+    new MutationObserver(() => {
+      const b = document.querySelector('.board')
+      if (b) window.__apart.push(b.classList.contains('apart'))
+    }).observe(document, { subtree: true, attributes: true, attributeFilter: ['class'] })
+  })
+  const res = await landing.goto(siteOrigin)
+  check(res?.ok(), `landing page loads (${res?.status()})`)
+  const siteCsp = res?.headers()['content-security-policy'] ?? ''
+  check(siteCsp.includes("'sha256-") && !siteCsp.includes('worker-src'), "the landing page gets the site's CSP, not the app's")
+  const pieces = await landing.locator('.board .piece').count()
+  check(pieces >= 5, `the hero board shows the traced badge (${pieces} pieces)`)
+  const moving = await landing.locator('.board .piece').evaluateAll((ps) => ps.filter((p) => p.style.getPropertyValue('--dx') !== '0px' || p.style.getPropertyValue('--dy') !== '0px').length)
+  check(moving >= pieces / 2, `most pieces have somewhere to settle from (${moving} of ${pieces})`)
+  await landing.waitForTimeout(2000)
+  const settled = await landing.evaluate(() => ({ seen: window.__apart.includes(true), now: document.querySelector('.board').classList.contains('apart') }))
+  check(settled.seen && !settled.now, 'the pieces start lifted and settle on load')
+  await landing.evaluate(() => (window.__apart = []))
+  await landing.getByRole('button', { name: 'Lift the pieces' }).click()
+  await landing.waitForTimeout(300)
+  check(await landing.evaluate(() => window.__apart.includes(true) && !document.querySelector('.board').classList.contains('apart')), '"Lift the pieces" lifts them and they settle again')
+  const trace = await landing.getByRole('link', { name: 'Trace an image' }).getAttribute('href')
+  check((await landing.request.get(new URL(trace, siteOrigin).href)).ok(), `"Trace an image" leads to the app (${trace})`)
+  // Every same-site link on the page resolves.
+  const hrefs = [...new Set(await landing.locator('a[href^="/"]').evaluateAll((as) => as.map((a) => a.getAttribute('href'))))]
+  const broken = []
+  for (const h of hrefs) if (!(await landing.request.get(new URL(h, siteOrigin).href)).ok()) broken.push(h)
+  check(!broken.length, `the landing page's ${hrefs.length} links resolve${broken.length ? ` (broken: ${broken.join(', ')})` : ''}`)
+  await shot(landing, '11-landing')
+
+  const still = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })
+  const quiet = await still.newPage()
+  await quiet.goto(siteOrigin)
+  check(await quiet.getByRole('button', { name: 'Lift the pieces' }).isHidden(), 'with reduced motion the pieces sit still and the replay button is hidden')
+  await still.close()
+
+  const guessed = await landing.request.get(new URL('docs/', siteOrigin).href)
+  check(guessed.ok() && guessed.url().endsWith('/docs/overview/'), `/docs/ leads to the docs (${guessed.url()})`)
+  const docs = await newPage({ width: 1440, height: 900 })
+  const docsRes = await docs.goto(new URL('docs/package/getting-started/', siteOrigin).href)
+  check(docsRes?.ok() && (await docs.locator('h1').first().innerText()) === 'Getting started', 'a docs page loads')
+  // Search is Pagefind: WebAssembly plus a hashed inline script, both of which the CSP must allow.
+  await docs.getByRole('button', { name: 'Search' }).click()
+  await docs.locator('dialog[open] input').fill('palette')
+  const found = await docs.locator('dialog[open] .pagefind-ui__result-link').first().waitFor({ timeout: 15_000 }).then(() => true, () => false)
+  check(found, 'docs search finds results under the CSP')
+  await shot(docs, '12-docs-search')
+  await docs.keyboard.press('Escape')
+
+  const docsDark = await newPage({ width: 1440, height: 900 }, 'dark')
+  await docsDark.goto(new URL('docs/overview/', siteOrigin).href)
+  check((await docsDark.evaluate(() => document.documentElement.dataset.theme)) === 'dark', 'docs follow a dark preference')
+  const landingDark = await newPage({ width: 1440, height: 900 }, 'dark')
+  await landingDark.goto(siteOrigin)
+  const bg = await landingDark.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)
+  check(bg !== 'rgb(245, 246, 242)', `the landing page follows a dark preference (${bg})`)
+
+  for (const path of ['', 'docs/package/getting-started/']) {
+    const phone = await newPage({ width: 390, height: 844 })
+    await phone.goto(new URL(path, siteOrigin).href)
+    const over = await phone.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+    check(over <= 0, `no horizontal scroll on a phone at /${path} (${over}px)`)
+    if (!path) await shot(phone, '13-landing-mobile')
+  }
+}
 
 await browser.close()
 

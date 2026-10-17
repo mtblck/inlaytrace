@@ -37,7 +37,7 @@ The policy is **tested, not trusted**. Without the two allowances the page
 loads, accepts a drop and never traces. So:
 
 - `npm run hosting:check` fails the build if either goes missing.
-- `vite preview` serves the real headers from `vercel.json`, so local testing
+- `npm run preview` serves the real headers from `vercel.json`, so local testing
   runs under the production policy.
 - `npm run verify` fails on any CSP violation in the console.
 

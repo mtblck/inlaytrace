@@ -8,7 +8,8 @@ One npm workspace: run every command from the repo root.
 
 ## Commands
 
-`npm test` · `npm run build` · `npm run preview` then `npm run verify [url]` · `npm run score`
+`npm test` · `npm run build` · `npm run preview` then `npm run verify [url]` · `npm run score` ·
+`npm run site:dev` · `npm run site:assets` after any tracer change (landing-page numbers)
 (real-browser E2E; `CHROME_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome`
 in Claude's cloud sandbox, where the Playwright CDN is blocked).
 
@@ -19,7 +20,10 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
 
 - **Client-only.** Tracing runs in a Web Worker (`apps/app/src/engine/`). Images never leave the device.
 - **Layout:** `apps/app` (Vite root; its config sets `root`, so scripts run it from the repo root with
-  `-c apps/app/vite.config.ts`), `packages/inlay`, root `vitest.config.ts` running both as projects.
+  `-c apps/app/vite.config.ts`), `apps/site` (Astro + Starlight: landing at `/`, docs at `/docs/`),
+  `packages/inlay`, root `vitest.config.ts` running app and package as projects.
+- **Docs live in `docs/`** (Boards reads them); `scripts/sync-docs.mjs` copies them into the site
+  at build time. Never edit `apps/site/src/content/docs/docs/` (generated, gitignored).
 - **Inlay, our shared-edge tracer, does Logo/Illustration/Line art/Pixel art** (`packages/inlay/src/inlay.ts`,
   fitting in `packages/inlay/src/fit.ts`): each colour boundary traced and fitted once, so shapes tile
   exactly. Run `npm run score` before shipping any tracer, fitter or preset change.
@@ -37,7 +41,9 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
 - **Paths:** Vite `base` is `/tools/img-to-svg/` and the build goes to the root's `dist/tools/img-to-svg`,
   so it serves identically on its own Vercel URL and through mb-portfolio's rewrite. At the
   inlaytrace.com cutover (#61) `BASE` in `apps/app/vite.config.ts` becomes `/app/`.
-- **CSP** needs `'wasm-unsafe-eval'` + `worker-src 'self'`; `hosting:check` guards it.
+- **Two CSPs** in `vercel.json`, scoped not to overlap: the app's needs `'wasm-unsafe-eval'` + `worker-src 'self'`;
+  the site's lists a sha256 per Starlight inline script. `hosting:check` guards both, and the build's
+  `--dist` pass names any new hash to add. `npm run preview` is `scripts/serve.mjs`, which mimics Vercel.
 - **Edits = `{ inks, doc }`** (`apps/app/src/lib/doc.ts`): ink edits keyed by traced hex; `doc` null
   until a geometric edit detaches it, then settings changes must confirm. paper.js is
   lazy-loaded for mirror only; keep it out of the main chunk.
