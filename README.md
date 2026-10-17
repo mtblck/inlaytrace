@@ -21,6 +21,17 @@ React 19 · Vite · Tailwind v4 · a shared-edge tracer for flat art and VTracer
 (Rust → WebAssembly) for posters and pixel art, in a Web Worker ·
 SVGO · paper.js (mirroring only, lazy-loaded) · deployed on Vercel, proxied into mattblack.space.
 
+## Docs
+
+The longer write-up lives in [`docs/`](docs/overview.md), and on Matt's Boards:
+
+- [How it works](docs/how-it-works.md): pipeline, palettes, the shared-edge
+  tracer, curve fitting, VTracer, measuring quality
+- [Features](docs/features.md): every feature and how it works
+- [What we do differently](docs/how-it-differs.md): compared with Vectorizer.ai,
+  Vector Magic, Illustrator, Inkscape and SVGcode
+- [Roadmap](docs/roadmap.md) · [Research](docs/research.md)
+
 ## Commands
 
 ```bash
@@ -77,12 +88,14 @@ a tracer of our own (`src/engine/shapes.ts`):
 3. Walk the cracks between differently labelled pixels. Where three regions
    meet is a junction; each boundary between junctions is one chain, with one
    region either side.
-4. Fit each chain once (`src/lib/fit.ts`): find corners (a turn that stays
-   sharp at half the distance; a curve's doesn't), square off the crisp ones,
-   then a straight line wherever one fits within 1.5× tolerance, otherwise
-   least-squares Béziers (Schneider). The line test sees a plain moving
-   average, which removes JPEG's 16 px colour-block ripple; curves are fitted
-   to a "twiced" average that keeps small dots their size.
+4. Fit each chain once (`src/lib/fit.ts`): find corners (two straight sides,
+   fitted a few pixels out, that meet near the outline; a round end's sides run
+   parallel, so it stays a curve), then a straight line wherever one fits
+   within 1.5× tolerance, otherwise straight stretches as lines and the rest as
+   least-squares Béziers (Schneider) with matching tangents. The line test sees
+   a plain moving average, which removes JPEG's 16 px colour-block ripple;
+   curves see an average whose window shrinks with local curvature, so small
+   dots keep their size.
 5. Build each region from its chains. Neighbours share the same fitted edge
    exactly: no gaps, no overlaps, which is also what a vinyl cutter wants.
 
@@ -97,7 +110,7 @@ wobble and rounded corners count):
 
 Straight edges are single segments and the peaks are single sharp corners.
 
-The second row came from Matt's testing on a different browser, whose JPEG
+The third row came from Matt's testing on a different browser, whose JPEG
 encoder left different noise: a bump at a snow cap's tip and hooked ends on the
 sample's arc. Sweeping JPEG quality reproduced both, and the fixes were about
 telling shapes apart rather than tuning numbers. A corner is now two straight
@@ -107,7 +120,7 @@ two scales so JPEG noise can't fake a tight bend; runs that mix straight and
 curved parts get lines for the straight stretches and curves joined smoothly
 between them; and a curve turns at most about 90°, so a circle is four curves.
 The extra nodes are those round ends and circles. On
-a 2048 px image the new tracer took 1.5 s where VTracer took 17.5 s. Poster and
+a 2048 px image the new tracer took 1.3 s where VTracer took 17.5 s. Poster and
 Pixel art keep VTracer: photos have no flat regions to share edges between, and
 pixel art wants its steps.
 
@@ -186,8 +199,8 @@ validated against what the tracers emit before it is rebuilt into the document.
 Recolours are normalised hex or ignored.
 
 **Edits sit on top of the trace until they can't.** The document is
-`{ inks, doc }`. Colour edits (`inks`) are keyed by the traced colour, so they
-survive re-tracing. `doc` stays `null`, meaning "whatever the tracer produces",
+`{ inks, doc, background }`. Colour edits (`inks`) are keyed by the traced
+colour, so they survive re-tracing, as does the background. `doc` stays `null`, meaning "whatever the tracer produces",
 until the first geometric edit (a node drag, a delete, a mirror) copies the
 trace into an editable document with fresh ids. From then on a trace setting
 would throw the edits away, so changing one asks first; going back to the trace
