@@ -44,7 +44,7 @@ Unit tests (Vitest) pin what the output must be, not just that it runs:
   square ends keeps exactly four corners.
 - A circle is four curves within 0.5 px; an acute peak at a junction is one
   point.
-- On a real JPEG crop of the sample (`src/engine/fixtures/sample-caps.ts`), no
+- On a real JPEG crop of the sample (`packages/inlay/src/fixtures/sample-caps.ts`), no
   two consecutive nodes are closer than 3 px.
 - Every preset runs through the real engine; mirror output is symmetric; path
   data round-trips without drift; undo/redo and colour edits behave.

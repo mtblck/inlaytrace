@@ -5,7 +5,7 @@ order: 2
 # Palettes from histogram peaks
 
 How Logo and Illustration decide which colours the image has
-(`src/lib/palette.ts`).
+(`packages/inlay/src/palette.ts`).
 
 ## The problem with quantizers
 
