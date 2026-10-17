@@ -13,7 +13,7 @@ where it deliberately goes its own way. Competitor details were checked on
 
 | Tool | Where it runs | Cost | Tracing | Editing |
 | --- | --- | --- | --- | --- |
-| **img-to-svg** | Your browser; nothing uploaded | Free | Shared-edge tracer (flat art), VTracer (photos, pixel art) | Colours, background, nodes and handles, delete, mirror, undo |
+| **img-to-svg** | Your browser; nothing uploaded | Free | Inlay, our shared-edge tracer (flat and pixel art); VTracer (photos) | Colours, background, nodes and handles, delete, mirror, undo |
 | **Vectorizer.ai** | Their servers (kept 24 h) | Paid downloads | Proprietary; symmetry and shape fitting | "Refine result": palette, recolour/merge/remove regions, toggle symmetries, fit shapes, sharpen/round corners. No node editing |
 | **Vector Magic** | Their servers, or a paid desktop app | Paid | Proprietary | Edits the colour regions before re-vectorising |
 | **Illustrator Image Trace** | Desktop | Subscription | Proprietary; presets, colour/path/corner/noise controls | Full editor after *Expand* |
@@ -26,14 +26,14 @@ where it deliberately goes its own way. Competitor details were checked on
 **Edges shared exactly, traced once.** Most tracers trace each colour region on
 its own, so every edge between two colours exists twice, and the copies don't
 quite agree: hairline gaps, or overlaps when shapes are stacked to hide them.
-Our flat-art tracer traces each boundary once and both neighbours use it, so
+Inlay, our tracer, traces each boundary once and both neighbours use it, so
 layers register perfectly for print and vinyl.
-→ [The shared-edge tracer](how-it-works/shared-edge-tracer.md)
+→ [Inlay](how-it-works/inlay.md)
 
 **Shapes a designer would draw.** Straight edges are single lines, corners are
 single sharp points measured from their two sides, round ends stay round, and
 circles are four curves. VTracer smoothed our sample's straight slopes into
-S-bends; the shared-edge tracer is more accurate with a third fewer nodes.
+S-bends; Inlay is more accurate with a third fewer nodes.
 → [Curve fitting](how-it-works/curve-fitting.md)
 
 **Colours that are actually in the image.** The palette comes from histogram

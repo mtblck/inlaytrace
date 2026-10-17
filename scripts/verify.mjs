@@ -577,6 +577,13 @@ await page.getByRole('radio', { name: 'Split' }).click()
 // Preset change re-traces.
 await retrace(page, () => page.getByRole('radio', { name: /Line art/ }).click())
 check((await page.locator(INKS).count()) === 1, 'line art traces to a single ink')
+await retrace(page, () => page.getByRole('radio', { name: /Pixel art/ }).click())
+{
+  // Pixel art goes through Inlay's staircase: every coordinate a whole pixel, only straight lines.
+  const ds = await page.locator(VECTOR).evaluateAll((els) => els.map((e) => e.getAttribute('d')))
+  const fractional = ds.join(' ').match(/\d+\.\d+/g) ?? []
+  check(ds.length > 3 && fractional.length === 0 && !ds.some((d) => /[CQSA]/i.test(d)), `pixel art is drawn on whole pixels with straight lines (${ds.length} paths)`)
+}
 await retrace(page, () => page.getByRole('radio', { name: /^Logo/ }).click())
 
 // ---- Colours: replace and remove ------------------------------------------

@@ -28,9 +28,11 @@ The pixels go to a Web Worker (`src/engine/worker.ts`), so a long trace never
 freezes the page. The worker runs one function, `runTrace` (`src/engine/run.ts`),
 which the unit tests also call, so the tests and the app can't drift apart:
 
-- **Logo, Illustration, Line art** → the [shared-edge tracer](shared-edge-tracer.md),
-  with a palette from [histogram peaks](palettes.md) (or ink/paper for line art).
-- **Poster, Pixel art** → [VTracer](vtracer.md), compiled from Rust to WebAssembly.
+- **Logo, Illustration, Line art** → [Inlay](inlay.md), our shared-edge
+  tracer, with a palette from [histogram peaks](palettes.md) (or ink/paper for
+  line art).
+- **Pixel art** → Inlay with the image's exact colours, keeping every pixel.
+- **Poster** → [VTracer](vtracer.md), compiled from Rust to WebAssembly.
 
 For line art with **Light on dark**, the worker inverts the pixels first, since
 line art always traces the dark side.

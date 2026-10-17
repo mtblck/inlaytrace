@@ -40,7 +40,7 @@ in a Web Worker so the page stays responsive.
 ## The docs
 
 - [How it works](how-it-works.md): the path from pixels to paths, the
-  shared-edge tracer, curve fitting and how quality is measured.
+  Inlay, curve fitting and how quality is measured.
 - [Features](features.md): every feature, how to use it and how it works.
 - [What we do differently](how-it-differs.md): how this compares with other
   image-to-SVG tools.
@@ -52,7 +52,7 @@ in a Web Worker so the page stays responsive.
 
 | Path | What |
 | --- | --- |
-| `src/engine/` | The worker, the shared-edge tracer (`shapes.ts`), VTracer glue, presets |
+| `src/engine/` | The worker, Inlay (`shapes.ts`), VTracer glue, presets |
 | `src/lib/fit.ts` | Curve fitting: corners, smoothing, lines and Béziers |
 | `src/lib/palette.ts` | Palettes from histogram peaks |
 | `src/lib/doc.ts`, `history.ts`, `pathdata.ts` | The editable document, undo, path data |

@@ -12,11 +12,11 @@ re-traces within about 120 ms of the last change.
 
 | Preset | For | Tracer | Defaults |
 | --- | --- | --- | --- |
-| **Logo** | Few flat colours, crisp corners | Shared edges | 8 colours, specks 8 px, smoothing 1.5, corners 45° |
-| **Illustration** | More colours, smooth curves | Shared edges | 16 colours, specks 4 px, smoothing 1, corners 60° |
-| **Line art** | Ink drawings and scans, one colour | Shared edges | Threshold 128, specks 6 px, smoothing 1.5, corners 45° |
+| **Logo** | Few flat colours, crisp corners | Inlay | 8 colours, specks 8 px, smoothing 1.5, corners 45° |
+| **Illustration** | More colours, smooth curves | Inlay | 16 colours, specks 4 px, smoothing 1, corners 60° |
+| **Line art** | Ink drawings and scans, one colour | Inlay | Threshold 128, specks 6 px, smoothing 1.5, corners 45° |
 | **Poster** | Photos flattened into colour bands | VTracer | 24 colours, specks 8 px, smoothing 1, corners 90°, stacked |
-| **Pixel art** | Hard edges, nothing smoothed | VTracer (pixel mode) | 32 colours, no speck filter, up to 4096 px |
+| **Pixel art** | Hard edges, nothing smoothed | Inlay (pixel staircase) | Its exact colours (up to 32), no speck filter, up to 4096 px |
 
 ## Settings
 
@@ -46,9 +46,9 @@ simplification, and 0 turns it off.
 curves. See [Curve fitting](../how-it-works/curve-fitting.md) for how a corner
 is told apart from a tight curve.
 
-**Shapes** (Poster and Pixel art only): *Stacked* shapes sit on top of each
+**Shapes** (Poster only): *Stacked* shapes sit on top of each
 other (smaller files); *Cut out* shapes never overlap (for vinyl and screen
-print layers). Flat-art presets always share edges exactly, so they don't need
+print layers). The other presets use Inlay and always share edges exactly, so they don't need
 the choice.
 
 ## Small and large images

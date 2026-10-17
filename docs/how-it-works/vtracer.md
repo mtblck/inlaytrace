@@ -2,18 +2,20 @@
 order: 5
 ---
 
-# VTracer (Poster and Pixel art)
+# VTracer (Poster)
 
 [VTracer](https://github.com/visioncortex/vtracer) is an MIT/Apache-2.0
 tracer written in Rust. The research found it the best classical tracer, and it
-traced everything until flat art moved to the
-[shared-edge tracer](shared-edge-tracer.md). It still handles:
+traced everything until flat art, then pixel art, moved to
+[Inlay](inlay.md). It still handles **Poster**: photos flattened into colour
+bands. Photos have no flat regions to share edges between, and VTracer's
+spline fitting and own quantizer suit their soft bands (histogram peaks made
+photos worse, 9.9 → 15.3 mean error).
 
-- **Poster:** photos flattened into colour bands. Photos have no flat regions
-  to share edges between, and VTracer's spline fitting and own quantizer suit
-  their soft bands (histogram peaks made photos worse, 9.9 → 15.3 mean error).
-- **Pixel art:** traced at up to 4096 px in VTracer's pixel mode, so every
-  pixel step is kept.
+Moving Poster to Inlay too would drop a 650 KB WebAssembly file, the vendoring
+script below and the CSP's `'wasm-unsafe-eval'`. It needs a stacked mode and a
+quantized palette first, scored against VTracer on real photos
+([#53](https://github.com/mtblck/img-to-svg/issues/53)).
 
 ## Loading it in a browser
 
