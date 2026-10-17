@@ -91,8 +91,20 @@ wobble and rounded corners count):
 | --- | --- | --- | --- |
 | VTracer, previous Logo settings | 0.86% | 259 | 7.3 KB |
 | Shared edges, fitted per chain | 0.74% | 167 | 5.0 KB |
+| + corners by their sides, round ends, lines inside curves | 0.68% | 194 | 5.8 KB |
 
-Straight edges are single segments and the peaks are single sharp corners. On
+Straight edges are single segments and the peaks are single sharp corners.
+
+The second row came from Matt's testing on a different browser, whose JPEG
+encoder left different noise: a bump at a snow cap's tip and hooked ends on the
+sample's arc. Sweeping JPEG quality reproduced both, and the fixes were about
+telling shapes apart rather than tuning numbers. A corner is now two straight
+sides meeting near the outline (a stroke's 4 px round end has sides that run
+parallel, so it stays a curve); smoothing follows local curvature, measured at
+two scales so JPEG noise can't fake a tight bend; runs that mix straight and
+curved parts get lines for the straight stretches and curves joined smoothly
+between them; and a curve turns at most about 90°, so a circle is four curves.
+The extra nodes are those round ends and circles. On
 a 2048 px image the new tracer took 1.5 s where VTracer took 17.5 s. Poster and
 Pixel art keep VTracer: photos have no flat regions to share edges between, and
 pixel art wants its steps.
