@@ -45,6 +45,7 @@ const VOID = -1 // outside the image, transparent pixels, and line art's paper
 
 export function traceShapes(rgba: ArrayLike<number>, w: number, h: number, o: ShapesOptions): string {
   const { labels, colors, drawn } = o.mode === 'palette' ? labelPalette(rgba, w, h, o.palette) : labelBinary(rgba, w, h, o.threshold)
+  despur(labels, w, h)
   mergeSpecks(labels, w, h, Math.max(0, Math.round(o.speckle)) ** 2)
 
   // Final regions: 4-connected components of drawn labels. Everything else is VOID.
@@ -222,7 +223,54 @@ export function otsu(lum: Uint8Array, alpha: Uint8Array) {
 
 const hexToRgb = (hex: string): Rgb => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)]
 
-// ---- 2. Specks ------------------------------------------------------------------------
+// ---- 2. Spurs and specks ------------------------------------------------------------
+
+/**
+ * A pixel whose eight neighbours are at least seven of one other colour takes
+ * that colour: a lone pixel jutting out of an edge, or a one-pixel nick in one.
+ * Where several colours meet, JPEG noise leaves exactly these, and fitted they
+ * become little bumps and notches. A pixel on a one-pixel line has two
+ * neighbours of its own colour, so lines survive, though such a line loses up
+ * to two pixels at each end (an end pixel looks exactly like a spur). Two passes.
+ */
+function despur(labels: Int32Array, w: number, h: number) {
+  for (let pass = 0; pass < 2; pass++) {
+    const src = labels.slice()
+    for (let y = 1; y < h - 1; y++)
+      for (let x = 1; x < w - 1; x++) {
+        const i = y * w + x
+        const own = src[i]
+        // The most common other label among the eight neighbours.
+        let best = -1
+        let bestCount = 0
+        for (let k = 0; k < 8; k++) {
+          const j = i + NEIGHBOURS[k][1] * w + NEIGHBOURS[k][0]
+          const l = src[j]
+          if (l === own || l === best) continue
+          let c = 0
+          for (let q = 0; q < 8; q++) if (src[i + NEIGHBOURS[q][1] * w + NEIGHBOURS[q][0]] === l) c++
+          if (c > bestCount) {
+            bestCount = c
+            best = l
+          }
+        }
+        if (bestCount >= 7) labels[i] = best
+      }
+  }
+}
+
+const NEIGHBOURS = [
+  [-1, -1],
+  [0, -1],
+  [1, -1],
+  [-1, 0],
+  [1, 0],
+  [-1, 1],
+  [0, 1],
+  [1, 1],
+] as const
+
+// ---- 2b. Specks ------------------------------------------------------------------------
 
 /**
  * 4-connected components of equal labels (two-pass union-find, linear time).

@@ -207,6 +207,17 @@ const inkCount = await page.locator(INKS).count()
 check(inkCount >= 5 && inkCount <= 8, `logo preset found ${inkCount} inks (5 in the art, cap 8)`)
 await shot(page, '02-split')
 
+// The view: Split to compare, then Vector once editing starts, unless you chose.
+const viewIs = async (name) => (await page.getByRole('radio', { name }).getAttribute('aria-checked')) === 'true'
+check(await viewIs('Split'), 'a new image opens on Split')
+await page.getByRole('tab', { name: /Edit/ }).click()
+check(await viewIs('Vector'), 'starting to edit switches to Vector, hiding the original')
+await page.getByRole('radio', { name: 'Split' }).click()
+await page.getByRole('tab', { name: /Trace/ }).click()
+await page.getByRole('tab', { name: /Edit/ }).click()
+check(await viewIs('Split'), 'a view picked afterwards sticks')
+await page.getByRole('tab', { name: /Trace/ }).click()
+
 for (const mode of ['Difference', 'Vector']) {
   await page.getByRole('radio', { name: mode }).click()
   await shot(page, `03-${mode.toLowerCase()}`)
@@ -243,6 +254,23 @@ console.log(`         exported ${svg.length.toLocaleString()} bytes, panel shows
 
 const [zip] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Layers (.zip)' }).click()])
 check(zip.suggestedFilename() === 'sample-badge-layers.zip', 'layers download is a zip')
+
+// ---- Background: behind everything, shows where a colour was removed ---------
+await page.getByRole('button', { name: 'Add background' }).click()
+await page.getByLabel('Background colour').fill('#ff00ff')
+check((await page.locator('svg[aria-label="Traced SVG"] rect[data-background]').getAttribute('fill')) === '#ff00ff', 'background shows in the preview')
+await page.getByRole('radio', { name: 'Vector' }).click()
+await shot(page, '04c-background')
+const withBg = await exportSvg(page)
+// SVGO may write the rect as a path and shorten the colour; either way it comes first.
+check(/<svg[^>]*>\s*<(rect|path)[^>]*fill="#(ff00ff|f0f)"/.test(withBg), 'background exports as the first element')
+check((await alphaAt(page, withBg, 2, 2)) === 255, 'the removed colour now shows the background')
+await page.keyboard.press('Control+z')
+check((await page.locator('svg[aria-label="Traced SVG"] rect[data-background]').getAttribute('fill')) === '#ffffff', 'Undo reverts the colour first')
+await page.keyboard.press('Control+z')
+await page.getByRole('button', { name: 'Add background' }).waitFor()
+check((await page.locator('rect[data-background]').count()) === 0, 'then takes the background away')
+await page.getByRole('radio', { name: 'Split' }).click()
 
 // Keyboard: the split handle is a real slider.
 const handle = page.getByRole('slider', { name: /Comparison split/ })
