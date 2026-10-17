@@ -1,6 +1,6 @@
 name: Claude
 
-# On-demand: mention @claude in a PR or issue comment (e.g. "@claude review this
+# On-demand: mention @claude in a PR or issue comment (e.g. "@claude explain this
 # again", "@claude fix the failing test"). Only users with write access trigger it.
 on:
   issue_comment:
