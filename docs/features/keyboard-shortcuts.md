@@ -15,6 +15,7 @@ Ctrl elsewhere; ⌥ is Alt. Shortcuts don't fire while you're typing in a field.
 | A | Nodes: edit one shape's nodes and curves |
 | M | Mirror |
 | Double-click a shape | Edit its nodes (from Select) |
+| Double-click the outline | Add a node there (Nodes) |
 
 ## Selection
 
@@ -32,7 +33,7 @@ Ctrl elsewhere; ⌥ is Alt. Shortcuts don't fire while you're typing in a field.
 | --- | --- |
 | ← ↑ → ↓ | Nudge the selection 1 px (of the trace) |
 | ⇧ + arrows | Nudge 10 px |
-| ⇧ while dragging | Move along one axis; scale in proportion |
+| ⇧ while dragging | Move along one axis; scale in proportion; rotate in 15° steps |
 | ⌥ while dragging | Scale from the centre; bend one handle on its own |
 | Delete, Backspace | Delete the selected nodes or shapes |
 | ⌘Z | Undo |
