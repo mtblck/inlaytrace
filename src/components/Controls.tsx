@@ -53,7 +53,27 @@ export function Controls({ settings, onChange, onPreset }: Props) {
           )}
 
           {p === 'lineart' && (
-            <div className="space-y-2">
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <span className="field-label">Ink is</span>
+                <div role="radiogroup" aria-label="Ink is" className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-rule bg-rule">
+                  {([false, true] as const).map((light) => (
+                    <button
+                      key={String(light)}
+                      role="radio"
+                      aria-checked={settings.lightInk === light}
+                      onClick={() => set('lightInk', light)}
+                      className={`py-1.5 text-[13px] ${settings.lightInk === light ? 'bg-paper font-medium text-accent' : 'bg-paper-sunk text-ink hover:bg-paper'}`}
+                    >
+                      {light ? 'Light on dark' : 'Dark on light'}
+                    </button>
+                  ))}
+                </div>
+                <p className="field-hint">Which part of the image to keep. The rest becomes transparent.</p>
+              </div>
+              {settings.threshold !== null && (
+                <Slider label="Ink threshold" value={settings.threshold} min={1} max={254} step={1} onChange={(v) => set('threshold', v)} format={(v) => `${v}`} hint="Move it to catch fainter strokes or drop stray ones." />
+              )}
               <label className="flex items-center gap-2 text-[13px]">
                 <input
                   type="checkbox"
@@ -61,11 +81,8 @@ export function Controls({ settings, onChange, onPreset }: Props) {
                   checked={settings.threshold === null}
                   onChange={(e) => set('threshold', e.target.checked ? null : 128)}
                 />
-                Adapt to uneven lighting
+                Adapt to uneven lighting (photos of paper)
               </label>
-              {settings.threshold !== null && (
-                <Slider label="Ink threshold" value={settings.threshold} min={1} max={254} step={1} onChange={(v) => set('threshold', v)} format={(v) => `${v}`} hint="Higher catches fainter lines." />
-              )}
             </div>
           )}
 

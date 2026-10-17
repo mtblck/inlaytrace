@@ -15,7 +15,21 @@ export type Source = {
   bitmap: ImageBitmap
 }
 
-export type Pixels = { rgba: Uint8ClampedArray; width: number; height: number }
+/** `upscale` is the factor applied before tracing (1 = none). */
+export type Pixels = { rgba: Uint8ClampedArray; width: number; height: number; upscale: number }
+
+/**
+ * Sources whose long edge is below UPSCALE_BELOW are upscaled to UPSCALE_TO
+ * before tracing. A 146×156 logo has 2–3 px features, and VTracer faithfully
+ * follows their pixel steps; upscaled with smoothing and a light blur the same
+ * logo traced to clean curves with every slit and tooth intact (README, "Small
+ * images"). The 640 px sample badge already traced to 0.93% wrong pixels at
+ * native size, so mid-size images are left alone rather than paying 2.5× the
+ * pixels for nothing.
+ */
+export const UPSCALE_BELOW = 512
+const UPSCALE_TO = 1024
+const MAX_UPSCALE = 8
 
 export const ACCEPTED = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/bmp']
 
@@ -38,17 +52,47 @@ export async function loadSource(file: Blob, name = 'image'): Promise<Source> {
   }
 }
 
-export function pixelsOf(source: Source, maxEdge: number): Pixels {
-  const scale = Math.min(1, maxEdge / Math.max(source.bitmap.width, source.bitmap.height))
+export function pixelsOf(source: Source, maxEdge: number, allowUpscale = true): Pixels {
+  const long = Math.max(source.bitmap.width, source.bitmap.height)
+  let scale = Math.min(1, maxEdge / long)
+  if (allowUpscale && long < UPSCALE_BELOW) scale = Math.min(MAX_UPSCALE, UPSCALE_TO / long)
   const width = Math.max(1, Math.round(source.bitmap.width * scale))
   const height = Math.max(1, Math.round(source.bitmap.height * scale))
   const canvas = new OffscreenCanvas(width, height)
   const ctx = canvas.getContext('2d', { willReadFrequently: true })!
-  // Pixel art must stay hard-edged when it is (rarely) scaled.
-  ctx.imageSmoothingEnabled = scale < 1 && maxEdge < 4096
+  // Pixel art must stay hard-edged; everything else is smoothed when resized.
+  ctx.imageSmoothingEnabled = allowUpscale
   ctx.imageSmoothingQuality = 'high'
+  // When upscaling, a blur of half the scale factor melts the stair-steps that
+  // smoothing alone leaves on diagonal edges. Browsers without canvas filters
+  // ignore this and still get the smoothed upscale.
+  if (scale > 1) ctx.filter = `blur(${(scale / 2).toFixed(1)}px)`
   ctx.drawImage(source.bitmap, 0, 0, width, height)
-  return { rgba: ctx.getImageData(0, 0, width, height).data, width, height }
+  return { rgba: ctx.getImageData(0, 0, width, height).data, width, height, upscale: scale > 1 ? scale : 1 }
+}
+
+/**
+ * Whether the image sits on a dark background, judged by its border pixels.
+ * Line art uses this to start in "light on dark" for logos like a white mark
+ * on black, so the shapes, not the background, are what get traced.
+ */
+export function hasDarkBackground(source: Source): boolean {
+  const size = 64
+  const canvas = new OffscreenCanvas(size, size)
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!
+  ctx.drawImage(source.bitmap, 0, 0, size, size)
+  const { data } = ctx.getImageData(0, 0, size, size)
+  let sum = 0
+  let n = 0
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) {
+      if (x > 1 && x < size - 2 && y > 1 && y < size - 2) continue
+      const i = (y * size + x) * 4
+      if (data[i + 3] < 128) continue // transparent border says nothing
+      sum += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]
+      n++
+    }
+  return n > 0 && sum / n < 96
 }
 
 export function baseName(name: string) {

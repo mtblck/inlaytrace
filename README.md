@@ -82,6 +82,21 @@ Two of those were surprises worth remembering:
 `layerDifference` and cut-out shapes follow the same pattern: big wins on flat
 art, costs on photos, so they are per-preset rather than global.
 
+**Small images.** A 146×156 logo has eye slits and teeth 2–3 px wide, and
+VTracer faithfully traces their pixel steps, so the result came out wobbly with
+the anti-aliasing as an extra grey ink. Sources under 512 px are now upscaled to
+1024 px with smoothing and a blur of half the scale factor before tracing; the
+same logo then traced to clean curves with every detail intact. Mid-size images
+are left alone: the 640 px sample was already at 0.93% wrong pixels natively.
+
+**Light ink on dark.** VTracer's binary mode always traces the dark side, so a
+white logo on black came out as the background with holes. Line art can now
+invert first ("Light on dark"), and starts that way when the image's border is
+dark. On the robot logo that is the whole job in one step: background gone,
+white shapes as black paths, 6.5 KB. Line art also defaults to a fixed
+threshold now; adaptive thresholding closed the thin gaps between the logo's
+shapes, so it stays as an option for photos of paper.
+
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
 most one waiting request per channel (trace, optimise), replacing it when a

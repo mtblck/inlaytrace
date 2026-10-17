@@ -31,6 +31,8 @@ export type Settings = {
   colors: number
   /** Line art only: 0–255, or adaptive when null. */
   threshold: number | null
+  /** Line art only: trace light ink on a dark background (inverts before tracing). */
+  lightInk: boolean
   speckle: number
   smoothing: number
   corners: number
@@ -49,31 +51,31 @@ export const PRESETS: Preset[] = [
     id: 'logo',
     label: 'Logo',
     hint: 'Few flat colours, crisp corners',
-    defaults: { colors: 8, threshold: null, speckle: 8, smoothing: 1.5, corners: 60, shapes: 'cutout' },
+    defaults: { colors: 8, threshold: null, lightInk: false, speckle: 8, smoothing: 1.5, corners: 60, shapes: 'cutout' },
   },
   {
     id: 'illustration',
     label: 'Illustration',
     hint: 'More colours, smooth curves',
-    defaults: { colors: 16, threshold: null, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked' },
+    defaults: { colors: 16, threshold: null, lightInk: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked' },
   },
   {
     id: 'lineart',
     label: 'Line art',
     hint: 'Ink drawings and scans, one colour',
-    defaults: { colors: 2, threshold: null, speckle: 6, smoothing: 1, corners: 60, shapes: 'stacked' },
+    defaults: { colors: 2, threshold: 128, lightInk: false, speckle: 6, smoothing: 1, corners: 60, shapes: 'stacked' },
   },
   {
     id: 'photo',
     label: 'Poster',
     hint: 'Photos flattened into colour bands',
-    defaults: { colors: 24, threshold: null, speckle: 8, smoothing: 1, corners: 90, shapes: 'stacked' },
+    defaults: { colors: 24, threshold: null, lightInk: false, speckle: 8, smoothing: 1, corners: 90, shapes: 'stacked' },
   },
   {
     id: 'pixel',
     label: 'Pixel art',
     hint: 'Hard edges, nothing smoothed',
-    defaults: { colors: 32, threshold: null, speckle: 0, smoothing: 0, corners: 0, shapes: 'stacked' },
+    defaults: { colors: 32, threshold: null, lightInk: false, speckle: 0, smoothing: 0, corners: 0, shapes: 'stacked' },
   },
 ]
 
@@ -101,6 +103,8 @@ export function toVtracerOptions(s: Settings): Record<string, unknown> {
     o.clustering = 'bw'
     if (s.threshold === null) o.adaptive = true
     else o.binaryThreshold = s.threshold
+    // Resolved by the worker, which inverts the pixels before VTracer sees them.
+    if (s.lightInk) o.invert = true
   } else if (s.preset === 'photo') {
     o.maxColors = s.colors
   } else {

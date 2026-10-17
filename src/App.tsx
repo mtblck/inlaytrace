@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { zipSync, strToU8 } from 'fflate'
 import { TraceClient } from './engine/client'
 import { maxTraceEdge, settingsFor, toVtracerOptions, type PresetId, type Settings } from './engine/presets'
-import { ACCEPTED, loadSource, pixelsOf, type Pixels, type Source } from './lib/image'
+import { ACCEPTED, hasDarkBackground, loadSource, pixelsOf, type Pixels, type Source } from './lib/image'
 import { buildSvg, formatBytes, inksOf, layerFiles, NO_EDITS, parseTrace, statsOf, type InkEdits, type Trace } from './lib/svg'
 import { sampleImage } from './lib/sample'
 import { Canvas, type ViewMode } from './components/Canvas'
@@ -29,7 +29,7 @@ export default function App() {
   const [dragOver, setDragOver] = useState(false)
   const [copied, setCopied] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
-  const pixelCache = useRef<{ source: Source; maxEdge: number; pixels: Pixels } | null>(null)
+  const pixelCache = useRef<{ source: Source; maxEdge: number; upscale: boolean; pixels: Pixels } | null>(null)
 
   // ---- Loading ------------------------------------------------------------
   const open = useCallback(async (file: Blob, name?: string) => {
@@ -70,9 +70,10 @@ export default function App() {
     if (!source) return
     const timer = setTimeout(async () => {
       const maxEdge = maxTraceEdge(settings.preset)
+      const upscale = settings.preset !== 'pixel'
       let cached = pixelCache.current
-      if (!cached || cached.source !== source || cached.maxEdge !== maxEdge) {
-        cached = { source, maxEdge, pixels: pixelsOf(source, maxEdge) }
+      if (!cached || cached.source !== source || cached.maxEdge !== maxEdge || cached.upscale !== upscale) {
+        cached = { source, maxEdge, upscale, pixels: pixelsOf(source, maxEdge, upscale) }
         pixelCache.current = cached
       }
       const { rgba, width, height } = cached.pixels
@@ -128,7 +129,11 @@ export default function App() {
     save(new Blob([zip.buffer as ArrayBuffer], { type: 'application/zip' }), `${source!.name}-layers.zip`)
   }
 
-  const choosePreset = (id: PresetId) => setSettings(settingsFor(id))
+  const choosePreset = (id: PresetId) => {
+    const next = settingsFor(id)
+    if (id === 'lineart' && source && hasDarkBackground(source)) next.lightInk = true
+    setSettings(next)
+  }
 
   const { theme, toggle } = useTheme()
 
@@ -248,7 +253,8 @@ export default function App() {
                   <div className="truncate text-[13.5px] font-medium">{source.name}</div>
                   <div className="num">
                     {source.originalWidth} × {source.originalHeight}
-                    {trace && trace.width !== source.originalWidth && ` · traced at ${trace.width} × ${trace.height}`}
+                    {trace && trace.width > source.originalWidth && ` · upscaled ${Math.round((trace.width / source.originalWidth) * 10) / 10}× to trace`}
+                    {trace && trace.width < source.originalWidth && ` · traced at ${trace.width} × ${trace.height}`}
                   </div>
                 </div>
                 <button className="btn shrink-0" onClick={() => fileInput.current?.click()}>
