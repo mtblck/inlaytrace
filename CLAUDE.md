@@ -24,6 +24,9 @@ in Claude's cloud sandbox, where the Playwright CDN is blocked).
 - **Paths:** Vite `base` and `outDir` are both `/tools/img-to-svg/`, so the build
   serves identically on its own Vercel URL and through mb-portfolio's rewrite.
 - **CSP** needs `'wasm-unsafe-eval'` + `worker-src 'self'`; `hosting:check` guards it.
+- **Edits = `{ inks, doc }`** (`src/lib/doc.ts`): ink edits keyed by traced hex; `doc` null
+  until a geometric edit detaches it, then settings changes must confirm. paper.js is
+  lazy-loaded for mirror only; keep it out of the main chunk.
 - No Supabase. A future paid "HD" mode is a Vercel Function with spend caps.
 - **Commit as `mtblck <105079242+mtblck@users.noreply.github.com>`.** Vercel blocks
   deploys whose author email isn't linked to Matt's account (seen on mb-portfolio).

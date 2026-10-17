@@ -53,6 +53,137 @@ async function retrace(page, action) {
   await traced(page)
 }
 
+
+/** Render an SVG string in the page and read one pixel's alpha (0 = transparent). */
+async function alphaAt(page, svg, x, y) {
+  return page.evaluate(
+    async ([svg, x, y]) => {
+      const img = new Image()
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+      await img.decode()
+      const c = new OffscreenCanvas(img.naturalWidth || 640, img.naturalHeight || 640)
+      c.getContext('2d').drawImage(img, 0, 0)
+      return c.getContext('2d').getImageData(x, y, 1, 1).data[3]
+    },
+    [svg, x, y],
+  )
+}
+
+/** Percentage of pixels that differ between the left half and the mirrored right half. */
+async function asymmetry(page, svg) {
+  return page.evaluate(async (svg) => {
+    const img = new Image()
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+    await img.decode()
+    const w = 400
+    const h = Math.round((img.naturalHeight / img.naturalWidth) * w)
+    const c = new OffscreenCanvas(w, h)
+    const x = c.getContext('2d')
+    x.drawImage(img, 0, 0, w, h)
+    const d = x.getImageData(0, 0, w, h).data
+    let diff = 0
+    let n = 0
+    for (let yy = 0; yy < h; yy++)
+      for (let xx = 0; xx < w / 2; xx++) {
+        const a = (yy * w + xx) * 4
+        const b = (yy * w + (w - 1 - xx)) * 4
+        const delta = Math.abs(d[a] - d[b]) + Math.abs(d[a + 1] - d[b + 1]) + Math.abs(d[a + 2] - d[b + 2]) + Math.abs(d[a + 3] - d[b + 3])
+        if (delta > 64) diff++
+        n++
+      }
+    return (diff / n) * 100
+  }, svg)
+}
+
+async function exportSvg(page) {
+  await page.getByText(/Traced in [\d,]+ ms$/).waitFor()
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download SVG' }).click()])
+  return readFileSync(await dl.path(), 'utf8')
+}
+
+async function editorChecks(page, label, n) {
+  await page.getByRole('tab', { name: /Edit/ }).click()
+  await page.getByRole('radio', { name: 'Vector' }).click()
+
+  // Overlays, with custom colours.
+  await page.getByLabel('Paths', { exact: true }).check()
+  await page.getByLabel('Paths overlay colour').fill('#00aa55')
+  await page.getByLabel('Nodes', { exact: true }).check()
+  await page.getByLabel('Nodes overlay colour').fill('#aa00ff')
+  const nodeRects = Number(await page.locator('[data-overlay="nodes"]').getAttribute('data-count'))
+  const pathStroke = await page.locator('g[stroke="#00aa55"] path').count()
+  check(nodeRects > 10 && pathStroke > 0, `${label}: overlays show ${pathStroke} outlines and ${nodeRects} nodes in the chosen colours`)
+  check((await page.locator('[data-overlay="nodes"]').getAttribute('fill')) === '#aa00ff', `${label}: node colour applied`)
+  await shot(page, `${n}a-${label}-overlays`)
+
+  // Select the largest shape by clicking its hit target, then drag a node.
+  const hits = page.locator('path[data-path-id]')
+  let best = 0
+  let bestArea = -1
+  const sheet = await page.locator('svg[aria-label="Traced SVG"]').boundingBox()
+  for (let i = 0; i < (await hits.count()); i++) {
+    const b = await hits.nth(i).boundingBox()
+    if (b && b.width * b.height > bestArea && b.width < sheet.width * 0.9) [best, bestArea] = [i, b.width * b.height]
+  }
+  const target = hits.nth(best)
+  const id = await target.getAttribute('data-path-id')
+  const tb = await target.boundingBox()
+  await target.dispatchEvent('pointerdown', { bubbles: true, clientX: tb.x + tb.width / 2, clientY: tb.y + tb.height / 2, pointerId: 1, isPrimary: true })
+  await page.locator('[data-selected]').waitFor()
+  check((await page.locator('[data-selected]').getAttribute('data-selected')) === id, `${label}: clicking a shape selects it`)
+  const dBefore = await page.locator(`svg[aria-label="Traced SVG"] path`).nth(best).getAttribute('d')
+  const node = page.locator('[data-node]').first()
+  const nb = await node.boundingBox()
+
+  // A plain click, off-centre, selects the node and changes nothing.
+  const wasDetached = (await page.locator('[data-edited]').count()) > 0
+  await page.mouse.click(nb.x + nb.width - 1, nb.y + nb.height - 1)
+  const dClicked = await page.locator('[data-selected] path').first().getAttribute('d')
+  const nowDetached = (await page.locator('[data-edited]').count()) > 0
+  check(dClicked === dBefore && nowDetached === wasDetached, `${label}: clicking a node selects it without moving it`)
+
+  // Grabbed off-centre, the node moves by exactly the pointer's travel instead of jumping to it.
+  const gx = nb.x + 1
+  const gy = nb.y + 1
+  await page.mouse.move(gx, gy)
+  await page.mouse.down()
+  for (let i = 1; i <= 5; i++) await page.mouse.move(gx + i * 8, gy + i * 6)
+  await page.mouse.up()
+  const nb2 = await node.boundingBox()
+  const off = Math.hypot(nb2.x - nb.x - 40, nb2.y - nb.y - 30)
+  check(off < 1.5, `${label}: a dragged node follows the pointer exactly (${off.toFixed(2)} px off)`)
+  const dAfter = await page.locator(`[data-selected]`).locator('path').first().getAttribute('d')
+  check(dAfter !== dBefore, `${label}: dragging a node reshapes the path`)
+  await shot(page, `${n}b-${label}-node-dragged`)
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z')
+  const dUndone = await page.locator(`svg[aria-label="Traced SVG"] path`).nth(best).getAttribute('d')
+  check(dUndone === dBefore, `${label}: one Undo reverts the whole drag`)
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+z' : 'Control+Shift+z')
+  const dRedone = await page.locator(`svg[aria-label="Traced SVG"] path`).nth(best).getAttribute('d')
+  check(dRedone === dAfter, `${label}: Redo brings it back`)
+  await page.keyboard.press('Escape')
+
+  // Mirror the left half onto the right.
+  const before = await asymmetry(page, await exportSvg(page))
+  await page.getByRole('radio', { name: 'Mirror' }).click()
+  await page.locator('[data-overlay="axis"]').waitFor()
+  await shot(page, `${n}c-${label}-mirror-tool`)
+  await page.getByRole('button', { name: /Mirror left onto right/ }).click()
+  await page.getByRole('radio', { name: 'Select', checked: true }).waitFor({ timeout: 15000 })
+  const after = await asymmetry(page, await exportSvg(page))
+  check(after < 2, `${label}: mirrored export is symmetric (${before.toFixed(1)}% → ${after.toFixed(2)}% of pixels differ)`)
+  await shot(page, `${n}d-${label}-mirrored`)
+
+  // Changing a trace setting now asks first, and Keep editing keeps the edits.
+  await page.getByRole('tab', { name: /Trace/ }).click()
+  await page.getByRole('radio', { name: /Illustration/ }).click()
+  await page.getByRole('alertdialog').waitFor()
+  check(true, `${label}: changing a setting after editing asks first`)
+  await page.getByRole('button', { name: 'Keep editing' }).click()
+  const stillSymmetric = await asymmetry(page, await exportSvg(page))
+  check(stillSymmetric < 2, `${label}: Keep editing leaves the edits in place`)
+}
+
 console.log(`\n  verify ${url}\n`)
 
 // ---- Desktop, sample image ------------------------------------------------
@@ -65,13 +196,15 @@ await shot(page, '01-empty')
 
 await page.getByRole('button', { name: 'Try a sample' }).click()
 await traced(page)
-const pathCount = await page.locator('.vector path').count()
+const VECTOR = 'svg[aria-label="Traced SVG"] path'
+const INKS = 'aside li[data-ink]'
+const pathCount = await page.locator(VECTOR).count()
 check(pathCount > 3, `sample traced into ${pathCount} paths`)
-const inkCount = await page.locator('aside li').count()
+const inkCount = await page.locator(INKS).count()
 check(inkCount >= 5 && inkCount <= 8, `logo preset found ${inkCount} inks (5 in the art, cap 8)`)
 await shot(page, '02-split')
 
-for (const mode of ['Difference', 'Outlines']) {
+for (const mode of ['Difference', 'Vector']) {
   await page.getByRole('radio', { name: mode }).click()
   await shot(page, `03-${mode.toLowerCase()}`)
 }
@@ -79,16 +212,19 @@ await page.getByRole('radio', { name: 'Split' }).click()
 
 // Preset change re-traces.
 await retrace(page, () => page.getByRole('radio', { name: /Line art/ }).click())
-check((await page.locator('aside li').count()) === 1, 'line art traces to a single ink')
+check((await page.locator(INKS).count()) === 1, 'line art traces to a single ink')
 await retrace(page, () => page.getByRole('radio', { name: /^Logo/ }).click())
 
-// Recolour an ink and hide another; both must reach the preview.
-const firstInk = page.locator('aside li').first()
-await firstInk.locator('input[type=color]').fill('#123456')
-check((await page.locator('.vector path[fill="#123456"]').count()) > 0, 'recolouring an ink updates the preview')
-await page.locator('aside li').nth(1).getByRole('button', { name: /Hide ink/ }).click()
+// ---- Colours: replace and remove ------------------------------------------
+await page.getByRole('tab', { name: /Edit/ }).click()
+const firstInk = page.locator(INKS).first()
+const bgHex = await firstInk.getAttribute('data-ink')
+await page.locator(INKS).nth(1).locator('input[type=color]').fill('#123456')
+check((await page.locator(`${VECTOR}[fill="#123456"]`).count()) > 0, 'replacing a colour updates the preview')
+await firstInk.getByRole('button', { name: /^Remove/ }).click()
 await page.getByText('Restore all').waitFor()
-await shot(page, '04-inks-edited')
+check((await page.locator(`${VECTOR}[fill="${bgHex}"]`).count()) === 0, `removing ${bgHex} drops its shapes`)
+await shot(page, '04-colours-edited')
 
 // Export.
 await page.getByText(/Traced in [\d,]+ ms$/).waitFor() // optimised numbers are in
@@ -96,7 +232,9 @@ const [download] = await Promise.all([page.waitForEvent('download'), page.getByR
 const svg = readFileSync(await download.path(), 'utf8')
 check(download.suggestedFilename() === 'sample-badge.svg', `download named ${download.suggestedFilename()}`)
 check(/<svg[^>]*viewBox="0 0 640 640"/.test(svg), 'exported SVG has a viewBox')
-check(svg.includes('#123456'), 'export carries the recolour')
+check(svg.includes('#123456'), 'export carries the replaced colour')
+const corner = await alphaAt(page, svg, 2, 2)
+check(corner === 0, `removed background exports as transparent (corner alpha ${corner})`)
 const sizeShown = await page.locator('dd').nth(2).innerText()
 console.log(`         exported ${svg.length.toLocaleString()} bytes, panel shows ${sizeShown}`)
 
@@ -109,13 +247,40 @@ await handle.focus()
 await page.keyboard.press('End')
 check((await handle.getAttribute('aria-valuenow')) === '100', 'split handle responds to the keyboard')
 
+// ---- Editor: overlays, node drag, undo/redo, mirror ------------------------
+await editorChecks(page, 'sample', '05')
+
+// Opening another image clears history, so the prompt must not promise Undo.
+await page.locator('input[type=file]').setInputFiles({ name: 'other.png', mimeType: 'image/png', buffer: await page.screenshot() })
+const prompt = await page.getByRole('alertdialog').innerText()
+check(!/\bundo\b/i.test(prompt) && /can.t be undone/i.test(prompt), `opening an image after edits warns it can't be undone`)
+await page.getByRole('button', { name: 'Keep editing' }).click()
+check((await page.locator('aside .truncate').first().innerText()) === 'sample-badge', 'Keep editing keeps the current image')
+
+// A colour changed while a discard prompt is open survives confirming it.
+await page.getByRole('tab', { name: /Trace/ }).click()
+await retrace(page, async () => {
+  await page.getByRole('radio', { name: /^Logo/ }).click()
+  await page.getByRole('alertdialog').waitFor()
+  await page.getByRole('tab', { name: /Edit/ }).click()
+  await page.locator(INKS).nth(1).locator('input[type=color]').fill('#00ff7f')
+  await page.getByRole('button', { name: 'Discard edits and re-trace' }).click()
+})
+check((await page.locator(`${VECTOR}[fill="#00ff7f"]`).count()) > 0, 'a colour changed while the prompt was open survives confirming it')
+check((await page.locator('[data-edited]').count()) === 0, 'confirming re-attaches the drawing to the trace')
+
 // ---- Optional real-world fixture ------------------------------------------
 if (process.env.FIXTURE) {
-  await retrace(page, () => page.locator('input[type=file]').setInputFiles(process.env.FIXTURE))
-  await retrace(page, () => page.getByRole('radio', { name: /Illustration/ }).click())
-  const ms = await page.getByText(/Traced in/).innerText()
-  check(true, `fixture traced (${ms.replace(/.*Traced in /, '')})`)
-  await shot(page, '05-fixture')
+  // A fresh page, so the sample's edits don't trigger the discard prompt.
+  const fx = await newPage({ width: 1440, height: 900 })
+  await fx.goto(url)
+  await fx.locator('input[type=file]').setInputFiles(process.env.FIXTURE)
+  await traced(fx)
+  await retrace(fx, () => fx.getByRole('radio', { name: /Line art/ }).click())
+  const light = await fx.getByRole('radio', { name: 'Light on dark' }).getAttribute('aria-checked')
+  console.log(`         fixture: ${await fx.locator('aside .num').first().innerText()}, light ink auto-selected: ${light}`)
+  await shot(fx, '06-fixture')
+  await editorChecks(fx, 'fixture', '07')
 }
 
 // ---- Dark theme and mobile ------------------------------------------------
@@ -124,7 +289,7 @@ await dark.goto(url)
 check((await dark.evaluate(() => document.documentElement.dataset.theme)) === 'dark', 'dark preference applied before paint')
 await dark.getByRole('button', { name: 'Try a sample' }).click()
 await traced(dark)
-await shot(dark, '06-dark')
+await shot(dark, '08-dark')
 
 const mobile = await newPage({ width: 390, height: 844 })
 await mobile.goto(url)
@@ -132,7 +297,9 @@ await mobile.getByRole('button', { name: 'Try a sample' }).click()
 await traced(mobile)
 const overflow = await mobile.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
 check(overflow <= 0, `no horizontal scroll on a phone (${overflow}px)`)
-await shot(mobile, '07-mobile')
+await shot(mobile, '09-mobile')
+await mobile.getByRole('tab', { name: /Edit/ }).click()
+await shot(mobile, '10-mobile-edit')
 
 await browser.close()
 

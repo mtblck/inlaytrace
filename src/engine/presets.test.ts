@@ -9,7 +9,8 @@ import { dirname, join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { init, vectorize_rgba } from './vtracer/vtracer.js'
 import { PRESETS, settingsFor, toVtracerOptions } from './presets'
-import { inksOf, parseTrace } from '../lib/svg'
+import { parseTrace } from '../lib/svg'
+import { inksOf } from '../lib/doc'
 import { peakPalette } from '../lib/palette'
 
 beforeAll(async () => {

@@ -8,12 +8,15 @@ anywhere.
 Pick what the image is (logo, illustration, line art, poster, pixel art), adjust
 colours and smoothing, and compare the result against the original three ways:
 a split slider, a difference blend that lights up wherever the SVG is wrong,
-and an outline view that shows every path as a cutter or plotter will. Each
-colour in the trace is an editable ink you can recolour or drop. Export a single
-optimised SVG, or a zip with one SVG per ink for screen printing and vinyl.
+and the vector on its own, with optional path and node overlays in colours you
+pick. Then edit: replace or remove any colour (removing one is how to drop a
+background), drag nodes and bend curves, delete nodes or shapes, and mirror one
+half of the drawing onto the other as seamless merged shapes. Everything is
+undoable. Export a single optimised SVG, or a zip with one SVG per colour for
+screen printing and vinyl.
 
 React 19 · Vite · Tailwind v4 · VTracer (Rust → WebAssembly) in a Web Worker ·
-SVGO · deployed on Vercel, proxied into mattblack.space.
+SVGO · paper.js (mirroring only, lazy-loaded) · deployed on Vercel, proxied into mattblack.space.
 
 ## Commands
 
@@ -29,7 +32,9 @@ npm run verify     # end-to-end in a real browser (needs `preview` running)
 `verify` takes an optional URL, so the same checks run against production:
 `npm run verify -- https://mattblack.space/tools/img-to-svg/`. Set
 `CHROME_PATH` to use an installed Chromium, `SHOTS=dir` to save screenshots,
-and `FIXTURE=path` to also trace an image of your own.
+and `FIXTURE=path` to also trace and edit an image of your own. The editor
+checks (overlays, node drag, undo/redo, mirror symmetry measured on the
+exported SVG, the discard prompt) run on the built-in sample and on the fixture.
 
 ## Design notes
 
@@ -121,11 +126,49 @@ serves the real headers from `vercel.json`; and `verify` fails on any CSP
 violation in the console.
 
 **Untrusted output stays out of the markup.** The trace is shown inline (the
-outline view needs CSS on the paths), so every `d`, `fill` and `transform` is
+overlays and hit targets need real DOM paths), so every `d`, `fill` and `transform` is
 validated against what VTracer emits before it is rebuilt into the document.
 Recolours are normalised hex or ignored.
 
+**Edits sit on top of the trace until they can't.** The document is
+`{ inks, doc }`. Colour edits (`inks`) are keyed by the traced colour, so they
+survive re-tracing. `doc` stays `null`, meaning "whatever the tracer produces",
+until the first geometric edit (a node drag, a delete, a mirror) copies the
+trace into an editable document with fresh ids. From then on a trace setting
+would throw the edits away, so changing one asks first; going back to the trace
+is itself an undoable step. Undo/redo stores whole snapshots (cheap at these
+sizes, capped at 100) and coalesces a drag or a colour-picker sweep into one step.
+
+**Path data is normalised once, then round-trips exactly.** Editing converts each
+path to absolute M/L/C/Z nodes with explicit handles (`src/lib/pathdata.ts`).
+Numbers are written to three decimals and the serialiser is idempotent, so
+touching one node never nudges the rest of the drawing.
+
+**Mirror is two booleans per shape.** For each path: intersect it with the kept
+half-plane, reflect that across the axis, and unite the two. A shape that
+crossed the axis comes out as one seamless shape rather than two halves that
+meet; shapes entirely on the discarded side are dropped; paint order and fills
+are kept. The geometry is paper.js (MIT), loaded only when you mirror: 72 KB
+gzipped against an 89 KB app. The unit tests run the same core build under
+jsdom, and `verify` renders the exported SVG and compares each half against
+the other (0.0% of pixels differ on a real logo).
+
+**Overlays never export.** The canvas is three layers: the original, the
+vector exactly as exported, and an overlay `svg` with hit targets, outlines,
+nodes, handles and the mirror axis. Nodes and handles are sized in screen pixels
+(scaled by the current zoom), so they stay grabbable at 8×. A press only becomes a
+drag after 3 px of travel and keeps the grab offset, so clicking a node selects
+it without nudging it. Invisible hit targets sit beneath every visible node, so
+a neighbour's target can't steal the node under the pointer.
+
+**Busy traces stay responsive.** A Poster trace of a photo can be 2,500 paths
+and 60,000 nodes. The node overlay is one `<path>` and is skipped (with a note)
+past 20,000 nodes; each shape is a memoised element; path data is validated
+once per path, not per render; and the stats panel measures only the optimised
+file. On that trace a node drag went from 117 ms to 25 ms a move, and toggling
+the overlay from 2.4 s to 0.3 s.
+
 ## Licence
 
-MIT. VTracer is MIT OR Apache-2.0; SVGO and fflate are MIT. Potrace (GPL) and
+MIT. VTracer is MIT OR Apache-2.0; SVGO, fflate and paper.js are MIT. Potrace (GPL) and
 the `@imgly` packages (AGPL) are deliberately not used.
