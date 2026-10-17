@@ -52,7 +52,7 @@ Ctrl elsewhere; ⌥ is Alt. Shortcuts don't fire while you're typing in a field.
 
 ## How it works
 
-One list (`SHORTCUTS` in `src/components/Shortcuts.tsx`) feeds the panel; the
+One list (`SHORTCUTS` in `apps/app/src/components/Shortcuts.tsx`) feeds the panel; the
 handlers are in `App.tsx` (editing) and `Canvas.tsx` (zoom and drag modifiers).
 The panel is a native modal `<dialog>`, so the browser traps focus, closes it on
 Esc and makes the page behind it inert.

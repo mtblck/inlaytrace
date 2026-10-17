@@ -27,7 +27,7 @@ browser needs the Rust wasm32 toolchain on every machine.
 So `scripts/vendor-vtracer.mjs` rewrites the official glue to browser ESM with
 an async `init(url)`. It asserts every substitution matched and pins the
 package version, so an upstream change fails the build instead of shipping a
-module that throws in the browser. The output in `src/engine/vtracer/` is
+module that throws in the browser. The output in `apps/app/src/engine/vtracer/` is
 generated and not committed.
 
 The WebAssembly needs `'wasm-unsafe-eval'` in the content security policy;

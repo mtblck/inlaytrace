@@ -1,5 +1,5 @@
 {
-  "name": "img-to-svg",
+  "name": "inlaytrace-monorepo",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -7,22 +7,14 @@
   "scripts": {
     "vendor": "node scripts/vendor-vtracer.mjs",
     "fonts": "node scripts/build-fonts.mjs",
-    "dev": "npm run vendor && vite",
-    "build": "npm run vendor && npm run hosting:check && tsc -b && tsc -p packages/inlay && vite build",
-    "preview": "vite preview",
+    "dev": "npm run vendor && vite -c apps/app/vite.config.ts",
+    "build": "npm run vendor && npm run hosting:check && npm run lint && vite build -c apps/app/vite.config.ts",
+    "preview": "vite preview -c apps/app/vite.config.ts",
     "test": "npm run vendor && vitest run",
-    "lint": "tsc -b --noEmit && tsc -p packages/inlay",
+    "lint": "tsc -p apps/app && tsc -p packages/inlay",
     "hosting:check": "node scripts/check-hosting.mjs",
     "verify": "node scripts/verify.mjs",
     "score": "node scripts/score.mjs"
-  },
-  "dependencies": {
-    "@mtblck/inlay": "0.1.0",
-    "fflate": "0.8.3",
-    "paper": "0.12.18",
-    "react": "19.3.1",
-    "react-dom": "19.3.1",
-    "svgo": "4.1.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.3",
@@ -42,6 +34,7 @@
     "node": ">=20"
   },
   "workspaces": [
+    "apps/*",
     "packages/*"
   ]
 }

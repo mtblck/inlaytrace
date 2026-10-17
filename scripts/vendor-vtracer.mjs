@@ -13,8 +13,8 @@
  * the build here rather than shipping a module that throws at runtime.
  *
  * Output (gitignored, regenerated on every dev/build):
- *   src/engine/vtracer/vtracer.js   ESM glue exporting init() + vectorize_rgba()
- *   src/engine/vtracer/vtracer.wasm the unmodified binary
+ *   apps/app/src/engine/vtracer/vtracer.js   ESM glue exporting init() + vectorize_rgba()
+ *   apps/app/src/engine/vtracer/vtracer.wasm the unmodified binary
  */
 import { mkdirSync, readFileSync, writeFileSync, copyFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -72,7 +72,7 @@ glue =
   glue +
   `\nexport { ${exported.join(', ')} };\n`
 
-const out = join(root, 'src/engine/vtracer')
+const out = join(root, 'apps/app/src/engine/vtracer')
 mkdirSync(out, { recursive: true })
 writeFileSync(join(out, 'vtracer.js'), glue)
 copyFileSync(join(pkgDir, 'pkg/vtracer_wasm_bg.wasm'), join(out, 'vtracer.wasm'))

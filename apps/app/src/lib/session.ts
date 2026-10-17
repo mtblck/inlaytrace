@@ -19,6 +19,7 @@ const VERSION = 1
 export type SavedImage = { v: number; id: string; file: Blob; name: string }
 export type SavedState = { v: number; id: string; settings: Settings; edits: Edits }
 
+// Named before the rename to Inlay; kept so existing sessions still restore.
 const DB = 'img-to-svg'
 const STORE = 'session'
 

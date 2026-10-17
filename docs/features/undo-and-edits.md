@@ -15,7 +15,7 @@ two steps.
 
 ## What survives a re-trace
 
-The document is three things (`src/lib/doc.ts`):
+The document is three things (`apps/app/src/lib/doc.ts`):
 
 | Part | Holds | On re-trace |
 | --- | --- | --- |
