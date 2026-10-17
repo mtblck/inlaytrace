@@ -42,7 +42,7 @@ per-preset because the measurements said so.
 
 ## How the tracer uses it
 
-The [shared-edge tracer](shared-edge-tracer.md) labels each pixel with its
+The [Inlay](inlay.md) labels each pixel with its
 nearest palette colour in OKLab. Pixels that sit between two colours are
 decided by their neighbours, which keeps slivers of in-between colours off
 every edge.

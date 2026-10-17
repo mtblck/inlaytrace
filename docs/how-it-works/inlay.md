@@ -2,10 +2,12 @@
 order: 3
 ---
 
-# The shared-edge tracer
+# Inlay
 
-The tracer behind Logo, Illustration and Line art (`src/engine/shapes.ts`).
-It replaced VTracer for flat art in October 2026.
+Inlay is our shared-edge tracer, behind Logo, Illustration, Line art and Pixel
+art (`src/engine/inlay.ts`). Like inlaid wood, every piece is cut to fit its
+neighbours exactly. It replaced VTracer for flat art in October 2026, and for
+pixel art soon after.
 
 ## Why we wrote our own
 
@@ -88,3 +90,24 @@ same image.
   each end, because an end pixel looks exactly like a spur. Small images are
   upscaled first, so this rarely matters.
 - Gradients become bands, one region per palette colour. Use Poster for photos.
+
+## Pixel art
+
+Pixel art skips the clean-up and the fitting (`pixels: true`):
+
+- **Palette:** the image's exact colours, most-used first
+  (`exactPalette` in `src/lib/palette.ts`). Histogram peaks would drop a
+  one-pixel eye for being rare and fold two close shades into one.
+- **No despur:** a lone pixel is deliberate.
+- **No fitting:** each boundary is its exact pixel staircase, with straight
+  runs joined into single lines (`staircase`). Every node sits on a pixel
+  corner, with no handles.
+
+On a 16 × 16 test sprite (7 colours, two close skin shades, a one-pixel eye)
+both Inlay and VTracer's pixel mode draw every pixel exactly. Inlay used 240
+nodes against VTracer's 278 and about the same bytes, with 31 paths against 25,
+because its shapes are cut out to tile rather than stacked. On a 1024 px
+sprite it took 0.2 s against 0.85 s; on a 1024 px photo picked as pixel art
+(a worst case), 6.5 s and 12 MB against 27 s and 20 MB.
+(`src/engine/pixel.test.ts` checks the sprite on every run.)
+

@@ -24,7 +24,7 @@ screen* in the banner picks from anywhere on your screen instead. Esc or
 
 ## Merge two colours
 
-Logo and Illustration only. *Merge* on a row, then a swatch under *Into*,
+Logo, Illustration and Pixel art. *Merge* on a row, then a swatch under *Into*,
 folds that colour into the other. Unlike making them the same colour, this
 re-traces with one colour fewer, so the edge between the two disappears and
 their shapes become one: fewer paths, and no seam for a cutter to follow.
@@ -52,12 +52,12 @@ Adding it and changing its colour are separate undo steps.
 
 ## How it works
 
-Merges are a trace setting (`merge: { from: into }`, traced colours). The
-shared-edge tracer labels every pixel with the full palette first, so
+Merges are a trace setting (`merge: { from: into }`, traced colours).
+Inlay labels every pixel with the full palette first, so
 anti-aliased edges are judged against both colours, then relabels merged
 colours as their targets (following chains) before any region is built
-(`mergeLabels` in `src/engine/shapes.ts`). Poster and Pixel art use VTracer,
-which has no such step, so they don't offer it.
+(`mergeLabels` in `src/engine/inlay.ts`). Poster uses VTracer, which has no such
+step, so it doesn't offer it; Line art has one colour.
 
 The eyedropper reads the original image's pixels once per image into a
 full-size buffer (`colourAt` in `src/lib/image.ts`) and maps the click from the

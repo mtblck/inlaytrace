@@ -89,10 +89,10 @@ export const presetById = (id: PresetId) => PRESETS.find((p) => p.id === id)!
 export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {} })
 
 /** Merging colours needs the shared-edge tracer's palette mode: Logo and Illustration. */
-export const canMerge = (id: PresetId) => id === 'logo' || id === 'illustration'
+export const canMerge = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'pixel'
 
-/** Presets traced by the shared-edge tracer (src/engine/shapes.ts) rather than VTracer. */
-export const usesShapes = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'lineart'
+/** Presets traced by the shared-edge tracer (src/engine/inlay.ts) rather than VTracer. */
+export const usesInlay = (id: PresetId) => id !== 'photo'
 
 /**
  * Smoothing 0–3 → fitting tolerance in px. The Logo default (1.5) lands on
@@ -105,20 +105,18 @@ export const toleranceFor = (smoothing: number) => 0.25 + 0.5 * smoothing
  * tracer for flat art, VTracer's own options for posters and pixel art.
  */
 export function toVtracerOptions(s: Settings): Record<string, unknown> {
-  if (usesShapes(s.preset)) {
-    const fit = { engine: 'shapes', speckle: s.speckle, tolerance: toleranceFor(s.smoothing), cornerAngle: s.corners }
+  if (usesInlay(s.preset)) {
+    const fit = { engine: 'inlay', speckle: s.speckle, tolerance: toleranceFor(s.smoothing), cornerAngle: s.corners }
     if (s.preset === 'lineart') return { ...fit, mode: 'binary', threshold: s.threshold, ...(s.lightInk ? { invert: true } : {}) }
+    const merge = Object.keys(s.merge ?? {}).length ? { merge: s.merge } : {}
+    // Pixel art: its exact colours, every pixel kept, boundaries as pixel staircases.
+    if (s.preset === 'pixel') return { ...fit, mode: 'palette', peakColors: s.colors, pixels: true, ...merge }
     // The worker picks the palette from histogram peaks (src/lib/palette.ts).
-    return { ...fit, mode: 'palette', peakColors: s.colors, ...(Object.keys(s.merge ?? {}).length ? { merge: s.merge } : {}) }
+    return { ...fit, mode: 'palette', peakColors: s.colors, ...merge }
   }
   const o: Record<string, unknown> = {
     filterSpeckle: s.speckle,
     hierarchical: s.shapes,
-  }
-  if (s.preset === 'pixel') {
-    o.mode = 'pixel'
-    o.maxColors = s.colors
-    return o
   }
   // Poster: VTracer's spline fitting and quantizer suit photos' soft bands.
   o.mode = 'spline'
