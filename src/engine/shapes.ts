@@ -81,14 +81,19 @@ export function traceShapes(rgba: ArrayLike<number>, w: number, h: number, o: Sh
 /** Relabel merged colours as their targets, following chains, in place. */
 export function mergeLabels(labels: Int32Array, colors: string[], merge: Record<string, string>) {
   const index = new Map(colors.map((c, i) => [c, i]))
+  // Follow the chain to the last colour this palette still has: with fewer
+  // colours a target can be missing, and then its own target (or nothing) wins.
   const remap = colors.map((c, i) => {
     let to = c
+    let at = i
     const seen = new Set<string>()
     while (merge[to] && !seen.has(to)) {
       seen.add(to)
       to = merge[to].toLowerCase()
+      const k = index.get(to)
+      if (k !== undefined) at = k
     }
-    return index.get(to) ?? i
+    return at
   })
   if (remap.every((t, i) => t === i)) return
   for (let i = 0; i < labels.length; i++) labels[i] = remap[labels[i]]

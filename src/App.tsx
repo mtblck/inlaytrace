@@ -122,6 +122,9 @@ export default function App() {
       })
       setTrace(null)
       setHistory(startHistory(NO_EDITS))
+      // Merges name this image's colours; another image starts without them.
+      setSettings((s) => (Object.keys(s.merge).length ? { ...s, merge: {} } : s))
+      setPicking(null)
       setSelectedIds([])
       setSelectedNodes([])
       setAxis(null)
@@ -501,6 +504,7 @@ export default function App() {
   }
   const chooseTool = useCallback((t: Tool) => {
     setTool(t)
+    setPicking(null)
     setSelectedNodes([])
     // Nodes edits one shape and Mirror shows none, so neither keeps a
     // multi-selection that Delete could act on unseen.
@@ -622,6 +626,7 @@ export default function App() {
         setSelectedNodes([])
       }
       setSettings(next)
+      setPicking(null)
     })
 
   /**
@@ -646,8 +651,12 @@ export default function App() {
   }
   const onPick = (at: Pt) => {
     if (!picking || !source || !doc) return
+    // An ink that a re-trace took away has nothing to recolour.
+    if (picking.target !== 'background' && !inks.some((i) => i.hex === picking.target)) return setPicking(null)
     const hex = colourAt(source, at.x / doc.width, at.y / doc.height)
-    if (hex) applyPicked(picking.target, hex)
+    // A transparent pixel has no colour: stay armed for another click.
+    if (!hex) return
+    applyPicked(picking.target, hex)
     setPicking(null)
   }
   type EyeDropperCtor = new () => { open: () => Promise<{ sRGBHex: string }> }
@@ -667,6 +676,9 @@ export default function App() {
 
   const choosePreset = (id: PresetId) => {
     const next = settingsFor(id)
+    // Reset (the same preset again) puts the sliders back but keeps merges:
+    // they're decisions about this image's colours, not settings to tune.
+    if (id === settings.preset) next.merge = settings.merge
     if (id === 'lineart' && source && hasDarkBackground(source)) next.lightInk = true
     changeSettings(next)
   }

@@ -636,6 +636,8 @@ export function Canvas(props: Props) {
               <rect x={marquee.x} y={marquee.y} width={marquee.w} height={marquee.h} fill="var(--c-accent-dim)" stroke="var(--c-accent)" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" pointerEvents="none" data-marquee="" />
             )}
 
+            {tool === 'mirror' && props.axis && <AxisOverlay axis={props.axis} width={width} height={height} unit={unit} onGrab={(e) => startDrag(e, { kind: 'axis' })} />}
+
             {/* The eyedropper: over everything, so the click picks instead of selecting. */}
             {props.picking && (
               <rect
@@ -652,8 +654,6 @@ export function Canvas(props: Props) {
                 }}
               />
             )}
-
-            {tool === 'mirror' && props.axis && <AxisOverlay axis={props.axis} width={width} height={height} unit={unit} onGrab={(e) => startDrag(e, { kind: 'axis' })} />}
           </svg>
 
           {allNodes && allNodes.length > MAX_OVERLAY_NODES && (

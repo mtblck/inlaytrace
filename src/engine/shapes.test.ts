@@ -186,6 +186,13 @@ describe('the shapes Matt reported (#19)', () => {
     const labels = new Int32Array([0, 1, 2, 3])
     mergeLabels(labels, ['#a', '#b', '#c', ''], { '#a': '#b', '#b': '#c' })
     expect([...labels]).toEqual([2, 2, 2, 3])
+    // a → b → c with b missing from this palette still lands on c; with c missing too, a stays.
+    const gap = new Int32Array([0, 1])
+    mergeLabels(gap, ['#a', '#c'], { '#a': '#b', '#b': '#c' })
+    expect([...gap]).toEqual([1, 1])
+    const none = new Int32Array([0])
+    mergeLabels(none, ['#a'], { '#a': '#b' })
+    expect([...none]).toEqual([0])
     const loop = new Int32Array([0, 1])
     mergeLabels(loop, ['#a', '#b'], { '#a': '#b', '#b': '#a' })
     expect([...loop]).toEqual([0, 1]) // a cycle (which the UI can't make) leaves both alone rather than hanging

@@ -55,7 +55,24 @@ export function Inks({ inks, edits, selectedInk, onReplace, onReplaceDone, onRem
   const removed = new Set(edits.removed)
   /** The ink whose "merge into" chooser is open. */
   const [merging, setMerging] = useState<string | null>(null)
+  // A merge is listed while its colour is merged into one this trace still has
+  // (the colour count can drop the target, and then the tracer ignores it).
+  const present = new Set(inks.map((i) => i.hex))
+  const finalOf = (hex: string) => {
+    let to = hex
+    let last: string | null = null
+    const seen = new Set<string>()
+    while (merged?.[to] && !seen.has(to)) {
+      seen.add(to)
+      to = merged[to]
+      if (present.has(to)) last = to
+    }
+    return last
+  }
   const mergedAway = Object.entries(merged ?? {})
+    .filter(([from]) => !present.has(from))
+    .map(([from]) => [from, finalOf(from)] as const)
+    .filter((e): e is readonly [string, string] => e[1] !== null)
   const edited = edits.removed.length > 0 || Object.keys(edits.recolor).length > 0
 
   return (
@@ -141,7 +158,7 @@ export function Inks({ inks, edits, selectedInk, onReplace, onReplaceDone, onRem
                 <div className="mt-1.5 mb-1 flex flex-wrap items-center gap-1.5 pl-1" role="group" aria-label={`Merge ${ink.hex} into`}>
                   <span className="text-[12px] text-ink-muted">Into:</span>
                   {inks
-                    .filter((o) => o.hex !== ink.hex)
+                    .filter((o) => o.hex !== ink.hex && !removed.has(o.hex))
                     .map((o) => (
                       <button
                         key={o.hex}
