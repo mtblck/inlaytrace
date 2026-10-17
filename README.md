@@ -9,10 +9,10 @@ Pick what the image is (logo, illustration, line art, poster, pixel art), adjust
 colours and smoothing, and compare the result against the original three ways:
 a split slider, a difference blend that lights up wherever the SVG is wrong,
 and the vector on its own, with optional path and node overlays in colours you
-pick. Zoom with the slider or a trackpad pinch over the image. Then edit: replace or remove any colour (removing one is how to drop a
-background), drag nodes and bend curves, delete nodes or shapes, and mirror one
-half of the drawing onto the other as seamless merged shapes. Everything is
-undoable. Export a single optimised SVG, or a zip with one SVG per colour for
+pick. Zoom with the slider or a trackpad pinch over the image. Then edit:
+replace or remove any colour (removing one is how to drop a background), drag
+nodes and bend curves, delete nodes or shapes, and mirror one half of the
+drawing onto the other as seamless merged shapes. Everything is undoable. Export a single optimised SVG, or a zip with one SVG per colour for
 screen printing and vinyl.
 
 React 19 · Vite · Tailwind v4 · VTracer (Rust → WebAssembly) in a Web Worker ·
