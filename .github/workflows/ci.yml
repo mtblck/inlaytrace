@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      # vendor + hosting:check + tsc + vite build
+      - run: npm run build
+
+  e2e:
+    name: E2E (real browser)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Start preview
+        run: |
+          npm run preview -- --port 4173 > preview.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4173/tools/img-to-svg/ > /dev/null && exit 0
+            sleep 1
+          done
+          cat preview.log
+          exit 1
+      - run: npm run verify
+        env:
+          SHOTS: shots
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-shots
+          path: |
+            shots
+            preview.log
+          if-no-files-found: ignore
