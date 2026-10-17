@@ -42,8 +42,8 @@ describe('scaling from a handle', () => {
   })
   it('leaves the untouched axis alone and never collapses to zero', () => {
     const m = scaleFromHandle(box, { h: -1, v: 0 }, { x: 30, y: 99 })
-    expect(m.sy).toBe(1)
-    expect(Math.abs(m.sx * box.w)).toBeGreaterThanOrEqual(0.5 - 1e-9)
+    expect(m.d).toBe(1)
+    expect(Math.abs(m.a * box.w)).toBeGreaterThanOrEqual(0.5 - 1e-9)
   })
   it('flips past the opposite edge', () => {
     close(after(scaleFromHandle(box, { h: 1, v: 0 }, { x: 0, y: 0 })), { x: 0, y: 10, w: 10, h: 10 })
@@ -54,7 +54,7 @@ describe('scaling from a handle', () => {
     expect(apply(m, { x: 30, y: 20 })).toEqual({ x: 40, y: 10 })
   })
   it('transforms path data', () => {
-    expect(transformPath('M0 0L10 0L10 10Z', { sx: 2, sy: 3, tx: 1, ty: 1 })).toBe('M1 1L21 1L21 31Z')
+    expect(transformPath('M0 0L10 0L10 10Z', { a: 2, b: 0, c: 0, d: 3, e: 1, f: 1 })).toBe('M1 1L21 1L21 31Z')
     expect(handlePoint(box, { h: 0, v: -1 })).toEqual({ x: 20, y: 10 })
   })
 })

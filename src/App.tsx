@@ -24,7 +24,8 @@ import { push, redo, startHistory, undo, type History } from './lib/history'
 import { centreAxis, mirrorDoc, type Axis } from './lib/mirror'
 import { loadPaper } from './lib/paper'
 import { deleteNodes, moveHandle, moveNode, moveNodes, parsePath, serializePath, nodeCount, type NodePart, type NodeRef, type Pt } from './lib/pathdata'
-import { allRefs, boxToBox, hasRef, nodesInRect, pathBounds, pathsInRect, transformPath, translate, union, type Affine, type Box } from './lib/transform'
+import { addNode, nearestOnPath, roundNode, sharpenNode, simplifySubpaths, smoothNode } from './lib/nodeops'
+import { allRefs, boxToBox, rotateAbout, hasRef, nodesInRect, pathBounds, pathsInRect, transformPath, translate, union, type Affine, type Box } from './lib/transform'
 import { usePersisted } from './lib/persisted'
 import { bounds, effective, fromSlider, snap, step, toSlider, type Zoom } from './lib/zoom'
 import { sampleImage } from './lib/sample'
@@ -391,6 +392,50 @@ export default function App() {
     [startEditing],
   )
 
+  // ---- Node and shape operations (Nodes: add, smooth, sharpen, round; Select: simplify, rotate) ----
+
+  /** Double-click on the edited shape's outline: a node there, selected. */
+  const onAddNode = (at: Pt) => {
+    if (!editing || !editingSubs) return
+    const hit = nearestOnPath(editingSubs, at)
+    if (!hit) return
+    // Ends of a segment are nodes already.
+    if (hit.t < 0.01 || hit.t > 0.99) return
+    const { ref } = addNode(editingSubs, hit.sub, hit.seg, hit.t)
+    editPath(editing.id, (subs) => addNode(subs, hit.sub, hit.seg, hit.t).subs)
+    setSelectedNodes([ref])
+  }
+  /**
+   * Apply `f` to each selected node of the edited shape, as one step. Highest
+   * index first within each subpath, so a node that `f` turns into two (round)
+   * never shifts one still to come.
+   */
+  const eachNode = (f: (subs: ReturnType<typeof parsePath>, ref: NodeRef) => ReturnType<typeof parsePath>) => {
+    if (!editing || !selectedNodes.length) return
+    const refs = [...selectedNodes].sort((a, b) => a.sub - b.sub || b.index - a.index)
+    editPath(editing.id, (subs) => refs.reduce((acc, r) => f(acc, r), subs))
+  }
+  const nodeOp = (op: 'smooth' | 'sharpen' | 'round', radius = 0) => {
+    eachNode((subs, r) => (op === 'smooth' ? smoothNode(subs, r) : op === 'sharpen' ? sharpenNode(subs, r) : roundNode(subs, r, radius)))
+    // Rounding replaces each node with two, so the old refs no longer point at the corner.
+    if (op === 'round') setSelectedNodes([])
+  }
+  const simplifySelection = (tolerance: number) => {
+    if (!selectedPaths.length) return
+    const ids = new Set(selectedPaths.map((p) => p.id))
+    editDoc((d) => ({ ...d, paths: d.paths.map((p) => (ids.has(p.id) ? { ...p, d: serializePath(simplifySubpaths(parsePath(p.d), tolerance)) } : p)) }))
+  }
+  const rotateSelection = (degrees: number) => {
+    if (selectionBox && degrees) transformSelection(rotateAbout({ x: selectionBox.x + selectionBox.w / 2, y: selectionBox.y + selectionBox.h / 2 }, degrees))
+  }
+  /** What simplifying would leave, for the panel: counted only for selections small enough to be instant. */
+  const PREVIEW_MAX = 40
+  const nodesOfSelection = useMemo(() => (selectedPaths.length <= PREVIEW_MAX ? selectedPaths.reduce((n, p) => n + nodeCount(parsePath(p.d)), 0) : null), [selectedPaths])
+  const simplifyPreview = useCallback(
+    (tolerance: number) => (selectedPaths.length <= PREVIEW_MAX ? selectedPaths.reduce((n, p) => n + nodeCount(simplifySubpaths(parsePath(p.d), tolerance)), 0) : null),
+    [selectedPaths],
+  )
+
   const deleteSelection = useCallback(() => {
     if (!selectedPaths.length) return
     if (tool === 'nodes' && selectedNodes.length && editing) {
@@ -650,6 +695,7 @@ export default function App() {
                   onEnterNodes={enterNodes}
                   onDragNode={onDragNode}
                   onTransform={onTransform}
+                  onAddNode={onAddNode}
                   onAxis={(position) => axis && setAxis({ ...axis, position })}
                 />
               </div>
@@ -801,6 +847,11 @@ export default function App() {
                 onDeleteSelection={deleteSelection}
                 onBox={setBox}
                 onBoxDone={boxDone}
+                onNodeOp={nodeOp}
+                selectionNodes={nodesOfSelection}
+                simplifyPreview={simplifyPreview}
+                onSimplify={simplifySelection}
+                onRotate={rotateSelection}
                 axis={axis}
                 width={doc.width}
                 height={doc.height}

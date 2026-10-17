@@ -181,6 +181,120 @@ async function smoothChecks(page, label) {
   await page.keyboard.press(`${MOD}+z`)
 }
 
+/** Nodes tool: add a node on the outline, then smooth, sharpen and round corners. Leaves the shape as it was. */
+async function nodeOpChecks(page, label) {
+  const nodes = () => page.locator('[data-node]').count()
+  const handlesOf = (key) => page.locator(`[data-handle^="${key}:"]`).count()
+  const outlineLength = () => page.locator('[data-outline-hit]').evaluate((el) => el.getTotalLength())
+  const n0 = await nodes()
+  const len0 = await outlineLength()
+  // A point on the outline, 37% of the way round, clear of existing nodes.
+  const spot = await page.evaluate(() => {
+    const el = document.querySelector('[data-outline-hit]')
+    const total = el.getTotalLength()
+    const m = el.getScreenCTM()
+    const taken = [...document.querySelectorAll('[data-node]')].map((n) => n.getBoundingClientRect())
+    for (const f of [0.37, 0.21, 0.63, 0.81, 0.12, 0.5]) {
+      const q = el.getPointAtLength(total * f)
+      const p = new DOMPoint(q.x, q.y).matrixTransform(m)
+      if (taken.every((r) => Math.hypot(r.x + r.width / 2 - p.x, r.y + r.height / 2 - p.y) > 16)) return { x: p.x, y: p.y }
+    }
+    return null
+  })
+  if (!spot) return console.log(`         ${label}: no clear spot on the outline; skipping node operations`)
+  await page.mouse.dblclick(spot.x, spot.y)
+  const n1 = await nodes()
+  const len1 = await outlineLength()
+  check(n1 === n0 + 1 && (await page.locator('[data-node-selected]').count()) === 1, `${label}: double-clicking the outline adds a node and selects it (${n0} → ${n1})`)
+  check(Math.abs(len1 - len0) / len0 < 0.002, `${label}: adding a node leaves the outline where it was (length ${len0.toFixed(1)} → ${len1.toFixed(1)})`)
+  await page.keyboard.press(`${MOD}+z`)
+
+  // A corner (a node with no handles) and a curved node (one with both).
+  const keys = await page.locator('[data-node]').evaluateAll((els) => els.map((e) => e.dataset.node))
+  const isClear = async (key) => {
+    const b = await page.locator(`[data-node="${key}"]`).boundingBox()
+    const others = await page.locator('[data-node], [data-handle]').evaluateAll((els, k) => els.filter((e) => e.dataset.node !== k && !(e.dataset.handle ?? '').startsWith(k + ':')).map((e) => e.getBoundingClientRect().toJSON()), key)
+    return others.every((o) => Math.hypot(o.x - b.x, o.y - b.y) > 14) ? b : null
+  }
+  let corner = null
+  let curved = null
+  for (const k of keys) {
+    const h = await handlesOf(k)
+    if (!corner && h === 0) corner = (await isClear(k)) && k
+    if (!curved && h === 2) curved = (await isClear(k)) && k
+    if (corner && curved) break
+  }
+  const press = async (key) => {
+    const b = await page.locator(`[data-node="${key}"]`).boundingBox()
+    await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2)
+  }
+  if (corner) {
+    await press(corner)
+    await page.getByLabel('Corner radius').fill('3')
+    await page.getByRole('button', { name: 'Round corner' }).click()
+    check((await nodes()) === n0 + 1, `${label}: Round corner replaces a corner with two nodes and an arc`)
+    await page.keyboard.press(`${MOD}+z`)
+    await press(corner)
+    await page.getByRole('button', { name: 'Smooth' }).click()
+    check((await handlesOf(corner)) === 2, `${label}: Smooth gives a corner two handles`)
+    await page.keyboard.press(`${MOD}+z`)
+  } else console.log(`         ${label}: no clear corner node; skipping Round and Smooth`)
+  if (curved) {
+    await press(curved)
+    await page.getByRole('button', { name: 'Sharpen' }).click()
+    check((await handlesOf(curved)) === 0, `${label}: Sharpen drops a node's handles`)
+    await page.keyboard.press(`${MOD}+z`)
+  } else console.log(`         ${label}: no clear curved node; skipping Sharpen`)
+  check((await nodes()) === n0 && Math.abs((await outlineLength()) - len0) < 0.01, `${label}: undo puts the shape back after the node operations`)
+}
+
+/** Select tool: rotate by quarter turns and by the handle, and simplify. Leaves the shape as it was. */
+async function shapeOpChecks(page, label, id) {
+  const b0 = await boxOf(page)
+  const d0 = await page.locator(`path[data-path-id="${id}"]`).getAttribute('d')
+  await page.getByRole('button', { name: 'Rotate 90° clockwise' }).click()
+  const b1 = await boxOf(page)
+  check(near(b1.width, b0.height) && near(b1.height, b0.width) && near(b1.x + b1.width / 2, b0.x + b0.width / 2), `${label}: ↻ 90° turns the shape a quarter about its centre`)
+  await page.getByRole('button', { name: 'Rotate 90° anticlockwise' }).click()
+  const b2 = await boxOf(page)
+  check(near(b2.x, b0.x, 0.5) && near(b2.width, b0.width, 0.5), `${label}: ↺ 90° turns it back`)
+  await page.keyboard.press(`${MOD}+z`)
+  await page.keyboard.press(`${MOD}+z`)
+  check((await page.locator(`path[data-path-id="${id}"]`).getAttribute('d')) === d0, `${label}: two Undos restore it exactly`)
+
+  // The rotate handle, swung a quarter of the way round the centre with Shift: snaps to a multiple of 15°.
+  const knob = await page.locator('[data-rotate-handle]').boundingBox()
+  const k = { x: knob.x + knob.width / 2, y: knob.y + knob.height / 2 }
+  const c = { x: b0.x + b0.width / 2, y: b0.y + b0.height / 2 }
+  const r = Math.hypot(k.x - c.x, k.y - c.y)
+  await page.mouse.move(k.x, k.y)
+  await page.keyboard.down('Shift')
+  await page.mouse.down()
+  for (let i = 1; i <= 8; i++) {
+    const a = -Math.PI / 2 + (i / 8) * (Math.PI / 2 - 0.12) // just short of 90°: snaps to 90°
+    await page.mouse.move(c.x + r * Math.cos(a), c.y + r * Math.sin(a))
+  }
+  await page.mouse.up()
+  await page.keyboard.up('Shift')
+  const b3 = await boxOf(page)
+  check(near(b3.width, b0.height) && near(b3.height, b0.width), `${label}: dragging the rotate handle with Shift snaps to 90°`)
+  await shot(page, `rot-${label}`)
+  await page.keyboard.press(`${MOD}+z`)
+
+  // Simplify: the button says what it would leave, and that's what you get.
+  await page.getByLabel('Simplify').fill('2')
+  const button = page.getByRole('button', { name: /Simplify:|Already as simple/ })
+  const text = await button.innerText()
+  const m = text.match(/(\d+) → (\d+)/)
+  if (m) {
+    await button.click()
+    const after = await button.innerText()
+    check(after.includes(`(${m[2]} nodes)`) || after.includes(`${m[2]} →`), `${label}: Simplify does what it says (${m[1]} → ${m[2]} nodes; now "${after}")`)
+    await page.keyboard.press(`${MOD}+z`)
+    check((await page.locator(`path[data-path-id="${id}"]`).getAttribute('d')) === d0, `${label}: one Undo reverts Simplify`)
+  } else console.log(`         ${label}: shape already as simple at ±2 px ("${text}")`)
+}
+
 /** Select tool: move, scale, typed size, nudge, multi-select, marquee, select all. */
 async function selectChecks(page, label, id, n) {
   await page.getByRole('radio', { name: 'Select', exact: true }).click()
@@ -257,6 +371,8 @@ async function selectChecks(page, label, id, n) {
   const x1 = Number(await page.getByLabel('X position').inputValue())
   check(near(x1 - x0, 10, 0.02), `${label}: Shift+→ nudges 10 px (${x0} → ${x1})`)
   await page.keyboard.press(`${MOD}+z`)
+
+  await shapeOpChecks(page, label, id)
 
   // Shift-click adds a shape; a marquee from the margin takes every shape inside; ⌘A takes all.
   const other = await page.locator('path[data-path-id]').evaluateAll((els, id) => els.map((e) => e.dataset.pathId).filter((x) => x !== id), id)
@@ -375,6 +491,7 @@ async function editorChecks(page, label, n) {
   check((await page.locator(`svg[aria-label="Traced SVG"] path`).nth(best).getAttribute('d')) === dBefore, `${label}: and Undo takes it away again`)
 
   await smoothChecks(page, label)
+  await nodeOpChecks(page, label)
 
   // A marquee from the margin selects the nodes inside it.
   const sheetBox = await page.locator('svg[aria-label="Traced SVG"]').boundingBox()

@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent } from 'react'
 import type { Axis } from '../lib/mirror'
 import { isSmooth, parsePath, type NodePart, type NodeRef, type Pt, type Subpath } from '../lib/pathdata'
-import { HANDLE_SET, handlePoint, hasRef, normRect, pathBounds, scaleFromHandle, translate, union, type Affine, type Box, type Handle } from '../lib/transform'
+import { angleAt, HANDLE_SET, handlePoint, hasRef, normRect, pathBounds, rotateAbout, scaleFromHandle, translate, union, type Affine, type Box, type Handle } from '../lib/transform'
 import { anchorScroll, effective, snap, step, wheelFactor, type Zoom } from '../lib/zoom'
 
 export type ViewMode = 'split' | 'difference' | 'vector'
@@ -44,8 +44,10 @@ type Props = {
    * release. `smooth` asks for the opposite handle to stay in line.
    */
   onDragNode: (ref: NodeRef, part: NodePart, to: Pt, phase: 'move' | 'end', smooth: boolean) => void
-  /** Moving or scaling the selected shapes: `m` is relative to where the drag began. */
+  /** Moving, scaling or rotating the selected shapes: `m` is relative to where the drag began. */
   onTransform: (m: Affine, phase: 'move' | 'end') => void
+  /** Double-click on the edited shape's outline with the Nodes tool: add a node there (SVG units). */
+  onAddNode: (at: Pt) => void
   onAxis: (position: number) => void
 }
 
@@ -56,6 +58,8 @@ const HANDLE_PX = 3
 const HIT_PX = 10
 /** Bounding-box handles: a square this size on screen. */
 const BOX_PX = 8
+/** How far above the box the rotate handle sits, on screen. */
+const ROTATE_PX = 22
 const CURSORS: Record<string, string> = { '-1-1': 'nwse-resize', '11': 'nwse-resize', '1-1': 'nesw-resize', '-11': 'nesw-resize', '0-1': 'ns-resize', '01': 'ns-resize', '-10': 'ew-resize', '10': 'ew-resize' }
 /** Screen pixels the pointer must travel before a press on a node becomes a drag. */
 const DRAG_PX = 3
@@ -97,6 +101,7 @@ export function Canvas(props: Props) {
     // `last` is the latest transform sent, so a drag the browser cancels still ends where it was.
     | { kind: 'move'; id: string; start: Pt; from: { x: number; y: number }; moved: boolean; reselect: boolean; last: Affine | null }
     | { kind: 'scale'; handle: Handle; box: Box; grab: Pt; from: { x: number; y: number }; moved: boolean; last: Affine | null }
+    | { kind: 'rotate'; centre: Pt; start: number; from: { x: number; y: number }; moved: boolean; last: Affine | null }
     | { kind: 'marquee'; start: Pt; from: { x: number; y: number }; moved: boolean; mode: SelectMode; clickId: string | null }
   >(null)
   const [marquee, setMarquee] = useState<Box | null>(null)
@@ -295,6 +300,11 @@ export function Canvas(props: Props) {
       d.moved = true
       d.last = scaleFromHandle(d.box, d.handle, { x: p.x + d.grab.x, y: p.y + d.grab.y }, { proportional: e.shiftKey, fromCentre: e.altKey })
       props.onTransform(d.last, 'move')
+    } else if (d.kind === 'rotate') {
+      if (!d.moved && !far(d, e)) return
+      d.moved = true
+      d.last = rotateBy(d, p, e.shiftKey)
+      props.onTransform(d.last, 'move')
     } else if (d.kind === 'marquee') {
       if (!d.moved && !far(d, e)) return
       d.moved = true
@@ -316,6 +326,8 @@ export function Canvas(props: Props) {
     } else if (d.kind === 'scale') {
       if (d.moved)
         props.onTransform(e.type === 'pointerup' && p ? scaleFromHandle(d.box, d.handle, { x: p.x + d.grab.x, y: p.y + d.grab.y }, { proportional: e.shiftKey, fromCentre: e.altKey }) : d.last!, 'end')
+    } else if (d.kind === 'rotate') {
+      if (d.moved) props.onTransform(e.type === 'pointerup' && p ? rotateBy(d, p, e.shiftKey) : d.last!, 'end')
     } else if (d.kind === 'marquee') {
       setMarquee(null)
       if (d.moved && p) props.onMarquee(normRect(d.start, p), d.mode)
@@ -482,6 +494,23 @@ export function Canvas(props: Props) {
               // visible anchors.
               <g data-selected={selected.id}>
                 <path d={selected.d} fill="none" stroke="var(--c-accent)" strokeWidth={2} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+                {/* The outline as a wide invisible stroke: double-click adds a node there. A
+                    press still behaves as on the shape (a marquee round nodes). */}
+                <path
+                  d={selected.d}
+                  fill="none"
+                  stroke="transparent"
+                  strokeWidth={HIT_PX}
+                  vectorEffect="non-scaling-stroke"
+                  pointerEvents="stroke"
+                  data-outline-hit=""
+                  style={{ cursor: 'copy' }}
+                  onPointerDown={(e) => onShapeDown(e, selected.id)}
+                  onDoubleClick={(e) => {
+                    const p = toSvg(e)
+                    if (p) props.onAddNode(p)
+                  }}
+                />
                 {nodeList.map(({ ref, n }) =>
                   HANDLES.map((part) => {
                     const hnd = n[part]
@@ -543,6 +572,31 @@ export function Canvas(props: Props) {
                   selectedPaths.map((p) => <path key={p.id} d={p.d} fill="none" stroke="var(--c-accent)" strokeWidth={1} vectorEffect="non-scaling-stroke" pointerEvents="none" />)}
                 {selectedPaths.length === 1 && <path d={selectedPaths[0].d} fill="none" stroke="var(--c-accent)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" pointerEvents="none" />}
                 <rect x={box.x} y={box.y} width={box.w} height={box.h} fill="none" stroke="var(--c-accent)" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" pointerEvents="none" />
+                {(() => {
+                  const top = handlePoint(box, { h: 0, v: -1 })
+                  const knob = { x: top.x, y: top.y - ROTATE_PX * unit }
+                  const centre = { x: box.x + box.w / 2, y: box.y + box.h / 2 }
+                  return (
+                    <g>
+                      <line x1={top.x} y1={top.y} x2={knob.x} y2={knob.y} stroke="var(--c-accent)" strokeWidth={1} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+                      <circle
+                        cx={knob.x}
+                        cy={knob.y}
+                        r={(BOX_PX / 2 + 1) * unit}
+                        fill="var(--c-paper)"
+                        stroke="var(--c-accent)"
+                        strokeWidth={1}
+                        vectorEffect="non-scaling-stroke"
+                        data-rotate-handle=""
+                        style={{ cursor: 'grab' }}
+                        onPointerDown={(e) => {
+                          const p = toSvg(e)
+                          if (p) startDrag(e, { kind: 'rotate', centre, start: angleAt(centre, p), from: { x: e.clientX, y: e.clientY }, moved: false, last: null })
+                        }}
+                      />
+                    </g>
+                  )
+                })()}
                 {HANDLE_SET.map((k) => {
                   const at = handlePoint(box, k)
                   const s = BOX_PX * unit
@@ -631,6 +685,13 @@ const HitPath = memo(function HitPath({ id, d, movable, onDown, onDouble }: HitP
     />
   )
 })
+
+/** A rotation about the drag's centre by how far the pointer has swung round it; Shift snaps to 15°. */
+function rotateBy(d: { centre: Pt; start: number }, p: Pt, snap: boolean) {
+  let deg = angleAt(d.centre, p) - d.start
+  if (snap) deg = Math.round(deg / 15) * 15
+  return rotateAbout(d.centre, deg)
+}
 
 /** A move from `start` to `p`; with Shift, along whichever axis moved further. */
 function moveBy(start: Pt, p: Pt, constrain: boolean) {
