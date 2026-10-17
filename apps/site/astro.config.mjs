@@ -33,6 +33,7 @@ export default defineConfig({
           items: [
             { label: 'Compared with other tools', link: '/docs/how-it-differs/' },
             { label: 'Roadmap', link: '/docs/roadmap/' },
+            { label: 'Design notes', link: '/docs/design-notes/' },
             { label: 'Research', link: '/docs/research/' },
           ],
         },

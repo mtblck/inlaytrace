@@ -9,7 +9,7 @@
  * anti-aliasing. Also reports nodes (path segments) and size.
  *
  * Re-run this before shipping any change to the tracer, the fitter or a preset
- * (see README, "Tuning the presets").
+ * (see docs/design-notes.md, "Tuning the presets").
  *
  *   CHROME_PATH=/path/to/chrome npm run score
  */

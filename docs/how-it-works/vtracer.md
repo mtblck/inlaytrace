@@ -15,7 +15,7 @@ photos worse, 9.9 → 15.3 mean error).
 Moving Poster to Inlay too would drop a 650 KB WebAssembly file, the vendoring
 script below and the CSP's `'wasm-unsafe-eval'`. It needs a stacked mode and a
 quantized palette first, scored against VTracer on real photos
-([#53](https://github.com/mtblck/img-to-svg/issues/53)).
+([#53](https://github.com/mtblck/inlaytrace/issues/53)).
 
 ## Loading it in a browser
 

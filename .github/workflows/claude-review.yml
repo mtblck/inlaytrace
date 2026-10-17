@@ -20,7 +20,12 @@ concurrency:
 
 jobs:
   review:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    # PRs from forks never get the token anyway; this skips them outright, so a
+    # stranger's PR can't spend review runs or put text in front of the reviewer.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.draft == false &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -54,7 +59,7 @@ jobs:
           git checkout --detach pr/head
           rm -rf .claude && cp -r "$RUNNER_TEMP/claude-skills" .claude
       - if: env.HAS_TOKEN == 'true' && env.NO_SKILL != '1'
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@f27be6b65a4652f08a2ba3cff79114829b588967 # v1, pinned: it runs with the token
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: "/review --comment ${{ github.repository }}/pull/${{ env.PR }}"

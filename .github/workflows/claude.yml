@@ -1,7 +1,9 @@
 name: Claude
 
 # On-demand: mention @claude in a PR or issue comment (e.g. "@claude explain this
-# again", "@claude fix the failing test"). Only users with write access trigger it.
+# again", "@claude fix the failing test"). Only the owner and collaborators trigger it:
+# the repo is public, and the action's own write-access check runs only after a
+# runner has started. The `if` below stops anyone else before that.
 on:
   issue_comment:
     types: [created]
@@ -10,7 +12,13 @@ on:
 
 jobs:
   claude:
-    if: contains(github.event.comment.body, '@claude')
+    # Both the comment and the issue or PR it's on must come from the owner or a
+    # collaborator: otherwise "@claude" on a stranger's issue would have Claude
+    # read their text with write access (a prompt-injection path).
+    if: >-
+      contains(github.event.comment.body, '@claude') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association || github.event.pull_request.author_association)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -23,6 +31,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 1
-      - uses: anthropics/claude-code-action@v1
+      - uses: anthropics/claude-code-action@f27be6b65a4652f08a2ba3cff79114829b588967 # v1, pinned: it runs with the token
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

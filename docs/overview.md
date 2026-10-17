@@ -11,7 +11,7 @@ Worker so the page stays responsive.
 
 **Live:** https://mattblack.space/tools/img-to-svg/ (moving to inlaytrace.com)
 <!-- site:hide -->
-· **Code:** `mtblck/img-to-svg` (to be `mtblck/inlaytrace`) · **Plan:**
+· **Code:** `mtblck/inlaytrace` · **Plan:**
 [Going public](launch-plan.md)
 <!-- /site:hide -->
 
