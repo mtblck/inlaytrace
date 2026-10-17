@@ -7,7 +7,8 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { init, vectorize_rgba } from './vtracer/vtracer.js'
+import { init } from './vtracer/vtracer.js'
+import { runTrace } from './run'
 import { PRESETS, settingsFor, toVtracerOptions } from './presets'
 import { parseTrace } from '../lib/svg'
 import { inksOf } from '../lib/doc'
@@ -40,12 +41,8 @@ function testCard() {
   return { px: new Uint8Array(px.buffer), w, h }
 }
 
-/** Mirrors the worker: peak palettes are resolved before VTracer sees the options. */
-function trace(px: Uint8Array, w: number, h: number, options: Record<string, unknown>) {
-  const { peakColors, ...rest } = options
-  if (typeof peakColors === 'number') rest.palette = peakPalette(px, peakColors)
-  return parseTrace(vectorize_rgba(px, w, h, rest))
-}
+/** The worker's own entry point; it may flip pixels in place, so it gets a copy. */
+const trace = (px: Uint8Array, w: number, h: number, options: Record<string, unknown>) => parseTrace(runTrace(px.slice(), w, h, options))
 
 describe('presets against the real engine', () => {
   const { px, w, h } = testCard()
@@ -75,10 +72,7 @@ describe('presets against the real engine', () => {
     const light = { ...settingsFor('lineart'), lightInk: true }
     const opts = toVtracerOptions(light)
     expect(opts.invert).toBe(true)
-    // Mirror the worker: invert, then trace.
-    const flipped = card.map((c, i) => (i % 4 === 3 ? c : 255 - c))
-    const { invert: _invert, ...rest } = opts
-    const t = trace(flipped, w, h, rest)
+    const t = trace(card, w, h, opts)
     // Every traced shape starts on the disc (x, y ≥ 18), not at the card's corner.
     for (const p of t.paths) {
       const [x, y] = p.d.match(/^M\s*([\d.]+)[ ,]([\d.]+)/)!.slice(1).map(Number)

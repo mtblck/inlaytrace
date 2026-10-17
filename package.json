@@ -13,7 +13,8 @@
     "test": "npm run vendor && vitest run",
     "lint": "tsc -b --noEmit",
     "hosting:check": "node scripts/check-hosting.mjs",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs",
+    "score": "node scripts/score.mjs"
   },
   "dependencies": {
     "fflate": "0.8.3",
