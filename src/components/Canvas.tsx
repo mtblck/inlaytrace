@@ -1,6 +1,7 @@
-import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent } from 'react'
 import type { Axis } from '../lib/mirror'
 import { parsePath, type NodePart, type NodeRef, type Pt, type Subpath } from '../lib/pathdata'
+import { anchorScroll, effective, snap, step, wheelFactor, type Zoom } from '../lib/zoom'
 
 export type ViewMode = 'split' | 'difference' | 'vector'
 export type Tool = 'select' | 'mirror'
@@ -13,7 +14,13 @@ type Props = {
   width: number
   height: number
   mode: ViewMode
-  zoom: number
+  /** Screen pixels per original-image pixel, or null to fit the window. */
+  zoom: Zoom
+  /** The original image's width in pixels, which 100% is measured against. */
+  naturalWidth: number
+  onZoom: (zoom: Zoom) => void
+  /** Reports the fit-to-window scale whenever the window or image changes. */
+  onFitScale: (scale: number) => void
   tool: Tool
   overlays: Overlays
   selectedId: string | null
@@ -54,6 +61,7 @@ export function Canvas(props: Props) {
   const matRef = useRef<HTMLDivElement>(null)
   const overlayRef = useRef<SVGSVGElement>(null)
   const [fit, setFit] = useState({ w: 0, h: 0 })
+  const [view, setView] = useState({ w: 0, h: 0 })
   const [split, setSplit] = useState(50)
   const drag = useRef<
     | null
@@ -74,6 +82,7 @@ export function Canvas(props: Props) {
       const availH = Math.max(0, mat.clientHeight - pad * 2)
       const scale = Math.min(availW / width, availH / height)
       setFit({ w: Math.floor(width * scale), h: Math.floor(height * scale) })
+      setView({ w: mat.clientWidth, h: mat.clientHeight })
     }
     measure()
     const ro = new ResizeObserver(measure)
@@ -81,10 +90,114 @@ export function Canvas(props: Props) {
     return () => ro.disconnect()
   }, [width, height])
 
-  const w = fit.w * zoom
-  const h = fit.h * zoom
+  const fitScale = fit.w > 0 && props.naturalWidth > 0 ? fit.w / props.naturalWidth : 1
+  const scale = effective(zoom, fitScale)
+  const w = fit.w > 0 ? Math.round(props.naturalWidth * scale) : 0
+  const h = width > 0 ? Math.round((w * height) / width) : 0
+  // Zoomed past fit, the sheet can be panned until any edge reaches the middle
+  // of the window, so zooming around a point near an edge keeps that point
+  // under the cursor instead of snapping to the edge. At fit or below it is
+  // simply centred.
+  const zoomedIn = scale > fitScale * 1.001
+  const padX = zoomedIn ? Math.max(32, Math.round(view.w / 2)) : 32
+  const padY = zoomedIn ? Math.max(32, Math.round(view.h / 2)) : 32
   // SVG units per screen pixel.
   const unit = w > 0 ? width / w : 1
+
+  const { onFitScale } = props
+  useLayoutEffect(() => {
+    if (fit.w > 0) onFitScale(fitScale)
+  }, [fit.w, fitScale, onFitScale])
+
+  // ---- Zoom around a point ------------------------------------------------------
+  // The sheet's last on-screen rect, the point a pending zoom should hold
+  // still, and the scale the next wheel event builds on (several can arrive
+  // before React re-renders).
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const lastRect = useRef<DOMRect | null>(null)
+  const anchor = useRef<{ x: number; y: number } | null>(null)
+  const target = useRef(scale)
+  const pointer = useRef<{ x: number; y: number } | null>(null)
+  const live = useRef({ scale, fitScale, onZoom: props.onZoom })
+  live.current = { scale, fitScale, onZoom: props.onZoom }
+
+  useLayoutEffect(() => {
+    const mat = matRef.current
+    const sheet = sheetRef.current
+    if (!mat || !sheet) return
+    const before = lastRect.current
+    const after = sheet.getBoundingClientRect()
+    if (before && (before.width !== after.width || before.height !== after.height)) {
+      const m = mat.getBoundingClientRect()
+      const at = anchor.current ?? { x: m.left + m.width / 2, y: m.top + m.height / 2 }
+      const { dx, dy } = anchorScroll(before, after, at.x, at.y)
+      mat.scrollLeft += dx
+      mat.scrollTop += dy
+    }
+    anchor.current = null
+    target.current = scale
+    lastRect.current = sheet.getBoundingClientRect()
+  }, [w, h, scale])
+
+  useEffect(() => {
+    const mat = matRef.current
+    if (!mat) return
+    const zoomTo = (next: number, at: { x: number; y: number } | null) => {
+      const { fitScale, onZoom } = live.current
+      target.current = next
+      anchor.current = at
+      onZoom(snap(next, fitScale))
+    }
+    // A trackpad pinch is a wheel event with ctrlKey set (Chrome, Firefox, Edge);
+    // ⌘/Ctrl + mouse wheel zooms too. Plain scrolling is left alone.
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return
+      e.preventDefault()
+      zoomTo(target.current * wheelFactor(e.deltaY, e.deltaMode), { x: e.clientX, y: e.clientY })
+    }
+    // Safari reports pinches as gesture events instead.
+    type Gesture = UIEvent & { scale: number; clientX: number; clientY: number }
+    let base = 1
+    const onGestureStart = (e: Event) => {
+      e.preventDefault()
+      base = target.current
+    }
+    const onGestureChange = (e: Event) => {
+      const g = e as Gesture
+      e.preventDefault()
+      zoomTo(base * g.scale, { x: g.clientX, y: g.clientY })
+    }
+    const onScroll = () => {
+      if (sheetRef.current) lastRect.current = sheetRef.current.getBoundingClientRect()
+    }
+    // ⌘/Ctrl + = − 0 1 while the pointer is over the canvas or focus is inside it.
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return
+      if (!pointer.current && !mat.contains(document.activeElement)) return
+      const { fitScale, onZoom } = live.current
+      const at = pointer.current
+      if (e.key === '=' || e.key === '+') zoomTo(effective(step(target.current, fitScale, 1), fitScale), at)
+      else if (e.key === '-' || e.key === '_') zoomTo(effective(step(target.current, fitScale, -1), fitScale), at)
+      else if (e.key === '0') {
+        anchor.current = null
+        onZoom(null)
+      } else if (e.key === '1') zoomTo(1, at)
+      else return
+      e.preventDefault()
+    }
+    mat.addEventListener('wheel', onWheel, { passive: false })
+    mat.addEventListener('gesturestart', onGestureStart)
+    mat.addEventListener('gesturechange', onGestureChange)
+    mat.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('keydown', onKey)
+    return () => {
+      mat.removeEventListener('wheel', onWheel)
+      mat.removeEventListener('gesturestart', onGestureStart)
+      mat.removeEventListener('gesturechange', onGestureChange)
+      mat.removeEventListener('scroll', onScroll)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [])
 
   /** Screen → SVG coordinates, through the overlay's own transform, so zoom and scroll never matter. */
   const toSvg = useCallback((e: { clientX: number; clientY: number }): Pt | null => {
@@ -175,9 +288,18 @@ export function Canvas(props: Props) {
   const vectorBox = `0 0 ${width} ${height}`
 
   return (
-    <div ref={matRef} className="mat absolute inset-0 overflow-auto">
-      <div className="grid min-h-full min-w-full place-items-center p-8" style={{ width: zoom > 1 ? w + 64 : undefined }}>
+    <div
+      ref={matRef}
+      className="mat absolute inset-0 overflow-auto"
+      data-zoom={Math.round(scale * 1000) / 1000}
+      onPointerMove={(e) => (pointer.current = { x: e.clientX, y: e.clientY })}
+      onPointerLeave={() => (pointer.current = null)}
+    >
+      {/* Sized to the sheet plus padding, never smaller than the window, so a
+          zoomed sheet scrolls in both directions and a fitted one stays centred. */}
+      <div className="grid min-h-full min-w-full place-items-center" style={{ width: w + 2 * padX, height: h + 2 * padY, padding: `${padY}px ${padX}px` }}>
         <div
+          ref={sheetRef}
           className="checker relative shadow-[0_0_0_1px_var(--c-rule)] select-none"
           // Touch scrolls the page unless something on the canvas is draggable:
           // a selected shape's nodes or the mirror axis. The split handle opts
@@ -193,7 +315,7 @@ export function Canvas(props: Props) {
               alt="Original image"
               draggable={false}
               className="absolute inset-0 h-full w-full"
-              style={{ imageRendering: zoom >= 3 ? 'pixelated' : undefined }}
+              style={{ imageRendering: scale >= 3 ? 'pixelated' : undefined }}
             />
           )}
 

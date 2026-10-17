@@ -247,6 +247,57 @@ await handle.focus()
 await page.keyboard.press('End')
 check((await handle.getAttribute('aria-valuenow')) === '100', 'split handle responds to the keyboard')
 
+// ---- Zoom ---------------------------------------------------------------------
+{
+  const readout = () => page.locator('[data-zoom-readout]').innerText()
+  const scale = async () => Number(await page.locator('[data-zoom]').getAttribute('data-zoom'))
+  const fitPct = await readout()
+  check((await page.getByRole('button', { name: 'Fit' }).getAttribute('aria-pressed')) === 'true', `opens at fit (${fitPct})`)
+  await page.getByRole('button', { name: '100%' }).click()
+  check((await scale()) === 1 && (await readout()) === '100%', '100% shows one image pixel per screen pixel')
+  // + steps by √2, but stops at fit when a step would cross it.
+  const fit = Number(fitPct.replace('%', '')) / 100
+  await page.getByRole('button', { name: 'Zoom in' }).click()
+  const stepped = await scale()
+  const expected = fit > 1 && fit < Math.SQRT2 ? fit : Math.SQRT2
+  check(Math.abs(stepped - expected) < 0.01, `+ steps by √2, stopping at fit if it crosses it (100% → ${await readout()})`)
+  await page.getByRole('slider', { name: 'Zoom' }).fill('2')
+  check((await readout()) === '400%', `slider sets the zoom (${await readout()})`)
+  const sheetW = (await page.locator('[data-zoom] .checker').boundingBox()).width
+  check(Math.abs(sheetW - 640 * 4) <= 1, `sheet is drawn at 400% (${Math.round(sheetW)} px for a 640 px image)`)
+
+  // Wheel with Ctrl (what a trackpad pinch sends) zooms around the cursor.
+  await page.getByRole('button', { name: 'Fit' }).click()
+  const mat = await page.locator('[data-zoom]').boundingBox()
+  const cx = mat.x + mat.width * 0.3
+  const cy = mat.y + mat.height * 0.35
+  const fracAt = async () => {
+    const b = await page.locator('[data-zoom] .checker').boundingBox()
+    return [(cx - b.x) / b.width, (cy - b.y) / b.height]
+  }
+  await page.mouse.move(cx, cy)
+  const before = await fracAt()
+  const s0 = await scale()
+  await page.mouse.wheel(0, 10) // plain scroll: no zoom
+  check((await scale()) === s0, 'plain scrolling over the canvas does not zoom')
+  await page.keyboard.down('Control')
+  for (let i = 0; i < 6; i++) await page.mouse.wheel(0, -40)
+  await page.keyboard.up('Control')
+  await page.waitForTimeout(100)
+  const after = await fracAt()
+  const drift = Math.max(Math.abs(after[0] - before[0]), Math.abs(after[1] - before[1])) * 100
+  const s1 = await scale()
+  check(s1 > s0 * 2, `ctrl+wheel (trackpad pinch) zooms in (${Math.round(s0 * 100)}% → ${Math.round(s1 * 100)}%)`)
+  check(drift < 0.5, `the point under the cursor stays put (${drift.toFixed(2)}% drift)`)
+  await shot(page, '04b-zoomed')
+
+  // Keyboard: Ctrl+- steps out, Ctrl+0 fits, with the pointer over the canvas.
+  await page.keyboard.press('Control+Minus')
+  check((await scale()) < s1, 'Ctrl+− zooms out')
+  await page.keyboard.press('Control+0')
+  check((await page.getByRole('button', { name: 'Fit' }).getAttribute('aria-pressed')) === 'true', 'Ctrl+0 returns to fit')
+}
+
 // ---- Editor: overlays, node drag, undo/redo, mirror ------------------------
 await editorChecks(page, 'sample', '05')
 

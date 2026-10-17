@@ -9,7 +9,7 @@ Pick what the image is (logo, illustration, line art, poster, pixel art), adjust
 colours and smoothing, and compare the result against the original three ways:
 a split slider, a difference blend that lights up wherever the SVG is wrong,
 and the vector on its own, with optional path and node overlays in colours you
-pick. Then edit: replace or remove any colour (removing one is how to drop a
+pick. Zoom with the slider or a trackpad pinch over the image. Then edit: replace or remove any colour (removing one is how to drop a
 background), drag nodes and bend curves, delete nodes or shapes, and mirror one
 half of the drawing onto the other as seamless merged shapes. Everything is
 undoable. Export a single optimised SVG, or a zip with one SVG per colour for
@@ -160,6 +160,16 @@ nodes, handles and the mirror axis. Nodes and handles are sized in screen pixels
 drag after 3 px of travel and keeps the grab offset, so clicking a node selects
 it without nudging it. Invisible hit targets sit beneath every visible node, so
 a neighbour's target can't steal the node under the pointer.
+
+**Zoom is a scale, not a level.** Zoom is stored as screen pixels per
+original pixel (`null` means fit, which follows the window), so 100% means the
+same thing however large the image was traced. The slider and the ± steps are
+logarithmic (√2 a step), and steps stop at fit and at 100% rather than skipping
+past them. A trackpad pinch over the canvas zooms around the cursor: Chrome,
+Firefox and Edge send it as ctrl+wheel, Safari as gesture events, and both are
+handled; ⌘/Ctrl + wheel, ⌘/Ctrl + = − 0 1 work too. Past fit, the sheet gets
+half a window of padding on each side, which is what lets the point under the
+cursor stay put (0.1% drift over a 1,100% pinch) even near an edge.
 
 **Busy traces stay responsive.** A Poster trace of a photo can be 2,500 paths
 and 60,000 nodes. The node overlay is one `<path>` and is skipped (with a note)
