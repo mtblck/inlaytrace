@@ -30,7 +30,7 @@ export const SHORTCUTS: { title: string; rows: Row[] }[] = [
       { keys: [`${SHIFT} click`], does: 'Add to or remove from the selection' },
       { keys: ['Drag on empty canvas'], does: 'Select shapes wholly inside (or nodes, with Nodes)' },
       { keys: [`${SHIFT} drag`, `${ALT} drag`], does: 'Add to / remove from the selection' },
-      { keys: ['Esc'], does: 'Deselect nodes, then shapes, then back to Select' },
+      { keys: ['Esc'], does: 'Put the eyedropper away; deselect nodes, then shapes; back to Select' },
     ],
   },
   {

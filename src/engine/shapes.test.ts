@@ -8,7 +8,7 @@ import { fitChain, pointAt, type Cubic } from '../lib/fit'
 import { parsePath, type Pt } from '../lib/pathdata'
 import { gunzipSync } from 'fflate'
 import { SAMPLE_CAPS } from './fixtures/sample-caps'
-import { otsu, traceShapes } from './shapes'
+import { mergeLabels, otsu, traceShapes } from './shapes'
 
 type Paint = (x: number, y: number) => [number, number, number, number?]
 
@@ -167,6 +167,35 @@ describe('the shapes Matt reported (#19)', () => {
           if (Math.hypot(a.x - b.x, a.y - b.y) < 3) close.push(`${a.x},${a.y}`)
         })
     expect(close).toEqual([])
+  })
+
+  it('merging a colour removes the edge between the two', () => {
+    // Red and blue squares side by side on cream: merged, one red rectangle.
+    const w = 80
+    const h = 50
+    const px = raster(w, h, (x, y) => (y > 10 && y < 40 && x > 10 && x < 70 ? (x < 40 ? RED : BLUE) : CREAM))
+    const palette = [hex(CREAM), hex(RED), hex(BLUE)]
+    const merged = pathsOf(traceShapes(px, w, h, { ...opts, mode: 'palette', palette, merge: { [hex(BLUE)]: hex(RED) } }))
+    expect(merged.map((p) => p.fill).sort()).toEqual([hex(CREAM), hex(RED)].sort())
+    const red = merged.find((p) => p.fill === hex(RED))!
+    expect(Math.abs(area(red.d))).toBeCloseTo(60 * 30, -1) // the whole 60 × 30 block
+    expect(parsePath(red.d).flatMap((x) => x.nodes)).toHaveLength(4) // one rectangle: no seam left inside it
+  })
+
+  it('follows merge chains and ignores loops', () => {
+    const labels = new Int32Array([0, 1, 2, 3])
+    mergeLabels(labels, ['#a', '#b', '#c', ''], { '#a': '#b', '#b': '#c' })
+    expect([...labels]).toEqual([2, 2, 2, 3])
+    // a → b → c with b missing from this palette still lands on c; with c missing too, a stays.
+    const gap = new Int32Array([0, 1])
+    mergeLabels(gap, ['#a', '#c'], { '#a': '#b', '#b': '#c' })
+    expect([...gap]).toEqual([1, 1])
+    const none = new Int32Array([0])
+    mergeLabels(none, ['#a'], { '#a': '#b' })
+    expect([...none]).toEqual([0])
+    const loop = new Int32Array([0, 1])
+    mergeLabels(loop, ['#a', '#b'], { '#a': '#b', '#b': '#a' })
+    expect([...loop]).toEqual([0, 1]) // a cycle (which the UI can't make) leaves both alone rather than hanging
   })
 
   it('a circle is four curves, the way it would be drawn by hand', () => {

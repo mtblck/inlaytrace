@@ -37,13 +37,18 @@ export type Settings = {
   smoothing: number
   corners: number
   shapes: 'stacked' | 'cutout'
+  /**
+   * Colours folded into others before tracing (Logo and Illustration), traced
+   * hex → traced hex. A new preset starts with none.
+   */
+  merge: Record<string, string>
 }
 
 export type Preset = {
   id: PresetId
   label: string
   hint: string
-  defaults: Omit<Settings, 'preset'>
+  defaults: Omit<Settings, 'preset' | 'merge'>
 }
 
 export const PRESETS: Preset[] = [
@@ -81,7 +86,10 @@ export const PRESETS: Preset[] = [
 
 export const presetById = (id: PresetId) => PRESETS.find((p) => p.id === id)!
 
-export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults })
+export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {} })
+
+/** Merging colours needs the shared-edge tracer's palette mode: Logo and Illustration. */
+export const canMerge = (id: PresetId) => id === 'logo' || id === 'illustration'
 
 /** Presets traced by the shared-edge tracer (src/engine/shapes.ts) rather than VTracer. */
 export const usesShapes = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'lineart'
@@ -101,7 +109,7 @@ export function toVtracerOptions(s: Settings): Record<string, unknown> {
     const fit = { engine: 'shapes', speckle: s.speckle, tolerance: toleranceFor(s.smoothing), cornerAngle: s.corners }
     if (s.preset === 'lineart') return { ...fit, mode: 'binary', threshold: s.threshold, ...(s.lightInk ? { invert: true } : {}) }
     // The worker picks the palette from histogram peaks (src/lib/palette.ts).
-    return { ...fit, mode: 'palette', peakColors: s.colors }
+    return { ...fit, mode: 'palette', peakColors: s.colors, ...(Object.keys(s.merge ?? {}).length ? { merge: s.merge } : {}) }
   }
   const o: Record<string, unknown> = {
     filterSpeckle: s.speckle,
