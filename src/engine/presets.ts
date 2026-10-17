@@ -91,7 +91,7 @@ export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetB
 /** Merging colours needs the shared-edge tracer's palette mode: Logo and Illustration. */
 export const canMerge = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'pixel'
 
-/** Presets traced by the shared-edge tracer (src/engine/inlay.ts) rather than VTracer. */
+/** Presets traced by the shared-edge tracer (packages/inlay) rather than VTracer. */
 export const usesInlay = (id: PresetId) => id !== 'photo'
 
 /**
@@ -111,7 +111,7 @@ export function toVtracerOptions(s: Settings): Record<string, unknown> {
     const merge = Object.keys(s.merge ?? {}).length ? { merge: s.merge } : {}
     // Pixel art: its exact colours, every pixel kept, boundaries as pixel staircases.
     if (s.preset === 'pixel') return { ...fit, mode: 'palette', peakColors: s.colors, pixels: true, ...merge }
-    // The worker picks the palette from histogram peaks (src/lib/palette.ts).
+    // The worker picks the palette from histogram peaks (peakPalette in packages/inlay).
     return { ...fit, mode: 'palette', peakColors: s.colors, ...merge }
   }
   const o: Record<string, unknown> = {

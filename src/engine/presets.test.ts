@@ -12,7 +12,7 @@ import { runTrace } from './run'
 import { PRESETS, settingsFor, toVtracerOptions } from './presets'
 import { parseTrace } from '../lib/svg'
 import { inksOf } from '../lib/doc'
-import { peakPalette } from '../lib/palette'
+import { peakPalette } from '@mtblck/inlay'
 
 beforeAll(async () => {
   // import.meta.url is not a file: URL under jsdom, so resolve from the module path.

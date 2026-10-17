@@ -5,7 +5,7 @@ order: 4
 # Curve fitting
 
 How a boundary of pixel steps becomes the fewest straight lines and curves that
-follow it (`src/lib/fit.ts`). The goal is what a designer would draw: straight
+follow it (`packages/inlay/src/fit.ts`). The goal is what a designer would draw: straight
 edges as single lines, corners as single sharp points, round things as smooth
 curves, and no clusters of nodes.
 
@@ -87,5 +87,5 @@ Each rule above fixed a measured failure: wobbly slopes and rounded peaks
 (VTracer), gaps (per-shape fitting), hooked stroke ends and a bump at a snow
 cap's tip (found in Matt's browser, reproduced by sweeping JPEG quality), and
 nodes 1–3 px apart at junctions (found in review). The unit tests in
-`src/engine/inlay.test.ts` pin each one, including one on a real JPEG crop of
+`packages/inlay/src/inlay.test.ts` pin each one, including one on a real JPEG crop of
 the sample.

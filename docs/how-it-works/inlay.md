@@ -5,7 +5,7 @@ order: 3
 # Inlay
 
 Inlay is our shared-edge tracer, behind Logo, Illustration, Line art and Pixel
-art (`src/engine/inlay.ts`). Like inlaid wood, every piece is cut to fit its
+art (`packages/inlay/src/inlay.ts`). Like inlaid wood, every piece is cut to fit its
 neighbours exactly. It replaced VTracer for flat art in October 2026, and for
 pixel art soon after.
 
@@ -96,7 +96,7 @@ same image.
 Pixel art skips the clean-up and the fitting (`pixels: true`):
 
 - **Palette:** the image's exact colours, most-used first
-  (`exactPalette` in `src/lib/palette.ts`). Histogram peaks would drop a
+  (`exactPalette` in `packages/inlay/src/palette.ts`). Histogram peaks would drop a
   one-pixel eye for being rare and fold two close shades into one.
 - **No despur:** a lone pixel is deliberate.
 - **No fitting:** each boundary is its exact pixel staircase, with straight

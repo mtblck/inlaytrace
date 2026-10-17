@@ -84,7 +84,7 @@ apart, and none of its settings gave straight lines *and* sharp corners.
 Fitting each traced shape separately fixed the lines but opened hairline gaps,
 because cut-out shapes trace every shared edge twice and the two copies were
 fitted a fraction of a pixel apart. So Logo, Illustration and Line art now use
-a tracer of our own, **Inlay** (`src/engine/inlay.ts`), named for inlaid wood,
+a tracer of our own, **Inlay** (`packages/inlay/src/inlay.ts`), named for inlaid wood,
 where every piece is cut to fit its neighbours:
 
 1. Label every pixel with a palette colour (the histogram peaks below). A pixel
@@ -94,7 +94,7 @@ where every piece is cut to fit its neighbours:
 3. Walk the cracks between differently labelled pixels. Where three regions
    meet is a junction; each boundary between junctions is one chain, with one
    region either side.
-4. Fit each chain once (`src/lib/fit.ts`): find corners (two straight sides,
+4. Fit each chain once (`packages/inlay/src/fit.ts`): find corners (two straight sides,
    fitted a few pixels out, that meet near the outline; a round end's sides run
    parallel, so it stays a curve), then a straight line wherever one fits
    within 1.5× tolerance, otherwise straight stretches as lines and the rest as
@@ -161,7 +161,7 @@ Two of those were surprises worth remembering:
 - *VTracer's quantizer drifts flat colours towards their neighbours.* The gold
   sun came out pale peach, plainly visible in the Difference view. Flat art's
   real colours are sharp peaks in the histogram, with anti-aliasing a thin
-  spread between them, so `src/lib/palette.ts` takes the peaks (5-bit bins,
+  spread between them, so `packages/inlay/src/palette.ts` takes the peaks (5-bit bins,
   most frequent first, accepted only if perceptually distinct in OKLab) and
   passes them to VTracer as a fixed palette. That recovered the source colours
   almost exactly, and on a real illustration cut mean error from 11.1 to 4.3.
