@@ -95,6 +95,27 @@ describe('remove and replace', () => {
   })
 })
 
+describe('background', () => {
+  it('sits behind every shape and is the first element', () => {
+    const svg = buildSvg(doc, NO_INKS, undefined, '#FFAA00')
+    expect(svg.indexOf('<rect')).toBeLessThan(svg.indexOf('<path'))
+    expect(svg).toContain('<rect width="64" height="32" fill="#ffaa00"/>')
+  })
+
+  it('is left out when transparent, and malformed colours are ignored', () => {
+    expect(buildSvg(doc)).not.toContain('<rect')
+    expect(buildSvg(doc, NO_INKS, undefined, 'red;}')).not.toContain('<rect')
+  })
+
+  it('is its own layer in the zip, first', () => {
+    const files = layerFiles(doc, NO_INKS, 'logo', '#ffffff')
+    expect(files[0].name).toBe('logo-00-background-ffffff.svg')
+    expect(files[0].svg).toContain('<rect')
+    expect(files[0].svg).not.toContain('<path')
+    expect(files.slice(1).every((f) => !f.svg.includes('<rect'))).toBe(true)
+  })
+})
+
 describe('geometry edits', () => {
   it('replace and delete touch only the named path', () => {
     const id = doc.paths[1].id
