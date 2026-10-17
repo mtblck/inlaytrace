@@ -1,0 +1,33 @@
+{
+  "name": "@mtblck/inlay",
+  "version": "0.1.0",
+  "description": "A raster-to-vector tracer whose shapes share their edges exactly: no gaps, no overlaps.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "author": "Matt Black (https://mattblack.space)",
+  "keywords": [
+    "vectorize",
+    "trace",
+    "bitmap",
+    "svg",
+    "image-tracing",
+    "vector"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "!src/**/*.test.ts",
+    "!src/fixtures"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "test": "vitest run --root ../..  packages/inlay",
+    "typecheck": "tsc -p ."
+  },
+  "devDependencies": {
+    "fflate": "0.8.3"
+  }
+}

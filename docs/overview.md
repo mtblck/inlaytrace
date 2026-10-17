@@ -53,8 +53,8 @@ in a Web Worker so the page stays responsive.
 | Path | What |
 | --- | --- |
 | `src/engine/` | The worker, Inlay (`shapes.ts`), VTracer glue, presets |
-| `src/lib/fit.ts` | Curve fitting: corners, smoothing, lines and Béziers |
-| `src/lib/palette.ts` | Palettes from histogram peaks |
+| `packages/inlay/src/fit.ts` | Curve fitting: corners, smoothing, lines and Béziers |
+| `packages/inlay/src/palette.ts` | Palettes from histogram peaks |
 | `src/lib/doc.ts`, `history.ts`, `pathdata.ts` | The editable document, undo, path data |
 | `src/lib/mirror.ts` | Mirroring with paper.js booleans |
 | `src/components/` | Canvas, controls, edit panel, colours |

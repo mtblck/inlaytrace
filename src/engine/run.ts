@@ -4,8 +4,7 @@
  * when a VTracer preset runs (the shared-edge tracer needs no setup).
  */
 import { vectorize_rgba } from './vtracer/vtracer.js'
-import { exactPalette, peakPalette } from '../lib/palette'
-import { traceInlay } from './inlay'
+import { exactPalette, peakPalette, traceInlay } from '@mtblck/inlay'
 
 export const needsVtracer = (options: Record<string, unknown>) => options.engine !== 'inlay'
 

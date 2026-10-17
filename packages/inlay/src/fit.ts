@@ -29,7 +29,7 @@
  * are clamped to the chain, so the result depends only on the chain's own
  * points. That is what lets two shapes share one fitted edge exactly.
  */
-import type { Pt } from './pathdata'
+import type { Pt } from './path'
 
 export type FitOptions = {
   /** Max distance in pixels between the outline and the fitted path. */
