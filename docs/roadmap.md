@@ -6,8 +6,7 @@ order: 40
 
 Suggested improvements, drawn from the [comparison with other tools](how-it-differs.md),
 the [research](research.md) and testing. Ordered by how much each would help
-against how much it costs. Items with a ticket link are on the board; the rest
-are ideas until they get one.
+against how much it costs. Every item has a ticket on the board.
 
 ## Now: make the editor feel like an editor
 
@@ -20,37 +19,37 @@ everyday fixes faster and are the ones testing has asked for.
 | **Drag to select** | A marquee to select several shapes, or several nodes inside one, so moves, deletes and scales apply to all of them. ⇧ adds, ⌥ removes. | [#22](https://github.com/mtblck/img-to-svg/issues/22) |
 | **Smooth nodes** | Dragging one handle of a smooth node should swing its partner to stay in line, as in Illustrator and Figma. Hold ⌥ to break the pair; corners stay independent. | [#23](https://github.com/mtblck/img-to-svg/issues/23) |
 | **Shortcuts and a shortcuts panel** | Tool keys (V select, A nodes), arrow-key nudging (⇧ for 10 px), select all, and a panel on `?` listing everything. | [#24](https://github.com/mtblck/img-to-svg/issues/24) |
-| **Fix the Smoothing "Off" label** | The slider reads "Off" at 0 but still smooths a little ([Presets and settings](features/presets-and-settings.md)). | — |
+| **Fix the Smoothing "Off" label** | The slider reads "Off" at 0 but still smooths a little ([Presets and settings](features/presets-and-settings.md)). | [#26](https://github.com/mtblck/img-to-svg/issues/26) |
 
 ## Next: close the gaps with the paid tools
 
-| Item | Why |
-| --- | --- |
-| **Add node, convert node** | Double-click a segment to add a node; toggle a node between corner and smooth. The two edits after moving that every editor has. |
-| **Merge colours** | Pick two palette swatches and fold one into the other, re-tracing so the shared edge disappears (Vectorizer.ai's region merge). Today you can only make them the same colour. |
-| **Eyedropper** | Pick a recolour from the original image, or from anywhere on screen with the EyeDropper API. |
-| **Corner sharpen and round** | Per-node: snap a slightly rounded corner sharp, or round a sharp one by a radius. |
-| **Simplify selection** | Re-fit the selected shapes with fewer nodes at a chosen tolerance. |
-| **Rotate** | With scale (#21), the last of the basic transforms. |
-| **Export size and PNG** | Set width and height (or units) on download; export a PNG at any scale from the vector. |
-| **PDF and EPS export** | What print shops and cutters still ask for. PDF can be built in the browser; EPS is plain text. |
-| **Session save** | Keep the image, settings and edits in IndexedDB so a reload doesn't lose work, with a clear "stored on this device" note. |
+| Item | Why | Ticket |
+| --- | --- | --- |
+| **Add node, convert node** | Double-click a segment to add a node; toggle a node between corner and smooth. The two edits after moving that every editor has. | [#27](https://github.com/mtblck/img-to-svg/issues/27) |
+| **Merge colours** | Pick two palette swatches and fold one into the other, re-tracing so the shared edge disappears (Vectorizer.ai's region merge). Today you can only make them the same colour. | [#28](https://github.com/mtblck/img-to-svg/issues/28) |
+| **Eyedropper** | Pick a recolour from the original image, or from anywhere on screen with the EyeDropper API. | [#29](https://github.com/mtblck/img-to-svg/issues/29) |
+| **Corner sharpen and round** | Per-node: snap a slightly rounded corner sharp, or round a sharp one by a radius. | [#30](https://github.com/mtblck/img-to-svg/issues/30) |
+| **Simplify selection** | Re-fit the selected shapes with fewer nodes at a chosen tolerance. | [#31](https://github.com/mtblck/img-to-svg/issues/31) |
+| **Rotate** | With scale (#21), the last of the basic transforms. | [#32](https://github.com/mtblck/img-to-svg/issues/32) |
+| **Export size and PNG** | Set width and height (or units) on download; export a PNG at any scale from the vector. | [#33](https://github.com/mtblck/img-to-svg/issues/33) |
+| **PDF and EPS export** | What print shops and cutters still ask for. PDF can be built in the browser; EPS is plain text. | [#34](https://github.com/mtblck/img-to-svg/issues/34) |
+| **Session save** | Keep the image, settings and edits in IndexedDB so a reload doesn't lose work, with a clear "stored on this device" note. | [#35](https://github.com/mtblck/img-to-svg/issues/35) |
 
 ## Later: bigger bets
 
-| Item | Why |
-| --- | --- |
-| **Symmetry detection** | Find mirror and rotational symmetry in the trace and enforce it, as Vectorizer.ai does. The manual mirror covers the common case. |
-| **Shape fitting** | Recognise circles, ellipses, rounded rectangles and regular polygons and write them as exact shapes. |
-| **Centerline tracing** | Single strokes for plotters, engraving and handwriting, rather than outlines. |
-| **Background removal and upscaling** | In-browser models for photos and low-res logos, held to the licence rule (MIT/BSD/Apache weights only). |
-| **Target file size** | "Make it under 10 KB": search the settings for the best trace that fits. |
-| **Groups and layer reordering** | Treat several shapes as one; move a shape above or below another. |
-| **DXF export** | For CNC and laser cutting. |
-| **SVG import** | Open an SVG to edit its paths, so the editor is useful on its own. |
-| **Batch** | Trace a folder of images with one preset, download a zip. |
-| **Offline install** | A service worker and manifest so it installs as an app and works offline (SVGcode does this). |
-| **HD mode** | A paid, server-side trace for very large images: a Vercel Function with spend caps, opt-in, clearly marked as leaving the device. No database. |
+| Item | Why | Ticket |
+| --- | --- | --- |
+| **Symmetry detection** | Find mirror and rotational symmetry in the trace and enforce it, as Vectorizer.ai does. The manual mirror covers the common case. | [#36](https://github.com/mtblck/img-to-svg/issues/36) |
+| **Shape fitting** | Recognise circles, ellipses, rounded rectangles and regular polygons and write them as exact shapes. | [#37](https://github.com/mtblck/img-to-svg/issues/37) |
+| **Centerline tracing** | Single strokes for plotters, engraving and handwriting, rather than outlines. | [#38](https://github.com/mtblck/img-to-svg/issues/38) |
+| **Background removal and upscaling** | In-browser models for photos and low-res logos, held to the licence rule (MIT/BSD/Apache weights only). | [#39](https://github.com/mtblck/img-to-svg/issues/39) |
+| **Target file size** | "Make it under 10 KB": search the settings for the best trace that fits. | [#40](https://github.com/mtblck/img-to-svg/issues/40) |
+| **Groups and layer reordering** | Treat several shapes as one; move a shape above or below another. | [#41](https://github.com/mtblck/img-to-svg/issues/41) |
+| **DXF export** | For CNC and laser cutting. | [#42](https://github.com/mtblck/img-to-svg/issues/42) |
+| **SVG import** | Open an SVG to edit its paths, so the editor is useful on its own. | [#43](https://github.com/mtblck/img-to-svg/issues/43) |
+| **Batch** | Trace a folder of images with one preset, download a zip. | [#44](https://github.com/mtblck/img-to-svg/issues/44) |
+| **Offline install** | A service worker and manifest so it installs as an app and works offline (SVGcode does this). | [#45](https://github.com/mtblck/img-to-svg/issues/45) |
+| **HD mode** | A paid, server-side trace for very large images: a Vercel Function with spend caps, opt-in, clearly marked as leaving the device. No database. | [#46](https://github.com/mtblck/img-to-svg/issues/46) |
 
 ## Not planned
 
