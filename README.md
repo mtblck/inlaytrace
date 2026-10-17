@@ -93,7 +93,7 @@ wobble and rounded corners count):
 | --- | --- | --- | --- |
 | VTracer, previous Logo settings | 0.86% | 259 | 7.3 KB |
 | Shared edges, fitted per chain | 0.74% | 167 | 5.0 KB |
-| + corners by their sides, round ends, lines inside curves | 0.68% | 194 | 5.8 KB |
+| + corners by their sides, round ends, lines inside curves | 0.70% | 177 | 5.4 KB |
 
 Straight edges are single segments and the peaks are single sharp corners.
 

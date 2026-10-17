@@ -610,7 +610,13 @@ export default function App() {
                 onRestore={(hex) => editInks((i) => restoreInk(i, hex))}
                 onRestoreAll={() => editInks(() => NO_INKS)}
                 background={edits.background}
-                onBackground={(c) => commit((e) => ({ ...e, background: c === null ? null : normalizeHex(c) }), c === null ? null : `background-${backgroundSeq.current}`)}
+                onBackground={(c) => {
+                  // Adding and removing are each their own undo step; colour
+                  // changes in one picker session undo together.
+                  const sweep = c !== null && edits.background !== null
+                  if (!sweep) backgroundSeq.current++
+                  commit((e) => ({ ...e, background: c === null ? null : normalizeHex(c) }), sweep ? `background-${backgroundSeq.current}` : null)
+                }}
                 onBackgroundDone={() => backgroundSeq.current++}
               />
             )}

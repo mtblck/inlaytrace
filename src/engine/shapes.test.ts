@@ -6,6 +6,8 @@
 import { describe, expect, it } from 'vitest'
 import { fitChain, pointAt, type Cubic } from '../lib/fit'
 import { parsePath, type Pt } from '../lib/pathdata'
+import { gunzipSync } from 'fflate'
+import { SAMPLE_CAPS } from './fixtures/sample-caps'
 import { otsu, traceShapes } from './shapes'
 
 type Paint = (x: number, y: number) => [number, number, number, number?]
@@ -120,9 +122,11 @@ describe('the shapes Matt reported (#19)', () => {
     const px = raster(120, 40, (x, y) => (capsule({ x, y }) < 4 && Math.hypot(x - Math.max(20, Math.min(100, x)), y - 20.3) < 4 ? CREAM : GREEN))
     const d = creamPath(traceShapes(px, 120, 40, { ...opts, ...pal }))
     expect(worstOff(d, capsule)).toBeLessThan(0.75)
-    // Two straight sides, and each end drawn as curves (no corner nodes there).
-    expect((d.match(/L/g) ?? []).length).toBe(2)
-    expect(segments(d)).toBeLessThanOrEqual(8)
+    // Two straight sides (one may be the closing Z), each end drawn as curves.
+    const sub = parsePath(d)[0]
+    const straight = sub.nodes.filter((n, i) => !n.out && !sub.nodes[(i + 1) % sub.nodes.length].in).length
+    expect(straight).toBe(2)
+    expect(sub.nodes.length).toBeLessThanOrEqual(8)
   })
 
   it('a stroke with square ends keeps its four corners', () => {
@@ -146,6 +150,23 @@ describe('the shapes Matt reported (#19)', () => {
     const top = nodes.reduce((a, b) => (b.y < a.y ? b : a))
     expect(Math.hypot(top.x - tip.x, top.y - tip.y)).toBeLessThan(1.5) // a 50° tip is pixel-limited
     expect(worstOff(d, (p) => Math.max(0, tip.y - p.y))).toBeLessThan(0.5)
+  })
+
+  it('never stacks nodes: none within 3 px of the next, on the real sample', () => {
+    // The sample's snow caps as the app traces them (JPEG q72): junctions,
+    // a peak inside the sun, a 15° sliver corner.
+    const { width: w, height: h, gz } = SAMPLE_CAPS
+    const px = gunzipSync(Uint8Array.from(atob(gz), (c) => c.charCodeAt(0)))
+    const palette = ['#f4ece1', '#203b4e', '#d9542b', '#2e6a50', '#e9a13b']
+    const svg = traceShapes(px, w, h, { tolerance: 1, cornerAngle: 45, speckle: 8, mode: 'palette', palette })
+    const close: string[] = []
+    for (const p of pathsOf(svg))
+      for (const s of parsePath(p.d))
+        s.nodes.forEach((a, i) => {
+          const b = s.nodes[(i + 1) % s.nodes.length]
+          if (Math.hypot(a.x - b.x, a.y - b.y) < 3) close.push(`${a.x},${a.y}`)
+        })
+    expect(close).toEqual([])
   })
 
   it('a circle is four curves, the way it would be drawn by hand', () => {
