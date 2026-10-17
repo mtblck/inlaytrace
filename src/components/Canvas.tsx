@@ -23,6 +23,8 @@ type Props = {
   onFitScale: (scale: number) => void
   tool: Tool
   overlays: Overlays
+  /** Drawn behind every shape, as it will be exported; null is transparent. */
+  background: string | null
   selectedId: string | null
   selectedNode: NodeRef | null
   axis: Axis | null
@@ -332,6 +334,7 @@ export function Canvas(props: Props) {
               pointerEvents: 'none',
             }}
           >
+            {props.background && <rect width={width} height={height} fill={props.background} data-background="" />}
             {props.paths.map((p) => (
               <VectorPath key={p.id} d={p.d} fill={p.fill} />
             ))}

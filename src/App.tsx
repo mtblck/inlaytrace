@@ -59,6 +59,19 @@ export default function App() {
   )
   /** Bumped when a colour picker closes, so the next sweep is its own undo step. */
   const recolorSeq = useRef(0)
+  const backgroundSeq = useRef(0)
+  /**
+   * A new image opens on Split, for comparing. The first time you start editing
+   * it (the Edit tab, or selecting a shape) the view switches to Vector, so the
+   * original is out of the way. Once per image, and never over a view you
+   * picked yourself.
+   */
+  const viewChosen = useRef(false)
+  const startEditing = useCallback(() => {
+    if (viewChosen.current) return
+    viewChosen.current = true
+    setMode('vector')
+  }, [])
   const [tool, setTool] = useState<Tool>('select')
   const [panel, setPanel] = useState<'trace' | 'edit'>('trace')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -101,6 +114,8 @@ export default function App() {
       setAxis(null)
       setTool('select')
       setPanel('trace')
+      setMode('split')
+      viewChosen.current = false
       setZoom(null)
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : String(error))
@@ -175,7 +190,7 @@ export default function App() {
   // into a stale trace.
   const traced = useMemo(() => (trace ? docFromTrace(trace) : null), [trace])
   const doc = traced ? docOf(edits, traced) : null
-  const svg = useMemo(() => (doc ? buildSvg(doc, edits.inks) : ''), [doc, edits.inks])
+  const svg = useMemo(() => (doc ? buildSvg(doc, edits.inks, undefined, edits.background) : ''), [doc, edits.inks, edits.background])
   const shown = useMemo(() => (doc ? visiblePaths(doc, edits.inks) : []), [doc, edits.inks])
   const inks = useMemo(() => (doc ? inksOf(doc) : []), [doc])
 
@@ -195,8 +210,11 @@ export default function App() {
     setSelectedId(id)
     setSelectedNode(null)
     // The selection's tools live in the Edit tab.
-    if (id) setPanel('edit')
-  }, [])
+    if (id) {
+      setPanel('edit')
+      startEditing()
+    }
+  }, [startEditing])
 
   const selectedPath = doc?.paths.find((p) => p.id === selectedId) ?? null
 
@@ -322,7 +340,7 @@ export default function App() {
 
   const downloadLayers = async () => {
     const files: Record<string, Uint8Array> = {}
-    for (const f of layerFiles(doc!, edits.inks, source!.name)) files[f.name] = strToU8(await optimizeHere(f.svg))
+    for (const f of layerFiles(doc!, edits.inks, source!.name, edits.background)) files[f.name] = strToU8(await optimizeHere(f.svg))
     files[`${source!.name}-all.svg`] = strToU8(await finalSvg())
     const zip = zipSync(files, { level: 6 })
     save(new Blob([zip.buffer as ArrayBuffer], { type: 'application/zip' }), `${source!.name}-layers.zip`)
@@ -414,6 +432,7 @@ export default function App() {
                   onFitScale={setFitScale}
                   tool={tool}
                   overlays={overlays}
+                  background={edits.background}
                   selectedId={selectedId}
                   selectedNode={selectedNode}
                   axis={axis}
@@ -436,7 +455,10 @@ export default function App() {
                       key={v}
                       role="radio"
                       aria-checked={mode === v}
-                      onClick={() => setMode(v)}
+                      onClick={() => {
+                        viewChosen.current = true
+                        setMode(v)
+                      }}
                       className={`px-3 py-1 text-[13px] ${mode === v ? 'bg-paper font-medium text-accent' : 'bg-paper-sunk hover:bg-paper'}`}
                     >
                       {label}
@@ -536,7 +558,10 @@ export default function App() {
                     id={`tab-${id}`}
                     aria-selected={panel === id}
                     aria-controls={`panel-${id}`}
-                    onClick={() => setPanel(id)}
+                    onClick={() => {
+                      setPanel(id)
+                      if (id === 'edit') startEditing()
+                    }}
                     className={`-mb-px border-b-2 px-1 py-2.5 mr-5 text-[13.5px] ${panel === id ? 'border-accent font-medium text-ink' : 'border-transparent text-ink-muted hover:text-ink'}`}
                   >
                     {label}
@@ -584,6 +609,9 @@ export default function App() {
                 onRemove={(hex) => editInks((i) => removeInk(i, hex))}
                 onRestore={(hex) => editInks((i) => restoreInk(i, hex))}
                 onRestoreAll={() => editInks(() => NO_INKS)}
+                background={edits.background}
+                onBackground={(c) => commit((e) => ({ ...e, background: c === null ? null : normalizeHex(c) }), c === null ? null : `background-${backgroundSeq.current}`)}
+                onBackgroundDone={() => backgroundSeq.current++}
               />
             )}
             </div>
