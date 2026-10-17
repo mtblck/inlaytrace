@@ -32,7 +32,12 @@ export type ShapesOptions = FitOptions & {
   /** Regions smaller than speckle × speckle pixels are merged into their surroundings. */
   speckle: number
 } & (
-    | { mode: 'palette'; palette: string[] }
+    /**
+     * `merge` folds colours together before any region is built, so the edge
+     * between them disappears: { from: to }, traced hex to traced hex, chains
+     * followed (a → b → c is a → c).
+     */
+    | { mode: 'palette'; palette: string[]; merge?: Record<string, string> }
     /**
      * Ink is darker than `threshold` (0–255). When null, each pixel is compared
      * with its neighbourhood instead, for photos of paper under uneven light.
@@ -45,6 +50,7 @@ const VOID = -1 // outside the image, transparent pixels, and line art's paper
 
 export function traceShapes(rgba: ArrayLike<number>, w: number, h: number, o: ShapesOptions): string {
   const { labels, colors, drawn } = o.mode === 'palette' ? labelPalette(rgba, w, h, o.palette) : labelBinary(rgba, w, h, o.threshold)
+  if (o.mode === 'palette' && o.merge) mergeLabels(labels, colors, o.merge)
   despur(labels, w, h)
   mergeSpecks(labels, w, h, Math.max(0, Math.round(o.speckle)) ** 2)
 
@@ -71,6 +77,22 @@ export function traceShapes(rgba: ArrayLike<number>, w: number, h: number, o: Sh
 }
 
 // ---- 1. Labels ----------------------------------------------------------------------
+
+/** Relabel merged colours as their targets, following chains, in place. */
+export function mergeLabels(labels: Int32Array, colors: string[], merge: Record<string, string>) {
+  const index = new Map(colors.map((c, i) => [c, i]))
+  const remap = colors.map((c, i) => {
+    let to = c
+    const seen = new Set<string>()
+    while (merge[to] && !seen.has(to)) {
+      seen.add(to)
+      to = merge[to].toLowerCase()
+    }
+    return index.get(to) ?? i
+  })
+  if (remap.every((t, i) => t === i)) return
+  for (let i = 0; i < labels.length; i++) labels[i] = remap[labels[i]]
+}
 
 function labelPalette(rgba: ArrayLike<number>, w: number, h: number, palette: string[]) {
   const pal = palette.map(hexToRgb)

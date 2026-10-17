@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { zipSync, strToU8 } from 'fflate'
 import { TraceClient } from './engine/client'
-import { maxTraceEdge, settingsFor, toVtracerOptions, type PresetId, type Settings } from './engine/presets'
-import { ACCEPTED, hasDarkBackground, loadSource, pixelsOf, type Pixels, type Source } from './lib/image'
+import { canMerge, maxTraceEdge, settingsFor, toVtracerOptions, type PresetId, type Settings } from './engine/presets'
+import { ACCEPTED, colourAt, hasDarkBackground, loadSource, pixelsOf, type Pixels, type Source } from './lib/image'
 import { formatBytes, normalizeHex, parseTrace, statsOf, type Trace } from './lib/svg'
 import {
   buildSvg,
@@ -87,6 +87,8 @@ export default function App() {
   /** Nodes selected in the shape the Nodes tool is editing (the first selected shape). */
   const [selectedNodes, setSelectedNodes] = useState<NodeRef[]>([])
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  /** The eyedropper is armed for an ink (its traced hex) or the background. */
+  const [picking, setPicking] = useState<{ target: string } | null>(null)
   const [axis, setAxis] = useState<Axis | null>(null)
   const [mirroring, setMirroring] = useState(false)
   const [mirrorError, setMirrorError] = useState<string | null>(null)
@@ -522,6 +524,10 @@ export default function App() {
         !!el &&
         (el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable || (el.tagName === 'INPUT' && !['color', 'range', 'checkbox', 'radio', 'button'].includes((el as HTMLInputElement).type)))
       if (typing || shortcutsOpen) return
+      if (picking && e.key === 'Escape') {
+        setPicking(null)
+        return
+      }
       const mod = e.metaKey || e.ctrlKey
       const key = e.key.toLowerCase()
       const hasDoc = !!doc
@@ -618,6 +624,47 @@ export default function App() {
       setSettings(next)
     })
 
+  /**
+   * Fold one traced colour into another. It's a trace setting, so it re-traces
+   * (asking first if shapes are edited), and the shared edge disappears; Unmerge
+   * in the colour list takes it back.
+   */
+  const mergeInk = (from: string, into: string) => changeSettings({ ...settings, merge: { ...settings.merge, [from]: into } })
+  const unmergeInk = (from: string) => {
+    const merge = { ...settings.merge }
+    delete merge[from]
+    changeSettings({ ...settings, merge })
+  }
+
+  // ---- Eyedropper -------------------------------------------------------------
+  /** A picked colour lands on its target as one undo step. */
+  const applyPicked = (target: string, hex: string) => {
+    const v = normalizeHex(hex)
+    if (!v) return
+    if (target === 'background') commit((e) => ({ ...e, background: v }))
+    else editInks((i) => recolorInk(i, target, v))
+  }
+  const onPick = (at: Pt) => {
+    if (!picking || !source || !doc) return
+    const hex = colourAt(source, at.x / doc.width, at.y / doc.height)
+    if (hex) applyPicked(picking.target, hex)
+    setPicking(null)
+  }
+  type EyeDropperCtor = new () => { open: () => Promise<{ sRGBHex: string }> }
+  const screenDropper = typeof window !== 'undefined' ? (window as unknown as { EyeDropper?: EyeDropperCtor }).EyeDropper : undefined
+  /** Chromium's EyeDropper: any pixel on screen. Cancelled (Esc) leaves things as they were. */
+  const pickFromScreen = async () => {
+    if (!picking || !screenDropper) return
+    const target = picking.target
+    setPicking(null)
+    try {
+      const { sRGBHex } = await new screenDropper().open()
+      applyPicked(target, sRGBHex)
+    } catch {
+      /* cancelled */
+    }
+  }
+
   const choosePreset = (id: PresetId) => {
     const next = settingsFor(id)
     if (id === 'lineart' && source && hasDarkBackground(source)) next.lightInk = true
@@ -682,6 +729,19 @@ export default function App() {
           {source && trace ? (
             <>
               <div className="relative min-h-0 flex-1">
+                {picking && (
+                  <div role="status" className="absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3 rounded-md border border-rule bg-paper px-3 py-2 text-[13px] shadow-md" data-picking={picking.target}>
+                    <span>Click the image to pick a colour from the original.</span>
+                    {screenDropper && (
+                      <button className="text-ink-muted underline-offset-2 hover:text-ink hover:underline" onClick={pickFromScreen}>
+                        Pick from screen
+                      </button>
+                    )}
+                    <button className="text-ink-muted underline-offset-2 hover:text-ink hover:underline" onClick={() => setPicking(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                )}
                 <Canvas
                   imageUrl={source.url}
                   paths={shown}
@@ -705,6 +765,8 @@ export default function App() {
                   onDragNode={onDragNode}
                   onTransform={onTransform}
                   onAddNode={onAddNode}
+                  picking={!!picking}
+                  onPick={onPick}
                   onAxis={(position) => axis && setAxis({ ...axis, position })}
                 />
               </div>
@@ -892,6 +954,11 @@ export default function App() {
                   commit((e) => ({ ...e, background: c === null ? null : normalizeHex(c) }), sweep ? `background-${backgroundSeq.current}` : null)
                 }}
                 onBackgroundDone={() => backgroundSeq.current++}
+                picking={picking?.target ?? null}
+                onPick={(target) => setPicking((p) => (p?.target === target ? null : { target }))}
+                merged={canMerge(settings.preset) ? settings.merge : null}
+                onMerge={mergeInk}
+                onUnmerge={unmergeInk}
               />
             )}
             </div>

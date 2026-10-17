@@ -39,3 +39,8 @@ export function IconButton({ label, hint, onClick, children, ...rest }: { label:
     </button>
   )
 }
+export const PipetteIcon = () => (
+  <svg {...base} width={14} height={14}>
+    <path d="M10.5 2.5l3 3-1.5 1.5-3-3zM9 4L3.5 9.5 3 13l3.5-.5L12 7" strokeLinejoin="round" />
+  </svg>
+)
