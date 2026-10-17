@@ -132,7 +132,10 @@ async function editorChecks(page, label, n) {
   await page.locator('[data-selected]').waitFor()
   check((await page.locator('[data-selected]').getAttribute('data-selected')) === id, `${label}: clicking a shape selects it`)
   const dBefore = await page.locator(`svg[aria-label="Traced SVG"] path`).nth(best).getAttribute('d')
-  const node = page.locator('[data-node]').first()
+  // A node with clear space around it: overlapping squares hand the press to whichever is on top.
+  const boxes = await page.locator('[data-node]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()))
+  const free = boxes.findIndex((b, i) => boxes.every((o, j) => j === i || Math.hypot(o.x - b.x, o.y - b.y) > 14))
+  const node = page.locator('[data-node]').nth(Math.max(0, free))
   const nb = await node.boundingBox()
 
   // A plain click, off-centre, selects the node and changes nothing.

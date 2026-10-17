@@ -15,7 +15,8 @@ nodes and bend curves, delete nodes or shapes, and mirror one half of the
 drawing onto the other as seamless merged shapes. Everything is undoable. Export a single optimised SVG, or a zip with one SVG per colour for
 screen printing and vinyl.
 
-React 19 · Vite · Tailwind v4 · VTracer (Rust → WebAssembly) in a Web Worker ·
+React 19 · Vite · Tailwind v4 · a shared-edge tracer for flat art and VTracer
+(Rust → WebAssembly) for posters and pixel art, in a Web Worker ·
 SVGO · paper.js (mirroring only, lazy-loaded) · deployed on Vercel, proxied into mattblack.space.
 
 ## Commands
@@ -27,6 +28,7 @@ npm test           # unit tests + every preset through the real tracer
 npm run build      # vendors the tracer, checks hosting config, type-checks, builds
 npm run preview    # serves the build with the production security headers
 npm run verify     # end-to-end in a real browser (needs `preview` running)
+npm run score      # trace the sample, score each preset against the clean art
 ```
 
 `verify` takes an optional URL, so the same checks run against production:
@@ -38,7 +40,7 @@ exported SVG, the discard prompt) run on the built-in sample and on the fixture.
 
 ## Design notes
 
-**The tracer is VTracer, not a model.** The research in
+**The tracers are classical, not a model.** The research in
 [`docs/research.md`](docs/research.md) found that no downloadable AI model
 beats a good classical tracer at the tracing itself: VTracer matches or beats
 every learned model on icons and clearly beats them on illustrations, at a
@@ -55,6 +57,45 @@ the wasm32 Rust toolchain on every machine that builds this, so instead
 `init(url)`. The rewrite asserts every substitution matched and pins the package
 version, so an upstream change fails the build rather than shipping a module
 that throws in the browser.
+
+**Flat art traces each edge once.** VTracer traces every colour region on
+its own and smooths the pixel outline into curves without knowing where the
+corners are. On the sample badge that turned the straight mountain slopes into
+slow S-bends and the snow-cap peaks into rounded bumps with two nodes a pixel
+apart, and none of its settings gave straight lines *and* sharp corners.
+Fitting each traced shape separately fixed the lines but opened hairline gaps,
+because cut-out shapes trace every shared edge twice and the two copies were
+fitted a fraction of a pixel apart. So Logo, Illustration and Line art now use
+a tracer of our own (`src/engine/shapes.ts`):
+
+1. Label every pixel with a palette colour (the histogram peaks below). A pixel
+   between two colours (anti-aliasing) takes the nearest colour *among its
+   neighbours*, so a red/blue edge never grows a purple sliver.
+2. Merge specks into their surroundings.
+3. Walk the cracks between differently labelled pixels. Where three regions
+   meet is a junction; each boundary between junctions is one chain, with one
+   region either side.
+4. Fit each chain once (`src/lib/fit.ts`): find corners (a turn that stays
+   sharp at half the distance; a curve's doesn't), square off the crisp ones,
+   then a straight line wherever one fits within 1.5× tolerance, otherwise
+   least-squares Béziers (Schneider). The line test sees a plain moving
+   average, which removes JPEG's 16 px colour-block ripple; curves are fitted
+   to a "twiced" average that keeps small dots their size.
+5. Build each region from its chains. Neighbours share the same fitted edge
+   exactly: no gaps, no overlaps, which is also what a vinyl cutter wants.
+
+Scored with `npm run score` (rendered back at 4× against the clean art, where
+wobble and rounded corners count):
+
+| Sample badge | Wrong pixels at 4× | Nodes | Size |
+| --- | --- | --- | --- |
+| VTracer, previous Logo settings | 0.86% | 259 | 7.3 KB |
+| Shared edges, fitted per chain | 0.74% | 167 | 5.0 KB |
+
+Straight edges are single segments and the peaks are single sharp corners. On
+a 2048 px image the new tracer took 1.5 s where VTracer took 17.5 s. Poster and
+Pixel art keep VTracer: photos have no flat regions to share edges between, and
+pixel art wants its steps.
 
 **Tuning the presets.** Each candidate setting was scored by tracing, rendering
 the SVG back in Chromium, and measuring the error against the *clean source
@@ -94,7 +135,7 @@ the anti-aliasing as an extra grey ink. Sources under 512 px are now upscaled to
 same logo then traced to clean curves with every detail intact. Mid-size images
 are left alone: the 640 px sample was already at 0.93% wrong pixels natively.
 
-**Light ink on dark.** VTracer's binary mode always traces the dark side, so a
+**Light ink on dark.** Line art always traces the dark side, so a
 white logo on black came out as the background with holes. Line art can now
 invert first ("Light on dark"), and starts that way when the image's border is
 dark. On the robot logo that is the whole job in one step: background gone,
@@ -127,7 +168,7 @@ violation in the console.
 
 **Untrusted output stays out of the markup.** The trace is shown inline (the
 overlays and hit targets need real DOM paths), so every `d`, `fill` and `transform` is
-validated against what VTracer emits before it is rebuilt into the document.
+validated against what the tracers emit before it is rebuilt into the document.
 Recolours are normalised hex or ignored.
 
 **Edits sit on top of the trace until they can't.** The document is
