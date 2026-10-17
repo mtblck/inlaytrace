@@ -180,11 +180,11 @@ feature request), and a PR template.
 | Phase | Work | Needs Matt | Ticket |
 | --- | --- | --- | --- |
 | 0 | Decide names, domain, repo approach | Done | — |
-| 1 | Restructure into `apps/` + `packages/`; rebrand the app; old URL keeps working | — | [#58](https://github.com/mtblck/img-to-svg/issues/58) |
-| 2 | Site: landing page, docs in Starlight, getting started, API reference | Review the wording | [#59](https://github.com/mtblck/img-to-svg/issues/59) |
-| 3 | Go public: history scan, issue review, community files, rename, flip public | Flip the switch | [#60](https://github.com/mtblck/img-to-svg/issues/60) |
-| 4 | Publish the package: build, Changesets, trusted publishing, maybe a CLI | npm account | [#55](https://github.com/mtblck/img-to-svg/issues/55) |
-| 5 | Domain, redirects, portfolio case study, Boards; announce | Buy the domain | [#61](https://github.com/mtblck/img-to-svg/issues/61) |
+| 1 | Restructure into `apps/` + `packages/`; rebrand the app; old URL keeps working | — | [#58](https://github.com/mtblck/inlaytrace/issues/58) |
+| 2 | Site: landing page, docs in Starlight, getting started, API reference | Review the wording | [#59](https://github.com/mtblck/inlaytrace/issues/59) |
+| 3 | Go public: history scan, issue review, community files, rename, flip public | Flip the switch | [#60](https://github.com/mtblck/inlaytrace/issues/60) |
+| 4 | Publish the package: build, Changesets, trusted publishing, maybe a CLI | npm account | [#55](https://github.com/mtblck/inlaytrace/issues/55) |
+| 5 | Domain, redirects, portfolio case study, Boards; announce | Buy the domain | [#61](https://github.com/mtblck/inlaytrace/issues/61) |
 
 ## Sources
 

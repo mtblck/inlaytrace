@@ -1,8 +1,8 @@
 # Inlay
 
 Image → SVG in the browser (`apps/app`, live at https://mattblack.space/tools/img-to-svg/)
-and the tracer behind it, `inlaytrace` (`packages/inlay`). Being prepared to go public
-as `mtblck/inlaytrace` on inlaytrace.com: see `docs/launch-plan.md` and tickets #58–#61, #55.
+and the tracer behind it, `inlaytrace` (`packages/inlay`). Repo `mtblck/inlaytrace` (renamed from
+img-to-svg); going public, then inlaytrace.com: see `docs/launch-plan.md` and tickets #58–#61, #55.
 Until then follow the `portfolio-tool` skill for hosting. `docs/design-notes.md` has the design notes and measurements; README is the public front door.
 One npm workspace: run every command from the repo root.
 

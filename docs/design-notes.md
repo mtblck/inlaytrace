@@ -90,7 +90,7 @@ sprite is 4× faster (0.2 s against 0.85 s). Only Poster keeps VTracer: photos
 have no flat regions or histogram peaks, and cut-out shapes cost size there.
 Whether Inlay can take Poster too (a stacked mode and a quantized palette,
 scored on real photos) is
-[#53](https://github.com/mtblck/img-to-svg/issues/53).
+[#53](https://github.com/mtblck/inlaytrace/issues/53).
 
 **Tuning the presets.** Each candidate setting was scored by tracing, rendering
 the SVG back in Chromium, and measuring the error against the *clean source
