@@ -37,7 +37,9 @@ Then:
 - Put each corner where its sides meet, undoing the rounding.
 - Very acute points (a 15° sliver is under a pixel wide for its last few px)
   may meet further out, in proportion to how acute they are, so they're drawn
-  sharp.
+  sharp; but never more than 18 px out. Without that cap, the end of a 1–2 px
+  rule (two corners too close to tell apart, with sides that run parallel)
+  once met 300 px beyond the image.
 - Drop corners within 4 px of a junction: the junction is already a node, and
   a corner beside it would only add a stub.
 

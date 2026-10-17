@@ -101,6 +101,180 @@ async function exportSvg(page) {
   return readFileSync(await dl.path(), 'utf8')
 }
 
+/** A point on screen where the shape's own hit target is what a click lands on, as near its middle as possible. */
+async function pointOn(page, id) {
+  return page.evaluate((id) => {
+    const el = document.querySelector(`path[data-path-id="${id}"]`)
+    const r = el.getBoundingClientRect()
+    const hits = []
+    for (let i = 1; i < 24; i++)
+      for (let j = 1; j < 24; j++) {
+        const x = r.x + (r.width * i) / 24
+        const y = r.y + (r.height * j) / 24
+        if (document.elementFromPoint(x, y) === el) hits.push({ x, y, d: Math.hypot(i - 12, j - 12) })
+      }
+    hits.sort((a, b) => a.d - b.d)
+    return hits[0] ?? null
+  }, id)
+}
+
+const MOD = process.platform === 'darwin' ? 'Meta' : 'Control'
+const boxOf = (page) => page.locator('[data-selection-box] > rect:not([data-box-handle])').boundingBox()
+const near = (a, b, tol = 1.5) => Math.abs(a - b) <= tol
+
+/** Smooth handles: dragging one swings its partner round; Alt bends one alone. */
+async function smoothChecks(page, label) {
+  // A smooth node whose out-handle has clear space round it on screen.
+  const pick = await page.evaluate(() => {
+    const at = (el) => {
+      const r = el.getBoundingClientRect()
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+    }
+    const nodes = new Map([...document.querySelectorAll('[data-node]')].map((el) => [el.dataset.node, at(el)]))
+    const handles = new Map([...document.querySelectorAll('[data-handle]')].map((el) => [el.dataset.handle, at(el)]))
+    const all = [...nodes.values(), ...handles.values()]
+    for (const [key, n] of nodes) {
+      const i = handles.get(`${key}:in`)
+      const o = handles.get(`${key}:out`)
+      if (!i || !o) continue
+      const a = { x: n.x - i.x, y: n.y - i.y }
+      const b = { x: o.x - n.x, y: o.y - n.y }
+      const la = Math.hypot(a.x, a.y)
+      const lb = Math.hypot(b.x, b.y)
+      if (la < 12 || lb < 12) continue
+      if ((a.x * b.x + a.y * b.y) / (la * lb) < 0.995) continue
+      if (all.filter((p) => Math.hypot(p.x - o.x, p.y - o.y) < 14).length > 1) continue
+      return { key, n, o }
+    }
+    return null
+  })
+  if (!pick) {
+    console.log(`         ${label}: no smooth node with room to drag; skipping the handle checks`)
+    return
+  }
+  const inHandle = () =>
+    page.locator(`[data-handle="${pick.key}:in"]`).evaluate((el) => {
+      const r = el.getBoundingClientRect()
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+    })
+  const dragOut = async (alt) => {
+    await page.mouse.move(pick.o.x, pick.o.y)
+    if (alt) await page.keyboard.down('Alt')
+    await page.mouse.down()
+    for (let i = 1; i <= 5; i++) await page.mouse.move(pick.o.x + i * 3, pick.o.y - i * 5)
+    await page.mouse.up()
+    if (alt) await page.keyboard.up('Alt')
+  }
+  const before = await inHandle()
+  await dragOut(false)
+  const swung = await inHandle()
+  const n = pick.n
+  const a = { x: n.x - swung.x, y: n.y - swung.y }
+  const o = { x: pick.o.x + 15 - n.x, y: pick.o.y - 25 - n.y }
+  const cos = (a.x * o.x + a.y * o.y) / (Math.hypot(a.x, a.y) * Math.hypot(o.x, o.y))
+  const kept = Math.abs(Math.hypot(a.x, a.y) - Math.hypot(n.x - before.x, n.y - before.y))
+  check(Math.hypot(swung.x - before.x, swung.y - before.y) > 2 && cos > 0.999 && kept < 1, `${label}: dragging a smooth handle swings the other round, same length (cos ${cos.toFixed(4)})`)
+  await page.keyboard.press(`${MOD}+z`)
+  await dragOut(true)
+  const alone = await inHandle()
+  check(Math.hypot(alone.x - before.x, alone.y - before.y) < 0.5, `${label}: with Alt, only the dragged handle moves`)
+  await page.keyboard.press(`${MOD}+z`)
+}
+
+/** Select tool: move, scale, typed size, nudge, multi-select, marquee, select all. */
+async function selectChecks(page, label, id, n) {
+  await page.getByRole('radio', { name: 'Select', exact: true }).click()
+  const at = await pointOn(page, id)
+  await page.mouse.click(at.x, at.y)
+  check((await page.locator('[data-selection-box]').getAttribute('data-selection-box')) === '1', `${label}: Select tool puts a box round the clicked shape`)
+  const b0 = await boxOf(page)
+  const d0 = await page.locator(`path[data-path-id="${id}"]`).getAttribute('d')
+
+  // Move by dragging the shape.
+  await page.mouse.move(at.x, at.y)
+  await page.mouse.down()
+  for (let i = 1; i <= 5; i++) await page.mouse.move(at.x + i * 6, at.y + i * 4)
+  await page.mouse.up()
+  const b1 = await boxOf(page)
+  check(near(b1.x - b0.x, 30) && near(b1.y - b0.y, 20), `${label}: dragging a shape moves it with the pointer (${(b1.x - b0.x).toFixed(1)}, ${(b1.y - b0.y).toFixed(1)})`)
+  await page.keyboard.press(`${MOD}+z`)
+  check((await page.locator(`path[data-path-id="${id}"]`).getAttribute('d')) === d0, `${label}: one Undo puts the moved shape back`)
+
+  // Scale from the bottom-right handle, then in proportion with Shift.
+  const corner = await page.locator('[data-box-handle="1,1"]').boundingBox()
+  const cx = corner.x + corner.width / 2
+  const cy = corner.y + corner.height / 2
+  await page.mouse.move(cx, cy)
+  await page.mouse.down()
+  for (let i = 1; i <= 4; i++) await page.mouse.move(cx + i * 10, cy + i * 5)
+  await page.mouse.up()
+  const b2 = await boxOf(page)
+  check(near(b2.width - b0.width, 40) && near(b2.height - b0.height, 20) && near(b2.x, b0.x) && near(b2.y, b0.y), `${label}: dragging a corner scales from the opposite corner`)
+  await shot(page, `${n}e-${label}-scaled`)
+  await page.keyboard.press(`${MOD}+z`)
+  await page.mouse.move(cx, cy)
+  await page.keyboard.down('Shift')
+  await page.mouse.down()
+  for (let i = 1; i <= 4; i++) await page.mouse.move(cx + i * 10, cy + i * 2)
+  await page.mouse.up()
+  await page.keyboard.up('Shift')
+  const b3 = await boxOf(page)
+  check(Math.abs(b3.width / b3.height - b0.width / b0.height) < 0.03, `${label}: Shift keeps proportions (${(b0.width / b0.height).toFixed(3)} → ${(b3.width / b3.height).toFixed(3)})`)
+  await page.keyboard.press(`${MOD}+z`)
+
+  // Typed width, then a Shift+arrow nudge read back from X.
+  const width = page.getByLabel('Width')
+  const w0 = Number(await width.inputValue())
+  await width.fill(String(Math.round(w0 * 2)))
+  await width.press('Enter')
+  const b4 = await boxOf(page)
+  check(Math.abs(b4.width / b0.width - Math.round(w0 * 2) / w0) < 0.02, `${label}: typing a width resizes the shape (${w0} → ${Math.round(w0 * 2)})`)
+  await page.keyboard.press(`${MOD}+z`)
+  check((await page.locator(`path[data-path-id="${id}"]`).getAttribute('d')) === d0, `${label}: one Undo reverts the typed width`)
+  const x0 = Number(await page.getByLabel('X position').inputValue())
+  await page.mouse.move(at.x, at.y) // focus back on the canvas, out of the field
+  await page.locator('h1').click()
+  await page.keyboard.press('Shift+ArrowRight')
+  const x1 = Number(await page.getByLabel('X position').inputValue())
+  check(near(x1 - x0, 10, 0.02), `${label}: Shift+→ nudges 10 px (${x0} → ${x1})`)
+  await page.keyboard.press(`${MOD}+z`)
+
+  // Shift-click adds a shape; a marquee from the margin takes every shape inside; ⌘A takes all.
+  const other = await page.locator('path[data-path-id]').evaluateAll((els, id) => els.map((e) => e.dataset.pathId).filter((x) => x !== id), id)
+  let added = false
+  for (const o of other.slice(-8)) {
+    const p = await pointOn(page, o)
+    if (!p) continue
+    await page.keyboard.down('Shift')
+    await page.mouse.click(p.x, p.y)
+    await page.keyboard.up('Shift')
+    added = (await page.locator('[data-selection-box]').getAttribute('data-selection-box')) === '2'
+    break
+  }
+  check(added, `${label}: Shift-click adds a second shape`)
+  await page.keyboard.press('Escape')
+  const total = await page.locator('path[data-path-id]').count()
+  const sheet = await page.locator('svg[aria-label="Traced SVG"]').boundingBox()
+  await page.mouse.move(sheet.x - 16, sheet.y - 16)
+  await page.mouse.down()
+  for (let i = 1; i <= 5; i++) await page.mouse.move(sheet.x - 16 + ((sheet.width + 32) * i) / 5, sheet.y - 16 + ((sheet.height + 32) * i) / 5)
+  await page.mouse.up()
+  const swept = Number((await page.locator('[data-selection-box]').getAttribute('data-selection-box')) ?? 0)
+  check(swept === total, `${label}: a marquee round the whole image selects all ${total} shapes (${swept})`)
+  await page.keyboard.press('Escape')
+  await page.keyboard.press(`${MOD}+a`)
+  check(Number(await page.locator('[data-selection-box]').getAttribute('data-selection-box')) === total, `${label}: ${MOD}+A selects every shape`)
+  await page.keyboard.press('Escape')
+  check((await page.locator('[data-selection-box]').count()) === 0, `${label}: Esc clears the selection`)
+
+  // Double-click goes into the shape's nodes.
+  await page.mouse.dblclick(at.x, at.y)
+  check((await page.getByRole('radio', { name: 'Nodes' }).getAttribute('aria-checked')) === 'true' && (await page.locator('[data-node]').count()) > 0, `${label}: double-clicking a shape edits its nodes`)
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('v')
+}
+
 async function editorChecks(page, label, n) {
   await page.getByRole('tab', { name: /Edit/ }).click()
   await page.getByRole('radio', { name: 'Vector' }).click()
@@ -116,7 +290,9 @@ async function editorChecks(page, label, n) {
   check((await page.locator('[data-overlay="nodes"]').getAttribute('fill')) === '#aa00ff', `${label}: node colour applied`)
   await shot(page, `${n}a-${label}-overlays`)
 
-  // Select the largest shape by clicking its hit target, then drag a node.
+  // Select the largest shape with the Nodes tool by clicking its hit target, then drag a node.
+  await page.keyboard.press('a')
+  check((await page.getByRole('radio', { name: 'Nodes' }).getAttribute('aria-checked')) === 'true', `${label}: A picks the Nodes tool`)
   const hits = page.locator('path[data-path-id]')
   let best = 0
   let bestArea = -1
@@ -164,7 +340,24 @@ async function editorChecks(page, label, n) {
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+z' : 'Control+Shift+z')
   const dRedone = await page.locator(`svg[aria-label="Traced SVG"] path`).nth(best).getAttribute('d')
   check(dRedone === dAfter, `${label}: Redo brings it back`)
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z')
+
+  await smoothChecks(page, label)
+
+  // A marquee from the margin selects the nodes inside it.
+  const sheetBox = await page.locator('svg[aria-label="Traced SVG"]').boundingBox()
+  await page.mouse.move(sheetBox.x - 12, sheetBox.y - 12)
+  await page.mouse.down()
+  for (let i = 1; i <= 4; i++) await page.mouse.move(sheetBox.x - 12 + ((sheetBox.width + 24) * i) / 4, sheetBox.y - 12 + ((sheetBox.height / 2 + 12) * i) / 4)
+  await page.mouse.up()
+  const picked = await page.locator('[data-node-selected]').count()
+  const expected = await page.locator('[data-node]').evaluateAll((els, top) => els.filter((e) => e.getBoundingClientRect().y + e.getBoundingClientRect().height / 2 <= top).length, sheetBox.y + sheetBox.height / 2)
+  check(picked > 1 && Math.abs(picked - expected) <= 1, `${label}: a marquee selects the nodes inside it (${picked} of ${expected} in the top half)`)
+  await shot(page, `${n}b2-${label}-nodes-marquee`)
   await page.keyboard.press('Escape')
+  await page.keyboard.press('Escape')
+
+  await selectChecks(page, label, id, n)
 
   // Mirror the left half onto the right.
   const before = await asymmetry(page, await exportSvg(page))
@@ -172,7 +365,7 @@ async function editorChecks(page, label, n) {
   await page.locator('[data-overlay="axis"]').waitFor()
   await shot(page, `${n}c-${label}-mirror-tool`)
   await page.getByRole('button', { name: /Mirror left onto right/ }).click()
-  await page.getByRole('radio', { name: 'Select', checked: true }).waitFor({ timeout: 15000 })
+  await page.getByRole('radio', { name: 'Select', exact: true, checked: true }).waitFor({ timeout: 15000 })
   const after = await asymmetry(page, await exportSvg(page))
   check(after < 2, `${label}: mirrored export is symmetric (${before.toFixed(1)}% → ${after.toFixed(2)}% of pixels differ)`)
   await shot(page, `${n}d-${label}-mirrored`)
@@ -277,6 +470,17 @@ const handle = page.getByRole('slider', { name: /Comparison split/ })
 await handle.focus()
 await page.keyboard.press('End')
 check((await handle.getAttribute('aria-valuenow')) === '100', 'split handle responds to the keyboard')
+await handle.blur()
+
+// The shortcuts panel: ? opens it, Esc closes it.
+await page.keyboard.press('Shift+Slash')
+const dialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' })
+await dialog.waitFor()
+check((await dialog.locator('kbd').count()) > 15, `? opens the shortcuts panel (${await dialog.locator('kbd').count()} keys listed)`)
+await shot(page, '04d-shortcuts')
+await page.keyboard.press('Escape')
+await dialog.waitFor({ state: 'hidden' })
+check(true, 'Esc closes it')
 
 // ---- Zoom ---------------------------------------------------------------------
 {

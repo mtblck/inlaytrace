@@ -1,10 +1,13 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent } from 'react'
 import type { Axis } from '../lib/mirror'
-import { parsePath, type NodePart, type NodeRef, type Pt, type Subpath } from '../lib/pathdata'
+import { isSmooth, parsePath, type NodePart, type NodeRef, type Pt, type Subpath } from '../lib/pathdata'
+import { HANDLE_SET, handlePoint, hasRef, normRect, pathBounds, scaleFromHandle, translate, union, type Affine, type Box, type Handle } from '../lib/transform'
 import { anchorScroll, effective, snap, step, wheelFactor, type Zoom } from '../lib/zoom'
 
 export type ViewMode = 'split' | 'difference' | 'vector'
-export type Tool = 'select' | 'mirror'
+export type Tool = 'select' | 'nodes' | 'mirror'
+/** How a click or marquee combines with the current selection: Shift adds (or toggles), Alt removes. */
+export type SelectMode = 'set' | 'add' | 'toggle' | 'subtract'
 export type Overlays = { paths: boolean; pathColor: string; nodes: boolean; nodeColor: string }
 export type ShownPath = { id: string; d: string; fill: string }
 
@@ -25,13 +28,24 @@ type Props = {
   overlays: Overlays
   /** Drawn behind every shape, as it will be exported; null is transparent. */
   background: string | null
-  selectedId: string | null
-  selectedNode: NodeRef | null
+  /** Selected shapes. In the Nodes tool only the first is edited. */
+  selectedIds: string[]
+  /** Selected nodes of the shape being edited with the Nodes tool. */
+  selectedNodes: NodeRef[]
   axis: Axis | null
-  onSelect: (id: string | null) => void
-  onSelectNode: (ref: NodeRef | null) => void
-  /** Called on every pointer move while dragging a node or handle; `end` on release. */
-  onDragNode: (ref: NodeRef, part: NodePart, to: Pt, phase: 'move' | 'end') => void
+  onSelect: (id: string | null, mode?: SelectMode) => void
+  onSelectNodes: (refs: NodeRef[], mode: SelectMode) => void
+  /** A finished marquee, in SVG units. */
+  onMarquee: (rect: Box, mode: SelectMode) => void
+  /** Double-click on a shape with the Select tool: edit its nodes. */
+  onEnterNodes: (id: string) => void
+  /**
+   * Called on every pointer move while dragging a node or handle; `end` on
+   * release. `smooth` asks for the opposite handle to stay in line.
+   */
+  onDragNode: (ref: NodeRef, part: NodePart, to: Pt, phase: 'move' | 'end', smooth: boolean) => void
+  /** Moving or scaling the selected shapes: `m` is relative to where the drag began. */
+  onTransform: (m: Affine, phase: 'move' | 'end') => void
   onAxis: (position: number) => void
 }
 
@@ -40,6 +54,9 @@ type Props = {
 const NODE_PX = 7
 const HANDLE_PX = 3
 const HIT_PX = 10
+/** Bounding-box handles: a square this size on screen. */
+const BOX_PX = 8
+const CURSORS: Record<string, string> = { '-1-1': 'nwse-resize', '11': 'nwse-resize', '1-1': 'nesw-resize', '-11': 'nesw-resize', '0-1': 'ns-resize', '01': 'ns-resize', '-10': 'ew-resize', '10': 'ew-resize' }
 /** Screen pixels the pointer must travel before a press on a node becomes a drag. */
 const DRAG_PX = 3
 const HANDLES = ['in', 'out'] as const
@@ -72,8 +89,16 @@ export function Canvas(props: Props) {
     // `grab` is the node's offset from the pointer at press, so the node keeps
     // its place under the pointer instead of jumping to it; `moved` stays false
     // until the pointer travels DRAG_PX, so a plain click selects without editing.
-    | { kind: 'node'; ref: NodeRef; part: NodePart; grab: Pt; from: { x: number; y: number }; moved: boolean }
+    // `smooth` is decided once, at the press: a drag that bends a handle past the
+    // threshold shouldn't suddenly let go of its partner.
+    | { kind: 'node'; ref: NodeRef; part: NodePart; grab: Pt; from: { x: number; y: number }; moved: boolean; smooth: boolean; reselect: boolean }
+    // Moving the selected shapes; `reselect` narrows a multi-selection to the
+    // pressed shape if the press turns out to be a click.
+    | { kind: 'move'; id: string; start: Pt; from: { x: number; y: number }; moved: boolean; reselect: boolean }
+    | { kind: 'scale'; handle: Handle; box: Box; grab: Pt }
+    | { kind: 'marquee'; start: Pt; from: { x: number; y: number }; moved: boolean; mode: SelectMode; clickId: string | null }
   >(null)
+  const [marquee, setMarquee] = useState<Box | null>(null)
 
   useLayoutEffect(() => {
     const mat = matRef.current
@@ -210,7 +235,11 @@ export function Canvas(props: Props) {
     return { x: p.x, y: p.y }
   }, [])
 
-  const selected = useMemo(() => props.paths.find((p) => p.id === props.selectedId) ?? null, [props.paths, props.selectedId])
+  const selectedSet = useMemo(() => new Set(props.selectedIds), [props.selectedIds])
+  const selectedPaths = useMemo(() => props.paths.filter((p) => selectedSet.has(p.id)), [props.paths, selectedSet])
+  // The Nodes tool edits one shape at a time.
+  const selected = tool === 'nodes' ? (selectedPaths.find((p) => p.id === props.selectedIds[0]) ?? null) : null
+  const box = useMemo(() => (tool === 'select' && selectedPaths.length ? union(selectedPaths.map((p) => pathBounds(p.d))) : null), [tool, selectedPaths])
   const selectedSubs = useMemo<Subpath[]>(() => (selected ? parsePath(selected.d) : []), [selected])
   const nodeList = useMemo(() => selectedSubs.flatMap((s, sub) => s.nodes.map((n, index) => ({ ref: { sub, index }, n }))), [selectedSubs])
   // Nodes per path, cached by path data: during a drag only one path changes,
@@ -239,36 +268,67 @@ export function Canvas(props: Props) {
   }, [allNodes, unit])
 
   // ---- Pointer handling ----------------------------------------------------
+  const far = (d: { from: { x: number; y: number } }, e: { clientX: number; clientY: number }) => Math.hypot(e.clientX - d.from.x, e.clientY - d.from.y) >= DRAG_PX
   const onMove = (e: RPointerEvent) => {
     const d = drag.current
     if (!d) return
     if (d.kind === 'split') {
-      const rect = e.currentTarget.getBoundingClientRect()
+      const rect = sheetRef.current!.getBoundingClientRect()
       setSplit(Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100)))
       return
     }
     const p = toSvg(e)
     if (!p) return
     if (d.kind === 'node') {
-      if (!d.moved && Math.hypot(e.clientX - d.from.x, e.clientY - d.from.y) < DRAG_PX) return
+      if (!d.moved && !far(d, e)) return
       d.moved = true
-      props.onDragNode(d.ref, d.part, { x: p.x + d.grab.x, y: p.y + d.grab.y }, 'move')
+      props.onDragNode(d.ref, d.part, { x: p.x + d.grab.x, y: p.y + d.grab.y }, 'move', d.smooth && !e.altKey)
+    } else if (d.kind === 'move') {
+      if (!d.moved && !far(d, e)) return
+      d.moved = true
+      props.onTransform(moveBy(d.start, p, e.shiftKey), 'move')
+    } else if (d.kind === 'scale') {
+      props.onTransform(scaleFromHandle(d.box, d.handle, { x: p.x + d.grab.x, y: p.y + d.grab.y }, { proportional: e.shiftKey, fromCentre: e.altKey }), 'move')
+    } else if (d.kind === 'marquee') {
+      if (!d.moved && !far(d, e)) return
+      d.moved = true
+      setMarquee(normRect(d.start, p))
     } else props.onAxis(clampAxis(props.axis!, p, width, height))
   }
   const onUp = (e: RPointerEvent) => {
     const d = drag.current
     drag.current = null
+    if (!d) return
+    const p = toSvg(e)
     // A press that never became a drag only selected; it changes nothing.
-    if (d?.kind === 'node' && d.moved) {
-      const p = toSvg(e)
-      if (p) props.onDragNode(d.ref, d.part, { x: p.x + d.grab.x, y: p.y + d.grab.y }, 'end')
+    if (d.kind === 'node') {
+      if (d.moved && p) props.onDragNode(d.ref, d.part, { x: p.x + d.grab.x, y: p.y + d.grab.y }, 'end', d.smooth && !e.altKey)
+      else if (!d.moved && d.reselect) props.onSelectNodes([d.ref], 'set')
+    } else if (d.kind === 'move') {
+      if (d.moved && p) props.onTransform(moveBy(d.start, p, e.shiftKey), 'end')
+      else if (!d.moved && d.reselect) props.onSelect(d.id, 'set')
+    } else if (d.kind === 'scale') {
+      if (p) props.onTransform(scaleFromHandle(d.box, d.handle, { x: p.x + d.grab.x, y: p.y + d.grab.y }, { proportional: e.shiftKey, fromCentre: e.altKey }), 'end')
+    } else if (d.kind === 'marquee') {
+      setMarquee(null)
+      if (d.moved && p) props.onMarquee(normRect(d.start, p), d.mode)
+      // A click on empty canvas clears the selection; on a shape (Nodes tool), selects it.
+      else if (!d.moved) props.onSelect(d.clickId, 'set')
     }
   }
   /** Start dragging the anchor or a handle at `at` (SVG units). */
-  const grabNode = (e: RPointerEvent, ref: NodeRef, part: NodePart, at: Pt) => {
-    props.onSelectNode(ref)
+  const grabNode = (e: RPointerEvent, ref: NodeRef, part: NodePart, at: Pt, node: Subpath['nodes'][number]) => {
+    const already = hasRef(props.selectedNodes, ref)
+    let reselect = false
+    if (part === 'anchor') {
+      if (e.shiftKey) props.onSelectNodes([ref], 'toggle')
+      else if (!already) props.onSelectNodes([ref], 'set')
+      // Pressing one of several selected nodes keeps them all, so they drag
+      // together; a plain click (no drag) then narrows to this one.
+      else reselect = props.selectedNodes.length > 1
+    } else if (!already) props.onSelectNodes([ref], 'set')
     const p = toSvg(e) ?? at
-    startDrag(e, { kind: 'node', ref, part, grab: { x: at.x - p.x, y: at.y - p.y }, from: { x: e.clientX, y: e.clientY }, moved: false })
+    startDrag(e, { kind: 'node', ref, part, grab: { x: at.x - p.x, y: at.y - p.y }, from: { x: e.clientX, y: e.clientY }, moved: false, smooth: part !== 'anchor' && isSmooth(node), reselect })
   }
   const startDrag = (e: RPointerEvent, next: NonNullable<typeof drag.current>) => {
     e.stopPropagation()
@@ -276,6 +336,39 @@ export function Canvas(props: Props) {
     drag.current = next
     ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
   }
+  const modeOf = (e: { shiftKey: boolean; altKey: boolean }): SelectMode => (e.altKey ? 'subtract' : e.shiftKey ? 'add' : 'set')
+  const startMarquee = (e: RPointerEvent, clickId: string | null) => {
+    const p = toSvg(e)
+    if (!p || e.button !== 0) return
+    startDrag(e, { kind: 'marquee', start: p, from: { x: e.clientX, y: e.clientY }, moved: false, mode: modeOf(e), clickId })
+  }
+  // Read through a ref so the memoised hit paths can keep one stable callback.
+  const shapeDown = useRef<(e: RPointerEvent, id: string) => void>(() => {})
+  shapeDown.current = (e, id) => {
+    if (tool === 'nodes') {
+      // In the Nodes tool a drag anywhere draws a marquee round nodes; a click picks the shape.
+      if (id === props.selectedIds[0]) startMarquee(e, id)
+      else {
+        e.stopPropagation()
+        props.onSelect(id, 'set')
+      }
+      return
+    }
+    if (tool !== 'select') return
+    if (e.shiftKey) {
+      e.stopPropagation()
+      props.onSelect(id, 'toggle')
+      return
+    }
+    const was = selectedSet.has(id)
+    if (!was) props.onSelect(id, 'set')
+    const p = toSvg(e)
+    if (p) startDrag(e, { kind: 'move', id, start: p, from: { x: e.clientX, y: e.clientY }, moved: false, reselect: was && props.selectedIds.length > 1 })
+  }
+  const onShapeDown = useCallback((e: RPointerEvent, id: string) => shapeDown.current(e, id), [])
+  const enterNodes = useRef(props.onEnterNodes)
+  enterNodes.current = props.onEnterNodes
+  const onShapeDouble = useCallback((id: string) => tool === 'select' && enterNodes.current(id), [tool])
 
   const onSplitKey = (e: KeyboardEvent) => {
     const step = e.shiftKey ? 10 : 2
@@ -299,17 +392,25 @@ export function Canvas(props: Props) {
     >
       {/* Sized to the sheet plus padding, never smaller than the window, so a
           zoomed sheet scrolls in both directions and a fitted one stays centred. */}
-      <div className="grid min-h-full min-w-full place-items-center" style={{ width: w + 2 * padX, height: h + 2 * padY, padding: `${padY}px ${padX}px` }}>
+      <div
+        className="grid min-h-full min-w-full place-items-center"
+        style={{ width: w + 2 * padX, height: h + 2 * padY, padding: `${padY}px ${padX}px` }}
+        // A marquee can start in the margin round the image, which matters when a
+        // background shape covers the whole canvas.
+        onPointerDown={(e) => {
+          if (e.target === e.currentTarget && (tool === 'select' || tool === 'nodes')) startMarquee(e, null)
+        }}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+      >
         <div
           ref={sheetRef}
           className="checker relative shadow-[0_0_0_1px_var(--c-rule)] select-none"
           // Touch scrolls the page unless something on the canvas is draggable:
           // a selected shape's nodes or the mirror axis. The split handle opts
           // out on its own.
-          style={{ width: w, height: h, touchAction: props.selectedId || tool === 'mirror' ? 'none' : undefined }}
-          onPointerMove={onMove}
-          onPointerUp={onUp}
-          onPointerCancel={onUp}
+          style={{ width: w, height: h, touchAction: props.selectedIds.length || tool === 'mirror' ? 'none' : undefined }}
         >
           {mode !== 'vector' && (
             <img
@@ -347,12 +448,12 @@ export function Canvas(props: Props) {
             viewBox={vectorBox}
             preserveAspectRatio="none"
             onPointerDown={(e) => {
-              // A click on empty canvas clears the selection.
-              if (tool === 'select' && e.target === e.currentTarget) props.onSelect(null)
+              // Empty canvas: a drag draws a marquee, a click clears the selection.
+              if ((tool === 'select' || tool === 'nodes') && e.target === e.currentTarget) startMarquee(e, null)
             }}
           >
-            {tool === 'select' &&
-              props.paths.map((p) => <HitPath key={p.id} id={p.id} d={p.d} onSelect={props.onSelect} />)}
+            {tool !== 'mirror' &&
+              props.paths.map((p) => <HitPath key={p.id} id={p.id} d={p.d} movable={tool === 'select' && selectedSet.has(p.id)} onDown={onShapeDown} onDouble={onShapeDouble} />)}
 
             {overlays.paths && (
               <g fill="none" stroke={overlays.pathColor} strokeWidth={1} pointerEvents="none">
@@ -376,11 +477,11 @@ export function Canvas(props: Props) {
                 {nodeList.map(({ ref, n }) =>
                   HANDLES.map((part) => {
                     const hnd = n[part]
-                    return hnd && <circle key={`h${ref.sub}:${ref.index}:${part}`} cx={hnd.x} cy={hnd.y} r={HIT_PX * unit} fill="transparent" onPointerDown={(e) => grabNode(e, ref, part, hnd)} style={{ cursor: 'grab' }} />
+                    return hnd && <circle key={`h${ref.sub}:${ref.index}:${part}`} cx={hnd.x} cy={hnd.y} r={HIT_PX * unit} fill="transparent" onPointerDown={(e) => grabNode(e, ref, part, hnd, n)} style={{ cursor: 'grab' }} />
                   }),
                 )}
                 {nodeList.map(({ ref, n }) => (
-                  <circle key={`a${ref.sub}:${ref.index}`} cx={n.x} cy={n.y} r={HIT_PX * unit} fill="transparent" onPointerDown={(e) => grabNode(e, ref, 'anchor', n)} style={{ cursor: 'move' }} />
+                  <circle key={`a${ref.sub}:${ref.index}`} cx={n.x} cy={n.y} r={HIT_PX * unit} fill="transparent" onPointerDown={(e) => grabNode(e, ref, 'anchor', n, n)} style={{ cursor: 'move' }} />
                 ))}
                 {nodeList.map(({ ref, n }) =>
                   HANDLES.map((part) => {
@@ -399,14 +500,14 @@ export function Canvas(props: Props) {
                           vectorEffect="non-scaling-stroke"
                           data-handle={`${ref.sub}:${ref.index}:${part}`}
                           style={{ cursor: 'grab' }}
-                          onPointerDown={(e) => grabNode(e, ref, part, hnd)}
+                          onPointerDown={(e) => grabNode(e, ref, part, hnd, n)}
                         />
                       </g>
                     )
                   }),
                 )}
                 {nodeList.map(({ ref, n }) => {
-                  const isSel = props.selectedNode?.sub === ref.sub && props.selectedNode.index === ref.index
+                  const isSel = hasRef(props.selectedNodes, ref)
                   return (
                     <rect
                       key={`n${ref.sub}:${ref.index}`}
@@ -419,12 +520,49 @@ export function Canvas(props: Props) {
                       strokeWidth={1}
                       vectorEffect="non-scaling-stroke"
                       data-node={`${ref.sub}:${ref.index}`}
+                      data-node-selected={isSel ? '' : undefined}
                       style={{ cursor: 'move' }}
-                      onPointerDown={(e) => grabNode(e, ref, 'anchor', n)}
+                      onPointerDown={(e) => grabNode(e, ref, 'anchor', n, n)}
                     />
                   )
                 })}
               </g>
+            )}
+
+            {box && (
+              <g data-selection-box={props.selectedIds.length}>
+                {selectedPaths.length > 1 &&
+                  selectedPaths.map((p) => <path key={p.id} d={p.d} fill="none" stroke="var(--c-accent)" strokeWidth={1} vectorEffect="non-scaling-stroke" pointerEvents="none" />)}
+                {selectedPaths.length === 1 && <path d={selectedPaths[0].d} fill="none" stroke="var(--c-accent)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" pointerEvents="none" />}
+                <rect x={box.x} y={box.y} width={box.w} height={box.h} fill="none" stroke="var(--c-accent)" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" pointerEvents="none" />
+                {HANDLE_SET.map((k) => {
+                  const at = handlePoint(box, k)
+                  const s = BOX_PX * unit
+                  return (
+                    <rect
+                      key={`${k.h}${k.v}`}
+                      x={at.x - s / 2}
+                      y={at.y - s / 2}
+                      width={s}
+                      height={s}
+                      fill="var(--c-paper)"
+                      stroke="var(--c-accent)"
+                      strokeWidth={1}
+                      vectorEffect="non-scaling-stroke"
+                      data-box-handle={`${k.h},${k.v}`}
+                      style={{ cursor: CURSORS[`${k.h}${k.v}`] }}
+                      onPointerDown={(e) => {
+                        const p = toSvg(e)
+                        if (p) startDrag(e, { kind: 'scale', handle: k, box, grab: { x: at.x - p.x, y: at.y - p.y } })
+                      }}
+                    />
+                  )
+                })}
+              </g>
+            )}
+
+            {marquee && (
+              <rect x={marquee.x} y={marquee.y} width={marquee.w} height={marquee.h} fill="var(--c-accent-dim)" stroke="var(--c-accent)" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" pointerEvents="none" data-marquee="" />
             )}
 
             {tool === 'mirror' && props.axis && <AxisOverlay axis={props.axis} width={width} height={height} unit={unit} onGrab={(e) => startDrag(e, { kind: 'axis' })} />}
@@ -471,21 +609,31 @@ const VectorPath = memo(function VectorPath({ d, fill }: { d: string; fill: stri
 const OutlinePath = memo(function OutlinePath({ d }: { d: string }) {
   return <path d={d} vectorEffect="non-scaling-stroke" />
 })
-const HitPath = memo(function HitPath({ id, d, onSelect }: { id: string; d: string; onSelect: (id: string) => void }) {
+type HitProps = { id: string; d: string; movable: boolean; onDown: (e: RPointerEvent, id: string) => void; onDouble: (id: string) => void }
+const HitPath = memo(function HitPath({ id, d, movable, onDown, onDouble }: HitProps) {
   return (
     <path
       d={d}
       fill="transparent"
       pointerEvents="fill"
       data-path-id={id}
-      style={{ cursor: 'pointer' }}
-      onPointerDown={(e) => {
-        e.stopPropagation()
-        onSelect(id)
-      }}
+      style={{ cursor: movable ? 'move' : 'pointer' }}
+      onPointerDown={(e) => onDown(e, id)}
+      onDoubleClick={() => onDouble(id)}
     />
   )
 })
+
+/** A move from `start` to `p`; with Shift, along whichever axis moved further. */
+function moveBy(start: Pt, p: Pt, constrain: boolean) {
+  let dx = p.x - start.x
+  let dy = p.y - start.y
+  if (constrain) {
+    if (Math.abs(dx) >= Math.abs(dy)) dy = 0
+    else dx = 0
+  }
+  return translate(dx, dy)
+}
 
 /** The mirror axis: a draggable line, with the side being replaced washed out. */
 function AxisOverlay({ axis, width, height, unit, onGrab }: { axis: Axis; width: number; height: number; unit: number; onGrab: (e: RPointerEvent) => void }) {

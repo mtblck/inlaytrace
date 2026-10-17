@@ -17,9 +17,10 @@ in a Web Worker so the page stays responsive.
 2. **Check.** Compare the SVG against the original with a split slider, a
    difference blend that lights up wherever they disagree, or the SVG on its
    own with path and node overlays. Zoom with a slider or a trackpad pinch.
-3. **Edit.** Replace or remove colours, add a background, drag nodes and bend
-   curves, delete nodes or shapes, and mirror one half onto the other. Every
-   edit is undoable.
+3. **Edit.** Replace or remove colours, add a background, select shapes to move
+   and scale them, drag nodes and bend curves, delete nodes or shapes, and
+   mirror one half onto the other. Every edit is undoable, and `?` lists the
+   keyboard shortcuts.
 4. **Export.** One optimised SVG, a copy to the clipboard, or a zip with one SVG
    per colour for screen printing and vinyl cutting.
 
