@@ -27,6 +27,15 @@ Selecting a shape from the canvas opens the Edit tab.
 - **X, Y, W, H** in the panel are the selection's bounds in pixels of the trace.
   Type a value to move or resize; *Keep proportions* links W and H. Each field
   is one undo step however many digits you type.
+- **Rotate** by dragging the round handle above the box (⇧ snaps to 15°), with
+  *↺ 90°* and *↻ 90°*, or by typing an angle (clockwise; negative turns
+  anticlockwise). Rotation is about the centre of the selection's box, and the
+  box stays square to the page: it is the bounds of the rotated shapes.
+  Quarter turns are exact, so four of them put every point back.
+- **Simplify** re-fits the selected shapes with fewer nodes, using the tracer's
+  own fitter at the tolerance on the slider. The button says how many nodes
+  you'll have before you press it. Neighbouring shapes no longer share the
+  simplified edges exactly, so a hairline can show between them.
 - **Double-click** a shape to edit its nodes.
 
 The box is the exact bounds of the drawn outline, not of the curve handles
@@ -45,6 +54,15 @@ Click a shape to show its nodes and handles.
   stay opposite, keeping its own length, so the curve stays smooth through the
   node. Hold ⌥ to bend one handle on its own. A corner's handles always move
   independently.
+- **Double-click the outline** to add a node there. The curve is split
+  exactly, so the shape doesn't move, and the new node is selected.
+- **Smooth** gives the selected nodes two handles in line (pointing from the
+  previous node towards the next), so the curve passes through without a kink.
+- **Sharpen** drops their handles, making sharp points.
+- **Round corner** replaces each selected corner with an arc that starts the
+  given radius along each side (at most 45% of a side, so neighbouring corners
+  never overlap), shaped like a circular arc for that turn. Smooth nodes and
+  the open ends of a line are left alone.
 - **Arrow keys** nudge the selected nodes.
 
 A press only becomes a drag after 3 px of movement, so clicking a node selects
@@ -73,8 +91,13 @@ idempotent, so touching one node never nudges the rest of the drawing. The
 first shape edit copies the trace into an editable document; see
 [Undo and the edit model](undo-and-edits.md).
 
-Moving and scaling (`src/lib/transform.ts`) are a scale and a translation
-applied to every point and handle. During a drag, each update is applied to the
+Moving, scaling and rotating (`src/lib/transform.ts`) are one affine matrix
+applied to every point and handle. Adding, smoothing, sharpening, rounding and
+simplifying are in `src/lib/nodeops.ts`: adding splits the cubic with
+de Casteljau's construction; rounding cuts each side at the radius and joins
+the cuts with a cubic whose handles are (4/3)·tan(φ/4) of the arc's radius for
+a turn of φ; simplifying samples the outline about a pixel apart and runs it
+back through `fitChain`. During a drag, each update is applied to the
 shapes as they were when the drag began, not to the previous update, so a long
 drag never accumulates rounding; the whole drag is one undo step.
 

@@ -8,12 +8,27 @@
 import { mapPoints, parsePath, serializePath, type NodeRef, type PathNode, type Pt, type Subpath } from './pathdata'
 
 export type Box = { x: number; y: number; w: number; h: number }
-/** x' = a·x + c, y' = b·y + d: scale and translate, which is all the editor needs. */
-export type Affine = { sx: number; sy: number; tx: number; ty: number }
+/** x' = a·x + c·y + e, y' = b·x + d·y + f: SVG's matrix(a b c d e f). */
+export type Affine = { a: number; b: number; c: number; d: number; e: number; f: number }
 
-export const IDENTITY: Affine = { sx: 1, sy: 1, tx: 0, ty: 0 }
-export const translate = (dx: number, dy: number): Affine => ({ sx: 1, sy: 1, tx: dx, ty: dy })
-export const apply = (m: Affine, p: Pt): Pt => ({ x: m.sx * p.x + m.tx, y: m.sy * p.y + m.ty })
+export const IDENTITY: Affine = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
+export const translate = (dx: number, dy: number): Affine => ({ ...IDENTITY, e: dx, f: dy })
+const scaleAt = (sx: number, sy: number, ax: number, ay: number): Affine => ({ a: sx, b: 0, c: 0, d: sy, e: ax - sx * ax, f: ay - sy * ay })
+export const apply = (m: Affine, p: Pt): Pt => ({ x: m.a * p.x + m.c * p.y + m.e, y: m.b * p.x + m.d * p.y + m.f })
+
+/** Rotation by `degrees` (clockwise on screen, where y points down) about `at`. */
+export function rotateAbout(at: Pt, degrees: number): Affine {
+  const r = (degrees * Math.PI) / 180
+  // Snap the quarter turns exactly, so four 90° turns put every point back where it was.
+  const q = Math.round(degrees / 90)
+  const exact = Math.abs(degrees - q * 90) < 1e-9
+  const cos = exact ? [1, 0, -1, 0][((q % 4) + 4) % 4] : Math.cos(r)
+  const sin = exact ? [0, 1, 0, -1][((q % 4) + 4) % 4] : Math.sin(r)
+  return { a: cos, b: sin, c: -sin, d: cos, e: at.x - cos * at.x + sin * at.y, f: at.y - sin * at.x - cos * at.y }
+}
+
+/** The angle from `at` to `p`, in degrees, clockwise from pointing right. */
+export const angleAt = (at: Pt, p: Pt) => (Math.atan2(p.y - at.y, p.x - at.x) * 180) / Math.PI
 
 export function transformPath(d: string, m: Affine): string {
   return serializePath(mapPoints(parsePath(d), (p) => apply(m, p)))
@@ -155,14 +170,14 @@ export function scaleFromHandle(box: Box, k: Handle, to: Pt, opts: { proportiona
       ax = centre.x
     }
   }
-  return { sx, sy, tx: ax - sx * ax, ty: ay - sy * ay }
+  return scaleAt(sx, sy, ax, ay)
 }
 
 /** The transform that maps `from` onto `to` (for typed X, Y, W and H). */
 export function boxToBox(from: Box, to: Box): Affine {
   const sx = from.w > 1e-9 ? to.w / from.w : 1
   const sy = from.h > 1e-9 ? to.h / from.h : 1
-  return { sx, sy, tx: to.x - sx * from.x, ty: to.y - sy * from.y }
+  return { a: sx, b: 0, c: 0, d: sy, e: to.x - sx * from.x, f: to.y - sy * from.y }
 }
 
 // ---- Rectangle selection ---------------------------------------------------------
