@@ -620,6 +620,44 @@ check((await page.locator('svg[aria-label="Traced SVG"] rect[data-background]').
 await page.keyboard.press('Control+z')
 await page.getByRole('button', { name: 'Add background' }).waitFor()
 check((await page.locator('rect[data-background]').count()) === 0, 'then takes the background away')
+
+// ---- Eyedropper and merge ------------------------------------------------------
+{
+  const hexOf = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
+  const apart = (a, b) => Math.max(...hexOf(a).map((v, i) => Math.abs(v - hexOf(b)[i])))
+  // Pick, for ink 3, the colour under the middle of an ink-4 shape.
+  const target = page.locator(INKS).nth(2)
+  const targetHex = await target.getAttribute('data-ink')
+  const sourceHex = await page.locator(INKS).nth(3).getAttribute('data-ink')
+  const sourceId = await page.locator(`${VECTOR}[fill="${sourceHex}"]`).first().evaluate((el) => {
+    const i = [...el.parentNode.querySelectorAll('path')].indexOf(el)
+    return document.querySelectorAll('path[data-path-id]')[i].dataset.pathId
+  })
+  const spot = await pointOn(page, sourceId)
+  await target.getByRole('button', { name: /Pick a colour/ }).click()
+  await page.locator('[data-picking]').waitFor()
+  await page.keyboard.press('Escape')
+  check((await page.locator('[data-picking]').count()) === 0, 'Esc puts the eyedropper away')
+  await target.getByRole('button', { name: /Pick a colour/ }).click()
+  await page.mouse.click(spot.x, spot.y)
+  const shown = (await target.locator('.font-mono').first().innerText()).trim()
+  check(shown !== targetHex && apart(shown, sourceHex) <= 24, `the eyedropper picks from the original: ${targetHex} → ${shown} (the ${sourceHex} area)`)
+  await page.keyboard.press('Control+z')
+  check((await target.locator('.font-mono').first().innerText()).trim() === targetHex, 'one Undo takes the picked colour back')
+
+  // Merge ink 4 into ink 3: one fewer colour, listed as merged, and Unmerge brings it back.
+  const before = await page.locator(INKS).count()
+  await retrace(page, async () => {
+    await page.locator(INKS).nth(3).getByRole('button', { name: /^Merge/ }).click()
+    await page.getByRole('button', { name: `Merge into ${targetHex}` }).click()
+  })
+  const after = await page.locator(INKS).count()
+  check(after === before - 1 && (await page.locator(`[data-merged="${sourceHex}"]`).count()) === 1, `merging re-traces with one colour fewer (${before} → ${after})`)
+  check((await page.locator(`${VECTOR}[fill="${sourceHex}"]`).count()) === 0, 'and no shape keeps the merged colour')
+  await shot(page, '04f-merged')
+  await retrace(page, () => page.getByRole('button', { name: `Unmerge ${sourceHex}` }).click())
+  check((await page.locator(INKS).count()) === before, 'Unmerge brings the colour back')
+}
 await page.getByRole('radio', { name: 'Split' }).click()
 
 // Keyboard: the split handle is a real slider.
