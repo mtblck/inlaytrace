@@ -16,10 +16,10 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
 ## Load-bearing decisions
 
 - **Client-only.** Tracing runs in a Web Worker (`src/engine/`). Images never leave the device.
-- **Flat art (Logo/Illustration/Line art) uses our shared-edge tracer** (`src/engine/shapes.ts`,
+- **Inlay, our shared-edge tracer, does Logo/Illustration/Line art/Pixel art** (`src/engine/inlay.ts`,
   fitting in `src/lib/fit.ts`): each colour boundary traced and fitted once, so shapes tile
   exactly. Run `npm run score` before shipping any tracer, fitter or preset change.
-- **VTracer 1.0 (Poster, Pixel art only) via `scripts/vendor-vtracer.mjs`**, which rewrites the official Node
+- **VTracer 1.0 (Poster only) via `scripts/vendor-vtracer.mjs`**, which rewrites the official Node
   package's glue to browser ESM. Output in `src/engine/vtracer/` is generated and
   gitignored. Bumping the package means re-checking that script's substitutions.
 - **Logo/Illustration palettes come from histogram peaks** (`src/lib/palette.ts`),

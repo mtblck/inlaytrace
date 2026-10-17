@@ -1,5 +1,6 @@
 /**
- * The shared-edge tracer, for flat art (Logo, Illustration, Line art).
+ * Inlay, our shared-edge tracer: Logo, Illustration, Line art and Pixel art.
+ * Like inlaid wood, every piece is cut to fit its neighbours exactly.
  *
  * VTracer traces every colour region on its own, so an edge between two
  * regions is traced twice. Fitting the two copies separately leaves hairline
@@ -28,9 +29,15 @@ import { fitChain, isFlat, type Cubic, type FitOptions } from '../lib/fit'
 import { oklab, type Rgb } from '../lib/palette'
 import { serializePath, type PathNode, type Pt, type Subpath } from '../lib/pathdata'
 
-export type ShapesOptions = FitOptions & {
+export type InlayOptions = FitOptions & {
   /** Regions smaller than speckle × speckle pixels are merged into their surroundings. */
   speckle: number
+  /**
+   * Pixel art: keep every pixel. No clean-up of single pixels, and no curve
+   * fitting: each boundary is its exact pixel staircase, with straight runs
+   * joined into single lines.
+   */
+  pixels?: boolean
 } & (
     /**
      * `merge` folds colours together before any region is built, so the edge
@@ -48,10 +55,11 @@ export type ShapesOptions = FitOptions & {
 
 const VOID = -1 // outside the image, transparent pixels, and line art's paper
 
-export function traceShapes(rgba: ArrayLike<number>, w: number, h: number, o: ShapesOptions): string {
+export function traceInlay(rgba: ArrayLike<number>, w: number, h: number, o: InlayOptions): string {
   const { labels, colors, drawn } = o.mode === 'palette' ? labelPalette(rgba, w, h, o.palette) : labelBinary(rgba, w, h, o.threshold)
   if (o.mode === 'palette' && o.merge) mergeLabels(labels, colors, o.merge)
-  despur(labels, w, h)
+  // A lone pixel in pixel art is deliberate, not a stray.
+  if (!o.pixels) despur(labels, w, h)
   mergeSpecks(labels, w, h, Math.max(0, Math.round(o.speckle)) ** 2)
 
   // Final regions: 4-connected components of drawn labels. Everything else is VOID.
@@ -59,7 +67,7 @@ export function traceShapes(rgba: ArrayLike<number>, w: number, h: number, o: Sh
   const chains = findChains(comp, w, h)
   const byComp = new Map<number, Oriented[]>()
   for (const c of chains) {
-    const cubics = fitChain(c.pts, c.closed, o)
+    const cubics = o.pixels ? staircase(c.pts, c.closed) : fitChain(c.pts, c.closed, o)
     if (!cubics.length) continue
     if (c.left !== VOID) addOriented(byComp, c.left, { ...c, cubics, reversed: false })
     if (c.right !== VOID) addOriented(byComp, c.right, { ...c, cubics: reverse(cubics), reversed: true })
@@ -74,6 +82,45 @@ export function traceShapes(rgba: ArrayLike<number>, w: number, h: number, o: Sh
     paths.push(`<path d="${d}" fill="${colors[compLabel[id]]}"/>`)
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">\n${paths.join('\n')}\n</svg>\n`
+}
+
+/**
+ * A chain as its exact pixel boundary: a line between each pair of turns.
+ * The points are pixel corners about a pixel apart, so a run of them in one
+ * direction is one straight edge. A closed loop starts at a turn, so its seam
+ * isn't a node in the middle of an edge.
+ */
+export function staircase(pts: Pt[], closed: boolean): Cubic[] {
+  const n = pts.length
+  if (n < 2) return []
+  const dir = (a: Pt, b: Pt) => `${Math.sign(b.x - a.x)},${Math.sign(b.y - a.y)}`
+  const isTurn = (i: number) => {
+    const a = pts[(i - 1 + n) % n]
+    const b = pts[i]
+    const c = pts[(i + 1) % n]
+    return dir(a, b) !== dir(b, c)
+  }
+  const keep: Pt[] = []
+  if (closed) {
+    const start = pts.findIndex((_, i) => isTurn(i))
+    if (start < 0) return [] // a loop with no turns can't happen on a pixel grid
+    for (let k = 0; k < n; k++) {
+      const i = (start + k) % n
+      if (isTurn(i)) keep.push(pts[i])
+    }
+    keep.push(keep[0])
+  } else {
+    keep.push(pts[0])
+    for (let i = 1; i < n - 1; i++) if (isTurn(i)) keep.push(pts[i])
+    keep.push(pts[n - 1])
+  }
+  const out: Cubic[] = []
+  for (let i = 1; i < keep.length; i++) {
+    const a = keep[i - 1]
+    const b = keep[i]
+    out.push([a, { x: a.x + (b.x - a.x) / 3, y: a.y + (b.y - a.y) / 3 }, { x: a.x + ((b.x - a.x) * 2) / 3, y: a.y + ((b.y - a.y) * 2) / 3 }, b])
+  }
+  return out
 }
 
 // ---- 1. Labels ----------------------------------------------------------------------

@@ -74,3 +74,23 @@ export function oklab([r, g, b]: Rgb): Rgb {
 const distance = (a: Rgb, b: Rgb) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
 
 const toHex = (rgb: Rgb) => `#${rgb.map((c) => Math.round(c).toString(16).padStart(2, '0')).join('')}`
+
+/**
+ * Pixel art's palette: its colours exactly, most-used first. Pixel art has a
+ * handful of deliberate colours, and a one-pixel eye matters as much as the
+ * sky, so nothing is merged or dropped for being rare or close to another.
+ * Beyond `maxColors` distinct colours (a photo picked as pixel art), the
+ * rarest ones take their nearest kept colour when pixels are labelled.
+ */
+export function exactPalette(rgba: ArrayLike<number>, maxColors: number): string[] {
+  const counts = new Map<number, number>()
+  for (let i = 0; i < rgba.length; i += 4) {
+    if (rgba[i + 3] < 128) continue
+    const key = (rgba[i] << 16) | (rgba[i + 1] << 8) | rgba[i + 2]
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  return [...counts]
+    .sort((a, b) => b[1] - a[1] || a[0] - b[0])
+    .slice(0, Math.max(1, maxColors))
+    .map(([k]) => `#${k.toString(16).padStart(6, '0')}`)
+}
