@@ -10,7 +10,7 @@
     "dev": "npm run vendor && vite",
     "build": "npm run vendor && npm run hosting:check && tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "npm run vendor && vitest run",
     "lint": "tsc -b --noEmit",
     "hosting:check": "node scripts/check-hosting.mjs",
     "verify": "node scripts/verify.mjs"

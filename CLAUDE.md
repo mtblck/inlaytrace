@@ -10,6 +10,9 @@ hosting and portfolio conventions. README has the design notes and measurements.
 (real-browser E2E; `CHROME_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome`
 in Claude's cloud sandbox, where the Playwright CDN is blocked).
 
+CI and Claude review run on PRs (`.github/workflows/`; playbook in mtblck/boards `docs/ci.md`).
+Open PRs as drafts and mark them ready only when the work is done: that triggers the Claude review.
+
 ## Load-bearing decisions
 
 - **Client-only.** Tracing runs in a Web Worker (`src/engine/`). Images never leave the device.
