@@ -1,3 +1,7 @@
+---
+order: 90
+---
+
 # Research: image → SVG (October 2026)
 
 Survey done before any code was written, to decide what to build on. Versions
