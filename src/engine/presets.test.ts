@@ -60,6 +60,35 @@ describe('presets against the real engine', () => {
     })
   }
 
+  it('line art with light ink traces the light shapes, not the dark background', () => {
+    // A light disc on a dark card: dark ink would trace the card around the hole;
+    // light ink should trace the disc itself, which is one compact shape.
+    const w = 64
+    const h = 64
+    const card = new Uint8Array(w * h * 4)
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const v = (x - 32) ** 2 + (y - 32) ** 2 < 14 ** 2 ? 240 : 12
+        card.set([v, v, v, 255], (y * w + x) * 4)
+      }
+    const light = { ...settingsFor('lineart'), lightInk: true }
+    const opts = toVtracerOptions(light)
+    expect(opts.invert).toBe(true)
+    // Mirror the worker: invert, then trace.
+    const flipped = card.map((c, i) => (i % 4 === 3 ? c : 255 - c))
+    const { invert: _invert, ...rest } = opts
+    const t = trace(flipped, w, h, rest)
+    // Every traced shape starts on the disc (x, y ≥ 18), not at the card's corner.
+    for (const p of t.paths) {
+      const [x, y] = p.d.match(/^M\s*([\d.]+)[ ,]([\d.]+)/)!.slice(1).map(Number)
+      expect(Math.min(x, y)).toBeGreaterThan(10)
+    }
+    // And the control: dark ink on the same card does trace from the corner.
+    const dark = trace(card, w, h, toVtracerOptions(settingsFor('lineart')))
+    expect(dark.paths.some((p) => /^M\s*0[ ,]/.test(p.d))).toBe(true) // starts on the card edge
+    expect(toVtracerOptions(settingsFor('lineart')).invert).toBeUndefined()
+  })
+
   it('the colour cap is honoured', () => {
     const s = { ...settingsFor('illustration'), colors: 3 }
     expect(inksOf(trace(px, w, h, toVtracerOptions(s))).length).toBeLessThanOrEqual(3)

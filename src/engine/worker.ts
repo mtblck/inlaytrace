@@ -30,7 +30,14 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
       await init(wasmUrl)
       const start = performance.now()
       const pixels = new Uint8Array(req.rgba)
-      const { peakColors, ...options } = req.options
+      const { peakColors, invert, ...options } = req.options
+      // Light ink on dark: VTracer's binary mode always traces the dark side,
+      // so flip the image first. The traced shapes are then the light areas.
+      if (invert) for (let i = 0; i < pixels.length; i += 4) {
+        pixels[i] = 255 - pixels[i]
+        pixels[i + 1] = 255 - pixels[i + 1]
+        pixels[i + 2] = 255 - pixels[i + 2]
+      }
       if (typeof peakColors === 'number') options.palette = peakPalette(pixels, peakColors)
       const svg = vectorize_rgba(pixels, req.width, req.height, options)
       post({ type: 'traced', id: req.id, svg, ms: Math.round(performance.now() - start) })
