@@ -25,6 +25,7 @@ import { centreAxis, mirrorDoc, type Axis } from './lib/mirror'
 import { loadPaper } from './lib/paper'
 import { deleteNode, moveNode, parsePath, serializePath, nodeCount, type NodePart, type NodeRef, type Pt } from './lib/pathdata'
 import { usePersisted } from './lib/persisted'
+import { bounds, effective, fromSlider, snap, step, toSlider, type Zoom } from './lib/zoom'
 import { sampleImage } from './lib/sample'
 import { Canvas, type Overlays, type Tool, type ViewMode } from './components/Canvas'
 import { EditPanel } from './components/EditPanel'
@@ -76,7 +77,9 @@ export default function App() {
   const dragSeq = useRef(0)
   const [optimized, setOptimized] = useState<{ from: string; svg: string } | null>(null)
   const [mode, setMode] = useState<ViewMode>('split')
-  const [zoom, setZoom] = useState(1)
+  /** Screen px per original px, or null to fit; see lib/zoom. */
+  const [zoom, setZoom] = useState<Zoom>(null)
+  const [fitScale, setFitScale] = useState(1)
   const [dragOver, setDragOver] = useState(false)
   const [copied, setCopied] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -98,7 +101,7 @@ export default function App() {
       setAxis(null)
       setTool('select')
       setPanel('trace')
-      setZoom(1)
+      setZoom(null)
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : String(error))
     }
@@ -406,6 +409,9 @@ export default function App() {
                   height={doc!.height}
                   mode={mode}
                   zoom={zoom}
+                  naturalWidth={source.originalWidth}
+                  onZoom={setZoom}
+                  onFitScale={setFitScale}
                   tool={tool}
                   overlays={overlays}
                   selectedId={selectedId}
@@ -458,18 +464,7 @@ export default function App() {
                     onColor={(nodeColor) => setOverlays({ ...overlays, nodeColor })}
                   />
                 </div>
-                <div className="flex items-center gap-1" role="group" aria-label="Zoom">
-                  {[1, 2, 4, 8].map((z) => (
-                    <button
-                      key={z}
-                      onClick={() => setZoom(z)}
-                      aria-pressed={zoom === z}
-                      className={`num rounded px-2 py-1 ${zoom === z ? 'bg-paper-sunk text-ink' : 'hover:text-ink'}`}
-                    >
-                      {z === 1 ? 'Fit' : `${z}×`}
-                    </button>
-                  ))}
-                </div>
+                <ZoomControl zoom={zoom} fit={fitScale} onZoom={setZoom} />
               </div>
             </>
           ) : (
@@ -657,6 +652,48 @@ function Empty(props: { loading: boolean; error: string | null; onChoose: () => 
           </>
         )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * − slider + and a readout, then Fit and 100%. The slider is logarithmic, so
+ * each stretch of travel is the same ratio of zoom. Fit follows the window;
+ * 100% is one original pixel per screen pixel.
+ */
+function ZoomControl({ zoom, fit, onZoom }: { zoom: Zoom; fit: number; onZoom: (z: Zoom) => void }) {
+  const scale = effective(zoom, fit)
+  const { min, max } = bounds(fit)
+  const pct = `${Math.round(scale * 100)}%`
+  const btn = 'num rounded px-1.5 py-1 hover:text-ink disabled:opacity-40'
+  return (
+    <div className="flex items-center gap-1.5" role="group" aria-label="Zoom">
+      <button className={`${btn} w-6`} onClick={() => onZoom(step(zoom, fit, -1))} disabled={scale <= min * 1.001} aria-label="Zoom out" title="Zoom out (⌘ −)">
+        −
+      </button>
+      <input
+        type="range"
+        className="w-24 accent-[var(--c-accent)] sm:w-28"
+        min={toSlider(min)}
+        max={toSlider(max)}
+        step="any"
+        value={toSlider(scale)}
+        onChange={(e) => onZoom(snap(fromSlider(Number(e.target.value)), fit))}
+        aria-label="Zoom"
+        aria-valuetext={pct}
+      />
+      <button className={`${btn} w-6`} onClick={() => onZoom(step(zoom, fit, 1))} disabled={scale >= max * 0.999} aria-label="Zoom in" title="Zoom in (⌘ =)">
+        +
+      </button>
+      <span className="num w-12 text-right tabular-nums" aria-live="polite" data-zoom-readout="">
+        {pct}
+      </span>
+      <button className={`${btn} ${zoom === null ? 'bg-paper-sunk text-ink' : ''}`} onClick={() => onZoom(null)} aria-pressed={zoom === null} title="Fit to window (⌘ 0)">
+        Fit
+      </button>
+      <button className={`${btn} ${zoom === 1 ? 'bg-paper-sunk text-ink' : ''}`} onClick={() => onZoom(snap(1, fit))} aria-pressed={zoom === 1} title="Actual size (⌘ 1)">
+        100%
+      </button>
     </div>
   )
 }
