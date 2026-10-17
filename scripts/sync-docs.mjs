@@ -12,7 +12,12 @@
  *  - Relative links to other docs (`../features/export.md#anchor`) become site
  *    URLs (`/docs/features/export/#anchor`). Links to anything else in the
  *    repo point at the file on GitHub.
- *  - Docs listed in INTERNAL (planning notes) are left out.
+ *  - Docs listed in INTERNAL (planning notes) are left out, and so is anything
+ *    between <!-- site:hide --> and <!-- /site:hide --> (notes for the board
+ *    that don't belong on the public site).
+ *
+ * Boards' `public:` frontmatter isn't consulted: that decides what anonymous
+ * visitors see on the board. Everything synced here is published on the site.
  */
 import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -47,6 +52,7 @@ for (const rel of files) {
     }
     text = text.slice(m[0].length)
   }
+  text = text.replace(/\n?<!-- site:hide -->[\s\S]*?<!-- \/site:hide -->/g, '')
   // Title from the first heading.
   const h1 = text.match(/^\s*# (.+)\n/)
   const title = h1 ? h1[1].trim() : rel.replace(/\.md$/, '')

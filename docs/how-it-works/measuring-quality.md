@@ -29,6 +29,14 @@ Current results:
 
 Run it before shipping any change to the tracer, the fitter or a preset.
 
+**The landing page's figures** come from `npm run site:assets`, which runs the
+same measurement on the same badge, for Inlay (the Logo preset) and for VTracer
+with the settings the Logo preset used before Inlay. Nodes are counted the same
+way (path commands). Re-run it after a tracer change and commit
+`apps/site/src/data/sample.json`. Re-measured in October 2026, VTracer comes out at 0.85%
+and 271 nodes; the 0.86% and 259 in the Inlay history were measured when it was
+still the Logo tracer.
+
 **JPEG noise matters.** Different browsers encode the sample's JPEG
 differently. Two flaws Matt saw (a bump at a snow cap's tip, hooked stroke
 ends) didn't show in our browser until the sample was traced at JPEG qualities

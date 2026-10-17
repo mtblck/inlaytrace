@@ -9,9 +9,11 @@ the tracer behind it, published as the `inlaytrace` package. It runs entirely
 on your device: the image is never uploaded, and tracing happens in a Web
 Worker so the page stays responsive.
 
-**Live:** https://mattblack.space/tools/img-to-svg/ (moving to inlaytrace.com) ·
-**Code:** `mtblck/img-to-svg` (to be `mtblck/inlaytrace`) · **Plan:**
+**Live:** https://mattblack.space/tools/img-to-svg/ (moving to inlaytrace.com)
+<!-- site:hide -->
+· **Code:** `mtblck/img-to-svg` (to be `mtblck/inlaytrace`) · **Plan:**
 [Going public](launch-plan.md)
+<!-- /site:hide -->
 
 ## What it does
 

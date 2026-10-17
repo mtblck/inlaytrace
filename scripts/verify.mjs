@@ -897,6 +897,8 @@ if (siteOrigin) {
   check(siteCsp.includes("'sha256-") && !siteCsp.includes('worker-src'), "the landing page gets the site's CSP, not the app's")
   const pieces = await landing.locator('.board .piece').count()
   check(pieces >= 5, `the hero board shows the traced badge (${pieces} pieces)`)
+  const moving = await landing.locator('.board .piece').evaluateAll((ps) => ps.filter((p) => p.style.getPropertyValue('--dx') !== '0px' || p.style.getPropertyValue('--dy') !== '0px').length)
+  check(moving >= pieces / 2, `most pieces have somewhere to settle from (${moving} of ${pieces})`)
   await landing.waitForTimeout(2000)
   const settled = await landing.evaluate(() => ({ seen: window.__apart.includes(true), now: document.querySelector('.board').classList.contains('apart') }))
   check(settled.seen && !settled.now, 'the pieces start lifted and settle on load')
@@ -919,6 +921,8 @@ if (siteOrigin) {
   check(await quiet.getByRole('button', { name: 'Lift the pieces' }).isHidden(), 'with reduced motion the pieces sit still and the replay button is hidden')
   await still.close()
 
+  const guessed = await landing.request.get(new URL('docs/', siteOrigin).href)
+  check(guessed.ok() && guessed.url().endsWith('/docs/overview/'), `/docs/ leads to the docs (${guessed.url()})`)
   const docs = await newPage({ width: 1440, height: 900 })
   const docsRes = await docs.goto(new URL('docs/package/getting-started/', siteOrigin).href)
   check(docsRes?.ok() && (await docs.locator('h1').first().innerText()) === 'Getting started', 'a docs page loads')
