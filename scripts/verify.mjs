@@ -514,6 +514,25 @@ await page.keyboard.press('Escape')
 const closed = await dialog.waitFor({ state: 'hidden', timeout: 3000 }).then(() => true, () => false)
 check(closed, 'Esc closes the shortcuts panel')
 
+// Header icons: the keyboard opens the same panel; the tooltip shows on keyboard focus; sun/moon switches theme.
+const kb = page.getByRole('button', { name: 'Keyboard shortcuts' })
+await kb.click()
+await dialog.waitFor()
+await page.keyboard.press('Escape')
+await dialog.waitFor({ state: 'hidden' })
+await kb.focus()
+await page.keyboard.press('Shift+Tab')
+await page.keyboard.press('Tab')
+await page.waitForTimeout(400)
+const tipOpacity = await kb.locator('span').evaluate((el) => getComputedStyle(el).opacity)
+check(tipOpacity === '1', `the keyboard icon opens the panel, and its tooltip shows on keyboard focus (opacity ${tipOpacity})`)
+await page.getByRole('button', { name: 'Use dark theme' }).click()
+const themed = await page.evaluate(() => document.documentElement.dataset.theme)
+await shot(page, '04e-dark-header')
+await page.getByRole('button', { name: 'Use light theme' }).click()
+check(themed === 'dark' && (await page.evaluate(() => document.documentElement.dataset.theme)) !== 'dark', 'the moon switches to dark, then the sun back to light')
+await kb.blur()
+
 // ---- Zoom ---------------------------------------------------------------------
 {
   const readout = () => page.locator('[data-zoom-readout]').innerText()

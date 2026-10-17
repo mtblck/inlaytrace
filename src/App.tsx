@@ -30,6 +30,7 @@ import { bounds, effective, fromSlider, snap, step, toSlider, type Zoom } from '
 import { sampleImage } from './lib/sample'
 import { Canvas, type Overlays, type SelectMode, type Tool, type ViewMode } from './components/Canvas'
 import { ShortcutsDialog } from './components/Shortcuts'
+import { IconButton, KeyboardIcon, MoonIcon, SunIcon } from './components/IconButton'
 import { EditPanel } from './components/EditPanel'
 import { Controls } from './components/Controls'
 import { Inks } from './components/Inks'
@@ -593,14 +594,14 @@ export default function App() {
           <h1 className="font-display text-[26px] leading-none tracking-tight">img-to-svg</h1>
           <p className="hidden text-[13px] text-ink-muted sm:block">Trace images to SVG, in your browser.</p>
         </div>
-        <div className="flex items-center gap-4 text-[13px]">
-          <button onClick={() => setShortcutsOpen(true)} className="text-ink-muted hover:text-ink" aria-keyshortcuts="?" title="Keyboard shortcuts (?)">
-            Shortcuts
-          </button>
-          <button onClick={toggle} className="text-ink-muted hover:text-ink" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
-            {theme === 'dark' ? 'Light' : 'Dark'}
-          </button>
-          <a href="https://mattblack.space" className="text-ink-muted hover:text-ink">
+        <div className="flex items-center gap-1 text-[13px]">
+          <IconButton label={theme === 'dark' ? 'Use light theme' : 'Use dark theme'} onClick={toggle}>
+            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+          </IconButton>
+          <IconButton label="Keyboard shortcuts" hint="Keyboard shortcuts (?)" aria-keyshortcuts="?" onClick={() => setShortcutsOpen(true)}>
+            <KeyboardIcon />
+          </IconButton>
+          <a href="https://mattblack.space" className="ml-3 text-ink-muted hover:text-ink">
             mattblack.space
           </a>
         </div>
