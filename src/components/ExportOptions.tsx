@@ -11,6 +11,9 @@ type Props = {
   isDefault: boolean
   disabled: boolean
   onPng: (scale: number, dpi: number) => void
+  /** Largest PNG, in pixels, that browsers will draw. */
+  maxPixels: number
+  pngError: string | null
   onPdf: () => void
   onEps: () => void
 }
@@ -28,6 +31,7 @@ export function ExportOptions(p: Props) {
   const [draft, setDraft] = useState<{ k: 'width' | 'height'; v: string } | null>(null)
   const physical = p.size.unit !== 'px'
   const px = pngPixels(p.size, scale, dpi)
+  const tooBig = px.width * px.height > p.maxPixels
 
   const setSide = (k: 'width' | 'height', raw: string) => {
     setDraft({ k, v: raw })
@@ -88,7 +92,12 @@ export function ExportOptions(p: Props) {
           )}
         </p>
         <div className="flex items-center gap-2">
-          <button className="btn flex-1" disabled={p.disabled} onClick={() => p.onPng(scale, dpi)} title="A PNG rendered from the vector">
+          <button
+            className="btn flex-1"
+            disabled={p.disabled || tooBig}
+            onClick={() => p.onPng(scale, dpi)}
+            title={tooBig ? 'Too large for browsers to draw: choose a smaller size or resolution' : 'A PNG rendered from the vector'}
+          >
             PNG · {px.width} × {px.height}
           </button>
           {physical ? (
@@ -109,6 +118,11 @@ export function ExportOptions(p: Props) {
             </select>
           )}
         </div>
+        {(tooBig || p.pngError) && (
+          <p className="text-[12.5px] text-accent" role="alert">
+            {p.pngError ?? 'That PNG is larger than browsers can draw. Choose a smaller size or resolution.'}
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-2">
           <button className="btn" disabled={p.disabled} onClick={p.onPdf} title="Vector PDF, one page at the export size">
             PDF
