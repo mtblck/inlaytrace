@@ -77,7 +77,18 @@ describe('rounding a corner', () => {
     const ns = roundNode(square, { sub: 0, index: 1 }, 50)[0].nodes
     expect(ns[1].x).toBeCloseTo(5.5)
   })
-  it('leaves an open end alone', () => {
+  it('rounds a corner between curves, keeping the curves’ handles', () => {
+    const blob = parsePath('M0 0C10 -5 20 -5 30 0C25 10 15 20 0 30C-5 20 -5 10 0 0Z')
+    const out = roundNode(blob, { sub: 0, index: 1 }, 4)
+    expect(out[0].nodes).toHaveLength(4)
+    // Every node on the trimmed curves still has the handle on its curved side.
+    expect(out[0].nodes[0].out).not.toBeNull()
+    expect(out[0].nodes[1].in).not.toBeNull()
+    expect(out[0].nodes[2].out).not.toBeNull()
+  })
+  it('leaves smooth nodes and open ends alone', () => {
+    const arch = parsePath('M0 0C0 -5 5 -10 10 -10C15 -10 20 -5 20 0Z')
+    expect(roundNode(arch, { sub: 0, index: 1 }, 3)).toBe(arch)
     const open = parsePath('M0 0L10 0L10 10')
     expect(roundNode(open, { sub: 0, index: 0 }, 3)).toBe(open)
   })
@@ -93,6 +104,16 @@ describe('simplify', () => {
     const out = simplifySubpaths(circle, 0.5)
     expect(out[0].nodes.length).toBeLessThan(12)
     expect(offBy(out, circle)).toBeLessThan(0.75)
+  })
+  it('never collapses a thin shape', () => {
+    for (const h of [2, 4, 6]) {
+      const bar = parsePath(`M0 0L200 0L200 ${h}L0 ${h}Z`)
+      for (const t of [0.5, 2, 4]) {
+        const out = simplifySubpaths(bar, t)
+        expect(out[0].nodes.length).toBeGreaterThanOrEqual(3)
+        expect(offBy(bar, out)).toBeLessThanOrEqual(2 * t + 0.25)
+      }
+    }
   })
   it('keeps a square square', () => {
     const square = parsePath('M0 0L40 0L40 40L0 40Z')

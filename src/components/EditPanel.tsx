@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Tool } from './Canvas'
 import type { Axis } from '../lib/mirror'
 import type { Box } from '../lib/transform'
@@ -276,7 +276,8 @@ function NumberField({ label, value, onValue, onDone }: { label: string; value: 
 
 /** Smooth, Sharpen and Round for the selected nodes. */
 function NodeActions({ count, onOp }: { count: number; onOp: (op: 'smooth' | 'sharpen' | 'round', radius?: number) => void }) {
-  const [radius, setRadius] = useState(4)
+  const [draft, setDraft] = useState('4')
+  const radius = Number(draft) > 0 ? Number(draft) : 0
   const what = count === 1 ? 'the node' : `the ${count} nodes`
   return (
     <div className="space-y-1.5">
@@ -289,7 +290,7 @@ function NodeActions({ count, onOp }: { count: number; onOp: (op: 'smooth' | 'sh
         </button>
       </div>
       <div className="flex items-center gap-1.5">
-        <button className="btn flex-1" onClick={() => onOp('round', radius)} title={`Replace ${what} with a rounded corner`}>
+        <button className="btn flex-1" onClick={() => onOp('round', radius)} disabled={!radius} title={`Replace ${what} with a rounded corner (smooth nodes and open ends are left alone)`}>
           Round corner
         </button>
         <label className="flex items-center gap-1 text-[12.5px] text-ink-muted">
@@ -299,11 +300,8 @@ function NodeActions({ count, onOp }: { count: number; onOp: (op: 'smooth' | 'sh
             step={0.5}
             aria-label="Corner radius"
             className="w-16 rounded-md border border-rule bg-paper px-1.5 py-1 font-mono text-[12.5px]"
-            value={radius}
-            onChange={(e) => {
-              const v = Number(e.target.value)
-              if (Number.isFinite(v) && v > 0) setRadius(v)
-            }}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
           />
           px
         </label>
@@ -352,7 +350,14 @@ function RotateFields({ onRotate }: { onRotate: (deg: number) => void }) {
 /** Re-fit the selection with fewer nodes. Shows the count before and after, when that's quick to work out. */
 function SimplifyFields({ now, preview, onSimplify }: { now: number | null; preview: (t: number) => number | null; onSimplify: (t: number) => void }) {
   const [tolerance, setTolerance] = useState(1)
-  const after = useMemo(() => preview(tolerance), [preview, tolerance])
+  // Worked out once things settle, not on every render: during a drag the
+  // selection changes on every pointer move.
+  const [after, setAfter] = useState<number | null>(null)
+  useEffect(() => {
+    setAfter(null)
+    const t = setTimeout(() => setAfter(preview(tolerance)), 250)
+    return () => clearTimeout(t)
+  }, [preview, tolerance])
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between">

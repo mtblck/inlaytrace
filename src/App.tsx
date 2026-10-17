@@ -410,15 +410,19 @@ export default function App() {
    * index first within each subpath, so a node that `f` turns into two (round)
    * never shifts one still to come.
    */
-  const eachNode = (f: (subs: ReturnType<typeof parsePath>, ref: NodeRef) => ReturnType<typeof parsePath>) => {
-    if (!editing || !selectedNodes.length) return
+  const eachNode = (f: (subs: ReturnType<typeof parsePath>, ref: NodeRef) => ReturnType<typeof parsePath>): boolean => {
+    if (!editing || !editingSubs || !selectedNodes.length) return false
     const refs = [...selectedNodes].sort((a, b) => a.sub - b.sub || b.index - a.index)
-    editPath(editing.id, (subs) => refs.reduce((acc, r) => f(acc, r), subs))
+    const apply = (subs: ReturnType<typeof parsePath>) => refs.reduce((acc, r) => f(acc, r), subs)
+    // Nothing to do (rounding a smooth node, sharpening a sharp one): no empty undo step.
+    if (serializePath(apply(editingSubs)) === editing.d) return false
+    editPath(editing.id, apply)
+    return true
   }
   const nodeOp = (op: 'smooth' | 'sharpen' | 'round', radius = 0) => {
-    eachNode((subs, r) => (op === 'smooth' ? smoothNode(subs, r) : op === 'sharpen' ? sharpenNode(subs, r) : roundNode(subs, r, radius)))
+    const changed = eachNode((subs, r) => (op === 'smooth' ? smoothNode(subs, r) : op === 'sharpen' ? sharpenNode(subs, r) : roundNode(subs, r, radius)))
     // Rounding replaces each node with two, so the old refs no longer point at the corner.
-    if (op === 'round') setSelectedNodes([])
+    if (changed && op === 'round') setSelectedNodes([])
   }
   const simplifySelection = (tolerance: number) => {
     if (!selectedPaths.length) return
@@ -429,11 +433,16 @@ export default function App() {
     if (selectionBox && degrees) transformSelection(rotateAbout({ x: selectionBox.x + selectionBox.w / 2, y: selectionBox.y + selectionBox.h / 2 }, degrees))
   }
   /** What simplifying would leave, for the panel: counted only for selections small enough to be instant. */
-  const PREVIEW_MAX = 40
-  const nodesOfSelection = useMemo(() => (selectedPaths.length <= PREVIEW_MAX ? selectedPaths.reduce((n, p) => n + nodeCount(parsePath(p.d)), 0) : null), [selectedPaths])
+  // Previewed only when the selection is small: simplifying is ~10 ms per 100
+  // nodes, and the panel works it out after the selection has settled.
+  const PREVIEW_NODES = 1500
+  const nodesOfSelection = useMemo(() => {
+    const n = selectedPaths.reduce((k, p) => k + nodeCount(parsePath(p.d)), 0)
+    return n <= PREVIEW_NODES ? n : null
+  }, [selectedPaths])
   const simplifyPreview = useCallback(
-    (tolerance: number) => (selectedPaths.length <= PREVIEW_MAX ? selectedPaths.reduce((n, p) => n + nodeCount(simplifySubpaths(parsePath(p.d), tolerance)), 0) : null),
-    [selectedPaths],
+    (tolerance: number) => (nodesOfSelection !== null ? selectedPaths.reduce((n, p) => n + nodeCount(simplifySubpaths(parsePath(p.d), tolerance)), 0) : null),
+    [selectedPaths, nodesOfSelection],
   )
 
   const deleteSelection = useCallback(() => {
