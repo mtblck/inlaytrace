@@ -28,7 +28,7 @@ halves meeting at a hairline. Shapes entirely on the discarded side are dropped;
 fills and paint order are kept.
 
 The booleans are [paper.js](http://paperjs.org) (MIT), loaded only the first
-time you open the Mirror tool: 72 KB gzipped, against an 89 KB app. The unit
+time you open the Mirror tool: 71 KB gzipped, against a 110 KB app. The unit
 tests run the same build, and the browser tests render the exported SVG and
 compare each half pixel by pixel: 0.0% of pixels differ on a symmetrical logo.
 

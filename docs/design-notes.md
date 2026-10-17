@@ -63,6 +63,9 @@ wobble and rounded corners count):
 | Shared edges, fitted per chain | 0.74% | 167 | 5.0 KB |
 | + corners by their sides, round ends, lines inside curves | 0.70% | 177 | 5.4 KB |
 
+(Re-measured later for the landing page, VTracer comes out at 0.85% and 271
+nodes; see [measuring quality](how-it-works/measuring-quality.md).)
+
 Straight edges are single segments and the peaks are single sharp corners.
 
 The third row came from Matt's testing on a different browser, whose JPEG
@@ -130,7 +133,7 @@ are left alone: the 640 px sample was already at 0.93% wrong pixels natively.
 **Light ink on dark.** Line art always traces the dark side, so a
 white logo on black came out as the background with holes. Line art can now
 invert first ("Light on dark"), and starts that way when the image's border is
-dark. On the robot logo that is the whole job in one step: background gone,
+dark. On a white-on-black logo that is the whole job in one step: background gone,
 white shapes as black paths, 6.5 KB. Line art also defaults to a fixed
 threshold now; adaptive thresholding closed the thin gaps between the logo's
 shapes, so it stays as an option for photos of paper.

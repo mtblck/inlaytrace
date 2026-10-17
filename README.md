@@ -16,7 +16,8 @@ It comes two ways:
   Nothing is uploaded. **[Open the app](https://mattblack.space/tools/img-to-svg/)**
   (moving to inlaytrace.com).
 - **The package**, `inlaytrace`, is the tracer on its own: pure TypeScript, no
-  WebAssembly, for browsers, Web Workers and Node. Not on npm yet.
+  WebAssembly, for browsers, Web Workers and Node. Not on npm yet; until it is,
+  it's TypeScript source, so Node needs a TypeScript-aware loader.
 
 ## Use the package
 
@@ -48,7 +49,11 @@ against the clean art ([how this is measured](docs/how-it-works/measuring-qualit
 | --- | --- | --- |
 | Pixels wrong | **0.70%** | 0.85% |
 | Nodes | **177** | 271 |
-| Time for a 2048 px image | **1.3 s** | 17.5 s |
+| Time for a 2048 px image¹ | **1.3 s** | 17.5 s |
+
+¹ Timed by hand, one run each, when Inlay replaced VTracer
+for the Logo preset ([design notes](docs/design-notes.md)); the other rows are
+re-measured by `npm run site:assets`.
 
 [VTracer](https://github.com/visioncortex/vtracer) is an excellent general
 tracer, and the app still uses it for photos (the Poster preset). Inlay is

@@ -31,7 +31,7 @@ body:
     id: settings
     attributes:
       label: Settings
-      description: Colours, smoothing, corners, speckle, or the options you passed to `trace()`.
+      description: Colours, smoothing, corners, ignore specks, or the options you passed to `trace()`.
       placeholder: "Colours 8, smoothing 1.5, corners 45°"
   - type: input
     id: where

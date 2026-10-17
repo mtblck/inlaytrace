@@ -66,5 +66,7 @@ Each of these is on the [roadmap](roadmap.md):
 - **Shape fitting** (Vectorizer.ai): recognises circles, ellipses, rounded
   rectangles and stars and writes them as true shapes.
 - **More formats**: DXF (Vectorizer.ai); offline install (SVGcode).
-- **A full editor** (Illustrator, Inkscape): pen tool, booleans, text.
 - **Centerline tracing** (AutoTrace) for plotters and engraving.
+
+Not planned: a full drawing program (Illustrator, Inkscape: pen tool, booleans,
+text). Inlay fixes a trace; for more, export the SVG to one of those.

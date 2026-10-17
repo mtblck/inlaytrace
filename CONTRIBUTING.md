@@ -13,7 +13,7 @@ image attached to an issue is public.
 
 ## Setting up
 
-Node 22 and npm. One install covers everything (npm workspaces):
+Node 20 or newer (CI uses 22) and npm. One install covers everything (npm workspaces):
 
 ```bash
 npm install
