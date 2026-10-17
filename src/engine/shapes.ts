@@ -230,7 +230,8 @@ const hexToRgb = (hex: string): Rgb => [parseInt(hex.slice(1, 3), 16), parseInt(
  * that colour: a lone pixel jutting out of an edge, or a one-pixel nick in one.
  * Where several colours meet, JPEG noise leaves exactly these, and fitted they
  * become little bumps and notches. A pixel on a one-pixel line has two
- * neighbours of its own colour, so lines survive. Two passes.
+ * neighbours of its own colour, so lines survive, though such a line loses up
+ * to two pixels at each end (an end pixel looks exactly like a spur). Two passes.
  */
 function despur(labels: Int32Array, w: number, h: number) {
   for (let pass = 0; pass < 2; pass++) {

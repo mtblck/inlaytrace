@@ -87,13 +87,23 @@ export function fitChain(points: Pt[], closed: boolean, o: FitOptions): Cubic[] 
   if (n < 2) return []
   if (!closed && n === 2) return [line(pts[0], pts[1])]
 
-  const corners = findCorners(pts, closed, o.cornerAngle)
+  // An open chain's ends are junctions, already nodes: a corner within
+  // MIN_GAP px of one would only add a stub segment beside it.
+  const corners = findCorners(pts, closed, o.cornerAngle).filter((c) => closed || (dist(c.at, pts[0]) >= MIN_GAP && dist(c.at, pts[n - 1]) >= MIN_GAP))
 
   if (closed && corners.length === 0) {
     // A smooth loop (a circle, a blob): fit it from an arbitrary start, with
     // the same tangent leaving and arriving so the seam is invisible.
     if (n < 4) return polygon(pts, true)
-    const smoothed = smooth([...pts, pts[0]], true, o.smoothing ?? SMOOTH)
+    let smoothed = smooth([...pts, pts[0]], true, o.smoothing ?? SMOOTH)
+    // If it has straight stretches, start the loop where one begins, so the
+    // seam is a natural node instead of a stub a pixel or two beside one.
+    const first = straights(smoothed.true, smoothed.radius, o.tolerance)[0]
+    if (first && first[0] > 0 && first[0] < n) {
+      const k = first[0]
+      const turned = [...pts.slice(k), ...pts.slice(0, k)]
+      smoothed = smooth([...turned, turned[0]], true, o.smoothing ?? SMOOTH)
+    }
     const run = smoothed.true
     const t = norm(sub(run[1], run[run.length - 2]))
     return flatten(fitMixed(smoothed, o.tolerance, t, mul(t, -1), 0))
@@ -221,7 +231,12 @@ function findCorners(pts: Pt[], closed: boolean, cornerAngle: number, maxRoundin
     const bend = 180 - interior
     if (bend < cornerAngle) continue
     const x = intersect(a.at, add(a.at, a.dir), b.at, add(b.at, b.dir))
-    if (!x || dist(x, pts[i]) > R / 2) continue
+    // The narrower the point, the further its pixels stop short of the real
+    // tip (a 15° sliver is under a pixel wide for its last 4–7 px), so the
+    // sides may meet further out, by as much as the allowed rounding implies.
+    const half = ((interior / 2) * Math.PI) / 180
+    const reachOut = 1 / Math.sin(half) - 1
+    if (!x || dist(x, pts[i]) > R / 2 + maxRounding * reachOut) continue
     // How rounded is it? An outline that misses the meeting point by d at an
     // interior angle θ is rounded with radius d / (1/sin(θ/2) − 1). Anti-aliasing
     // rounds a real corner by about a pixel; a stroke's round end by its
@@ -231,8 +246,7 @@ function findCorners(pts: Pt[], closed: boolean, cornerAngle: number, maxRoundin
       const j = closed ? (((i + k) % n) + n) % n : i + k
       if (j >= 0 && j < n) d = Math.min(d, dist(pts[j], x))
     }
-    const half = ((interior / 2) * Math.PI) / 180
-    const rounding = d / Math.max(1e-6, 1 / Math.sin(half) - 1)
+    const rounding = d / Math.max(1e-6, reachOut)
     // A wide corner magnifies noise in that formula (at 120°, half a pixel of
     // JPEG error reads as 3 px of rounding), so an outline that passes within
     // 0.75 px of the meeting point is a corner however wide it is.
@@ -278,6 +292,7 @@ function lightly(pts: Pt[], closed: boolean): Pt[] {
   })
 }
 
+const MIN_GAP = 4 // px: the closest two nodes may be where one of them is a junction
 const MIN_REACH = 4 // px: the least chain a corner can be measured on, near a junction
 const ARM_RMS = 0.6 // px: how far a corner's side may wander from a straight line
 const ARM_BEND = 14 // degrees: how much a corner's side may change direction along its length
@@ -469,12 +484,9 @@ function fitBetween(smoothed: Smoothed, tolerance: number): Cubic[] {
  * end of the straight and the bend together and overshoot the bend.
  */
 function fitMixed(s: Smoothed, tolerance: number, t1: Pt, t2: Pt, skipEnds: number): Cubic[] {
-  const flat = s.flat
   const curve = s.true
-  const n = flat.length
+  const n = curve.length
   const tol = curveTolerance(tolerance, s.minRadius)
-  // Grown on the shape-true points: they are fully smoothed along straight
-  // stretches anyway, and unlike the flat ones they don't sag near a bend.
   const lines = straights(curve, s.radius, tolerance)
   if (!lines.length) return fitRun(curve, t1, t2, tol, 0, skipEnds, skipEnds)
 
@@ -484,21 +496,30 @@ function fitMixed(s: Smoothed, tolerance: number, t1: Pt, t2: Pt, skipEnds: numb
   let tFrom = t1
   let fromAt = curve[0]
   for (const [i, j] of lines) {
-    const a = curve[i]
+    // A line starting within MIN_GAP px of the previous node starts at it: a
+    // curve piece that short is only a stub. Short both as the crow flies and
+    // along the outline (points ≈ 1 px apart), so a hairpin like a round end,
+    // whose ends are close but whose outline is long, never counts.
+    const isStub = (p: number, q: number) => dist(curve[p], curve[q]) < MIN_GAP && Math.abs(q - p) < 3 * MIN_GAP
+    const short = i > from && isStub(from, i)
+    const a = short ? fromAt : curve[i]
     const b = curve[j]
     const dir = norm(sub(b, a))
-    if (i > from) {
+    if (i > from && !short) {
       const piece = curve.slice(from, i + 1)
       piece[0] = fromAt
       piece[piece.length - 1] = a
       out.push(...fitRun(piece, tFrom, mul(dir, -1), tol, 0, from === 0 ? skipEnds : 0, 0))
     }
-    out.push(line(i > from ? a : fromAt, b))
+    out.push(line(i > from && !short ? a : fromAt, b))
     from = j
     fromAt = b
     tFrom = dir
   }
-  if (from < n - 1) {
+  if (from < n - 1 && out.length && dist(fromAt, curve[n - 1]) < MIN_GAP && n - 1 - from < 3 * MIN_GAP) {
+    // Same at the far end: the last line runs to the end rather than leave a stub.
+    out[out.length - 1] = line(out[out.length - 1][0], curve[n - 1])
+  } else if (from < n - 1) {
     const piece = curve.slice(from)
     piece[0] = fromAt
     out.push(...fitRun(piece, tFrom, t2, tol, 0, 0, skipEnds))
@@ -510,9 +531,10 @@ const MAX_SWEEP = 100 // degrees one cubic may turn through
 const MIN_LINE = 12 // px: shorter straight stretches are left to the curve fit
 
 /**
- * Maximal straight stretches [start, end] (indices), greedily from the start.
- * They are grown on the ripple-free points, then each end is trimmed back
- * until the shape-true outline sits on the line (within 0.3 px): otherwise a
+ * Maximal straight stretches [start, end] (indices), greedily from the start,
+ * on the shape-true points (fully smoothed along straight stretches anyway,
+ * and unlike the flat ones they don't sag near a bend). Each end is then
+ * trimmed back until the outline sits on the line (within 0.3 px): otherwise a
  * line would run a few px into the bend that follows and chamfer it.
  */
 function straights(exact: Pt[], radius: Float64Array, tolerance: number): [number, number][] {
@@ -603,7 +625,8 @@ function fitRun(pts: Pt[], t1: Pt, t2: Pt, tolerance: number, depth = 0, skipSta
   // single cubic across half a circle can stay within tolerance and still look
   // squashed. t2 points backwards from the end, so straight on is t1 = -t2.
   const sweep = (Math.acos(Math.max(-1, Math.min(1, -dot(t1, t2)))) * 180) / Math.PI
-  if (sweep > MAX_SWEEP && n >= 8 && depth <= 12) {
+  // (Not for bends under 2 × MIN_GAP across: splitting those only stacks nodes.)
+  if (sweep > MAX_SWEEP && n >= 8 && depth <= 12 && dist(pts[0], pts[n - 1]) >= 2 * MIN_GAP) {
     const mid = Math.floor(n / 2)
     const span = Math.min(3, mid, n - 1 - mid)
     const tm = norm(sub(pts[mid - span], pts[mid + span]))

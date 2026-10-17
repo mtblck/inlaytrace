@@ -93,8 +93,8 @@ export function visiblePaths(doc: Doc, inks: InkEdits, only?: string) {
 }
 
 /**
- * The SVG to export. Nothing is drawn behind the paths, so a removed
- * background ink leaves real transparency rather than a white box.
+ * The SVG to export. Nothing is drawn behind the paths unless a background is
+ * set, so a removed colour leaves real transparency rather than a white box.
  */
 export function buildSvg(doc: Doc, inks: InkEdits = NO_INKS, only?: string, background: string | null = null): string {
   const w = Number(doc.width) || 0

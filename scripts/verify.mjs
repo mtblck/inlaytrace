@@ -266,8 +266,10 @@ const withBg = await exportSvg(page)
 check(/<svg[^>]*>\s*<(rect|path)[^>]*fill="#(ff00ff|f0f)"/.test(withBg), 'background exports as the first element')
 check((await alphaAt(page, withBg, 2, 2)) === 255, 'the removed colour now shows the background')
 await page.keyboard.press('Control+z')
+check((await page.locator('svg[aria-label="Traced SVG"] rect[data-background]').getAttribute('fill')) === '#ffffff', 'Undo reverts the colour first')
+await page.keyboard.press('Control+z')
 await page.getByRole('button', { name: 'Add background' }).waitFor()
-check((await page.locator('rect[data-background]').count()) === 0, 'Undo takes the background away again')
+check((await page.locator('rect[data-background]').count()) === 0, 'then takes the background away')
 await page.getByRole('radio', { name: 'Split' }).click()
 
 // Keyboard: the split handle is a real slider.
