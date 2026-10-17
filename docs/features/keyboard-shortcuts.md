@@ -4,7 +4,7 @@ order: 8
 
 # Keyboard shortcuts
 
-Press **?** (or *Shortcuts* in the header) for the list in the app. ⌘ on a Mac,
+Press **?** (or the keyboard icon in the header) for the list in the app. ⌘ on a Mac,
 Ctrl elsewhere; ⌥ is Alt. Shortcuts don't fire while you're typing in a field.
 
 ## Tools
