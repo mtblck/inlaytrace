@@ -4,3 +4,5 @@ apps/app/src/engine/vtracer/
 *.local
 .vercel
 *.tsbuildinfo
+apps/site/src/content/docs/docs/
+apps/site/.astro/
