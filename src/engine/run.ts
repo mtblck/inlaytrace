@@ -20,11 +20,11 @@ export function runTrace(pixels: Uint8Array, width: number, height: number, opti
       pixels[i + 2] = 255 - pixels[i + 2]
     }
   if (engine === 'shapes') {
-    const o = rest as { mode: 'palette' | 'binary'; speckle: number; tolerance: number; cornerAngle: number; threshold?: number | null }
+    const o = rest as { mode: 'palette' | 'binary'; speckle: number; tolerance: number; cornerAngle: number; threshold?: number | null; merge?: Record<string, string> }
     const fit = { speckle: o.speckle, tolerance: o.tolerance, cornerAngle: o.cornerAngle }
     return o.mode === 'binary'
       ? traceShapes(pixels, width, height, { ...fit, mode: 'binary', threshold: o.threshold ?? null })
-      : traceShapes(pixels, width, height, { ...fit, mode: 'palette', palette: peakPalette(pixels, Number(peakColors)) })
+      : traceShapes(pixels, width, height, { ...fit, mode: 'palette', palette: peakPalette(pixels, Number(peakColors)), merge: o.merge })
   }
   if (typeof peakColors === 'number') rest.palette = peakPalette(pixels, peakColors)
   return vectorize_rgba(pixels, width, height, rest)

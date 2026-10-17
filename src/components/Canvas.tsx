@@ -48,6 +48,9 @@ type Props = {
   onTransform: (m: Affine, phase: 'move' | 'end') => void
   /** Double-click on the edited shape's outline with the Nodes tool: add a node there (SVG units). */
   onAddNode: (at: Pt) => void
+  /** The eyedropper is armed: the next click on the image picks a colour from the original there (SVG units). */
+  picking: boolean
+  onPick: (at: Pt) => void
   onAxis: (position: number) => void
 }
 
@@ -631,6 +634,23 @@ export function Canvas(props: Props) {
 
             {marquee && (
               <rect x={marquee.x} y={marquee.y} width={marquee.w} height={marquee.h} fill="var(--c-accent-dim)" stroke="var(--c-accent)" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" pointerEvents="none" data-marquee="" />
+            )}
+
+            {/* The eyedropper: over everything, so the click picks instead of selecting. */}
+            {props.picking && (
+              <rect
+                width={width}
+                height={height}
+                fill="transparent"
+                data-picker=""
+                style={{ cursor: 'crosshair' }}
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                  e.preventDefault()
+                  const p = toSvg(e)
+                  if (p) props.onPick(p)
+                }}
+              />
             )}
 
             {tool === 'mirror' && props.axis && <AxisOverlay axis={props.axis} width={width} height={height} unit={unit} onGrab={(e) => startDrag(e, { kind: 'axis' })} />}

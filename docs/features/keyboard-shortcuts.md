@@ -25,7 +25,7 @@ Ctrl elsewhere; ⌥ is Alt. Shortcuts don't fire while you're typing in a field.
 | ⇧ click | Add to or remove from the selection |
 | Drag on empty canvas | Select shapes wholly inside (nodes inside, with Nodes) |
 | ⇧ drag, ⌥ drag | Add to / remove from the selection |
-| Esc | Deselect nodes, then shapes, then go back to Select |
+| Esc | Put the eyedropper away; deselect nodes, then shapes; then go back to Select |
 
 ## Editing
 

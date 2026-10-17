@@ -99,3 +99,28 @@ export function baseName(name: string) {
   const stem = name.replace(/\.[^.]+$/, '').trim()
   return (stem || 'image').replace(/[^\w.-]+/g, '-').slice(0, 60)
 }
+
+// One full-size copy of the original's pixels per image, made on the first pick.
+const pickCache = new WeakMap<ImageBitmap, ImageData>()
+
+/**
+ * The original image's colour at (fx, fy), as fractions of its width and
+ * height: what the eyedropper picks. Read from the original, never the trace,
+ * so it gives back what the artist used. Transparent pixels give null.
+ */
+export function colourAt(source: Source, fx: number, fy: number): string | null {
+  const bm = source.bitmap
+  let data = pickCache.get(bm)
+  if (!data) {
+    const c = new OffscreenCanvas(bm.width, bm.height)
+    const ctx = c.getContext('2d', { willReadFrequently: true })!
+    ctx.drawImage(bm, 0, 0)
+    data = ctx.getImageData(0, 0, bm.width, bm.height)
+    pickCache.set(bm, data)
+  }
+  const x = Math.min(bm.width - 1, Math.max(0, Math.floor(fx * bm.width)))
+  const y = Math.min(bm.height - 1, Math.max(0, Math.floor(fy * bm.height)))
+  const i = (y * bm.width + x) * 4
+  if (data.data[i + 3] < 128) return null
+  return `#${[0, 1, 2].map((k) => data!.data[i + k].toString(16).padStart(2, '0')).join('')}`
+}
