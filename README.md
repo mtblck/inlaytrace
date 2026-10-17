@@ -10,14 +10,16 @@ colours and smoothing, and compare the result against the original three ways:
 a split slider, a difference blend that lights up wherever the SVG is wrong,
 and the vector on its own, with optional path and node overlays in colours you
 pick. Zoom with the slider or a trackpad pinch over the image. Then edit
-(the view switches to the SVG alone once you start): replace or remove any
-colour (removing one is how to drop a background), add a background colour
-behind everything, select shapes (click, ⇧-click or a marquee) to move and
-scale them, edit one shape's nodes and curves (smooth nodes keep their handles
-in line), delete nodes or shapes, and mirror one half of the drawing onto the
-other as seamless merged shapes. Everything is undoable, and `?` lists the
-keyboard shortcuts. Export a single optimised SVG, or a zip with one SVG
-per colour for screen printing and vinyl.
+(the view switches to the SVG alone once you start): replace, pick (from the
+original), merge or remove any colour (removing one is how to drop a
+background), add a background colour behind everything, select shapes (click,
+⇧-click or a marquee) to move, scale, rotate and simplify them, edit one
+shape's nodes (add, smooth, sharpen, round corners; smooth nodes keep their
+handles in line), delete nodes or shapes, and mirror one half of the drawing
+onto the other as seamless merged shapes. Everything is undoable, `?` lists
+the keyboard shortcuts, and the session is kept in your browser so a reload
+loses nothing. Export an optimised SVG at any size, a PNG, PDF or EPS, or a
+zip with one SVG per colour for screen printing and vinyl.
 
 React 19 · Vite · Tailwind v4 · a shared-edge tracer for flat art and VTracer
 (Rust → WebAssembly) for posters and pixel art, in a Web Worker ·
@@ -244,6 +246,21 @@ let go of its partner.
 but a trace usually has one large shape behind everything, and touching would
 add it to every selection. A marquee can start in the margin round the image,
 for when that background shape covers all of it.
+
+**PDF and EPS are written by hand.** Both are a few path operators per
+shape (moveto, lineto, curveto, closepath, fill), so a library would add more
+than it saves. The PDF is five objects with a Flate-compressed content stream
+and a byte-exact cross-reference table; the tests check every offset, and the
+file passes `qpdf --check` and renders back the same as the SVG in Poppler.
+Coordinates are flipped (both formats put the origin bottom-left) and scaled
+from the viewBox to points.
+
+**Merging colours happens before regions exist.** Making two colours the same
+leaves two shapes and the seam between them. Merging relabels one colour's
+pixels as the other's after palette labelling (so anti-aliased edges were
+still judged against both) and before specks, components and edges are
+built, so the seam never exists. It's a trace setting, so it costs a
+re-trace and asks first after shape edits.
 
 **Overlays never export.** The canvas is three layers: the original, the
 vector exactly as exported, and an overlay `svg` with hit targets, outlines,

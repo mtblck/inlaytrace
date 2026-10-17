@@ -49,6 +49,13 @@ function isSafe(p: DocPath) {
 
 let nextId = 1
 export const newId = () => `p${nextId++}`
+/** After restoring a saved document, new ids must not reuse its ones. */
+export function reserveIds(doc: Doc | null) {
+  for (const p of doc?.paths ?? []) {
+    const n = Number(p.id.slice(1))
+    if (p.id.startsWith('p') && Number.isFinite(n) && n >= nextId) nextId = n + 1
+  }
+}
 
 export function docFromTrace(trace: Trace): Doc {
   return {
