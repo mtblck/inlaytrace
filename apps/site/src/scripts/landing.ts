@@ -25,8 +25,13 @@ if (still.matches && replay) replay.hidden = true
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy]')) {
   button.addEventListener('click', async () => {
     const text = document.getElementById(button.dataset.copy!)?.textContent ?? ''
-    await navigator.clipboard.writeText(text)
-    button.textContent = 'Copied'
+    try {
+      await navigator.clipboard.writeText(text)
+      button.textContent = 'Copied'
+    } catch {
+      // No permission, or not a secure context: say how to copy instead.
+      button.textContent = 'Select and copy'
+    }
     setTimeout(() => (button.textContent = 'Copy'), 1500)
   })
 }

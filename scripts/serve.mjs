@@ -10,7 +10,7 @@
 import { createServer } from 'node:http'
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { dirname, join, extname, normalize } from 'node:path'
+import { dirname, join, extname, normalize, sep } from 'node:path'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const dist = join(root, 'dist')
@@ -28,7 +28,7 @@ const file = (path) => {
     return null // a malformed % escape: a 404, as on Vercel, not a crash
   }
   const p = normalize(join(dist, decoded))
-  if (!p.startsWith(dist)) return null
+  if (p !== dist && !p.startsWith(dist + sep)) return null // not dist-old/ beside it
   if (existsSync(p) && statSync(p).isFile()) return p
   if (existsSync(join(p, 'index.html'))) return join(p, 'index.html')
   return null
