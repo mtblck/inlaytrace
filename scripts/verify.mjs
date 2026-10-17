@@ -13,7 +13,7 @@
  * never traces anything, and only a real browser with the real headers sees it.
  */
 import { chromium } from 'playwright'
-import { mkdirSync, readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const url = process.argv[2] ?? 'http://localhost:4173/tools/img-to-svg/'
@@ -350,7 +350,7 @@ async function selectChecks(page, label, id, n) {
 
   // Typed width, then a Shift+arrow nudge read back from X.
   // Typed key by key, as a person would, so each digit is its own change.
-  const width = page.getByLabel('Width')
+  const width = page.getByLabel('Width', { exact: true })
   const w0 = Number(await width.inputValue())
   await width.selectText()
   await width.pressSequentially(String(Math.round(w0 * 2)))
@@ -660,6 +660,49 @@ check((await page.locator('rect[data-background]').count()) === 0, 'then takes t
 }
 await page.getByRole('radio', { name: 'Split' }).click()
 
+// ---- Export size and formats ------------------------------------------------------
+{
+  await page.getByText('Size and other formats').click()
+  await shot(page, '04g-export-options')
+  await page.getByLabel('Export unit').selectOption('mm')
+  const w = page.getByLabel('Export width')
+  const h = page.getByLabel('Export height')
+  check(Math.abs(Number(await w.inputValue()) - (640 * 25.4) / 96) < 0.02, `switching to mm converts the size (${await w.inputValue()} mm for 640 px)`)
+  await w.fill('100')
+  check(Number(await h.inputValue()) === 100, 'height follows the drawing’s proportions (100 × 100 mm)')
+  const svgMm = await exportSvg(page)
+  check(/^<svg[^>]* width="100mm" height="100mm"/.test(svgMm) && /viewBox="0 0 640 640"/.test(svgMm), 'the SVG opens at 100 mm and keeps its viewBox')
+  const grab = async (name) => {
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name }).click()])
+    const buf = readFileSync(await dl.path())
+    if (shots) writeFileSync(join(shots, dl.suggestedFilename()), buf)
+    return { buf, name: dl.suggestedFilename() }
+  }
+  const pdf = await grab('PDF')
+  const pdfText = pdf.buf.toString('latin1')
+  const pt = Math.round(((100 * 72) / 25.4) * 1000) / 1000
+  check(pdf.name === 'sample-badge.pdf' && pdfText.startsWith('%PDF-1.4') && pdfText.includes(`/MediaBox [0 0 ${pt} ${pt}]`), `PDF downloads as a ${pt} pt page (100 mm)`)
+  const eps = await grab('EPS')
+  check(eps.name === 'sample-badge.eps' && eps.buf.toString().startsWith('%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 284 284'), 'EPS downloads with a 100 mm bounding box')
+  await page.getByLabel('PNG resolution').selectOption('150')
+  const png = await grab(/^PNG/)
+  const dims = [png.buf.readUInt32BE(16), png.buf.readUInt32BE(20)]
+  check(png.buf.subarray(1, 4).toString() === 'PNG' && dims[0] === 591 && dims[1] === 591, `PNG renders at 150 dpi: ${dims.join(' × ')} px for 100 mm`)
+  await page.getByRole('button', { name: 'Reset to the traced size' }).click()
+  check((await w.inputValue()) === '640' && (await page.getByLabel('Export unit').inputValue()) === 'px', 'Reset goes back to the traced size')
+  await page.getByText('Size and other formats').click()
+}
+
+// ---- The session survives a reload ------------------------------------------------
+{
+  await page.waitForTimeout(800) // saved 600 ms after the last change
+  await page.reload()
+  await traced(page)
+  check((await page.locator('[data-session]').getAttribute('data-session')) === 'restored', 'a reload restores the session')
+  check((await page.locator('aside .truncate').first().innerText()) === 'sample-badge' && (await page.locator(`${VECTOR}[fill="#123456"]`).count()) > 0, 'with the same image and its colour edits')
+  await page.getByRole('radio', { name: 'Split' }).click()
+}
+
 // Keyboard: the split handle is a real slider.
 const handle = page.getByRole('slider', { name: /Comparison split/ })
 await handle.focus()
@@ -790,6 +833,15 @@ check((await dark.evaluate(() => document.documentElement.dataset.theme)) === 'd
 await dark.getByRole('button', { name: 'Try a sample' }).click()
 await traced(dark)
 await shot(dark, '08-dark')
+// Start over forgets the session: empty now, and still empty after a reload.
+await dark.waitForTimeout(800)
+await dark.reload()
+await traced(dark)
+await dark.getByRole('button', { name: 'Start over' }).click()
+await dark.getByRole('button', { name: 'Try a sample' }).waitFor()
+await dark.reload()
+await dark.waitForTimeout(800)
+check((await dark.getByRole('button', { name: 'Try a sample' }).count()) === 1, 'Start over clears the saved session')
 
 const mobile = await newPage({ width: 390, height: 844 })
 await mobile.goto(url)
