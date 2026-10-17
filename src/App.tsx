@@ -55,6 +55,11 @@ export default function App() {
    * reverts edits made in the meantime. Edits sharing a `key` in a row (a drag,
    * a colour-picker sweep) undo as one.
    */
+  /** Undo or redo. A node selection is indices into a shape whose nodes may change, so it is cleared. */
+  const historyStep = useCallback((dir: 'undo' | 'redo') => {
+    setHistory((h) => (dir === 'undo' ? undo(h) : redo(h)))
+    setSelectedNodes([])
+  }, [])
   const commit = useCallback(
     (next: (present: Edits) => Edits, key: string | null = null) => setHistory((h) => push(h, next(h.present), key)),
     [],
@@ -301,7 +306,10 @@ export default function App() {
    */
   const transformBase = useRef<Map<string, string> | null>(null)
   const onTransform = (m: Affine, phase: 'move' | 'end') => {
-    if (!traced || !doc || !selectedIds.length) return
+    if (!traced || !doc || !selectedIds.length) {
+      transformBase.current = null
+      return
+    }
     const ids = new Set(selectedIds)
     // Captured here, not in the updater: React may run the updater after this
     // handler has already cleared the ref at the end of the drag.
@@ -325,9 +333,32 @@ export default function App() {
     },
     [editDoc, selectedIds],
   )
+  /**
+   * Typed X/Y/W/H. Like a drag, every keystroke is applied to the shapes as
+   * they were when the field was first changed: typing "120" passes through
+   * W = 1 and 12, and compounding those would round the shape away.
+   */
   const boxSeq = useRef(0)
-  const setBox = (next: Box) => {
-    if (selectionBox) transformSelection(boxToBox(selectionBox, next), `box-${boxSeq.current}`)
+  const boxBase = useRef<{ box: Box; paths: Map<string, string> } | null>(null)
+  const setBox = (field: keyof Box, value: number, lock: boolean) => {
+    if (!traced || !doc || !selectionBox) return
+    const ids = new Set(selectedIds)
+    boxBase.current ??= { box: selectionBox, paths: new Map(doc.paths.filter((p) => ids.has(p.id)).map((p) => [p.id, p.d])) }
+    const { box, paths } = boxBase.current
+    // Everything but the typed field comes from the captured box too, never
+    // from the current one, which the previous keystroke has rounded.
+    const next = { ...box, [field]: value }
+    if (lock && field === 'w' && box.w > 0) next.h = (box.h * value) / box.w
+    if (lock && field === 'h' && box.h > 0) next.w = (box.w * value) / box.h
+    const m = boxToBox(box, next)
+    commit((e) => {
+      const d = docOf(e, traced)
+      return { ...e, doc: { ...d, paths: d.paths.map((p) => (paths.has(p.id) ? { ...p, d: transformPath(paths.get(p.id)!, m) } : p)) } }
+    }, `box-${boxSeq.current}`)
+  }
+  const boxDone = () => {
+    boxBase.current = null
+    boxSeq.current++
   }
 
   const onMarquee = (rect: Box, how: SelectMode) => {
@@ -401,15 +432,23 @@ export default function App() {
   }
 
   /** Arrow-key nudges in trace pixels: the selected nodes with the Nodes tool, else the selected shapes. */
-  const nudge = (dx: number, dy: number) => {
+  // A held arrow key repeats; the repeats undo with the press that started them.
+  const nudgeSeq = useRef(0)
+  const nudge = (dx: number, dy: number, repeat: boolean) => {
+    if (!repeat) nudgeSeq.current++
+    const key = `nudge-${nudgeSeq.current}`
     if (tool === 'nodes' && editing && selectedNodes.length) {
       const refs = selectedNodes
-      editPath(editing.id, (subs) => moveNodes(subs, refs, dx, dy))
-    } else if (tool === 'select') transformSelection(translate(dx, dy))
+      editPath(editing.id, (subs) => moveNodes(subs, refs, dx, dy), key)
+    } else if (tool === 'select') transformSelection(translate(dx, dy), key)
   }
   const chooseTool = useCallback((t: Tool) => {
     setTool(t)
     setSelectedNodes([])
+    // Nodes edits one shape and Mirror shows none, so neither keeps a
+    // multi-selection that Delete could act on unseen.
+    if (t === 'nodes') setSelectedIds((ids) => ids.slice(0, 1))
+    else if (t === 'mirror') setSelectedIds([])
     if (t === 'mirror') void loadPaper().catch(() => {}) // warm it up while the user picks a side
   }, [])
 
@@ -433,10 +472,10 @@ export default function App() {
       const hasDoc = !!doc
       if (mod && key === 'z') {
         e.preventDefault()
-        setHistory((h) => (e.shiftKey ? redo(h) : undo(h)))
+        historyStep(e.shiftKey ? 'redo' : 'undo')
       } else if (mod && key === 'y') {
         e.preventDefault()
-        setHistory((h) => redo(h))
+        historyStep('redo')
       } else if (mod && key === 'a' && hasDoc) {
         e.preventDefault()
         if (tool === 'nodes' && editingSubs) setSelectedNodes(allRefs(editingSubs))
@@ -449,7 +488,7 @@ export default function App() {
         }
       } else if (mod || e.altKey) {
         return
-      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length) {
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length && tool !== 'mirror') {
         e.preventDefault()
         deleteSelection()
       } else if (e.key === 'Escape') {
@@ -459,7 +498,7 @@ export default function App() {
       } else if (e.key.startsWith('Arrow') && selectedIds.length && !(el && (el.tagName === 'INPUT' || el.getAttribute('role') === 'slider'))) {
         e.preventDefault()
         const d = e.shiftKey ? 10 : 1
-        nudge(e.key === 'ArrowLeft' ? -d : e.key === 'ArrowRight' ? d : 0, e.key === 'ArrowUp' ? -d : e.key === 'ArrowDown' ? d : 0)
+        nudge(e.key === 'ArrowLeft' ? -d : e.key === 'ArrowRight' ? d : 0, e.key === 'ArrowUp' ? -d : e.key === 'ArrowDown' ? d : 0, e.repeat)
       } else if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
         e.preventDefault()
         setShortcutsOpen(true)
@@ -750,17 +789,17 @@ export default function App() {
                 onTool={chooseTool}
                 canUndo={history.past.length > 0}
                 canRedo={history.future.length > 0}
-                onUndo={() => setHistory(undo)}
-                onRedo={() => setHistory(redo)}
+                onUndo={() => historyStep('undo')}
+                onRedo={() => historyStep('redo')}
                 detached={detached}
                 selection={
                   selectedPaths.length
-                    ? { shapes: selectedPaths.length, nodes: editingSubs ? nodeCount(editingSubs) : 0, selectedNodes: tool === 'nodes' ? selectedNodes.length : 0, box: selectionBox }
+                    ? { key: selectedIds.join(' '), shapes: selectedPaths.length, nodes: editingSubs ? nodeCount(editingSubs) : 0, selectedNodes: tool === 'nodes' ? selectedNodes.length : 0, box: selectionBox }
                     : null
                 }
                 onDeleteSelection={deleteSelection}
                 onBox={setBox}
-                onBoxDone={() => boxSeq.current++}
+                onBoxDone={boxDone}
                 axis={axis}
                 width={doc.width}
                 height={doc.height}
