@@ -49,10 +49,15 @@ export function parsePath(d: string): Subpath[] {
     ensure().nodes.push({ x: p.x, y: p.y, in: null, out: null })
     cur = p
   }
+  // A control point sitting exactly on its node is no handle at all: that is
+  // how the writer below spells a curve with a handle on one side only, so
+  // reading it back as a zero-length handle would make sharp nodes look curved.
+  const at = (a: Pt, b: Pt) => a.x === b.x && a.y === b.y
   const curveTo = (c1: Pt, c2: Pt, p: Pt) => {
     const s = ensure()
-    s.nodes[s.nodes.length - 1].out = c1
-    s.nodes.push({ x: p.x, y: p.y, in: c2, out: null })
+    const prev = s.nodes[s.nodes.length - 1]
+    prev.out = at(c1, prev) ? null : c1
+    s.nodes.push({ x: p.x, y: p.y, in: at(c2, p) ? null : c2, out: null })
     cur = p
   }
 

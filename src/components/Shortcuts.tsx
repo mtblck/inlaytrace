@@ -20,7 +20,7 @@ export const SHORTCUTS: { title: string; rows: Row[] }[] = [
       { keys: ['V'], does: 'Select: pick, move and scale shapes' },
       { keys: ['A'], does: 'Nodes: edit one shape’s nodes and curves' },
       { keys: ['M'], does: 'Mirror' },
-      { keys: ['Double-click'], does: 'Edit a shape’s nodes (from Select)' },
+      { keys: ['Double-click'], does: 'Edit a shape’s nodes (Select); add a node on the outline (Nodes)' },
     ],
   },
   {
@@ -38,7 +38,7 @@ export const SHORTCUTS: { title: string; rows: Row[] }[] = [
     rows: [
       { keys: ['← ↑ → ↓'], does: 'Nudge the selection 1 px' },
       { keys: [`${SHIFT} arrows`], does: 'Nudge 10 px' },
-      { keys: [`${SHIFT} drag`], does: 'Move along one axis; scale in proportion' },
+      { keys: [`${SHIFT} drag`], does: 'Move along one axis; scale in proportion; rotate in 15° steps' },
       { keys: [`${ALT} drag`], does: 'Scale from the centre; bend one handle on its own' },
       { keys: ['Delete', 'Backspace'], does: 'Delete the selected nodes or shapes' },
       { keys: [`${MOD} Z`], does: 'Undo' },
