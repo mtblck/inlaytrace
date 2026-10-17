@@ -96,6 +96,66 @@ describe('fitting', () => {
   })
 })
 
+describe('the shapes Matt reported (#19)', () => {
+  const opts = { tolerance: 1, cornerAngle: 45, speckle: 2 }
+  const GREEN: [number, number, number] = [47, 105, 81]
+  const pal = { mode: 'palette' as const, palette: [hex(GREEN), hex(CREAM)] }
+  const creamPath = (svg: string) => pathsOf(svg).find((p) => p.fill === hex(CREAM))!.d
+
+  /** Every fitted point's distance from a reference outline, worst case. */
+  function worstOff(d: string, distanceTo: (p: Pt) => number) {
+    let worst = 0
+    for (const s of parsePath(d))
+      s.nodes.forEach((n, i) => {
+        const m = s.nodes[(i + 1) % s.nodes.length]
+        const c: Cubic = [n, n.out ?? n, m.in ?? m, m]
+        for (let k = 0; k <= 16; k++) worst = Math.max(worst, distanceTo(pointAt(c, k / 16)))
+      })
+    return worst
+  }
+
+  it('a stroke with round ends keeps them round: no hook, no flat cut', () => {
+    // 8 px wide, round caps, like the arc on the sample badge.
+    const capsule = (p: Pt) => Math.abs(Math.hypot(p.x - Math.max(20, Math.min(100, p.x)), p.y - 20.3) - 4)
+    const px = raster(120, 40, (x, y) => (capsule({ x, y }) < 4 && Math.hypot(x - Math.max(20, Math.min(100, x)), y - 20.3) < 4 ? CREAM : GREEN))
+    const d = creamPath(traceShapes(px, 120, 40, { ...opts, ...pal }))
+    expect(worstOff(d, capsule)).toBeLessThan(0.75)
+    // Two straight sides, and each end drawn as curves (no corner nodes there).
+    expect((d.match(/L/g) ?? []).length).toBe(2)
+    expect(segments(d)).toBeLessThanOrEqual(8)
+  })
+
+  it('a stroke with square ends keeps its four corners', () => {
+    const px = raster(120, 40, (x, y) => (x > 20 && x < 100 && Math.abs(y - 20.3) < 4 ? CREAM : GREEN))
+    const d = creamPath(traceShapes(px, 120, 40, { ...opts, ...pal }))
+    expect(d).not.toMatch(/C/)
+    expect(parsePath(d)[0].nodes).toHaveLength(4) // the fourth side is the closing Z
+  })
+
+  it('an acute peak where three colours meet stays one sharp point', () => {
+    // A narrow snow-cap wedge (about 50°) poking into a disc, over a third colour.
+    const w = 80
+    const h = 60
+    const tip = { x: 40, y: 12 }
+    const inWedge = (x: number, y: number) => y > tip.y && Math.abs(x - tip.x) < (y - tip.y) * 0.47
+    const px = raster(w, h, (x, y) => (inWedge(x, y) ? CREAM : Math.hypot(x - 52, y - 4) < 16 ? RED : BLUE))
+    const svg = traceShapes(px, w, h, { ...opts, mode: 'palette', palette: [hex(CREAM), hex(RED), hex(BLUE)] })
+    const d = pathsOf(svg).find((p) => p.fill === hex(CREAM))!.d
+    // Its topmost node is the tip itself, within a pixel, and nothing pokes above it.
+    const nodes = parsePath(d).flatMap((s) => s.nodes)
+    const top = nodes.reduce((a, b) => (b.y < a.y ? b : a))
+    expect(Math.hypot(top.x - tip.x, top.y - tip.y)).toBeLessThan(1.5) // a 50° tip is pixel-limited
+    expect(worstOff(d, (p) => Math.max(0, tip.y - p.y))).toBeLessThan(0.5)
+  })
+
+  it('a circle is four curves, the way it would be drawn by hand', () => {
+    const px = raster(100, 100, (x, y) => (Math.hypot(x - 50, y - 50) < 30 ? CREAM : GREEN))
+    const d = creamPath(traceShapes(px, 100, 100, { ...opts, ...pal }))
+    expect(segments(d)).toBe(4)
+    expect(worstOff(d, (p) => Math.abs(Math.hypot(p.x - 50, p.y - 50) - 30))).toBeLessThan(0.5)
+  })
+})
+
 describe('shared-edge tracer', () => {
   const opts = { tolerance: 1, cornerAngle: 60, speckle: 4 }
 
