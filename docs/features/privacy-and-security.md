@@ -15,8 +15,12 @@ a Web Worker; SVGO and paper.js are loaded from the same site, on first use.
 So a reload or a closed tab doesn't lose work, the current session is kept in
 **this browser's own storage** (IndexedDB): the original image file, the trace
 settings and your edits. It never leaves the device and isn't shared with
-other sites. *Start over* (beside *Replace*) deletes it; so does clearing this
-site's data in your browser. A private window keeps nothing after it closes.
+other sites. The image is stored once it has traced (so one that can't be
+traced is never brought back), and the settings and edits as you work. A note
+under the file name appears once it's saved. *Start over* (beside *Replace*)
+asks, then deletes it; so does clearing this site's data in your browser. A
+private window keeps nothing after it closes. Saved data is checked on the
+way back in, like everything else that becomes markup.
 Your light/dark theme and overlay colours are kept in localStorage.
 
 Saving is best-effort: if the browser refuses storage (some private modes,
