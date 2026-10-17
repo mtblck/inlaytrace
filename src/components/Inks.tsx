@@ -1,99 +1,99 @@
-import { type Ink, type InkEdits } from '../lib/svg'
+import type { Ink, InkEdits } from '../lib/doc'
 import { Section } from './Controls'
 
 type Props = {
   inks: Ink[]
   edits: InkEdits
-  onChange: (next: InkEdits) => void
+  /** The traced colour of the selected shape, highlighted in the list. */
+  selectedInk: string | null
+  onReplace: (hex: string, to: string) => void
+  onRemove: (hex: string) => void
+  onRestore: (hex: string) => void
+  onRestoreAll: () => void
 }
 
 /**
- * The trace's colours as a list of inks, like screen-print separations. Each
- * can be recoloured or hidden; the trace itself is untouched, so edits survive
- * re-tracing as long as the colour still comes out of the tracer.
+ * The trace's colours as inks, like screen-print separations. Two edits, both
+ * undoable: Replace swaps an ink's colour everywhere, Remove deletes its shapes
+ * so those areas export as transparent (the way to drop a background). Edits are
+ * keyed by the traced colour, so they survive re-tracing as long as the tracer
+ * still produces that colour.
  */
-export function Inks({ inks, edits, onChange }: Props) {
-  const hidden = new Set(edits.hidden)
-  const edited = edits.hidden.length > 0 || Object.keys(edits.recolor).length > 0
-
-  const recolor = (hex: string, to: string) => {
-    const recolorMap = { ...edits.recolor }
-    if (to.toLowerCase() === hex) delete recolorMap[hex]
-    else recolorMap[hex] = to.toLowerCase()
-    onChange({ ...edits, recolor: recolorMap })
-  }
-  const toggle = (hex: string) =>
-    onChange({ ...edits, hidden: hidden.has(hex) ? edits.hidden.filter((h) => h !== hex) : [...edits.hidden, hex] })
+export function Inks({ inks, edits, selectedInk, onReplace, onRemove, onRestore, onRestoreAll }: Props) {
+  const removed = new Set(edits.removed)
+  const edited = edits.removed.length > 0 || Object.keys(edits.recolor).length > 0
 
   return (
     <Section
-      title={`Inks (${inks.length})`}
+      title={`Colours (${inks.length})`}
       action={
         edited && (
-          <button
-            className="text-[12.5px] text-ink-muted underline-offset-2 hover:text-ink hover:underline"
-            onClick={() => onChange({ recolor: {}, hidden: [] })}
-          >
+          <button className="text-[12.5px] text-ink-muted underline-offset-2 hover:text-ink hover:underline" onClick={onRestoreAll}>
             Restore all
           </button>
         )
       }
     >
-      <p className="field-hint -mt-1 mb-3">Click a swatch to change its colour. Hide an ink to drop it from the export.</p>
-      <ul className="max-h-72 space-y-1 overflow-y-auto pr-1">
+      <p className="field-hint -mt-1 mb-3">
+        Click a swatch to replace a colour. Remove makes its shapes transparent, which is how to drop a background.
+      </p>
+      <ul className="max-h-80 space-y-1 overflow-y-auto pr-1">
         {inks.map((ink) => {
+          const isRemoved = removed.has(ink.hex)
           const shown = edits.recolor[ink.hex] ?? ink.hex
-          const isHidden = hidden.has(ink.hex)
+          const changed = shown !== ink.hex
           const inputId = `ink-${ink.hex.slice(1)}`
+          const isSelected = selectedInk === ink.hex
           return (
-            <li key={ink.hex} className={`flex items-center gap-3 rounded-md py-1 ${isHidden ? 'opacity-45' : ''}`}>
+            <li
+              key={ink.hex}
+              data-ink={ink.hex}
+              aria-current={isSelected || undefined}
+              className={`flex items-center gap-3 rounded-md px-1.5 py-1 ${isSelected ? 'bg-accent-dim' : ''}`}
+            >
               <label
                 htmlFor={inputId}
-                className="relative h-7 w-10 shrink-0 overflow-hidden rounded border border-rule"
-                style={{ background: shown }}
-                title="Change colour"
+                className={`relative h-7 w-10 shrink-0 overflow-hidden rounded border border-rule ${isRemoved ? 'checker' : ''}`}
+                style={isRemoved ? undefined : { background: shown }}
+                title="Replace colour"
               >
-                {shown !== ink.hex && (
-                  <span className="absolute inset-y-0 left-0 w-2" style={{ background: ink.hex }} aria-hidden="true" />
-                )}
+                {changed && !isRemoved && <span className="absolute inset-y-0 left-0 w-2" style={{ background: ink.hex }} aria-hidden="true" />}
                 <input
                   id={inputId}
                   type="color"
                   value={shown}
-                  onChange={(e) => recolor(ink.hex, e.target.value)}
+                  onChange={(e) => onReplace(ink.hex, e.target.value)}
                   className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                  aria-label={`Colour for ink ${shown}`}
+                  aria-label={`Replace colour ${ink.hex}`}
                 />
               </label>
               <div className="min-w-0 flex-1">
-                <div className="font-mono text-[12.5px] text-ink">{shown}</div>
+                <div className={`font-mono text-[12.5px] ${isRemoved ? 'text-ink-faint line-through' : 'text-ink'}`}>{isRemoved ? ink.hex : shown}</div>
                 <div className="text-[12px] text-ink-faint">
-                  {ink.count} {ink.count === 1 ? 'shape' : 'shapes'}
-                  {shown !== ink.hex && <> · was {ink.hex}</>}
+                  {isRemoved ? 'Removed, now transparent' : `${ink.count} ${ink.count === 1 ? 'shape' : 'shapes'}`}
+                  {changed && !isRemoved && <> · was {ink.hex}</>}
                 </div>
               </div>
-              <button
-                onClick={() => toggle(ink.hex)}
-                aria-pressed={isHidden}
-                aria-label={isHidden ? `Show ink ${shown}` : `Hide ink ${shown}`}
-                className="rounded p-1.5 text-ink-muted hover:text-ink"
-              >
-                <EyeIcon off={isHidden} />
-              </button>
+              {isRemoved ? (
+                <button className="text-[12.5px] text-ink-muted hover:text-ink" onClick={() => onRestore(ink.hex)} aria-label={`Restore ${ink.hex}`}>
+                  Restore
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  {changed && (
+                    <button className="text-[12.5px] text-ink-muted hover:text-ink" onClick={() => onRestore(ink.hex)} aria-label={`Reset ${ink.hex} to its traced colour`}>
+                      Reset
+                    </button>
+                  )}
+                  <button className="text-[12.5px] text-ink-muted hover:text-accent" onClick={() => onRemove(ink.hex)} aria-label={`Remove ${ink.hex}`}>
+                    Remove
+                  </button>
+                </div>
+              )}
             </li>
           )
         })}
       </ul>
     </Section>
-  )
-}
-
-function EyeIcon({ off }: { off: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-      <path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z" />
-      <circle cx="8" cy="8" r="2" />
-      {off && <path d="M2.5 13.5 13.5 2.5" />}
-    </svg>
   )
 }

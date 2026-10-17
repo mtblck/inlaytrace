@@ -3,9 +3,31 @@ import { zipSync, strToU8 } from 'fflate'
 import { TraceClient } from './engine/client'
 import { maxTraceEdge, settingsFor, toVtracerOptions, type PresetId, type Settings } from './engine/presets'
 import { ACCEPTED, hasDarkBackground, loadSource, pixelsOf, type Pixels, type Source } from './lib/image'
-import { buildSvg, formatBytes, inksOf, layerFiles, NO_EDITS, parseTrace, statsOf, type InkEdits, type Trace } from './lib/svg'
+import { formatBytes, normalizeHex, parseTrace, statsOf, type Trace } from './lib/svg'
+import {
+  buildSvg,
+  deletePath,
+  docFromTrace,
+  docOf,
+  inksOf,
+  layerFiles,
+  NO_EDITS,
+  NO_INKS,
+  recolorInk,
+  removeInk,
+  replacePath,
+  restoreInk,
+  visiblePaths,
+  type Edits,
+} from './lib/doc'
+import { push, redo, startHistory, undo, type History } from './lib/history'
+import { centreAxis, mirrorDoc, type Axis } from './lib/mirror'
+import { loadPaper } from './lib/paper'
+import { deleteNode, moveNode, parsePath, serializePath, nodeCount, type NodePart, type NodeRef, type Pt } from './lib/pathdata'
+import { usePersisted } from './lib/persisted'
 import { sampleImage } from './lib/sample'
-import { Canvas, type ViewMode } from './components/Canvas'
+import { Canvas, type Overlays, type Tool, type ViewMode } from './components/Canvas'
+import { EditPanel } from './components/EditPanel'
 import { Controls } from './components/Controls'
 import { Inks } from './components/Inks'
 import { useTheme } from './lib/theme'
@@ -22,7 +44,26 @@ export default function App() {
   const [traceCount, setTraceCount] = useState(0)
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [edits, setEdits] = useState<InkEdits>(NO_EDITS)
+  const [history, setHistory] = useState<History<Edits>>(() => startHistory(NO_EDITS))
+  const edits = history.present
+  /** Record an edit. Edits sharing a `key` in a row (a drag, a colour-picker sweep) undo as one. */
+  const commit = useCallback((next: Edits, key: string | null = null) => setHistory((h) => push(h, next, key)), [])
+  const [tool, setTool] = useState<Tool>('select')
+  const [panel, setPanel] = useState<'trace' | 'edit'>('trace')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedNode, setSelectedNode] = useState<NodeRef | null>(null)
+  const [axis, setAxis] = useState<Axis | null>(null)
+  const [mirroring, setMirroring] = useState(false)
+  const [mirrorError, setMirrorError] = useState<string | null>(null)
+  /** An action that would throw away shape edits, waiting for the user to confirm. */
+  const [pending, setPending] = useState<{ message: string; confirm: string; run: () => void } | null>(null)
+  const [overlays, setOverlays] = usePersisted<Overlays>('img-to-svg:overlays', {
+    paths: false,
+    pathColor: '#c4451f',
+    nodes: false,
+    nodeColor: '#2f6fd6',
+  })
+  const dragSeq = useRef(0)
   const [optimized, setOptimized] = useState<{ from: string; svg: string } | null>(null)
   const [mode, setMode] = useState<ViewMode>('split')
   const [zoom, setZoom] = useState(1)
@@ -32,7 +73,7 @@ export default function App() {
   const pixelCache = useRef<{ source: Source; maxEdge: number; upscale: boolean; pixels: Pixels } | null>(null)
 
   // ---- Loading ------------------------------------------------------------
-  const open = useCallback(async (file: Blob, name?: string) => {
+  const openNow = useCallback(async (file: Blob, name?: string) => {
     setLoadError(null)
     try {
       const next = await loadSource(file, name ?? (file instanceof File ? file.name : 'image'))
@@ -41,12 +82,35 @@ export default function App() {
         return next
       })
       setTrace(null)
-      setEdits(NO_EDITS)
+      setHistory(startHistory(NO_EDITS))
+      setSelectedId(null)
+      setSelectedNode(null)
+      setAxis(null)
+      setTool('select')
+      setPanel('trace')
       setZoom(1)
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : String(error))
     }
   }, [])
+
+  const detached = edits.doc !== null
+  /** Run `action` now, or ask first when it would discard shape edits. */
+  const guard = useCallback(
+    (message: string, confirm: string, action: () => void) => {
+      if (detached) setPending({ message, confirm, run: action })
+      else action()
+    },
+    [detached],
+  )
+
+  const open = useCallback(
+    (file: Blob, name?: string) =>
+      guard('Opening another image discards your shape edits.', 'Discard and open', () => {
+        void openNow(file, name)
+      }),
+    [guard, openNow],
+  )
 
   const openSample = async () => {
     setSettings(settingsFor('logo'))
@@ -94,8 +158,93 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [client, source, settings])
 
-  const svg = useMemo(() => (trace ? buildSvg(trace, edits) : ''), [trace, edits])
-  const inks = useMemo(() => (trace ? inksOf(trace) : []), [trace])
+  // The trace as a document. New ids per trace, so a selection never points
+  // into a stale trace.
+  const traced = useMemo(() => (trace ? docFromTrace(trace) : null), [trace])
+  const doc = traced ? docOf(edits, traced) : null
+  const svg = useMemo(() => (doc ? buildSvg(doc, edits.inks) : ''), [doc, edits.inks])
+  const shown = useMemo(() => (doc ? visiblePaths(doc, edits.inks) : []), [doc, edits.inks])
+  const inks = useMemo(() => (doc ? inksOf(doc) : []), [doc])
+
+  // A selection that no longer exists (re-trace, undo past its creation) is dropped.
+  useEffect(() => {
+    if (selectedId && !shown.some((p) => p.id === selectedId)) {
+      setSelectedId(null)
+      setSelectedNode(null)
+    }
+  }, [shown, selectedId])
+  useEffect(() => {
+    if (doc && !axis) setAxis(centreAxis(doc))
+  }, [doc, axis])
+
+  // ---- Editing --------------------------------------------------------------
+  const selectedPath = doc?.paths.find((p) => p.id === selectedId) ?? null
+
+  const editInks = (next: typeof edits.inks, key: string | null = null) => commit({ ...edits, inks: next }, key)
+  const editDoc = (next: NonNullable<typeof doc>, key: string | null = null) => commit({ ...edits, doc: next }, key)
+
+  const onDragNode = (ref: NodeRef, part: NodePart, to: Pt, phase: 'move' | 'end') => {
+    if (!doc || !selectedPath) return
+    const d = serializePath(moveNode(parsePath(selectedPath.d), ref, part, to))
+    editDoc(replacePath(doc, selectedPath.id, d), `drag-${dragSeq.current}`)
+    if (phase === 'end') dragSeq.current++
+  }
+
+  const deleteSelection = useCallback(() => {
+    if (!doc || !selectedPath) return
+    if (selectedNode) {
+      const subs = deleteNode(parsePath(selectedPath.d), selectedNode)
+      editDoc(subs.length ? replacePath(doc, selectedPath.id, serializePath(subs)) : deletePath(doc, selectedPath.id))
+      setSelectedNode(null)
+      if (!subs.length) setSelectedId(null)
+    } else {
+      editDoc(deletePath(doc, selectedPath.id))
+      setSelectedId(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc, selectedPath, selectedNode, edits])
+
+  const mirror = async () => {
+    if (!doc || !axis) return
+    setMirroring(true)
+    setMirrorError(null)
+    try {
+      const paper = await loadPaper()
+      editDoc(mirrorDoc(paper, doc, axis))
+      setSelectedId(null)
+      setSelectedNode(null)
+      // Back to Select, so the washed-out preview stops hiding the result.
+      setTool('select')
+    } catch (error) {
+      setMirrorError(`Mirroring failed: ${error instanceof Error ? error.message : String(error)}. Your drawing is unchanged.`)
+    } finally {
+      setMirroring(false)
+    }
+  }
+
+  // Keyboard: undo/redo everywhere except text fields; Delete and Esc act on the selection.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null
+      const typing = el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !['color', 'range', 'checkbox', 'radio'].includes((el as HTMLInputElement).type)))
+      const mod = e.metaKey || e.ctrlKey
+      if (mod && !typing && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        setHistory((h) => (e.shiftKey ? redo(h) : undo(h)))
+      } else if (mod && !typing && e.key.toLowerCase() === 'y') {
+        e.preventDefault()
+        setHistory((h) => redo(h))
+      } else if (!typing && (e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+        e.preventDefault()
+        deleteSelection()
+      } else if (e.key === 'Escape') {
+        if (selectedNode) setSelectedNode(null)
+        else setSelectedId(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selectedId, selectedNode, deleteSelection])
 
   // Optimise in the background so the numbers shown are the numbers exported.
   useEffect(() => {
@@ -123,16 +272,31 @@ export default function App() {
 
   const downloadLayers = async () => {
     const files: Record<string, Uint8Array> = {}
-    for (const f of layerFiles(trace!, edits, source!.name)) files[f.name] = strToU8(await optimizeHere(f.svg))
+    for (const f of layerFiles(doc!, edits.inks, source!.name)) files[f.name] = strToU8(await optimizeHere(f.svg))
     files[`${source!.name}-all.svg`] = strToU8(await finalSvg())
     const zip = zipSync(files, { level: 6 })
     save(new Blob([zip.buffer as ArrayBuffer], { type: 'application/zip' }), `${source!.name}-layers.zip`)
   }
 
+  /**
+   * Trace settings re-trace, which replaces detached shapes. Ask first; on
+   * confirm, re-attaching is itself an undoable edit, so Undo brings the
+   * edited shapes back.
+   */
+  const changeSettings = (next: Settings) =>
+    guard('Changing a trace setting re-traces the image and replaces your shape edits.', 'Discard edits and re-trace', () => {
+      if (detached) {
+        commit({ ...edits, doc: null })
+        setSelectedId(null)
+        setSelectedNode(null)
+      }
+      setSettings(next)
+    })
+
   const choosePreset = (id: PresetId) => {
     const next = settingsFor(id)
     if (id === 'lineart' && source && hasDarkBackground(source)) next.lightInk = true
-    setSettings(next)
+    changeSettings(next)
   }
 
   const { theme, toggle } = useTheme()
@@ -188,7 +352,28 @@ export default function App() {
           {source && trace ? (
             <>
               <div className="relative min-h-0 flex-1">
-                <Canvas imageUrl={source.url} svg={svg} width={trace.width} height={trace.height} mode={mode} zoom={zoom} />
+                <Canvas
+                  imageUrl={source.url}
+                  paths={shown}
+                  width={doc!.width}
+                  height={doc!.height}
+                  mode={mode}
+                  zoom={zoom}
+                  tool={tool}
+                  overlays={overlays}
+                  selectedId={selectedId}
+                  selectedNode={selectedNode}
+                  axis={axis}
+                  onSelect={(id) => {
+                    setSelectedId(id)
+                    setSelectedNode(null)
+                    // The selection's tools live in the Edit tab.
+                    if (id) setPanel('edit')
+                  }}
+                  onSelectNode={setSelectedNode}
+                  onDragNode={onDragNode}
+                  onAxis={(position) => axis && setAxis({ ...axis, position })}
+                />
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rule px-4 py-2.5">
                 <div role="radiogroup" aria-label="Compare" className="flex gap-px overflow-hidden rounded-md border border-rule bg-rule">
@@ -196,7 +381,7 @@ export default function App() {
                     [
                       ['split', 'Split'],
                       ['difference', 'Difference'],
-                      ['outlines', 'Outlines'],
+                      ['vector', 'Vector'],
                     ] as const
                   ).map(([v, label]) => (
                     <button
@@ -213,8 +398,24 @@ export default function App() {
                 <p className="order-last w-full text-[12.5px] text-ink-muted md:order-none md:w-auto">
                   {mode === 'split' && 'Original on the left, SVG on the right. Drag the handle.'}
                   {mode === 'difference' && 'Black means the SVG matches. Bright areas are where it differs.'}
-                  {mode === 'outlines' && 'Every path as a hairline, as a cutter or plotter sees it.'}
+                  {mode === 'vector' && 'The SVG on its own, over a check pattern where it is transparent.'}
                 </p>
+                <div className="flex items-center gap-3" role="group" aria-label="Overlays">
+                  <OverlayToggle
+                    label="Paths"
+                    on={overlays.paths}
+                    color={overlays.pathColor}
+                    onToggle={(paths) => setOverlays({ ...overlays, paths })}
+                    onColor={(pathColor) => setOverlays({ ...overlays, pathColor })}
+                  />
+                  <OverlayToggle
+                    label="Nodes"
+                    on={overlays.nodes}
+                    color={overlays.nodeColor}
+                    onToggle={(nodes) => setOverlays({ ...overlays, nodes })}
+                    onColor={(nodeColor) => setOverlays({ ...overlays, nodeColor })}
+                  />
+                </div>
                 <div className="flex items-center gap-1" role="group" aria-label="Zoom">
                   {[1, 2, 4, 8].map((z) => (
                     <button
@@ -262,8 +463,93 @@ export default function App() {
                 </button>
               </div>
             )}
-            <Controls settings={settings} onChange={setSettings} onPreset={choosePreset} />
-            {trace && <Inks inks={inks} edits={edits} onChange={setEdits} />}
+            {pending && (
+              <div role="alertdialog" aria-labelledby="pending-msg" className="border-b border-rule bg-accent-dim px-5 py-4">
+                <p id="pending-msg" className="text-[13.5px] text-ink">
+                  {pending.message} Undo can still bring them back.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => {
+                      const run = pending.run
+                      setPending(null)
+                      run()
+                    }}
+                  >
+                    {pending.confirm}
+                  </button>
+                  <button className="btn" autoFocus onClick={() => setPending(null)}>
+                    Keep editing
+                  </button>
+                </div>
+              </div>
+            )}
+            {doc && (
+              <div role="tablist" aria-label="Panel" className="flex border-b border-rule px-5">
+                {(
+                  [
+                    ['trace', 'Trace'],
+                    ['edit', 'Edit'],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    role="tab"
+                    id={`tab-${id}`}
+                    aria-selected={panel === id}
+                    aria-controls={`panel-${id}`}
+                    onClick={() => setPanel(id)}
+                    className={`-mb-px border-b-2 px-1 py-2.5 mr-5 text-[13.5px] ${panel === id ? 'border-accent font-medium text-ink' : 'border-transparent text-ink-muted hover:text-ink'}`}
+                  >
+                    {label}
+                    {id === 'edit' && detached && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" aria-label="(edited)" />}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div role="tabpanel" id="panel-edit" aria-labelledby="tab-edit" hidden={!doc || panel !== 'edit'}>
+            {doc && axis && (
+              <EditPanel
+                tool={tool}
+                onTool={(t) => {
+                  setTool(t)
+                  if (t === 'mirror') void loadPaper().catch(() => {}) // warm it up while the user picks a side
+                }}
+                canUndo={history.past.length > 0}
+                canRedo={history.future.length > 0}
+                onUndo={() => setHistory(undo)}
+                onRedo={() => setHistory(redo)}
+                detached={detached}
+                selection={selectedPath ? { id: selectedPath.id, nodes: nodeCount(parsePath(selectedPath.d)), node: !!selectedNode } : null}
+                onDeleteSelection={deleteSelection}
+                axis={axis}
+                width={doc.width}
+                height={doc.height}
+                onAxis={setAxis}
+                mirroring={mirroring}
+                mirrorError={mirrorError}
+                onMirror={mirror}
+              />
+            )}
+            {doc && (
+              <Inks
+                inks={inks}
+                edits={edits.inks}
+                selectedInk={selectedPath?.fill ?? null}
+                onReplace={(hex, to) => {
+                  const v = normalizeHex(to)
+                  if (v) editInks(recolorInk(edits.inks, hex, v), `recolor-${hex}`)
+                }}
+                onRemove={(hex) => editInks(removeInk(edits.inks, hex))}
+                onRestore={(hex) => editInks(restoreInk(edits.inks, hex))}
+                onRestoreAll={() => editInks(NO_INKS)}
+              />
+            )}
+            </div>
+            <div role="tabpanel" id="panel-trace" aria-labelledby="tab-trace" hidden={!!doc && panel !== 'trace'}>
+              <Controls settings={settings} onChange={changeSettings} onPreset={choosePreset} />
+            </div>
           </div>
 
           {/* On a phone this sits straight under the canvas; on desktop it pins to the foot of the column. */}
@@ -327,6 +613,26 @@ function Empty(props: { loading: boolean; error: string | null; onChoose: () => 
         )}
       </div>
     </div>
+  )
+}
+
+function OverlayToggle(props: { label: string; on: boolean; color: string; onToggle: (on: boolean) => void; onColor: (c: string) => void }) {
+  return (
+    <span className="flex items-center gap-1.5 text-[13px]">
+      <label className="flex cursor-pointer items-center gap-1.5">
+        <input type="checkbox" className="accent-[var(--c-accent)]" checked={props.on} onChange={(e) => props.onToggle(e.target.checked)} />
+        {props.label}
+      </label>
+      <label className="relative h-4 w-4 overflow-hidden rounded-sm border border-rule" style={{ background: props.color }} title={`${props.label} colour`}>
+        <input
+          type="color"
+          value={props.color}
+          onChange={(e) => props.onColor(e.target.value)}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          aria-label={`${props.label} overlay colour`}
+        />
+      </label>
+    </span>
   )
 }
 
