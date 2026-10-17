@@ -14,10 +14,10 @@ type Props = {
   onRedo: () => void
   detached: boolean
   /** `nodes` counts the edited shape's nodes; `selectedNodes` those picked with the Nodes tool. */
-  selection: { shapes: number; nodes: number; selectedNodes: number; box: Box | null } | null
+  selection: { key: string; shapes: number; nodes: number; selectedNodes: number; box: Box | null } | null
   onDeleteSelection: () => void
-  /** Typed position or size; changes in one field undo together. */
-  onBox: (box: Box) => void
+  /** One typed field of the bounds; `lock` keeps W and H in proportion. Changes in one field undo together. */
+  onBox: (field: keyof Box, value: number, lock: boolean) => void
   onBoxDone: () => void
   axis: Axis
   width: number
@@ -84,7 +84,8 @@ export function EditPanel(p: Props) {
               <p className="field-hint">
                 {p.selection.shapes === 1 ? '1 shape' : `${p.selection.shapes} shapes`} selected. Drag to move, drag a square to scale (⇧ in proportion, ⌥ from the centre). Arrows nudge.
               </p>
-              {p.selection.box && <BoxFields box={p.selection.box} onBox={p.onBox} onDone={p.onBoxDone} />}
+              {/* Keyed to the selection, so a half-typed value never carries over to other shapes. */}
+              {p.selection.box && <BoxFields key={p.selection.key} box={p.selection.box} onBox={p.onBox} onDone={p.onBoxDone} />}
               <button className="btn w-full" onClick={p.onDeleteSelection}>
                 {p.selection.shapes === 1 ? 'Delete shape' : `Delete ${p.selection.shapes} shapes`}
               </button>
@@ -213,15 +214,12 @@ const round = (n: number) => Math.round(n * 100) / 100
  * reshapes the drawing; it applies as you type valid numbers and undoes as one
  * step per field.
  */
-function BoxFields({ box, onBox, onDone }: { box: Box; onBox: (b: Box) => void; onDone: () => void }) {
+function BoxFields({ box, onBox, onDone }: { box: Box; onBox: (k: keyof Box, v: number, lock: boolean) => void; onDone: () => void }) {
   const [lock, setLock] = useState(false)
   const set = (k: keyof Box, v: number) => {
     if (!Number.isFinite(v)) return
     if ((k === 'w' || k === 'h') && v <= 0) return
-    const next = { ...box, [k]: v }
-    if (lock && k === 'w' && box.w > 0) next.h = (box.h * v) / box.w
-    if (lock && k === 'h' && box.h > 0) next.w = (box.w * v) / box.h
-    onBox(next)
+    onBox(k, v, lock)
   }
   return (
     <div className="space-y-1.5">

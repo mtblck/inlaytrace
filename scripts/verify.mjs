@@ -204,6 +204,10 @@ async function selectChecks(page, label, id, n) {
   const corner = await page.locator('[data-box-handle="1,1"]').boundingBox()
   const cx = corner.x + corner.width / 2
   const cy = corner.y + corner.height / 2
+  const pastBefore = (await page.getByRole('button', { name: 'Undo' }).isEnabled())
+  const editedBefore = await page.locator('[data-edited]').count()
+  await page.mouse.click(cx, cy)
+  check((await page.locator(`path[data-path-id="${id}"]`).getAttribute('d')) === d0 && (await page.locator('[data-edited]').count()) === editedBefore && (await page.getByRole('button', { name: 'Undo' }).isEnabled()) === pastBefore, `${label}: clicking a scale handle without dragging changes nothing`)
   await page.mouse.move(cx, cy)
   await page.mouse.down()
   for (let i = 1; i <= 4; i++) await page.mouse.move(cx + i * 10, cy + i * 5)
@@ -223,14 +227,29 @@ async function selectChecks(page, label, id, n) {
   await page.keyboard.press(`${MOD}+z`)
 
   // Typed width, then a Shift+arrow nudge read back from X.
+  // Typed key by key, as a person would, so each digit is its own change.
   const width = page.getByLabel('Width')
   const w0 = Number(await width.inputValue())
-  await width.fill(String(Math.round(w0 * 2)))
+  await width.selectText()
+  await width.pressSequentially(String(Math.round(w0 * 2)))
   await width.press('Enter')
   const b4 = await boxOf(page)
   check(Math.abs(b4.width / b0.width - Math.round(w0 * 2) / w0) < 0.02, `${label}: typing a width resizes the shape (${w0} → ${Math.round(w0 * 2)})`)
   await page.keyboard.press(`${MOD}+z`)
   check((await page.locator(`path[data-path-id="${id}"]`).getAttribute('d')) === d0, `${label}: one Undo reverts the typed width`)
+  // Typed key by key, the digits on the way (W = 1, 10…) must not round the
+  // shape: the result is exactly what setting the value in one go gives.
+  const target = String(Math.round(w0 * 1.5))
+  await width.selectText()
+  await width.pressSequentially(target)
+  await width.press('Enter')
+  const typed = await page.locator(`path[data-path-id="${id}"]`).getAttribute('d')
+  await page.keyboard.press(`${MOD}+z`)
+  await width.fill(target)
+  await width.press('Enter')
+  const once = await page.locator(`path[data-path-id="${id}"]`).getAttribute('d')
+  check(typed === once, `${label}: typing a width digit by digit gives exactly the same shape as setting it at once`)
+  await page.keyboard.press(`${MOD}+z`)
   const x0 = Number(await page.getByLabel('X position').inputValue())
   await page.mouse.move(at.x, at.y) // focus back on the canvas, out of the field
   await page.locator('h1').click()
@@ -264,6 +283,17 @@ async function selectChecks(page, label, id, n) {
   await page.keyboard.press('Escape')
   await page.keyboard.press(`${MOD}+a`)
   check(Number(await page.locator('[data-selection-box]').getAttribute('data-selection-box')) === total, `${label}: ${MOD}+A selects every shape`)
+  // A Shift-click that misses every shape keeps the selection.
+  await page.keyboard.down('Shift')
+  await page.mouse.click(sheet.x - 10, sheet.y - 10)
+  await page.keyboard.up('Shift')
+  check(Number(await page.locator('[data-selection-box]').getAttribute('data-selection-box')) === total, `${label}: a Shift-click on empty canvas keeps the selection`)
+  // Switching to Nodes narrows to one shape, so Delete can't remove shapes you can't see.
+  await page.keyboard.press('a')
+  await page.keyboard.press('Delete')
+  check((await page.locator('path[data-path-id]').count()) === total - 1, `${label}: Delete in Nodes after select-all removes only the shape shown`)
+  await page.keyboard.press(`${MOD}+z`)
+  await page.keyboard.press('v')
   await page.keyboard.press('Escape')
   check((await page.locator('[data-selection-box]').count()) === 0, `${label}: Esc clears the selection`)
 
@@ -340,7 +370,9 @@ async function editorChecks(page, label, n) {
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+z' : 'Control+Shift+z')
   const dRedone = await page.locator(`svg[aria-label="Traced SVG"] path`).nth(best).getAttribute('d')
   check(dRedone === dAfter, `${label}: Redo brings it back`)
+  // Undo the drag again, so the checks below start from the traced shape.
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z')
+  check((await page.locator(`svg[aria-label="Traced SVG"] path`).nth(best).getAttribute('d')) === dBefore, `${label}: and Undo takes it away again`)
 
   await smoothChecks(page, label)
 
@@ -479,8 +511,8 @@ await dialog.waitFor()
 check((await dialog.locator('kbd').count()) > 15, `? opens the shortcuts panel (${await dialog.locator('kbd').count()} keys listed)`)
 await shot(page, '04d-shortcuts')
 await page.keyboard.press('Escape')
-await dialog.waitFor({ state: 'hidden' })
-check(true, 'Esc closes it')
+const closed = await dialog.waitFor({ state: 'hidden', timeout: 3000 }).then(() => true, () => false)
+check(closed, 'Esc closes the shortcuts panel')
 
 // ---- Zoom ---------------------------------------------------------------------
 {

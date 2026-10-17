@@ -94,8 +94,9 @@ export function Canvas(props: Props) {
     | { kind: 'node'; ref: NodeRef; part: NodePart; grab: Pt; from: { x: number; y: number }; moved: boolean; smooth: boolean; reselect: boolean }
     // Moving the selected shapes; `reselect` narrows a multi-selection to the
     // pressed shape if the press turns out to be a click.
-    | { kind: 'move'; id: string; start: Pt; from: { x: number; y: number }; moved: boolean; reselect: boolean }
-    | { kind: 'scale'; handle: Handle; box: Box; grab: Pt }
+    // `last` is the latest transform sent, so a drag the browser cancels still ends where it was.
+    | { kind: 'move'; id: string; start: Pt; from: { x: number; y: number }; moved: boolean; reselect: boolean; last: Affine | null }
+    | { kind: 'scale'; handle: Handle; box: Box; grab: Pt; from: { x: number; y: number }; moved: boolean; last: Affine | null }
     | { kind: 'marquee'; start: Pt; from: { x: number; y: number }; moved: boolean; mode: SelectMode; clickId: string | null }
   >(null)
   const [marquee, setMarquee] = useState<Box | null>(null)
@@ -286,9 +287,14 @@ export function Canvas(props: Props) {
     } else if (d.kind === 'move') {
       if (!d.moved && !far(d, e)) return
       d.moved = true
-      props.onTransform(moveBy(d.start, p, e.shiftKey), 'move')
+      d.last = moveBy(d.start, p, e.shiftKey)
+      props.onTransform(d.last, 'move')
     } else if (d.kind === 'scale') {
-      props.onTransform(scaleFromHandle(d.box, d.handle, { x: p.x + d.grab.x, y: p.y + d.grab.y }, { proportional: e.shiftKey, fromCentre: e.altKey }), 'move')
+      // Like a node, a handle only starts scaling after DRAG_PX: a click on it changes nothing.
+      if (!d.moved && !far(d, e)) return
+      d.moved = true
+      d.last = scaleFromHandle(d.box, d.handle, { x: p.x + d.grab.x, y: p.y + d.grab.y }, { proportional: e.shiftKey, fromCentre: e.altKey })
+      props.onTransform(d.last, 'move')
     } else if (d.kind === 'marquee') {
       if (!d.moved && !far(d, e)) return
       d.moved = true
@@ -305,15 +311,17 @@ export function Canvas(props: Props) {
       if (d.moved && p) props.onDragNode(d.ref, d.part, { x: p.x + d.grab.x, y: p.y + d.grab.y }, 'end', d.smooth && !e.altKey)
       else if (!d.moved && d.reselect) props.onSelectNodes([d.ref], 'set')
     } else if (d.kind === 'move') {
-      if (d.moved && p) props.onTransform(moveBy(d.start, p, e.shiftKey), 'end')
-      else if (!d.moved && d.reselect) props.onSelect(d.id, 'set')
+      if (d.moved) props.onTransform(e.type === 'pointerup' && p ? moveBy(d.start, p, e.shiftKey) : d.last!, 'end')
+      else if (d.reselect) props.onSelect(d.id, 'set')
     } else if (d.kind === 'scale') {
-      if (p) props.onTransform(scaleFromHandle(d.box, d.handle, { x: p.x + d.grab.x, y: p.y + d.grab.y }, { proportional: e.shiftKey, fromCentre: e.altKey }), 'end')
+      if (d.moved)
+        props.onTransform(e.type === 'pointerup' && p ? scaleFromHandle(d.box, d.handle, { x: p.x + d.grab.x, y: p.y + d.grab.y }, { proportional: e.shiftKey, fromCentre: e.altKey }) : d.last!, 'end')
     } else if (d.kind === 'marquee') {
       setMarquee(null)
       if (d.moved && p) props.onMarquee(normRect(d.start, p), d.mode)
-      // A click on empty canvas clears the selection; on a shape (Nodes tool), selects it.
-      else if (!d.moved) props.onSelect(d.clickId, 'set')
+      // A plain click on empty canvas clears the selection, and on a shape
+      // (Nodes tool) selects it. A ⇧/⌥-click that misses keeps the selection.
+      else if (!d.moved && d.mode === 'set') props.onSelect(d.clickId, 'set')
     }
   }
   /** Start dragging the anchor or a handle at `at` (SVG units). */
@@ -363,7 +371,7 @@ export function Canvas(props: Props) {
     const was = selectedSet.has(id)
     if (!was) props.onSelect(id, 'set')
     const p = toSvg(e)
-    if (p) startDrag(e, { kind: 'move', id, start: p, from: { x: e.clientX, y: e.clientY }, moved: false, reselect: was && props.selectedIds.length > 1 })
+    if (p) startDrag(e, { kind: 'move', id, start: p, from: { x: e.clientX, y: e.clientY }, moved: false, reselect: was && props.selectedIds.length > 1, last: null })
   }
   const onShapeDown = useCallback((e: RPointerEvent, id: string) => shapeDown.current(e, id), [])
   const enterNodes = useRef(props.onEnterNodes)
@@ -553,7 +561,7 @@ export function Canvas(props: Props) {
                       style={{ cursor: CURSORS[`${k.h}${k.v}`] }}
                       onPointerDown={(e) => {
                         const p = toSvg(e)
-                        if (p) startDrag(e, { kind: 'scale', handle: k, box, grab: { x: at.x - p.x, y: at.y - p.y } })
+                        if (p) startDrag(e, { kind: 'scale', handle: k, box, grab: { x: at.x - p.x, y: at.y - p.y }, from: { x: e.clientX, y: e.clientY }, moved: false, last: null })
                       }}
                     />
                   )
