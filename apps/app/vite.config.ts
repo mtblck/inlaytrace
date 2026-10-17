@@ -2,27 +2,33 @@ import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 // `vite preview` serves the production headers from vercel.json, so a CSP that
 // would block the WebAssembly tracer fails locally instead of only on Vercel.
-const vercel = JSON.parse(readFileSync(new URL('./vercel.json', import.meta.url), 'utf8'))
+const vercel = JSON.parse(readFileSync(new URL('../../vercel.json', import.meta.url), 'utf8'))
 const productionHeaders: Record<string, string> = Object.fromEntries(
   vercel.headers[0].headers.map((h: { key: string; value: string }) => [h.key, h.value]),
 )
 
 /**
- * The tool is served at mattblack.space/tools/img-to-svg/ through a rewrite in
- * the portfolio, and also at its own Vercel URL. Building into
- * dist/tools/img-to-svg with a matching base puts every file at the same path
- * on both hosts, so the portfolio's rewrite never has to translate paths.
+ * Until inlaytrace.com is live (#61) the app is served at
+ * mattblack.space/tools/img-to-svg/ through a rewrite in the portfolio, and at
+ * its own Vercel URL. Building into dist/tools/img-to-svg with a matching base
+ * puts every file at the same path on both hosts, so the portfolio's rewrite
+ * never has to translate paths. At the cutover this becomes '/app/'.
  */
-const BASE = '/tools/img-to-svg/'
+export const BASE = '/tools/img-to-svg/'
+const here = fileURLToPath(new URL('.', import.meta.url))
 
 export default defineConfig({
+  // Run from the repo root (npm scripts, vitest projects), so root is set explicitly.
+  root: here,
   base: BASE,
   plugins: [react(), tailwindcss()],
   build: {
-    outDir: `dist${BASE}`,
+    // The repo root's dist/, which Vercel serves.
+    outDir: `${here}../../dist${BASE}`,
     emptyOutDir: true,
     target: 'es2022',
     // The two large chunks are SVGO (lazy, only fetched for export/stats) and

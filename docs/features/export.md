@@ -26,7 +26,7 @@ and offers PNG, PDF and EPS.
   size you'll get. Transparent unless you've added a background.
 - **PDF**: one page exactly the export size, every shape a filled vector path
   in its shown colour, with the background behind them if set. Built in the
-  browser (`src/lib/vectorExport.ts`): five objects and a compressed content
+  browser (`apps/app/src/lib/vectorExport.ts`): five objects and a compressed content
   stream, checked with `qpdf --check` and by rendering it back.
 - **EPS**: the same paths as PostScript, with a bounding box of the export
   size, for print and cutting software that still asks for it.

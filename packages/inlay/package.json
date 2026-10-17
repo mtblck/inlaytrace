@@ -1,5 +1,5 @@
 {
-  "name": "@mtblck/inlay",
+  "name": "inlaytrace",
   "version": "0.1.0",
   "description": "A raster-to-vector tracer whose shapes share their edges exactly: no gaps, no overlaps.",
   "private": true,

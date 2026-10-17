@@ -24,15 +24,15 @@ const SIZE = 640
 const K = 4
 
 // Load the app's own TypeScript modules through Vite, so this scores exactly what ships.
-const vite = await createServer({ root, logLevel: 'error', server: { middlewareMode: true }, appType: 'custom' })
+const vite = await createServer({ root: join(root, 'apps/app'), logLevel: 'error', server: { middlewareMode: true }, appType: 'custom' })
 const { runTrace } = await vite.ssrLoadModule('/src/engine/run.ts')
 const { PRESETS, settingsFor, toVtracerOptions, usesInlay } = await vite.ssrLoadModule('/src/engine/presets.ts')
 const { init } = await vite.ssrLoadModule('/src/engine/vtracer/vtracer.js')
 globalThis.fetch = async () =>
-  new Response(readFileSync(join(root, 'src/engine/vtracer/vtracer.wasm')), { headers: { 'content-type': 'application/wasm' } })
+  new Response(readFileSync(join(root, 'apps/app/src/engine/vtracer/vtracer.wasm')), { headers: { 'content-type': 'application/wasm' } })
 await init('vtracer.wasm')
 
-const ART = readFileSync(join(root, 'src/lib/sample.ts'), 'utf8').match(/const ART = `([\s\S]*?)`/)[1]
+const ART = readFileSync(join(root, 'apps/app/src/lib/sample.ts'), 'utf8').match(/const ART = `([\s\S]*?)`/)[1]
 const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {})
 const page = await browser.newPage()
 await page.goto('about:blank')

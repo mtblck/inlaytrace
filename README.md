@@ -1,9 +1,20 @@
-# img-to-svg
+# Inlay
 
-Turn a PNG, JPG or WebP into a clean SVG — in the browser, without uploading it
-anywhere.
+Turn a PNG, JPG or WebP into a clean, editable SVG, in the browser, without
+uploading it anywhere. Inlay's tracer cuts every shape to fit its neighbours
+exactly, like inlaid wood: no gaps, no overlaps.
 
-**https://mattblack.space/tools/img-to-svg/**
+**App:** https://mattblack.space/tools/img-to-svg/ (moving to inlaytrace.com/app)
+· **Package:** [`inlaytrace`](packages/inlay) (not yet published)
+
+This repo holds both:
+
+| Path | What |
+| --- | --- |
+| `apps/app` | The app: trace, compare, edit and export (React, Vite) |
+| `packages/inlay` | The tracer, published as `inlaytrace` (pure TypeScript, no DOM) |
+| `docs` | How it works, every feature, roadmap; also shown on the project board |
+| `scripts` | Browser checks, quality scoring, VTracer vendoring, hosting checks |
 
 Pick what the image is (logo, illustration, line art, poster, pixel art), adjust
 colours and smoothing, and compare the result against the original three ways:
@@ -39,9 +50,9 @@ The longer write-up lives in [`docs/`](docs/overview.md), and on Matt's Boards:
 ## Commands
 
 ```bash
-npm install
-npm run dev        # http://localhost:5173/tools/img-to-svg/
-npm test           # unit tests + every preset through the real tracer
+npm install        # one install for the app and the package (npm workspaces)
+npm run dev        # the app: http://localhost:5173/tools/img-to-svg/
+npm test           # the app's and the package's tests, plus every preset through the real tracer
 npm run build      # vendors the tracer, checks hosting config, type-checks, builds
 npm run preview    # serves the build with the production security headers
 npm run verify     # end-to-end in a real browser (needs `preview` running)
@@ -198,7 +209,7 @@ from the SVGO-optimised output, computed in the background after each change,
 not from the raw trace. Before this, the panel showed 41 KB for a file that
 downloaded at 31 KB.
 
-**Paths are the same on both hosts.** The build goes to `dist/tools/img-to-svg`
+**Paths are the same on both hosts.** The app builds to `dist/tools/img-to-svg` (at the repo root, which Vercel serves)
 with a matching Vite `base`, so assets live at `/tools/img-to-svg/assets/…` on
 this project's own Vercel URL *and* through mattblack.space's rewrite. The
 portfolio proxies the path without translating it.
@@ -224,7 +235,7 @@ is itself an undoable step. Undo/redo stores whole snapshots (cheap at these
 sizes, capped at 100) and coalesces a drag or a colour-picker sweep into one step.
 
 **Path data is normalised once, then round-trips exactly.** Editing converts each
-path to absolute M/L/C/Z nodes with explicit handles (`src/lib/pathdata.ts`).
+path to absolute M/L/C/Z nodes with explicit handles (`apps/app/src/lib/pathdata.ts`).
 Numbers are written to three decimals and the serialiser is idempotent, so
 touching one node never nudges the rest of the drawing.
 

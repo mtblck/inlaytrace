@@ -3,9 +3,9 @@
  * node types, live in the Inlay package (packages/inlay/src/path.ts) so the
  * tracer and the editor share one definition; this file adds the edits.
  */
-import type { PathNode, Pt, Subpath } from '@mtblck/inlay'
+import type { PathNode, Pt, Subpath } from 'inlaytrace'
 
-export { mapPoints, parsePath, serializePath, type PathNode, type Pt, type Subpath } from '@mtblck/inlay'
+export { mapPoints, parsePath, serializePath, type PathNode, type Pt, type Subpath } from 'inlaytrace'
 
 /** Where a node lives: subpath index and node index within it. */
 export type NodeRef = { sub: number; index: number }

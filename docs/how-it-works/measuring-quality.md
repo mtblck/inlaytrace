@@ -8,7 +8,7 @@ Every change to tracing is measured, not judged by eye. Three tools do it.
 
 ## `npm run score`: accuracy against clean art
 
-The built-in sample badge is drawn in code (`src/lib/sample.ts`), so its exact
+The built-in sample badge is drawn in code (`apps/app/src/lib/sample.ts`), so its exact
 shapes are known. `scripts/score.mjs`:
 
 1. Renders the badge at 640 px and saves it as a JPEG at quality 72, exactly as

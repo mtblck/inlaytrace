@@ -86,14 +86,14 @@ Delete or Backspace (or the button in the panel) removes what's selected:
 ## How it works
 
 Editing converts each path to absolute M/L/C/Z nodes with explicit handles
-(`src/lib/pathdata.ts`). Numbers are written to three decimals and the writer is
+(`apps/app/src/lib/pathdata.ts`). Numbers are written to three decimals and the writer is
 idempotent, so touching one node never nudges the rest of the drawing. The
 first shape edit copies the trace into an editable document; see
 [Undo and the edit model](undo-and-edits.md).
 
-Moving, scaling and rotating (`src/lib/transform.ts`) are one affine matrix
+Moving, scaling and rotating (`apps/app/src/lib/transform.ts`) are one affine matrix
 applied to every point and handle. Adding, smoothing, sharpening, rounding and
-simplifying are in `src/lib/nodeops.ts`: adding splits the cubic with
+simplifying are in `apps/app/src/lib/nodeops.ts`: adding splits the cubic with
 de Casteljau's construction; rounding cuts each side at the radius and joins
 the cuts with a cubic whose handles are (4/3)·tan(φ/4) of the arc's radius for
 a turn of φ; simplifying samples the outline about a pixel apart and runs it
