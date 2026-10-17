@@ -58,10 +58,14 @@ async function run<T>(mode: IDBTransactionMode, f: (s: IDBObjectStore) => IDBReq
 export const newSessionId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 export const saveImage = async (image: Omit<SavedImage, 'v'>) => (await run('readwrite', (s) => s.put({ v: VERSION, ...image }, 'image'))).ok
 export const saveState = async (state: Omit<SavedState, 'v'>) => (await run('readwrite', (s) => s.put({ v: VERSION, ...state }, 'state'))).ok
-export const clearSession = async () => {
-  await run('readwrite', (s) => s.delete('image'))
-  await run('readwrite', (s) => s.delete('state'))
-}
+/** Both records in one transaction, so there's never a moment with only one gone. */
+export const clearSession = async () =>
+  (
+    await run('readwrite', (s) => {
+      s.delete('image')
+      return s.delete('state')
+    })
+  ).ok
 
 /** The saved image and its state, checked and filled in; null if there's nothing usable. */
 export async function loadSession(): Promise<{ image: SavedImage; settings: Settings; edits: Edits } | null> {

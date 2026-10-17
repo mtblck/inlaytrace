@@ -207,9 +207,12 @@ export default function App() {
     setPending({
       message: 'Start over? This clears the image and all your edits, here and from this browser’s storage. It can’t be undone.',
       confirm: 'Start over',
-      run: () => {
+      run: async () => {
         openSeq.current++
-        void clearSession()
+        sessionId.current = null
+        // Cleared before the screen is: once the empty page shows, a reload (or
+        // closing the tab) can't bring the old session back.
+        await clearSession()
         fileRef.current = null
         sessionId.current = null
         setSource((prev) => {
