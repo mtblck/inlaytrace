@@ -12,9 +12,11 @@ and the vector on its own, with optional path and node overlays in colours you
 pick. Zoom with the slider or a trackpad pinch over the image. Then edit
 (the view switches to the SVG alone once you start): replace or remove any
 colour (removing one is how to drop a background), add a background colour
-behind everything, drag nodes and bend curves, delete nodes or shapes, and
-mirror one half of the drawing onto the other as seamless merged shapes.
-Everything is undoable. Export a single optimised SVG, or a zip with one SVG
+behind everything, select shapes (click, ⇧-click or a marquee) to move and
+scale them, edit one shape's nodes and curves (smooth nodes keep their handles
+in line), delete nodes or shapes, and mirror one half of the drawing onto the
+other as seamless merged shapes. Everything is undoable, and `?` lists the
+keyboard shortcuts. Export a single optimised SVG, or a zip with one SVG
 per colour for screen printing and vinyl.
 
 React 19 · Vite · Tailwind v4 · a shared-edge tracer for flat art and VTracer
@@ -48,8 +50,9 @@ npm run score      # trace the sample, score each preset against the clean art
 `npm run verify -- https://mattblack.space/tools/img-to-svg/`. Set
 `CHROME_PATH` to use an installed Chromium, `SHOTS=dir` to save screenshots,
 and `FIXTURE=path` to also trace and edit an image of your own. The editor
-checks (overlays, node drag, undo/redo, mirror symmetry measured on the
-exported SVG, the discard prompt) run on the built-in sample and on the fixture.
+checks (overlays, node drag, smooth handles, node and shape marquees, move,
+scale, typed size, nudges, select all, undo/redo, mirror symmetry measured on
+the exported SVG, the discard prompt, the shortcuts panel) run on the built-in sample and on the fixture.
 
 ## Design notes
 
@@ -220,6 +223,27 @@ are kept. The geometry is paper.js (MIT), loaded only when you mirror: 72 KB
 gzipped against an 89 KB app. The unit tests run the same core build under
 jsdom, and `verify` renders the exported SVG and compares each half against
 the other (0.0% of pixels differ on a real logo).
+
+**Moves and scales are measured from the start of the drag.** Each pointer
+move sends the whole transform since the press, and it is applied to the shapes
+as they were then. Applying increments instead would compound rounding over a
+long drag. The starting shapes are captured in the event handler, not inside
+the state updater: React can run the updater after the handler has already
+cleared them at the end of the drag, and in an early version that applied the
+final move twice (a 30 px drag moved 60 px). The browser check drags by a known
+distance and measures the result.
+
+**Smooth nodes stay smooth.** A node whose two handles are in line (within
+10°) is smooth, which is how the tracer writes curves that meet with matching
+tangents. Dragging one of its handles swings the other round to stay opposite,
+keeping its length; ⌥ breaks the pair. Whether a node is smooth is decided at
+the press, so a drag that bends a handle past the threshold doesn't suddenly
+let go of its partner.
+
+**Marquees take shapes wholly inside.** Touching is the other common rule,
+but a trace usually has one large shape behind everything, and touching would
+add it to every selection. A marquee can start in the margin round the image,
+for when that background shape covers all of it.
 
 **Overlays never export.** The canvas is three layers: the original, the
 vector exactly as exported, and an overlay `svg` with hit targets, outlines,
