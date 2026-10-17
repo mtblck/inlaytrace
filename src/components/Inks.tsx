@@ -7,6 +7,8 @@ type Props = {
   /** The traced colour of the selected shape, highlighted in the list. */
   selectedInk: string | null
   onReplace: (hex: string, to: string) => void
+  /** The picker closed: the next replace is a new undo step. */
+  onReplaceDone: () => void
   onRemove: (hex: string) => void
   onRestore: (hex: string) => void
   onRestoreAll: () => void
@@ -19,7 +21,7 @@ type Props = {
  * keyed by the traced colour, so they survive re-tracing as long as the tracer
  * still produces that colour.
  */
-export function Inks({ inks, edits, selectedInk, onReplace, onRemove, onRestore, onRestoreAll }: Props) {
+export function Inks({ inks, edits, selectedInk, onReplace, onReplaceDone, onRemove, onRestore, onRestoreAll }: Props) {
   const removed = new Set(edits.removed)
   const edited = edits.removed.length > 0 || Object.keys(edits.recolor).length > 0
 
@@ -63,6 +65,7 @@ export function Inks({ inks, edits, selectedInk, onReplace, onRemove, onRestore,
                   type="color"
                   value={shown}
                   onChange={(e) => onReplace(ink.hex, e.target.value)}
+                  onBlur={onReplaceDone}
                   className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                   aria-label={`Replace colour ${ink.hex}`}
                 />

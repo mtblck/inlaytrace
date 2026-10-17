@@ -156,7 +156,17 @@ the other (0.0% of pixels differ on a real logo).
 **Overlays never export.** The canvas is three layers: the original, the
 vector exactly as exported, and an overlay `svg` with hit targets, outlines,
 nodes, handles and the mirror axis. Nodes and handles are sized in screen pixels
-(scaled by the current zoom), so they stay grabbable at 8×.
+(scaled by the current zoom), so they stay grabbable at 8×. A press only becomes a
+drag after 3 px of travel and keeps the grab offset, so clicking a node selects
+it without nudging it. Invisible hit targets sit beneath every visible node, so
+a neighbour's target can't steal the node under the pointer.
+
+**Busy traces stay responsive.** A Poster trace of a photo can be 2,500 paths
+and 60,000 nodes. The node overlay is one `<path>` and is skipped (with a note)
+past 20,000 nodes; each shape is a memoised element; path data is validated
+once per path, not per render; and the stats panel measures only the optimised
+file. On that trace a node drag went from 117 ms to 25 ms a move, and toggling
+the overlay from 2.4 s to 0.3 s.
 
 ## Licence
 

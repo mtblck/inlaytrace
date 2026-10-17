@@ -110,7 +110,7 @@ async function editorChecks(page, label, n) {
   await page.getByLabel('Paths overlay colour').fill('#00aa55')
   await page.getByLabel('Nodes', { exact: true }).check()
   await page.getByLabel('Nodes overlay colour').fill('#aa00ff')
-  const nodeRects = await page.locator('[data-overlay="nodes"] rect').count()
+  const nodeRects = Number(await page.locator('[data-overlay="nodes"]').getAttribute('data-count'))
   const pathStroke = await page.locator('g[stroke="#00aa55"] path').count()
   check(nodeRects > 10 && pathStroke > 0, `${label}: overlays show ${pathStroke} outlines and ${nodeRects} nodes in the chosen colours`)
   check((await page.locator('[data-overlay="nodes"]').getAttribute('fill')) === '#aa00ff', `${label}: node colour applied`)
@@ -134,10 +134,24 @@ async function editorChecks(page, label, n) {
   const dBefore = await page.locator(`svg[aria-label="Traced SVG"] path`).nth(best).getAttribute('d')
   const node = page.locator('[data-node]').first()
   const nb = await node.boundingBox()
-  await page.mouse.move(nb.x + nb.width / 2, nb.y + nb.height / 2)
+
+  // A plain click, off-centre, selects the node and changes nothing.
+  const wasDetached = (await page.locator('[data-edited]').count()) > 0
+  await page.mouse.click(nb.x + nb.width - 1, nb.y + nb.height - 1)
+  const dClicked = await page.locator('[data-selected] path').first().getAttribute('d')
+  const nowDetached = (await page.locator('[data-edited]').count()) > 0
+  check(dClicked === dBefore && nowDetached === wasDetached, `${label}: clicking a node selects it without moving it`)
+
+  // Grabbed off-centre, the node moves by exactly the pointer's travel instead of jumping to it.
+  const gx = nb.x + 1
+  const gy = nb.y + 1
+  await page.mouse.move(gx, gy)
   await page.mouse.down()
-  for (let i = 1; i <= 5; i++) await page.mouse.move(nb.x + nb.width / 2 + i * 8, nb.y + nb.height / 2 + i * 6)
+  for (let i = 1; i <= 5; i++) await page.mouse.move(gx + i * 8, gy + i * 6)
   await page.mouse.up()
+  const nb2 = await node.boundingBox()
+  const off = Math.hypot(nb2.x - nb.x - 40, nb2.y - nb.y - 30)
+  check(off < 1.5, `${label}: a dragged node follows the pointer exactly (${off.toFixed(2)} px off)`)
   const dAfter = await page.locator(`[data-selected]`).locator('path').first().getAttribute('d')
   check(dAfter !== dBefore, `${label}: dragging a node reshapes the path`)
   await shot(page, `${n}b-${label}-node-dragged`)
@@ -235,6 +249,25 @@ check((await handle.getAttribute('aria-valuenow')) === '100', 'split handle resp
 
 // ---- Editor: overlays, node drag, undo/redo, mirror ------------------------
 await editorChecks(page, 'sample', '05')
+
+// Opening another image clears history, so the prompt must not promise Undo.
+await page.locator('input[type=file]').setInputFiles({ name: 'other.png', mimeType: 'image/png', buffer: await page.screenshot() })
+const prompt = await page.getByRole('alertdialog').innerText()
+check(!/\bundo\b/i.test(prompt) && /can.t be undone/i.test(prompt), `opening an image after edits warns it can't be undone`)
+await page.getByRole('button', { name: 'Keep editing' }).click()
+check((await page.locator('aside .truncate').first().innerText()) === 'sample-badge', 'Keep editing keeps the current image')
+
+// A colour changed while a discard prompt is open survives confirming it.
+await page.getByRole('tab', { name: /Trace/ }).click()
+await retrace(page, async () => {
+  await page.getByRole('radio', { name: /^Logo/ }).click()
+  await page.getByRole('alertdialog').waitFor()
+  await page.getByRole('tab', { name: /Edit/ }).click()
+  await page.locator(INKS).nth(1).locator('input[type=color]').fill('#00ff7f')
+  await page.getByRole('button', { name: 'Discard edits and re-trace' }).click()
+})
+check((await page.locator(`${VECTOR}[fill="#00ff7f"]`).count()) > 0, 'a colour changed while the prompt was open survives confirming it')
+check((await page.locator('[data-edited]').count()) === 0, 'confirming re-attaches the drawing to the trace')
 
 // ---- Optional real-world fixture ------------------------------------------
 if (process.env.FIXTURE) {
