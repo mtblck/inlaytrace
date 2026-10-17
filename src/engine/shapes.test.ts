@@ -239,6 +239,20 @@ describe('shared-edge tracer', () => {
     expect(Math.abs(area(paths[0].d)) / (Math.PI * (22 ** 2 - 12 ** 2))).toBeCloseTo(1, 1)
   })
 
+  it('keeps a thin rule inside the image', () => {
+    // 1–2 px rules (a screenshot's borders) end in two corners a pixel or two
+    // apart whose sides run parallel. Their sides' meeting point is far off, and
+    // once shot 300 px past the image edge.
+    const w = 160
+    const h = 120
+    for (const width of [1, 2, 3]) {
+      const px = raster(w, h, (x, y) => (Math.abs(x - 80) < width / 2 || (Math.abs(y - 40) < width / 2 && x > 20 && x < 140) ? [20, 20, 20] : [250, 250, 250]))
+      for (const d of pathsOf(traceShapes(px, w, h, { ...opts, mode: 'binary', threshold: 128 })).map((p) => p.d))
+        for (const s of parsePath(d))
+          for (const n of s.nodes) for (const q of [n, n.in, n.out]) if (q) expect([width, q.x > -2 && q.x < w + 2 && q.y > -2 && q.y < h + 2]).toEqual([width, true])
+    }
+  })
+
   it('Otsu splits two populations between them', () => {
     const lum = new Uint8Array([...Array(50).fill(30), ...Array(50).fill(220)])
     const t = otsu(lum, new Uint8Array(100).fill(1))

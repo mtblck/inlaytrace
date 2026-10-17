@@ -236,7 +236,10 @@ function findCorners(pts: Pt[], closed: boolean, cornerAngle: number, maxRoundin
     // sides may meet further out, by as much as the allowed rounding implies.
     const half = ((interior / 2) * Math.PI) / 180
     const reachOut = 1 / Math.sin(half) - 1
-    if (!x || dist(x, pts[i]) > R / 2 + maxRounding * reachOut) continue
+    // But not without limit: where the sides run parallel (the end of a 1–2 px
+    // rule, two corners too close to measure apart) they meet hundreds of
+    // pixels away. MAX_REACH_OUT still allows a 10° sliver its full reach.
+    if (!x || dist(x, pts[i]) > Math.min(MAX_REACH_OUT, R / 2 + maxRounding * reachOut)) continue
     // How rounded is it? An outline that misses the meeting point by d at an
     // interior angle θ is rounded with radius d / (1/sin(θ/2) − 1). Anti-aliasing
     // rounds a real corner by about a pixel; a stroke's round end by its
@@ -297,6 +300,7 @@ const MIN_REACH = 4 // px: the least chain a corner can be measured on, near a j
 const ARM_RMS = 0.6 // px: how far a corner's side may wander from a straight line
 const ARM_BEND = 14 // degrees: how much a corner's side may change direction along its length
 const MAX_ROUNDING = 1.5 // px: a bend rounded more than this is a curve
+const MAX_REACH_OUT = 3 * R // px: the furthest a corner's sides may meet from the outline
 
 /**
  * A least-squares line through the chain from R/2 to 1.5R px before (side -1)

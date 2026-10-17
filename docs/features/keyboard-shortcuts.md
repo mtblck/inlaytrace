@@ -4,20 +4,54 @@ order: 8
 
 # Keyboard shortcuts
 
-⌘ on a Mac, Ctrl elsewhere. Shortcuts don't fire while you're typing in a text
-or number field.
+Press **?** (or *Shortcuts* in the header) for the list in the app. ⌘ on a Mac,
+Ctrl elsewhere; ⌥ is Alt. Shortcuts don't fire while you're typing in a field.
 
-| Keys | Does | Where |
-| --- | --- | --- |
-| ⌘Z | Undo | Anywhere |
-| ⇧⌘Z, Ctrl + Y | Redo | Anywhere |
-| Delete, Backspace | Delete the selected node, or the shape if no node is selected | With a selection |
-| Esc | Deselect the node, then the shape | With a selection |
-| ⌘ = / ⌘ − | Zoom in / out around the pointer | Pointer over the image |
-| ⌘ 0 | Fit to window | Pointer over the image |
-| ⌘ 1 | 100% | Pointer over the image |
-| ⌘ + scroll, pinch | Zoom around the pointer | Pointer over the image |
-| ← → (⇧ for bigger steps), Home, End | Move the split handle | Split handle focused |
+## Tools
 
-A shortcuts panel inside the app, and more shortcuts (tools, nudging nodes with
-the arrow keys, select all), are on the [roadmap](../roadmap.md).
+| Keys | Does |
+| --- | --- |
+| V | Select: pick, move and scale shapes |
+| A | Nodes: edit one shape's nodes and curves |
+| M | Mirror |
+| Double-click a shape | Edit its nodes (from Select) |
+
+## Selection
+
+| Keys | Does |
+| --- | --- |
+| ⌘A | Select all shapes, or all nodes of the shape with Nodes |
+| ⇧ click | Add to or remove from the selection |
+| Drag on empty canvas | Select shapes wholly inside (nodes inside, with Nodes) |
+| ⇧ drag, ⌥ drag | Add to / remove from the selection |
+| Esc | Deselect nodes, then shapes, then go back to Select |
+
+## Editing
+
+| Keys | Does |
+| --- | --- |
+| ← ↑ → ↓ | Nudge the selection 1 px (of the trace) |
+| ⇧ + arrows | Nudge 10 px |
+| ⇧ while dragging | Move along one axis; scale in proportion |
+| ⌥ while dragging | Scale from the centre; bend one handle on its own |
+| Delete, Backspace | Delete the selected nodes or shapes |
+| ⌘Z | Undo |
+| ⇧⌘Z, Ctrl + Y | Redo |
+
+## View
+
+| Keys | Does |
+| --- | --- |
+| ⌘ = / ⌘ − | Zoom in / out around the pointer |
+| ⌘ 0 | Fit to window |
+| ⌘ 1 | 100% |
+| ⌘ + scroll, pinch | Zoom around the pointer |
+| ← → (⇧ for bigger steps), Home, End | Move the split handle, when it has focus |
+| ? | Show the shortcuts panel |
+
+## How it works
+
+One list (`SHORTCUTS` in `src/components/Shortcuts.tsx`) feeds the panel; the
+handlers are in `App.tsx` (editing) and `Canvas.tsx` (zoom and drag modifiers).
+The panel is a native modal `<dialog>`, so the browser traps focus, closes it on
+Esc and makes the page behind it inert.
