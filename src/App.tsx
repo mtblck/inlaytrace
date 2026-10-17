@@ -16,6 +16,7 @@ import {
   recolorInk,
   removeInk,
   replacePath,
+  reserveIds,
   restoreInk,
   visiblePaths,
   type Edits,
@@ -31,6 +32,9 @@ import { bounds, effective, fromSlider, snap, step, toSlider, type Zoom } from '
 import { sampleImage } from './lib/sample'
 import { Canvas, type Overlays, type SelectMode, type Tool, type ViewMode } from './components/Canvas'
 import { ShortcutsDialog } from './components/Shortcuts'
+import { ExportOptions } from './components/ExportOptions'
+import { clearSession, isSaved, loadSession, saveSession } from './lib/session'
+import { buildEps, buildPdf, pngPixels, withSize, type ExportSize } from './lib/vectorExport'
 import { IconButton, KeyboardIcon, MoonIcon, SunIcon } from './components/IconButton'
 import { EditPanel } from './components/EditPanel'
 import { Controls } from './components/Controls'
@@ -108,35 +112,85 @@ export default function App() {
   const [fitScale, setFitScale] = useState(1)
   const [dragOver, setDragOver] = useState(false)
   const [copied, setCopied] = useState(false)
+  /** The export size, or null for the drawing's own (trace pixels). */
+  const [exportSize, setExportSize] = useState<ExportSize | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const pixelCache = useRef<{ source: Source; maxEdge: number; upscale: boolean; pixels: Pixels } | null>(null)
 
   // ---- Loading ------------------------------------------------------------
-  const openNow = useCallback(async (file: Blob, name?: string) => {
+  /** The original file, kept so the session can be saved on this device. */
+  const fileRef = useRef<Blob | null>(null)
+  /** `restore` reopens a saved session: its settings and edits instead of fresh ones. */
+  const openNow = useCallback(async (file: Blob, name?: string, restore?: { settings: Settings; edits: Edits }) => {
     setLoadError(null)
     try {
       const next = await loadSource(file, name ?? (file instanceof File ? file.name : 'image'))
+      fileRef.current = file
       setSource((prev) => {
         if (prev) URL.revokeObjectURL(prev.url)
         return next
       })
       setTrace(null)
-      setHistory(startHistory(NO_EDITS))
-      // Merges name this image's colours; another image starts without them.
-      setSettings((s) => (Object.keys(s.merge).length ? { ...s, merge: {} } : s))
+      if (restore) {
+        reserveIds(restore.edits.doc)
+        setSettings({ ...restore.settings, merge: restore.settings.merge ?? {} })
+      } else {
+        // Merges name this image's colours; another image starts without them.
+        setSettings((s) => (Object.keys(s.merge).length ? { ...s, merge: {} } : s))
+      }
+      setHistory(startHistory(restore ? restore.edits : NO_EDITS))
+      setExportSize(null)
       setPicking(null)
       setSelectedIds([])
       setSelectedNodes([])
       setAxis(null)
       setTool('select')
-      setPanel('trace')
-      setMode('split')
-      viewChosen.current = false
+      setPanel(restore?.edits.doc ? 'edit' : 'trace')
+      setMode(restore ? 'vector' : 'split')
+      viewChosen.current = !!restore
       setZoom(null)
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : String(error))
     }
   }, [])
+
+  // ---- The session, kept on this device ----------------------------------------
+  /** 'restored' while showing a session brought back from a previous visit. */
+  const [sessionNote, setSessionNote] = useState<'restored' | null>(null)
+  const restoredOnce = useRef(false)
+  useEffect(() => {
+    // StrictMode runs effects twice in development; restore once.
+    if (restoredOnce.current) return
+    restoredOnce.current = true
+    void loadSession().then((saved) => {
+      if (!isSaved(saved)) return
+      setSessionNote('restored')
+      void openNow(saved.file, saved.name, { settings: saved.settings, edits: saved.edits })
+    })
+  }, [openNow])
+  useEffect(() => {
+    if (!source || !fileRef.current) return
+    const file = fileRef.current
+    const t = setTimeout(() => void saveSession({ file, name: source.name, settings, edits, savedAt: Date.now() }), 600)
+    return () => clearTimeout(t)
+  }, [source, settings, edits])
+  /** Forget everything: the saved session and what's on screen. */
+  const startOver = () =>
+    guard('Starting over discards this image and your edits, here and in this browser’s storage. This can’t be undone.', 'Start over', () => {
+      void clearSession()
+      fileRef.current = null
+      setSource((prev) => {
+        if (prev) URL.revokeObjectURL(prev.url)
+        return null
+      })
+      setTrace(null)
+      setHistory(startHistory(NO_EDITS))
+      setSelectedIds([])
+      setSelectedNodes([])
+      setSettings(settingsFor('logo'))
+      setSessionNote(null)
+      setExportSize(null)
+    })
 
   const detached = edits.doc !== null
   /** Run `action` now, or ask first when it would discard shape edits. */
@@ -595,9 +649,33 @@ export default function App() {
   const stats = freshStats ?? (keptStats?.source === source ? keptStats.stats : null)
 
   // ---- Export -------------------------------------------------------------
-  const finalSvg = async () => fresh ?? (await optimizeHere(svg))
+  const size: ExportSize = exportSize ?? { width: doc?.width ?? 0, height: doc?.height ?? 0, unit: 'px' }
+  /** The optimised SVG at the export size. */
+  const finalSvg = async () => withSize(fresh ?? (await optimizeHere(svg)), size)
 
   const download = async () => save(new Blob([await finalSvg()], { type: 'image/svg+xml' }), `${source!.name}.svg`)
+
+  /** What PDF and EPS draw: the shapes as shown, with the background. */
+  const drawable = () => ({ width: doc!.width, height: doc!.height, background: edits.background, paths: visiblePaths(doc!, edits.inks) })
+  const downloadPdf = () => save(new Blob([buildPdf(drawable(), size, source!.name) as BlobPart], { type: 'application/pdf' }), `${source!.name}.pdf`)
+  const downloadEps = () => save(new Blob([buildEps(drawable(), size, source!.name)], { type: 'application/postscript' }), `${source!.name}.eps`)
+  /** A PNG rendered by the browser from the SVG, at the export size × scale (px) or at a dpi (physical units). */
+  const downloadPng = async (scale: number, dpi: number) => {
+    const { width, height } = pngPixels(size, scale, dpi)
+    const img = new Image()
+    img.src = URL.createObjectURL(new Blob([withSize(fresh ?? (await optimizeHere(svg)), { width, height, unit: 'px' })], { type: 'image/svg+xml' }))
+    try {
+      await img.decode()
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      canvas.getContext('2d')!.drawImage(img, 0, 0, width, height)
+      const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
+      if (blob) save(blob, `${source!.name}.png`)
+    } finally {
+      URL.revokeObjectURL(img.src)
+    }
+  }
 
   const copy = async () => {
     await navigator.clipboard.writeText(await finalSvg())
@@ -607,7 +685,7 @@ export default function App() {
 
   const downloadLayers = async () => {
     const files: Record<string, Uint8Array> = {}
-    for (const f of layerFiles(doc!, edits.inks, source!.name, edits.background)) files[f.name] = strToU8(await optimizeHere(f.svg))
+    for (const f of layerFiles(doc!, edits.inks, source!.name, edits.background)) files[f.name] = strToU8(withSize(await optimizeHere(f.svg), size))
     files[`${source!.name}-all.svg`] = strToU8(await finalSvg())
     const zip = zipSync(files, { level: 6 })
     save(new Blob([zip.buffer as ArrayBuffer], { type: 'application/zip' }), `${source!.name}-layers.zip`)
@@ -857,10 +935,20 @@ export default function App() {
                     {trace && trace.width < source.originalWidth && ` · traced at ${trace.width} × ${trace.height}`}
                   </div>
                 </div>
-                <button className="btn shrink-0" onClick={() => fileInput.current?.click()}>
-                  Replace
-                </button>
+                <div className="flex shrink-0 gap-1.5">
+                  <button className="btn" onClick={() => fileInput.current?.click()}>
+                    Replace
+                  </button>
+                  <button className="btn" onClick={startOver} title="Clear this image and your edits, here and from this browser’s storage">
+                    Start over
+                  </button>
+                </div>
               </div>
+            )}
+            {source && (
+              <p className="border-b border-rule px-5 py-2 text-[12px] text-ink-faint" data-session={sessionNote ?? 'saved'}>
+                {sessionNote === 'restored' ? 'Restored from your last visit. ' : ''}Your image and edits are kept in this browser only, so a reload doesn’t lose them.
+              </p>
             )}
             {pending && (
               <div role="alertdialog" aria-labelledby="pending-msg" className="border-b border-rule bg-accent-dim px-5 py-4">
@@ -1002,6 +1090,19 @@ export default function App() {
                 Layers (.zip)
               </button>
             </div>
+            {doc && (
+              <ExportOptions
+                size={size}
+                aspect={doc.width / doc.height}
+                onSize={setExportSize}
+                onReset={() => setExportSize(null)}
+                isDefault={exportSize === null}
+                disabled={!trace}
+                onPng={downloadPng}
+                onPdf={downloadPdf}
+                onEps={downloadEps}
+              />
+            )}
           </div>
         </aside>
       </main>

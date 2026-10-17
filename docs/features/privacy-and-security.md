@@ -10,9 +10,18 @@ The image is decoded, traced, edited and exported in your browser. There is no
 upload, no server step, no analytics and no third-party script. Tracing runs in
 a Web Worker; SVGO and paper.js are loaded from the same site, on first use.
 
-The only things stored are your light/dark theme and overlay colours, in your
-own browser's localStorage. Images and edits aren't kept anywhere: reloading the page starts
-over.
+## What's kept in your browser
+
+So a reload or a closed tab doesn't lose work, the current session is kept in
+**this browser's own storage** (IndexedDB): the original image file, the trace
+settings and your edits. It never leaves the device and isn't shared with
+other sites. *Start over* (beside *Replace*) deletes it; so does clearing this
+site's data in your browser. A private window keeps nothing after it closes.
+Your light/dark theme and overlay colours are kept in localStorage.
+
+Saving is best-effort: if the browser refuses storage (some private modes,
+full disks, blocked site data), the tool works as before and simply doesn't
+restore.
 
 ## A strict content security policy
 
