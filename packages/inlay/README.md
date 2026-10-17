@@ -9,16 +9,16 @@ curves. Pixel art keeps its exact staircase.
 Pure TypeScript with no DOM and no WebAssembly: it runs in browsers, Web
 Workers and Node. MIT licensed.
 
-It is the tracer behind [img-to-svg](https://mattblack.space/tools/img-to-svg/)
+It is the tracer behind the [Inlay app](https://mattblack.space/tools/img-to-svg/)
 for logos, illustrations, line art and pixel art.
 
-> Status: lives in the img-to-svg repo as a workspace package while its API
-> settles. Not yet published to npm.
+> Status: lives in the Inlay repo beside the app, as a workspace package, while
+> its API settles. Not yet published to npm.
 
 ## Use
 
 ```ts
-import { trace, toSvg, peakPalette } from '@mtblck/inlay'
+import { trace, toSvg, peakPalette } from 'inlaytrace'
 
 // RGBA pixels, e.g. from canvas getImageData().data
 const result = trace(rgba, width, height, {
@@ -68,7 +68,7 @@ toSvg(result) // '<svg …>…</svg>'
 5. **Assemble** each region from its chains (reversed where it sees them from
    the other side). Neighbours share the same fitted edge exactly.
 
-The full write-up, with measurements, is in img-to-svg's
+The full write-up, with measurements, is in the repo's
 [docs](../../docs/how-it-works/inlay.md).
 
 ## Measured

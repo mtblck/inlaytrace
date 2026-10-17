@@ -1,0 +1,16 @@
+{
+  "name": "inlaytrace-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "Inlay: image to SVG, in your browser. The app at inlaytrace.com/app.",
+  "dependencies": {
+    "inlaytrace": "0.1.0",
+    "fflate": "0.8.3",
+    "paper": "0.12.18",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "svgo": "4.1.0"
+  }
+}

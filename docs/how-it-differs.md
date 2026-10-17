@@ -4,7 +4,7 @@ order: 30
 
 # What we do differently
 
-How img-to-svg compares with the image-to-SVG tools people already use, and
+How Inlay compares with the image-to-SVG tools people already use, and
 where it deliberately goes its own way. Competitor details were checked on
 2026-10-17 from each tool's own site, or come from the
 [research](research.md); some may have changed since.
@@ -13,7 +13,7 @@ where it deliberately goes its own way. Competitor details were checked on
 
 | Tool | Where it runs | Cost | Tracing | Editing |
 | --- | --- | --- | --- | --- |
-| **img-to-svg** | Your browser; nothing uploaded | Free | Inlay, our shared-edge tracer (flat and pixel art); VTracer (photos) | Colours, background, nodes and handles, delete, mirror, undo |
+| **Inlay** | Your browser; nothing uploaded | Free | Inlay, our shared-edge tracer (flat and pixel art); VTracer (photos) | Colours, background, nodes and handles, delete, mirror, undo |
 | **Vectorizer.ai** | Their servers (kept 24 h) | Paid downloads | Proprietary; symmetry and shape fitting | "Refine result": palette, recolour/merge/remove regions, toggle symmetries, fit shapes, sharpen/round corners. No node editing |
 | **Vector Magic** | Their servers, or a paid desktop app | Paid | Proprietary | Edits the colour regions before re-vectorising |
 | **Illustrator Image Trace** | Desktop | Subscription | Proprietary; presets, colour/path/corner/noise controls | Full editor after *Expand* |

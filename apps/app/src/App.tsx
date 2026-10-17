@@ -98,7 +98,7 @@ export default function App() {
   const [mirrorError, setMirrorError] = useState<string | null>(null)
   /** An action that would throw away shape edits, waiting for the user to confirm. */
   const [pending, setPending] = useState<{ message: string; confirm: string; run: () => void } | null>(null)
-  const [overlays, setOverlays] = usePersisted<Overlays>('img-to-svg:overlays', {
+  const [overlays, setOverlays] = usePersisted<Overlays>('img-to-svg:overlays', { // key predates the rename; kept so settings survive
     paths: false,
     pathColor: '#c4451f',
     nodes: false,
@@ -824,8 +824,8 @@ export default function App() {
     >
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-rule px-5">
         <div className="flex items-baseline gap-3">
-          <h1 className="font-display text-[26px] leading-none tracking-tight">img-to-svg</h1>
-          <p className="hidden text-[13px] text-ink-muted sm:block">Trace images to SVG, in your browser.</p>
+          <h1 className="font-display text-[26px] leading-none tracking-tight">Inlay</h1>
+          <p className="hidden text-[13px] text-ink-muted sm:block">Image to SVG, in your browser.</p>
         </div>
         <div className="flex items-center gap-1 text-[13px]">
           <IconButton label={theme === 'dark' ? 'Use light theme' : 'Use dark theme'} onClick={toggle}>

@@ -8,7 +8,7 @@ What happens between dropping a file and seeing the trace.
 
 ## 1. Load
 
-The file is decoded in the page (`src/lib/image.ts`). PNG, JPG, WebP, GIF and
+The file is decoded in the page (`apps/app/src/lib/image.ts`). PNG, JPG, WebP, GIF and
 BMP all work; transparency is kept. Nothing leaves the browser.
 
 ## 2. Resize for tracing
@@ -24,8 +24,8 @@ The panel says when either happens ("upscaled 6.6× to trace", "traced at
 
 ## 3. Trace in a worker
 
-The pixels go to a Web Worker (`src/engine/worker.ts`), so a long trace never
-freezes the page. The worker runs one function, `runTrace` (`src/engine/run.ts`),
+The pixels go to a Web Worker (`apps/app/src/engine/worker.ts`), so a long trace never
+freezes the page. The worker runs one function, `runTrace` (`apps/app/src/engine/run.ts`),
 which the unit tests also call, so the tests and the app can't drift apart:
 
 - **Logo, Illustration, Line art** → [Inlay](inlay.md), our shared-edge
@@ -38,7 +38,7 @@ For line art with **Light on dark**, the worker inverts the pixels first, since
 line art always traces the dark side.
 
 **Only the latest request waits.** Dragging a slider fires many trace requests
-a second. `TraceClient` (`src/engine/client.ts`) keeps at most one waiting
+a second. `TraceClient` (`apps/app/src/engine/client.ts`) keeps at most one waiting
 request per channel and replaces it when a newer one arrives, so the preview is
 never more than one trace behind the slider.
 

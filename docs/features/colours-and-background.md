@@ -60,7 +60,7 @@ colours as their targets (following chains) before any region is built
 step, so it doesn't offer it; Line art has one colour.
 
 The eyedropper reads the original image's pixels once per image into a
-full-size buffer (`colourAt` in `src/lib/image.ts`) and maps the click from the
+full-size buffer (`colourAt` in `apps/app/src/lib/image.ts`) and maps the click from the
 canvas to the original's pixel grid, so it works at any zoom and on upscaled
 traces.
 
