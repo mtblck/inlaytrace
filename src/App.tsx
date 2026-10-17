@@ -46,8 +46,18 @@ export default function App() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [history, setHistory] = useState<History<Edits>>(() => startHistory(NO_EDITS))
   const edits = history.present
-  /** Record an edit. Edits sharing a `key` in a row (a drag, a colour-picker sweep) undo as one. */
-  const commit = useCallback((next: Edits, key: string | null = null) => setHistory((h) => push(h, next, key)), [])
+  /**
+   * Record an edit, computed from the latest state rather than the render that
+   * started it, so an async step (loading paper.js) or a confirm prompt never
+   * reverts edits made in the meantime. Edits sharing a `key` in a row (a drag,
+   * a colour-picker sweep) undo as one.
+   */
+  const commit = useCallback(
+    (next: (present: Edits) => Edits, key: string | null = null) => setHistory((h) => push(h, next(h.present), key)),
+    [],
+  )
+  /** Bumped when a colour picker closes, so the next sweep is its own undo step. */
+  const recolorSeq = useRef(0)
   const [tool, setTool] = useState<Tool>('select')
   const [panel, setPanel] = useState<'trace' | 'edit'>('trace')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -106,7 +116,7 @@ export default function App() {
 
   const open = useCallback(
     (file: Blob, name?: string) =>
-      guard('Opening another image discards your shape edits.', 'Discard and open', () => {
+      guard('Opening another image discards your edits. This can’t be undone.', 'Discard and open', () => {
         void openNow(file, name)
       }),
     [guard, openNow],
@@ -178,31 +188,59 @@ export default function App() {
   }, [doc, axis])
 
   // ---- Editing --------------------------------------------------------------
+  const select = useCallback((id: string | null) => {
+    setSelectedId(id)
+    setSelectedNode(null)
+    // The selection's tools live in the Edit tab.
+    if (id) setPanel('edit')
+  }, [])
+
   const selectedPath = doc?.paths.find((p) => p.id === selectedId) ?? null
 
-  const editInks = (next: typeof edits.inks, key: string | null = null) => commit({ ...edits, inks: next }, key)
-  const editDoc = (next: NonNullable<typeof doc>, key: string | null = null) => commit({ ...edits, doc: next }, key)
+  type DocT = NonNullable<typeof doc>
+  const editInks = (f: (inks: Edits['inks']) => Edits['inks'], key: string | null = null) => commit((e) => ({ ...e, inks: f(e.inks) }), key)
+  /** A geometry edit, applied to the latest document (detaching it from the trace). */
+  const editDoc = useCallback(
+    (f: (doc: DocT) => DocT, key: string | null = null) => {
+      if (!traced) return
+      commit((e) => ({ ...e, doc: f(docOf(e, traced)) }), key)
+    },
+    [commit, traced],
+  )
+  /** Change one path's nodes, reading its current data at commit time. */
+  const editPath = (id: string, f: (subs: ReturnType<typeof parsePath>) => ReturnType<typeof parsePath>, key: string | null = null) =>
+    editDoc((d) => {
+      const p = d.paths.find((x) => x.id === id)
+      if (!p) return d
+      const subs = f(parsePath(p.d))
+      return subs.length ? replacePath(d, id, serializePath(subs)) : deletePath(d, id)
+    }, key)
 
   const onDragNode = (ref: NodeRef, part: NodePart, to: Pt, phase: 'move' | 'end') => {
-    if (!doc || !selectedPath) return
-    const d = serializePath(moveNode(parsePath(selectedPath.d), ref, part, to))
-    editDoc(replacePath(doc, selectedPath.id, d), `drag-${dragSeq.current}`)
+    if (!selectedId) return
+    editPath(selectedId, (subs) => moveNode(subs, ref, part, to), `drag-${dragSeq.current}`)
     if (phase === 'end') dragSeq.current++
   }
 
   const deleteSelection = useCallback(() => {
-    if (!doc || !selectedPath) return
+    if (!selectedPath) return
+    const id = selectedPath.id
     if (selectedNode) {
-      const subs = deleteNode(parsePath(selectedPath.d), selectedNode)
-      editDoc(subs.length ? replacePath(doc, selectedPath.id, serializePath(subs)) : deletePath(doc, selectedPath.id))
+      const ref = selectedNode
+      const left = deleteNode(parsePath(selectedPath.d), ref)
+      editDoc((d) => {
+        const p = d.paths.find((x) => x.id === id)
+        if (!p) return d
+        const subs = deleteNode(parsePath(p.d), ref)
+        return subs.length ? replacePath(d, id, serializePath(subs)) : deletePath(d, id)
+      })
       setSelectedNode(null)
-      if (!subs.length) setSelectedId(null)
+      if (!left.length) setSelectedId(null)
     } else {
-      editDoc(deletePath(doc, selectedPath.id))
+      editDoc((d) => deletePath(d, id))
       setSelectedId(null)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc, selectedPath, selectedNode, edits])
+  }, [editDoc, selectedPath, selectedNode])
 
   const mirror = async () => {
     if (!doc || !axis) return
@@ -210,7 +248,10 @@ export default function App() {
     setMirrorError(null)
     try {
       const paper = await loadPaper()
-      editDoc(mirrorDoc(paper, doc, axis))
+      // Mirrors the drawing as it was when the button was pressed (the button is
+      // disabled meanwhile); colour edits made while paper.js loaded are kept.
+      const mirrored = mirrorDoc(paper, doc, axis)
+      editDoc(() => mirrored)
       setSelectedId(null)
       setSelectedNode(null)
       // Back to Select, so the washed-out preview stops hiding the result.
@@ -257,7 +298,13 @@ export default function App() {
   }, [client, svg])
 
   const fresh = optimized?.from === svg ? optimized.svg : null
-  const stats = useMemo(() => (svg ? statsOf(fresh ?? svg) : null), [svg, fresh])
+  // Numbers come only from the optimised file. While a drag or a sweep keeps
+  // changing the SVG, the last optimised numbers stay up rather than measuring
+  // every intermediate state (20 ms a move on a busy trace).
+  const freshStats = useMemo(() => (fresh ? statsOf(fresh) : null), [fresh])
+  const [keptStats, setKeptStats] = useState<{ source: Source; stats: NonNullable<typeof freshStats> } | null>(null)
+  if (freshStats && source && keptStats?.stats !== freshStats) setKeptStats({ source, stats: freshStats })
+  const stats = freshStats ?? (keptStats?.source === source ? keptStats.stats : null)
 
   // ---- Export -------------------------------------------------------------
   const finalSvg = async () => fresh ?? (await optimizeHere(svg))
@@ -284,9 +331,9 @@ export default function App() {
    * edited shapes back.
    */
   const changeSettings = (next: Settings) =>
-    guard('Changing a trace setting re-traces the image and replaces your shape edits.', 'Discard edits and re-trace', () => {
+    guard('Changing a trace setting re-traces the image and replaces your shape edits. Undo brings them back.', 'Discard edits and re-trace', () => {
       if (detached) {
-        commit({ ...edits, doc: null })
+        commit((e) => ({ ...e, doc: null }))
         setSelectedId(null)
         setSelectedNode(null)
       }
@@ -364,12 +411,7 @@ export default function App() {
                   selectedId={selectedId}
                   selectedNode={selectedNode}
                   axis={axis}
-                  onSelect={(id) => {
-                    setSelectedId(id)
-                    setSelectedNode(null)
-                    // The selection's tools live in the Edit tab.
-                    if (id) setPanel('edit')
-                  }}
+                  onSelect={select}
                   onSelectNode={setSelectedNode}
                   onDragNode={onDragNode}
                   onAxis={(position) => axis && setAxis({ ...axis, position })}
@@ -466,7 +508,7 @@ export default function App() {
             {pending && (
               <div role="alertdialog" aria-labelledby="pending-msg" className="border-b border-rule bg-accent-dim px-5 py-4">
                 <p id="pending-msg" className="text-[13.5px] text-ink">
-                  {pending.message} Undo can still bring them back.
+                  {pending.message}
                 </p>
                 <div className="mt-3 flex gap-2">
                   <button
@@ -503,7 +545,9 @@ export default function App() {
                     className={`-mb-px border-b-2 px-1 py-2.5 mr-5 text-[13.5px] ${panel === id ? 'border-accent font-medium text-ink' : 'border-transparent text-ink-muted hover:text-ink'}`}
                   >
                     {label}
-                    {id === 'edit' && detached && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" aria-label="(edited)" />}
+                    {id === 'edit' && detached && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" data-edited="">
+                        <span className="sr-only">(edited)</span>
+                      </span>}
                   </button>
                 ))}
               </div>
@@ -539,11 +583,12 @@ export default function App() {
                 selectedInk={selectedPath?.fill ?? null}
                 onReplace={(hex, to) => {
                   const v = normalizeHex(to)
-                  if (v) editInks(recolorInk(edits.inks, hex, v), `recolor-${hex}`)
+                  if (v) editInks((i) => recolorInk(i, hex, v), `recolor-${hex}-${recolorSeq.current}`)
                 }}
-                onRemove={(hex) => editInks(removeInk(edits.inks, hex))}
-                onRestore={(hex) => editInks(restoreInk(edits.inks, hex))}
-                onRestoreAll={() => editInks(NO_INKS)}
+                onReplaceDone={() => recolorSeq.current++}
+                onRemove={(hex) => editInks((i) => removeInk(i, hex))}
+                onRestore={(hex) => editInks((i) => restoreInk(i, hex))}
+                onRestoreAll={() => editInks(() => NO_INKS)}
               />
             )}
             </div>

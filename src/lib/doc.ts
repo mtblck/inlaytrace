@@ -29,6 +29,19 @@ export const NO_EDITS: Edits = { inks: NO_INKS, doc: null }
 const PATH_DATA = /^[\d\s,.eE+\-MmLlHhVvCcSsQqTtAaZz]*$/
 const ID = /^[\w-]+$/
 
+// Paths are immutable and shared between undo snapshots, so each one is
+// checked once. Re-checking every path on every drag move cost ~75 ms a move
+// on a 2,500-path trace.
+const checked = new WeakMap<DocPath, boolean>()
+function isSafe(p: DocPath) {
+  let ok = checked.get(p)
+  if (ok === undefined) {
+    ok = !!p.d && typeof p.d === 'string' && PATH_DATA.test(p.d) && ID.test(p.id)
+    checked.set(p, ok)
+  }
+  return ok
+}
+
 let nextId = 1
 export const newId = () => `p${nextId++}`
 
@@ -68,7 +81,7 @@ export function visiblePaths(doc: Doc, inks: InkEdits, only?: string) {
     if (only && p.fill !== only) continue
     const fill = shownFill(inks, p.fill)
     // Edited `d` is ours, but it is still checked: this string becomes markup.
-    if (!fill || !p.d || !PATH_DATA.test(p.d) || !ID.test(p.id)) continue
+    if (!fill || !isSafe(p)) continue
     out.push({ id: p.id, d: p.d, fill })
   }
   return out

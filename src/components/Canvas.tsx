@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent } from 'react'
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent } from 'react'
 import type { Axis } from '../lib/mirror'
 import { parsePath, type NodePart, type NodeRef, type Pt, type Subpath } from '../lib/pathdata'
 
@@ -31,6 +31,11 @@ type Props = {
 const NODE_PX = 7
 const HANDLE_PX = 3
 const HIT_PX = 10
+/** Screen pixels the pointer must travel before a press on a node becomes a drag. */
+const DRAG_PX = 3
+const HANDLES = ['in', 'out'] as const
+/** Beyond this many nodes the overlay is skipped: drawing them costs seconds and shows nothing legible. */
+export const MAX_OVERLAY_NODES = 20_000
 
 /**
  * The work surface. Everything is drawn into one box so the split, the
@@ -50,7 +55,15 @@ export function Canvas(props: Props) {
   const overlayRef = useRef<SVGSVGElement>(null)
   const [fit, setFit] = useState({ w: 0, h: 0 })
   const [split, setSplit] = useState(50)
-  const drag = useRef<null | { kind: 'split' } | { kind: 'node'; ref: NodeRef; part: NodePart } | { kind: 'axis' }>(null)
+  const drag = useRef<
+    | null
+    | { kind: 'split' }
+    | { kind: 'axis' }
+    // `grab` is the node's offset from the pointer at press, so the node keeps
+    // its place under the pointer instead of jumping to it; `moved` stays false
+    // until the pointer travels DRAG_PX, so a plain click selects without editing.
+    | { kind: 'node'; ref: NodeRef; part: NodePart; grab: Pt; from: { x: number; y: number }; moved: boolean }
+  >(null)
 
   useLayoutEffect(() => {
     const mat = matRef.current
@@ -84,10 +97,31 @@ export function Canvas(props: Props) {
 
   const selected = useMemo(() => props.paths.find((p) => p.id === props.selectedId) ?? null, [props.paths, props.selectedId])
   const selectedSubs = useMemo<Subpath[]>(() => (selected ? parsePath(selected.d) : []), [selected])
-  const allNodes = useMemo(
-    () => (overlays.nodes ? props.paths.flatMap((p) => parsePath(p.d).flatMap((s) => s.nodes)) : []),
-    [overlays.nodes, props.paths],
-  )
+  const nodeList = useMemo(() => selectedSubs.flatMap((s, sub) => s.nodes.map((n, index) => ({ ref: { sub, index }, n }))), [selectedSubs])
+  // Nodes per path, cached by path data: during a drag only one path changes,
+  // so only that one is parsed again.
+  const nodeCache = useRef(new Map<string, Pt[]>())
+  const allNodes = useMemo(() => {
+    if (!overlays.nodes) return null
+    const prev = nodeCache.current
+    const next = new Map<string, Pt[]>()
+    const pts: Pt[] = []
+    for (const p of props.paths) {
+      let n = next.get(p.d) ?? prev.get(p.d)
+      if (!n) n = parsePath(p.d).flatMap((s) => s.nodes.map(({ x, y }) => ({ x, y })))
+      next.set(p.d, n)
+      for (const q of n) pts.push(q)
+    }
+    nodeCache.current = next
+    return pts
+  }, [overlays.nodes, props.paths])
+  // Every node as one path of squares: one element instead of tens of thousands.
+  const nodeOverlay = useMemo(() => {
+    if (!allNodes || allNodes.length > MAX_OVERLAY_NODES) return null
+    const s = NODE_PX * unit
+    const r = (n: number) => Math.round(n * 100) / 100
+    return allNodes.map((n) => `M${r(n.x - s / 2)} ${r(n.y - s / 2)}h${r(s)}v${r(s)}h${r(-s)}z`).join('')
+  }, [allNodes, unit])
 
   // ---- Pointer handling ----------------------------------------------------
   const onMove = (e: RPointerEvent) => {
@@ -100,16 +134,26 @@ export function Canvas(props: Props) {
     }
     const p = toSvg(e)
     if (!p) return
-    if (d.kind === 'node') props.onDragNode(d.ref, d.part, p, 'move')
-    else props.onAxis(clampAxis(props.axis!, p, width, height))
+    if (d.kind === 'node') {
+      if (!d.moved && Math.hypot(e.clientX - d.from.x, e.clientY - d.from.y) < DRAG_PX) return
+      d.moved = true
+      props.onDragNode(d.ref, d.part, { x: p.x + d.grab.x, y: p.y + d.grab.y }, 'move')
+    } else props.onAxis(clampAxis(props.axis!, p, width, height))
   }
   const onUp = (e: RPointerEvent) => {
     const d = drag.current
     drag.current = null
-    if (d?.kind === 'node') {
+    // A press that never became a drag only selected; it changes nothing.
+    if (d?.kind === 'node' && d.moved) {
       const p = toSvg(e)
-      if (p) props.onDragNode(d.ref, d.part, p, 'end')
+      if (p) props.onDragNode(d.ref, d.part, { x: p.x + d.grab.x, y: p.y + d.grab.y }, 'end')
     }
+  }
+  /** Start dragging the anchor or a handle at `at` (SVG units). */
+  const grabNode = (e: RPointerEvent, ref: NodeRef, part: NodePart, at: Pt) => {
+    props.onSelectNode(ref)
+    const p = toSvg(e) ?? at
+    startDrag(e, { kind: 'node', ref, part, grab: { x: at.x - p.x, y: at.y - p.y }, from: { x: e.clientX, y: e.clientY }, moved: false })
   }
   const startDrag = (e: RPointerEvent, next: NonNullable<typeof drag.current>) => {
     e.stopPropagation()
@@ -135,7 +179,10 @@ export function Canvas(props: Props) {
       <div className="grid min-h-full min-w-full place-items-center p-8" style={{ width: zoom > 1 ? w + 64 : undefined }}>
         <div
           className="checker relative shadow-[0_0_0_1px_var(--c-rule)] select-none"
-          style={{ width: w, height: h, touchAction: 'none' }}
+          // Touch scrolls the page unless something on the canvas is draggable:
+          // a selected shape's nodes or the mirror axis. The split handle opts
+          // out on its own.
+          style={{ width: w, height: h, touchAction: props.selectedId || tool === 'mirror' ? 'none' : undefined }}
           onPointerMove={onMove}
           onPointerUp={onUp}
           onPointerCancel={onUp}
@@ -164,7 +211,7 @@ export function Canvas(props: Props) {
             }}
           >
             {props.paths.map((p) => (
-              <path key={p.id} d={p.d} fill={p.fill} />
+              <VectorPath key={p.id} d={p.d} fill={p.fill} />
             ))}
           </svg>
 
@@ -180,97 +227,89 @@ export function Canvas(props: Props) {
             }}
           >
             {tool === 'select' &&
-              props.paths.map((p) => (
-                <path
-                  key={p.id}
-                  d={p.d}
-                  fill="transparent"
-                  pointerEvents="fill"
-                  data-path-id={p.id}
-                  style={{ cursor: 'pointer' }}
-                  onPointerDown={(e) => {
-                    e.stopPropagation()
-                    props.onSelect(p.id)
-                  }}
-                />
-              ))}
+              props.paths.map((p) => <HitPath key={p.id} id={p.id} d={p.d} onSelect={props.onSelect} />)}
 
             {overlays.paths && (
               <g fill="none" stroke={overlays.pathColor} strokeWidth={1} pointerEvents="none">
                 {props.paths.map((p) => (
-                  <path key={p.id} d={p.d} vectorEffect="non-scaling-stroke" />
+                  <OutlinePath key={p.id} d={p.d} />
                 ))}
               </g>
             )}
 
-            {overlays.nodes && (
-              <g fill={overlays.nodeColor} pointerEvents="none" data-overlay="nodes">
-                {allNodes.map((n, i) => (
-                  <rect key={i} x={n.x - (NODE_PX * unit) / 2} y={n.y - (NODE_PX * unit) / 2} width={NODE_PX * unit} height={NODE_PX * unit} opacity={0.9} />
-                ))}
-              </g>
+            {nodeOverlay !== null && (
+              <path d={nodeOverlay} fill={overlays.nodeColor} opacity={0.9} pointerEvents="none" data-overlay="nodes" data-count={allNodes!.length} />
             )}
 
             {selected && (
+              // Drawn in layers across all nodes, so a neighbour's generous hit
+              // area can never sit on top of the node you can see: invisible
+              // targets (handles, then anchors) under visible handles, under
+              // visible anchors.
               <g data-selected={selected.id}>
                 <path d={selected.d} fill="none" stroke="var(--c-accent)" strokeWidth={2} vectorEffect="non-scaling-stroke" pointerEvents="none" />
-                {selectedSubs.map((s, si) =>
-                  s.nodes.map((n, ni) => {
-                    const ref = { sub: si, index: ni }
-                    const isSel = props.selectedNode?.sub === si && props.selectedNode.index === ni
+                {nodeList.map(({ ref, n }) =>
+                  HANDLES.map((part) => {
+                    const hnd = n[part]
+                    return hnd && <circle key={`h${ref.sub}:${ref.index}:${part}`} cx={hnd.x} cy={hnd.y} r={HIT_PX * unit} fill="transparent" onPointerDown={(e) => grabNode(e, ref, part, hnd)} style={{ cursor: 'grab' }} />
+                  }),
+                )}
+                {nodeList.map(({ ref, n }) => (
+                  <circle key={`a${ref.sub}:${ref.index}`} cx={n.x} cy={n.y} r={HIT_PX * unit} fill="transparent" onPointerDown={(e) => grabNode(e, ref, 'anchor', n)} style={{ cursor: 'move' }} />
+                ))}
+                {nodeList.map(({ ref, n }) =>
+                  HANDLES.map((part) => {
+                    const hnd = n[part]
+                    if (!hnd) return null
                     return (
-                      <g key={`${si}-${ni}`}>
-                        {(['in', 'out'] as const).map((part) => {
-                          const hnd = n[part]
-                          if (!hnd) return null
-                          return (
-                            <g key={part}>
-                              <line x1={n.x} y1={n.y} x2={hnd.x} y2={hnd.y} stroke="var(--c-accent)" strokeWidth={1} vectorEffect="non-scaling-stroke" pointerEvents="none" />
-                              <circle
-                                cx={hnd.x}
-                                cy={hnd.y}
-                                r={HANDLE_PX * unit}
-                                fill="var(--c-paper)"
-                                stroke="var(--c-accent)"
-                                strokeWidth={1}
-                                vectorEffect="non-scaling-stroke"
-                                data-handle={`${si}:${ni}:${part}`}
-                                style={{ cursor: 'grab' }}
-                                onPointerDown={(e) => {
-                                  props.onSelectNode(ref)
-                                  startDrag(e, { kind: 'node', ref, part })
-                                }}
-                              />
-                              {/* A larger invisible target, so a 3 px dot is easy to grab. */}
-                              <circle cx={hnd.x} cy={hnd.y} r={HIT_PX * unit} fill="transparent" onPointerDown={(e) => { props.onSelectNode(ref); startDrag(e, { kind: 'node', ref, part }) }} style={{ cursor: 'grab' }} />
-                            </g>
-                          )
-                        })}
-                        <rect
-                          x={n.x - (NODE_PX * unit) / 2}
-                          y={n.y - (NODE_PX * unit) / 2}
-                          width={NODE_PX * unit}
-                          height={NODE_PX * unit}
-                          fill={isSel ? 'var(--c-accent)' : 'var(--c-paper)'}
+                      <g key={`v${ref.sub}:${ref.index}:${part}`}>
+                        <line x1={n.x} y1={n.y} x2={hnd.x} y2={hnd.y} stroke="var(--c-accent)" strokeWidth={1} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+                        <circle
+                          cx={hnd.x}
+                          cy={hnd.y}
+                          r={HANDLE_PX * unit}
+                          fill="var(--c-paper)"
                           stroke="var(--c-accent)"
                           strokeWidth={1}
                           vectorEffect="non-scaling-stroke"
-                          data-node={`${si}:${ni}`}
-                          style={{ cursor: 'move' }}
-                          onPointerDown={(e) => {
-                            props.onSelectNode(ref)
-                            startDrag(e, { kind: 'node', ref, part: 'anchor' })
-                          }}
+                          data-handle={`${ref.sub}:${ref.index}:${part}`}
+                          style={{ cursor: 'grab' }}
+                          onPointerDown={(e) => grabNode(e, ref, part, hnd)}
                         />
                       </g>
                     )
                   }),
                 )}
+                {nodeList.map(({ ref, n }) => {
+                  const isSel = props.selectedNode?.sub === ref.sub && props.selectedNode.index === ref.index
+                  return (
+                    <rect
+                      key={`n${ref.sub}:${ref.index}`}
+                      x={n.x - (NODE_PX * unit) / 2}
+                      y={n.y - (NODE_PX * unit) / 2}
+                      width={NODE_PX * unit}
+                      height={NODE_PX * unit}
+                      fill={isSel ? 'var(--c-accent)' : 'var(--c-paper)'}
+                      stroke="var(--c-accent)"
+                      strokeWidth={1}
+                      vectorEffect="non-scaling-stroke"
+                      data-node={`${ref.sub}:${ref.index}`}
+                      style={{ cursor: 'move' }}
+                      onPointerDown={(e) => grabNode(e, ref, 'anchor', n)}
+                    />
+                  )
+                })}
               </g>
             )}
 
             {tool === 'mirror' && props.axis && <AxisOverlay axis={props.axis} width={width} height={height} unit={unit} onGrab={(e) => startDrag(e, { kind: 'axis' })} />}
           </svg>
+
+          {allNodes && allNodes.length > MAX_OVERLAY_NODES && (
+            <p className="absolute top-2 left-2 rounded bg-paper/90 px-2 py-1 text-[12px] text-ink-muted shadow-sm" role="status">
+              {allNodes.length.toLocaleString()} nodes is too many to draw. Select a shape to see its own.
+            </p>
+          )}
 
           {mode === 'split' && (
             <div
@@ -283,7 +322,7 @@ export function Canvas(props: Props) {
               onKeyDown={onSplitKey}
               onPointerDown={(e) => startDrag(e, { kind: 'split' })}
               className="group absolute top-0 bottom-0 -ml-3 w-6 cursor-ew-resize"
-              style={{ left: `${split}%` }}
+              style={{ left: `${split}%`, touchAction: 'none' }}
             >
               <div className="mx-auto h-full w-px bg-accent" />
               <div className="absolute top-1/2 left-1/2 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-accent bg-paper text-accent shadow-sm">
@@ -298,6 +337,30 @@ export function Canvas(props: Props) {
     </div>
   )
 }
+
+// Each shape is its own memoised element: dragging a node changes one path,
+// and the thousands of others in a busy trace skip re-rendering entirely.
+const VectorPath = memo(function VectorPath({ d, fill }: { d: string; fill: string }) {
+  return <path d={d} fill={fill} />
+})
+const OutlinePath = memo(function OutlinePath({ d }: { d: string }) {
+  return <path d={d} vectorEffect="non-scaling-stroke" />
+})
+const HitPath = memo(function HitPath({ id, d, onSelect }: { id: string; d: string; onSelect: (id: string) => void }) {
+  return (
+    <path
+      d={d}
+      fill="transparent"
+      pointerEvents="fill"
+      data-path-id={id}
+      style={{ cursor: 'pointer' }}
+      onPointerDown={(e) => {
+        e.stopPropagation()
+        onSelect(id)
+      }}
+    />
+  )
+})
 
 /** The mirror axis: a draggable line, with the side being replaced washed out. */
 function AxisOverlay({ axis, width, height, unit, onGrab }: { axis: Axis; width: number; height: number; unit: number; onGrab: (e: RPointerEvent) => void }) {
