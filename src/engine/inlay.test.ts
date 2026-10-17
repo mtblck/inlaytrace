@@ -8,7 +8,7 @@ import { fitChain, pointAt, type Cubic } from '../lib/fit'
 import { parsePath, type Pt } from '../lib/pathdata'
 import { gunzipSync } from 'fflate'
 import { SAMPLE_CAPS } from './fixtures/sample-caps'
-import { mergeLabels, otsu, traceShapes } from './shapes'
+import { mergeLabels, otsu, traceInlay } from './inlay'
 
 type Paint = (x: number, y: number) => [number, number, number, number?]
 
@@ -120,7 +120,7 @@ describe('the shapes Matt reported (#19)', () => {
     // 8 px wide, round caps, like the arc on the sample badge.
     const capsule = (p: Pt) => Math.abs(Math.hypot(p.x - Math.max(20, Math.min(100, p.x)), p.y - 20.3) - 4)
     const px = raster(120, 40, (x, y) => (capsule({ x, y }) < 4 && Math.hypot(x - Math.max(20, Math.min(100, x)), y - 20.3) < 4 ? CREAM : GREEN))
-    const d = creamPath(traceShapes(px, 120, 40, { ...opts, ...pal }))
+    const d = creamPath(traceInlay(px, 120, 40, { ...opts, ...pal }))
     expect(worstOff(d, capsule)).toBeLessThan(0.75)
     // Two straight sides (one may be the closing Z), each end drawn as curves.
     const sub = parsePath(d)[0]
@@ -131,7 +131,7 @@ describe('the shapes Matt reported (#19)', () => {
 
   it('a stroke with square ends keeps its four corners', () => {
     const px = raster(120, 40, (x, y) => (x > 20 && x < 100 && Math.abs(y - 20.3) < 4 ? CREAM : GREEN))
-    const d = creamPath(traceShapes(px, 120, 40, { ...opts, ...pal }))
+    const d = creamPath(traceInlay(px, 120, 40, { ...opts, ...pal }))
     expect(d).not.toMatch(/C/)
     expect(parsePath(d)[0].nodes).toHaveLength(4) // the fourth side is the closing Z
   })
@@ -143,7 +143,7 @@ describe('the shapes Matt reported (#19)', () => {
     const tip = { x: 40, y: 12 }
     const inWedge = (x: number, y: number) => y > tip.y && Math.abs(x - tip.x) < (y - tip.y) * 0.47
     const px = raster(w, h, (x, y) => (inWedge(x, y) ? CREAM : Math.hypot(x - 52, y - 4) < 16 ? RED : BLUE))
-    const svg = traceShapes(px, w, h, { ...opts, mode: 'palette', palette: [hex(CREAM), hex(RED), hex(BLUE)] })
+    const svg = traceInlay(px, w, h, { ...opts, mode: 'palette', palette: [hex(CREAM), hex(RED), hex(BLUE)] })
     const d = pathsOf(svg).find((p) => p.fill === hex(CREAM))!.d
     // Its topmost node is the tip itself, within a pixel, and nothing pokes above it.
     const nodes = parsePath(d).flatMap((s) => s.nodes)
@@ -158,7 +158,7 @@ describe('the shapes Matt reported (#19)', () => {
     const { width: w, height: h, gz } = SAMPLE_CAPS
     const px = gunzipSync(Uint8Array.from(atob(gz), (c) => c.charCodeAt(0)))
     const palette = ['#f4ece1', '#203b4e', '#d9542b', '#2e6a50', '#e9a13b']
-    const svg = traceShapes(px, w, h, { tolerance: 1, cornerAngle: 45, speckle: 8, mode: 'palette', palette })
+    const svg = traceInlay(px, w, h, { tolerance: 1, cornerAngle: 45, speckle: 8, mode: 'palette', palette })
     const close: string[] = []
     for (const p of pathsOf(svg))
       for (const s of parsePath(p.d))
@@ -175,7 +175,7 @@ describe('the shapes Matt reported (#19)', () => {
     const h = 50
     const px = raster(w, h, (x, y) => (y > 10 && y < 40 && x > 10 && x < 70 ? (x < 40 ? RED : BLUE) : CREAM))
     const palette = [hex(CREAM), hex(RED), hex(BLUE)]
-    const merged = pathsOf(traceShapes(px, w, h, { ...opts, mode: 'palette', palette, merge: { [hex(BLUE)]: hex(RED) } }))
+    const merged = pathsOf(traceInlay(px, w, h, { ...opts, mode: 'palette', palette, merge: { [hex(BLUE)]: hex(RED) } }))
     expect(merged.map((p) => p.fill).sort()).toEqual([hex(CREAM), hex(RED)].sort())
     const red = merged.find((p) => p.fill === hex(RED))!
     expect(Math.abs(area(red.d))).toBeCloseTo(60 * 30, -1) // the whole 60 × 30 block
@@ -200,7 +200,7 @@ describe('the shapes Matt reported (#19)', () => {
 
   it('a circle is four curves, the way it would be drawn by hand', () => {
     const px = raster(100, 100, (x, y) => (Math.hypot(x - 50, y - 50) < 30 ? CREAM : GREEN))
-    const d = creamPath(traceShapes(px, 100, 100, { ...opts, ...pal }))
+    const d = creamPath(traceInlay(px, 100, 100, { ...opts, ...pal }))
     expect(segments(d)).toBe(4)
     expect(worstOff(d, (p) => Math.abs(Math.hypot(p.x - 50, p.y - 50) - 30))).toBeLessThan(0.5)
   })
@@ -214,7 +214,7 @@ describe('shared-edge tracer', () => {
     const w = 120
     const h = 90
     const px = raster(w, h, (x, y) => ((x - 80) ** 2 + (y - 40) ** 2 < 22 ** 2 ? RED : y > 0.4 * x + 30 ? BLUE : CREAM))
-    const svg = traceShapes(px, w, h, { ...opts, mode: 'palette', palette: [hex(CREAM), hex(RED), hex(BLUE)] })
+    const svg = traceInlay(px, w, h, { ...opts, mode: 'palette', palette: [hex(CREAM), hex(RED), hex(BLUE)] })
     const total = pathsOf(svg).reduce((s, p) => s + area(p.d), 0)
     expect(Math.abs(Math.abs(total) - w * h) / (w * h)).toBeLessThan(0.002)
   })
@@ -224,7 +224,7 @@ describe('shared-edge tracer', () => {
     const h = 80
     // Two colours split by a slanted straight line.
     const px = raster(w, h, (x, y) => (y > 0.5 * x + 15 ? BLUE : CREAM))
-    const paths = pathsOf(traceShapes(px, w, h, { ...opts, mode: 'palette', palette: [hex(CREAM), hex(BLUE)] }))
+    const paths = pathsOf(traceInlay(px, w, h, { ...opts, mode: 'palette', palette: [hex(CREAM), hex(BLUE)] }))
     expect(paths).toHaveLength(2)
     // Each shape is a polygon: the slanted edge plus image edges, all straight.
     for (const p of paths) {
@@ -241,15 +241,15 @@ describe('shared-edge tracer', () => {
     const h = 40
     const px = raster(w, h, (x, y) => (x >= 20 && x < 22 && y >= 20 && y < 22 ? BLUE : CREAM))
     const pal = { mode: 'palette' as const, palette: [hex(CREAM), hex(BLUE)] }
-    expect(pathsOf(traceShapes(px, w, h, { ...opts, ...pal, speckle: 3 }))).toHaveLength(1)
-    expect(pathsOf(traceShapes(px, w, h, { ...opts, ...pal, speckle: 1 }))).toHaveLength(2)
+    expect(pathsOf(traceInlay(px, w, h, { ...opts, ...pal, speckle: 3 }))).toHaveLength(1)
+    expect(pathsOf(traceInlay(px, w, h, { ...opts, ...pal, speckle: 1 }))).toHaveLength(2)
   })
 
   it('never draws transparent pixels', () => {
     const w = 40
     const h = 40
     const px = raster(w, h, (x, y) => ((x - 20) ** 2 + (y - 20) ** 2 < 100 ? [...RED, 255] : [0, 0, 0, 0]))
-    const paths = pathsOf(traceShapes(px, w, h, { ...opts, mode: 'palette', palette: [hex(RED)] }))
+    const paths = pathsOf(traceInlay(px, w, h, { ...opts, mode: 'palette', palette: [hex(RED)] }))
     expect(paths).toHaveLength(1)
     expect(Math.abs(area(paths[0].d)) / (Math.PI * 100)).toBeCloseTo(1, 1) // within 5%
   })
@@ -262,7 +262,7 @@ describe('shared-edge tracer', () => {
       const r = Math.hypot(x - 30, y - 30)
       return r < 22 && r > 12 ? [20, 20, 20] : [250, 250, 250]
     })
-    const paths = pathsOf(traceShapes(px, w, h, { ...opts, mode: 'binary', threshold: 128 }))
+    const paths = pathsOf(traceInlay(px, w, h, { ...opts, mode: 'binary', threshold: 128 }))
     expect(paths).toHaveLength(1)
     expect(parsePath(paths[0].d)).toHaveLength(2) // outline and hole
     expect(Math.abs(area(paths[0].d)) / (Math.PI * (22 ** 2 - 12 ** 2))).toBeCloseTo(1, 1)
@@ -276,7 +276,7 @@ describe('shared-edge tracer', () => {
     const h = 120
     for (const width of [1, 2, 3]) {
       const px = raster(w, h, (x, y) => (Math.abs(x - 80) < width / 2 || (Math.abs(y - 40) < width / 2 && x > 20 && x < 140) ? [20, 20, 20] : [250, 250, 250]))
-      for (const d of pathsOf(traceShapes(px, w, h, { ...opts, mode: 'binary', threshold: 128 })).map((p) => p.d))
+      for (const d of pathsOf(traceInlay(px, w, h, { ...opts, mode: 'binary', threshold: 128 })).map((p) => p.d))
         for (const s of parsePath(d))
           for (const n of s.nodes) for (const q of [n, n.in, n.out]) if (q) expect([width, q.x > -2 && q.x < w + 2 && q.y > -2 && q.y < h + 2]).toEqual([width, true])
     }

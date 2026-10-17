@@ -87,5 +87,5 @@ Each rule above fixed a measured failure: wobbly slopes and rounded peaks
 (VTracer), gaps (per-shape fitting), hooked stroke ends and a bump at a snow
 cap's tip (found in Matt's browser, reproduced by sweeping JPEG quality), and
 nodes 1–3 px apart at junctions (found in review). The unit tests in
-`src/engine/shapes.test.ts` pin each one, including one on a real JPEG crop of
+`src/engine/inlay.test.ts` pin each one, including one on a real JPEG crop of
 the sample.

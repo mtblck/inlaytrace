@@ -55,5 +55,5 @@ colour:
 | `<name>-01-<hex>.svg`, `-02-…` | Each remaining colour, most-used first, named by its *shown* colour |
 | `<name>-all.svg` | The whole drawing |
 
-With the flat-art presets, neighbouring layers share their edges exactly, so
+With every preset but Poster, neighbouring layers share their edges exactly, so
 they register perfectly when printed or cut.

@@ -21,16 +21,16 @@ the keyboard shortcuts, and the session is kept in your browser so a reload
 loses nothing. Export an optimised SVG at any size, a PNG, PDF or EPS, or a
 zip with one SVG per colour for screen printing and vinyl.
 
-React 19 · Vite · Tailwind v4 · a shared-edge tracer for flat art and VTracer
-(Rust → WebAssembly) for posters and pixel art, in a Web Worker ·
+React 19 · Vite · Tailwind v4 · Inlay, our shared-edge tracer, for flat and
+pixel art, and VTracer (Rust → WebAssembly) for posters, in a Web Worker ·
 SVGO · paper.js (mirroring only, lazy-loaded) · deployed on Vercel, proxied into mattblack.space.
 
 ## Docs
 
 The longer write-up lives in [`docs/`](docs/overview.md), and on Matt's Boards:
 
-- [How it works](docs/how-it-works.md): pipeline, palettes, the shared-edge
-  tracer, curve fitting, VTracer, measuring quality
+- [How it works](docs/how-it-works.md): pipeline, palettes, Inlay (our
+  shared-edge tracer), curve fitting, VTracer, measuring quality
 - [Features](docs/features.md): every feature and how it works
 - [What we do differently](docs/how-it-differs.md): compared with Vectorizer.ai,
   Vector Magic, Illustrator, Inkscape and SVGcode
@@ -84,7 +84,8 @@ apart, and none of its settings gave straight lines *and* sharp corners.
 Fitting each traced shape separately fixed the lines but opened hairline gaps,
 because cut-out shapes trace every shared edge twice and the two copies were
 fitted a fraction of a pixel apart. So Logo, Illustration and Line art now use
-a tracer of our own (`src/engine/shapes.ts`):
+a tracer of our own, **Inlay** (`src/engine/inlay.ts`), named for inlaid wood,
+where every piece is cut to fit its neighbours:
 
 1. Label every pixel with a palette colour (the histogram peaks below). A pixel
    between two colours (anti-aliasing) takes the nearest colour *among its
@@ -125,9 +126,19 @@ two scales so JPEG noise can't fake a tight bend; runs that mix straight and
 curved parts get lines for the straight stretches and curves joined smoothly
 between them; and a curve turns at most about 90°, so a circle is four curves.
 The extra nodes are those round ends and circles. On
-a 2048 px image the new tracer took 1.3 s where VTracer took 17.5 s. Poster and
-Pixel art keep VTracer: photos have no flat regions to share edges between, and
-pixel art wants its steps.
+a 2048 px image Inlay took 1.3 s where VTracer took 17.5 s.
+
+**Pixel art moved to Inlay too.** Pixel art wants its exact staircase, which
+Inlay already walks before it fits anything, so a pixel mode skips the
+clean-up and the fitting and joins straight runs. Its palette is the image's
+exact colours, because histogram peaks drop a one-pixel eye for being rare and
+fold close shades together. On a test sprite both engines draw every pixel
+exactly; Inlay uses 14% fewer nodes, about the same bytes, and on a 1024 px
+sprite is 4× faster (0.2 s against 0.85 s). Only Poster keeps VTracer: photos
+have no flat regions or histogram peaks, and cut-out shapes cost size there.
+Whether Inlay can take Poster too (a stacked mode and a quantized palette,
+scored on real photos) is
+[#53](https://github.com/mtblck/img-to-svg/issues/53).
 
 **Tuning the presets.** Each candidate setting was scored by tracing, rendering
 the SVG back in Chromium, and measuring the error against the *clean source
