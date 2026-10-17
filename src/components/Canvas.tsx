@@ -505,7 +505,13 @@ export function Canvas(props: Props) {
                   pointerEvents="stroke"
                   data-outline-hit=""
                   style={{ cursor: 'copy' }}
-                  onPointerDown={(e) => onShapeDown(e, selected.id)}
+                  onPointerDown={(e) => {
+                    // A press near the edge belongs to whichever shape is under the
+                    // pointer, so a touching neighbour can still be clicked; only
+                    // the double-click is this stroke's own.
+                    const under = document.elementsFromPoint(e.clientX, e.clientY).find((el) => el instanceof SVGPathElement && el.dataset.pathId)
+                    onShapeDown(e, (under as SVGPathElement | undefined)?.dataset.pathId ?? selected.id)
+                  }}
                   onDoubleClick={(e) => {
                     const p = toSvg(e)
                     if (p) props.onAddNode(p)

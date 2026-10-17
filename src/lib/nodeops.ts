@@ -7,7 +7,7 @@
  * node splits a curve exactly (de Casteljau), so the shape doesn't move.
  */
 import { fitChain, isFlat, type Cubic } from './fit'
-import type { NodeRef, PathNode, Pt, Subpath } from './pathdata'
+import { isSmooth, type NodeRef, type PathNode, type Pt, type Subpath } from './pathdata'
 
 const sub = (a: Pt, b: Pt): Pt => ({ x: a.x - b.x, y: a.y - b.y })
 const add = (a: Pt, b: Pt): Pt => ({ x: a.x + b.x, y: a.y + b.y })
@@ -181,7 +181,7 @@ export function roundNode(subs: Subpath[], ref: NodeRef, radius: number): Subpat
   const s = subs[ref.sub]
   const n = s.nodes.length
   const i = ref.index
-  if (radius <= 0 || n < 3 || (!s.closed && (i === 0 || i === n - 1))) return subs
+  if (radius <= 0 || n < 3 || (!s.closed && (i === 0 || i === n - 1)) || isSmooth(s.nodes[i])) return subs
   const ip = (i - 1 + n) % n
   // A straight segment as a cubic with handles a third of the way along, so its
   // parameter runs evenly and splitting it by length lands where it should.
@@ -198,15 +198,18 @@ export function roundNode(subs: Subpath[], ref: NodeRef, radius: number): Subpat
   const p1 = keepIn[3]
   const p2 = keepOut[0]
   // Directions of travel at the two cut points.
-  const d1 = norm(isFlat(keepIn) ? sub(s.nodes[i], p1) : sub(keepIn[3], keepIn[2]))
-  const d2 = norm(isFlat(keepOut) ? sub(keepOut[3], p2) : sub(keepOut[1], keepOut[0]))
+  const d1 = norm(len(sub(keepIn[3], keepIn[2])) > 1e-9 ? sub(keepIn[3], keepIn[2]) : sub(s.nodes[i], p1))
+  const d2 = norm(len(sub(keepOut[1], keepOut[0])) > 1e-9 ? sub(keepOut[1], keepOut[0]) : sub(keepOut[3], p2))
   const turn = Math.acos(Math.max(-1, Math.min(1, d1.x * d2.x + d1.y * d2.y)))
   if (turn < 1e-3) return subs // already smooth: nothing to round
   // For a circular arc turning through φ between tangent points r from the
   // corner, the radius is r / tan(φ/2) and each handle (4/3)·tan(φ/4)·radius.
   const h = Math.min(r, (4 / 3) * Math.tan(turn / 4) * (r / Math.tan(turn / 2)))
-  const flatIn = isFlat(keepIn)
-  const flatOut = isFlat(keepOut)
+  // Curved or straight is the original segment's, not the kept part's: a short
+  // kept piece of a gentle curve can look flat, and dropping its handles would
+  // leave the neighbour's handle sized for the whole segment.
+  const flatIn = !s.nodes[ip].out && !s.nodes[i].in
+  const flatOut = !s.nodes[i].out && !s.nodes[(i + 1) % n].in
   const first: PathNode = { x: p1.x, y: p1.y, in: flatIn ? null : keepIn[2], out: add(p1, mul(d1, h)) }
   const second: PathNode = { x: p2.x, y: p2.y, in: sub(p2, mul(d2, h)), out: flatOut ? null : keepOut[1] }
   const nodes = s.nodes.map((x) => ({ ...x }))
@@ -264,6 +267,11 @@ export function simplifySubpaths(subs: Subpath[], tolerance: number): Subpath[] 
     const cubics = fitChain(pts, s.closed, { tolerance, cornerAngle: 45, smoothing: 2 })
     if (!cubics.length) return s
     const next = fromCubics(cubics, s.closed)
-    return next.nodes.length >= 2 && next.nodes.length < s.nodes.length ? next : s
+    if (next.nodes.length < (s.closed ? 3 : 2) || next.nodes.length >= s.nodes.length) return s
+    // The fitter smooths before it fits, which can fold a thin shape's two long
+    // sides into one line (a 4 px bar became a two-node sliver with no area).
+    // Keep the result only if every point of the old outline is still near it.
+    const worst = Math.max(...pts.filter((_, k) => k % 2 === 0).map((p) => nearestOnPath([next], p)?.dist ?? Infinity))
+    return worst <= 2 * tolerance + 0.25 ? next : s
   })
 }

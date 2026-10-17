@@ -188,6 +188,7 @@ async function nodeOpChecks(page, label) {
   const outlineLength = () => page.locator('[data-outline-hit]').evaluate((el) => el.getTotalLength())
   const n0 = await nodes()
   const len0 = await outlineLength()
+  const d0 = await page.locator('[data-outline-hit]').getAttribute('d')
   // A point on the outline, 37% of the way round, clear of existing nodes.
   const spot = await page.evaluate(() => {
     const el = document.querySelector('[data-outline-hit]')
@@ -201,7 +202,7 @@ async function nodeOpChecks(page, label) {
     }
     return null
   })
-  if (!spot) return console.log(`         ${label}: no clear spot on the outline; skipping node operations`)
+  if (!spot) return label === 'sample' ? check(false, 'sample: a clear spot on the outline for node operations') : console.log(`         ${label}: no clear spot on the outline; skipping node operations`)
   await page.mouse.dblclick(spot.x, spot.y)
   const n1 = await nodes()
   const len1 = await outlineLength()
@@ -232,20 +233,24 @@ async function nodeOpChecks(page, label) {
     await press(corner)
     await page.getByLabel('Corner radius').fill('3')
     await page.getByRole('button', { name: 'Round corner' }).click()
-    check((await nodes()) === n0 + 1, `${label}: Round corner replaces a corner with two nodes and an arc`)
+    const rounded = await outlineLength()
+    // Cutting a corner with a 3 px arc shortens the outline by a little under 2 × 3 × (1 − π/4) ≈ 1.3 px at 90°.
+    check((await nodes()) === n0 + 1 && rounded < len0 && len0 - rounded < 3, `${label}: Round corner replaces a corner with two nodes and an arc (outline ${len0.toFixed(1)} → ${rounded.toFixed(1)})`)
     await page.keyboard.press(`${MOD}+z`)
     await press(corner)
     await page.getByRole('button', { name: 'Smooth' }).click()
     check((await handlesOf(corner)) === 2, `${label}: Smooth gives a corner two handles`)
     await page.keyboard.press(`${MOD}+z`)
-  } else console.log(`         ${label}: no clear corner node; skipping Round and Smooth`)
+  } else if (label === 'sample') check(false, 'sample: a clear corner node for Round and Smooth')
+  else console.log(`         ${label}: no clear corner node; skipping Round and Smooth`)
   if (curved) {
     await press(curved)
     await page.getByRole('button', { name: 'Sharpen' }).click()
     check((await handlesOf(curved)) === 0, `${label}: Sharpen drops a node's handles`)
     await page.keyboard.press(`${MOD}+z`)
-  } else console.log(`         ${label}: no clear curved node; skipping Sharpen`)
-  check((await nodes()) === n0 && Math.abs((await outlineLength()) - len0) < 0.01, `${label}: undo puts the shape back after the node operations`)
+  } else if (label === 'sample') check(false, 'sample: a clear curved node for Sharpen')
+  else console.log(`         ${label}: no clear curved node; skipping Sharpen`)
+  check((await page.locator('[data-outline-hit]').getAttribute('d')) === d0, `${label}: undo puts the shape back exactly after the node operations`)
 }
 
 /** Select tool: rotate by quarter turns and by the handle, and simplify. Leaves the shape as it was. */
@@ -283,6 +288,8 @@ async function shapeOpChecks(page, label, id) {
 
   // Simplify: the button says what it would leave, and that's what you get.
   await page.getByLabel('Simplify').fill('2')
+  check(await page.getByText('±2.00 px').isVisible(), `${label}: the Simplify slider is at ±2 px`)
+  await page.waitForTimeout(400) // the count is worked out once the selection settles
   const button = page.getByRole('button', { name: /Simplify:|Already as simple/ })
   const text = await button.innerText()
   const m = text.match(/(\d+) → (\d+)/)
@@ -292,7 +299,8 @@ async function shapeOpChecks(page, label, id) {
     check(after.includes(`(${m[2]} nodes)`) || after.includes(`${m[2]} →`), `${label}: Simplify does what it says (${m[1]} → ${m[2]} nodes; now "${after}")`)
     await page.keyboard.press(`${MOD}+z`)
     check((await page.locator(`path[data-path-id="${id}"]`).getAttribute('d')) === d0, `${label}: one Undo reverts Simplify`)
-  } else console.log(`         ${label}: shape already as simple at ±2 px ("${text}")`)
+  } else if (label === 'sample') check(false, `sample: Simplify has something to remove at ±2 px ("${text}")`)
+  else console.log(`         ${label}: shape already as simple at ±2 px ("${text}")`)
 }
 
 /** Select tool: move, scale, typed size, nudge, multi-select, marquee, select all. */
