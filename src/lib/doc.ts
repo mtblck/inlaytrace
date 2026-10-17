@@ -20,11 +20,16 @@ import { mapPoints, parsePath, serializePath, type Pt } from './pathdata'
 export type DocPath = { id: string; d: string; fill: string }
 export type Doc = { width: number; height: number; paths: DocPath[] }
 export type InkEdits = { recolor: Record<string, string>; removed: string[] }
-export type Edits = { inks: InkEdits; doc: Doc | null }
+/**
+ * `background` is a colour behind every shape, or null for transparent. Like
+ * ink edits it never touches geometry, so it survives re-tracing; it only
+ * shows where shapes are removed or a colour is deleted.
+ */
+export type Edits = { inks: InkEdits; doc: Doc | null; background: string | null }
 export type Ink = { hex: string; count: number }
 
 export const NO_INKS: InkEdits = { recolor: {}, removed: [] }
-export const NO_EDITS: Edits = { inks: NO_INKS, doc: null }
+export const NO_EDITS: Edits = { inks: NO_INKS, doc: null, background: null }
 
 const PATH_DATA = /^[\d\s,.eE+\-MmLlHhVvCcSsQqTtAaZz]*$/
 const ID = /^[\w-]+$/
@@ -88,21 +93,28 @@ export function visiblePaths(doc: Doc, inks: InkEdits, only?: string) {
 }
 
 /**
- * The SVG to export. Nothing is drawn behind the paths, so a removed
- * background ink leaves real transparency rather than a white box.
+ * The SVG to export. Nothing is drawn behind the paths unless a background is
+ * set, so a removed colour leaves real transparency rather than a white box.
  */
-export function buildSvg(doc: Doc, inks: InkEdits = NO_INKS, only?: string): string {
-  const body = visiblePaths(doc, inks, only)
-    .map((p) => `<path d="${p.d}" fill="${p.fill}"/>`)
-    .join('\n')
+export function buildSvg(doc: Doc, inks: InkEdits = NO_INKS, only?: string, background: string | null = null): string {
   const w = Number(doc.width) || 0
   const h = Number(doc.height) || 0
+  const bg = background ? normalizeHex(background) : null
+  const body = [
+    // First, so it sits behind every shape.
+    ...(bg ? [`<rect width="${w}" height="${h}" fill="${bg}"/>`] : []),
+    ...visiblePaths(doc, inks, only).map((p) => `<path d="${p.d}" fill="${p.fill}"/>`),
+  ].join('\n')
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n${body}\n</svg>\n`
 }
 
-/** One SVG per remaining ink, each in the ink's (possibly recoloured) colour. */
-export function layerFiles(doc: Doc, inks: InkEdits, baseName: string) {
-  return inksOf(doc)
+/**
+ * One SVG per remaining ink, each in the ink's (possibly recoloured) colour,
+ * plus the background as layer 00 when there is one.
+ */
+export function layerFiles(doc: Doc, inks: InkEdits, baseName: string, background: string | null = null) {
+  const bg = background ? normalizeHex(background) : null
+  const files = inksOf(doc)
     .filter((ink) => !inks.removed.includes(ink.hex))
     .map((ink, i) => {
       const shown = shownFill(inks, ink.hex)!
@@ -111,6 +123,9 @@ export function layerFiles(doc: Doc, inks: InkEdits, baseName: string) {
         svg: buildSvg(doc, inks, ink.hex),
       }
     })
+  if (!bg) return files
+  // The background alone: an only-filter no path matches, so just the rect.
+  return [{ name: `${baseName}-00-background-${bg.slice(1)}.svg`, svg: buildSvg(doc, inks, '#background', bg) }, ...files]
 }
 
 // ---- Ink edits ------------------------------------------------------------
