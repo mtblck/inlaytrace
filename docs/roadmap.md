@@ -8,20 +8,21 @@ Suggested improvements, drawn from the [comparison with other tools](how-it-diff
 the [research](research.md) and testing. Ordered by how much each would help
 against how much it costs. Every item has a ticket on the board.
 
-## Now: make the editor feel like an editor
+## Done: make the editor feel like an editor
 
-The tracer is ahead of the field; the editor is the gap. These four make
-everyday fixes faster and are the ones testing has asked for.
+The tracer was ahead of the field and the editor was the gap. These shipped
+together; see [Editing shapes](features/editing-shapes.md) and
+[Keyboard shortcuts](features/keyboard-shortcuts.md).
 
-| Item | Why | Ticket |
+| Item | What shipped | Ticket |
 | --- | --- | --- |
-| **Scale and move shapes** | Fixing a trace often means nudging or resizing a whole shape, not dragging nodes one by one. Bounding-box handles, ⇧ to keep proportions, ⌥ to scale from the centre. | [#21](https://github.com/mtblck/img-to-svg/issues/21) |
-| **Drag to select** | A marquee to select several shapes, or several nodes inside one, so moves, deletes and scales apply to all of them. ⇧ adds, ⌥ removes. | [#22](https://github.com/mtblck/img-to-svg/issues/22) |
-| **Smooth nodes** | Dragging one handle of a smooth node should swing its partner to stay in line, as in Illustrator and Figma. Hold ⌥ to break the pair; corners stay independent. | [#23](https://github.com/mtblck/img-to-svg/issues/23) |
-| **Shortcuts and a shortcuts panel** | Tool keys (V select, A nodes), arrow-key nudging (⇧ for 10 px), select all, and a panel on `?` listing everything. | [#24](https://github.com/mtblck/img-to-svg/issues/24) |
-| **Fix the Smoothing "Off" label** | The slider reads "Off" at 0 but still smooths a little ([Presets and settings](features/presets-and-settings.md)). | [#26](https://github.com/mtblck/img-to-svg/issues/26) |
+| **Scale and move shapes** | A Select tool with a bounding box: drag to move (⇧ one axis), square handles to scale (⇧ in proportion, ⌥ from the centre), typed X/Y/W/H, arrow nudges. | [#21](https://github.com/mtblck/img-to-svg/issues/21) |
+| **Drag to select** | A marquee for shapes (wholly inside) and, with the Nodes tool, nodes. ⇧ adds, ⌥ removes; ⇧-click toggles; several nodes drag together. | [#22](https://github.com/mtblck/img-to-svg/issues/22) |
+| **Smooth nodes** | Dragging one handle of a smooth node swings its partner round to stay in line. ⌥ breaks the pair; corners stay independent. | [#23](https://github.com/mtblck/img-to-svg/issues/23) |
+| **Shortcuts and a shortcuts panel** | V, A, M for tools, arrows to nudge, ⌘A, and a panel on `?`. | [#24](https://github.com/mtblck/img-to-svg/issues/24) |
+| **Fix the Smoothing "Off" label** | Flat-art presets show the tolerance (±0.25 px at the bottom); Poster keeps "Off", which is true there. | [#26](https://github.com/mtblck/img-to-svg/issues/26) |
 
-## Next: close the gaps with the paid tools
+## Now: close the gaps with the paid tools
 
 | Item | Why | Ticket |
 | --- | --- | --- |

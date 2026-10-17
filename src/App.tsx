@@ -23,11 +23,13 @@ import {
 import { push, redo, startHistory, undo, type History } from './lib/history'
 import { centreAxis, mirrorDoc, type Axis } from './lib/mirror'
 import { loadPaper } from './lib/paper'
-import { deleteNode, moveNode, parsePath, serializePath, nodeCount, type NodePart, type NodeRef, type Pt } from './lib/pathdata'
+import { deleteNodes, moveHandle, moveNode, moveNodes, parsePath, serializePath, nodeCount, type NodePart, type NodeRef, type Pt } from './lib/pathdata'
+import { allRefs, boxToBox, hasRef, nodesInRect, pathBounds, pathsInRect, transformPath, translate, union, type Affine, type Box } from './lib/transform'
 import { usePersisted } from './lib/persisted'
 import { bounds, effective, fromSlider, snap, step, toSlider, type Zoom } from './lib/zoom'
 import { sampleImage } from './lib/sample'
-import { Canvas, type Overlays, type Tool, type ViewMode } from './components/Canvas'
+import { Canvas, type Overlays, type SelectMode, type Tool, type ViewMode } from './components/Canvas'
+import { ShortcutsDialog } from './components/Shortcuts'
 import { EditPanel } from './components/EditPanel'
 import { Controls } from './components/Controls'
 import { Inks } from './components/Inks'
@@ -53,6 +55,11 @@ export default function App() {
    * reverts edits made in the meantime. Edits sharing a `key` in a row (a drag,
    * a colour-picker sweep) undo as one.
    */
+  /** Undo or redo. A node selection is indices into a shape whose nodes may change, so it is cleared. */
+  const historyStep = useCallback((dir: 'undo' | 'redo') => {
+    setHistory((h) => (dir === 'undo' ? undo(h) : redo(h)))
+    setSelectedNodes([])
+  }, [])
   const commit = useCallback(
     (next: (present: Edits) => Edits, key: string | null = null) => setHistory((h) => push(h, next(h.present), key)),
     [],
@@ -74,8 +81,10 @@ export default function App() {
   }, [])
   const [tool, setTool] = useState<Tool>('select')
   const [panel, setPanel] = useState<'trace' | 'edit'>('trace')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [selectedNode, setSelectedNode] = useState<NodeRef | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  /** Nodes selected in the shape the Nodes tool is editing (the first selected shape). */
+  const [selectedNodes, setSelectedNodes] = useState<NodeRef[]>([])
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [axis, setAxis] = useState<Axis | null>(null)
   const [mirroring, setMirroring] = useState(false)
   const [mirrorError, setMirrorError] = useState<string | null>(null)
@@ -109,8 +118,8 @@ export default function App() {
       })
       setTrace(null)
       setHistory(startHistory(NO_EDITS))
-      setSelectedId(null)
-      setSelectedNode(null)
+      setSelectedIds([])
+      setSelectedNodes([])
       setAxis(null)
       setTool('select')
       setPanel('trace')
@@ -194,29 +203,63 @@ export default function App() {
   const shown = useMemo(() => (doc ? visiblePaths(doc, edits.inks) : []), [doc, edits.inks])
   const inks = useMemo(() => (doc ? inksOf(doc) : []), [doc])
 
-  // A selection that no longer exists (re-trace, undo past its creation) is dropped.
+  // Shapes that no longer exist (re-trace, undo past their creation) drop out
+  // of the selection, and so do nodes that no longer exist in the edited shape.
   useEffect(() => {
-    if (selectedId && !shown.some((p) => p.id === selectedId)) {
-      setSelectedId(null)
-      setSelectedNode(null)
+    const ids = new Set(shown.map((p) => p.id))
+    if (selectedIds.some((id) => !ids.has(id))) {
+      const kept = selectedIds.filter((id) => ids.has(id))
+      setSelectedIds(kept)
+      if (kept[0] !== selectedIds[0]) setSelectedNodes([])
     }
-  }, [shown, selectedId])
+  }, [shown, selectedIds])
+  const editing = shown.find((p) => p.id === selectedIds[0]) ?? null
+  const editingSubs = useMemo(() => (editing ? parsePath(editing.d) : null), [editing])
+  useEffect(() => {
+    if (!editingSubs) return
+    const ok = (r: NodeRef) => r.sub < editingSubs.length && r.index < editingSubs[r.sub].nodes.length
+    if (selectedNodes.some((r) => !ok(r))) setSelectedNodes((n) => n.filter(ok))
+  }, [editingSubs, selectedNodes])
   useEffect(() => {
     if (doc && !axis) setAxis(centreAxis(doc))
   }, [doc, axis])
 
   // ---- Editing --------------------------------------------------------------
-  const select = useCallback((id: string | null) => {
-    setSelectedId(id)
-    setSelectedNode(null)
-    // The selection's tools live in the Edit tab.
-    if (id) {
-      setPanel('edit')
-      startEditing()
-    }
-  }, [startEditing])
+  const select = useCallback(
+    (id: string | null, how: SelectMode = 'set') => {
+      setSelectedIds((cur) => {
+        if (id === null) return how === 'set' ? [] : cur
+        if (how === 'set') return [id]
+        if (how === 'subtract') return cur.filter((x) => x !== id)
+        if (how === 'add') return cur.includes(id) ? cur : [...cur, id]
+        return cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
+      })
+      setSelectedNodes([])
+      // The selection's tools live in the Edit tab.
+      if (id) {
+        setPanel('edit')
+        startEditing()
+      }
+    },
+    [startEditing],
+  )
+  const selectNodes = useCallback((refs: NodeRef[], how: SelectMode) => {
+    setSelectedNodes((cur) => {
+      if (how === 'set') return refs
+      if (how === 'subtract') return cur.filter((r) => !hasRef(refs, r))
+      if (how === 'add') return [...cur, ...refs.filter((r) => !hasRef(cur, r))]
+      // toggle
+      const off = cur.filter((r) => !hasRef(refs, r))
+      return [...off, ...refs.filter((r) => !hasRef(cur, r))]
+    })
+  }, [])
 
-  const selectedPath = doc?.paths.find((p) => p.id === selectedId) ?? null
+  const selectedPaths = useMemo(() => {
+    if (!doc) return []
+    const ids = new Set(selectedIds)
+    return doc.paths.filter((p) => ids.has(p.id))
+  }, [doc, selectedIds])
+  const selectionBox = useMemo(() => union(selectedPaths.map((p) => pathBounds(p.d))), [selectedPaths])
 
   type DocT = NonNullable<typeof doc>
   const editInks = (f: (inks: Edits['inks']) => Edits['inks'], key: string | null = null) => commit((e) => ({ ...e, inks: f(e.inks) }), key)
@@ -237,31 +280,135 @@ export default function App() {
       return subs.length ? replacePath(d, id, serializePath(subs)) : deletePath(d, id)
     }, key)
 
-  const onDragNode = (ref: NodeRef, part: NodePart, to: Pt, phase: 'move' | 'end') => {
-    if (!selectedId) return
-    editPath(selectedId, (subs) => moveNode(subs, ref, part, to), `drag-${dragSeq.current}`)
+  const onDragNode = (ref: NodeRef, part: NodePart, to: Pt, phase: 'move' | 'end', smooth: boolean) => {
+    const id = selectedIds[0]
+    if (!id) return
+    // An anchor in a multi-node selection carries the others with it; a handle
+    // keeps its partner in line unless the node is a corner or Alt is held.
+    const others = part === 'anchor' && hasRef(selectedNodes, ref) && selectedNodes.length > 1 ? selectedNodes : null
+    editPath(
+      id,
+      (subs) => {
+        if (part !== 'anchor') return moveHandle(subs, ref, part, to, smooth)
+        if (!others) return moveNode(subs, ref, part, to)
+        const n = subs[ref.sub]?.nodes[ref.index]
+        return n ? moveNodes(subs, others, to.x - n.x, to.y - n.y) : subs
+      },
+      `drag-${dragSeq.current}`,
+    )
     if (phase === 'end') dragSeq.current++
   }
 
+  /**
+   * Moving or scaling the selected shapes. Each update is relative to the
+   * drag's start, so it is applied to the paths as they were then, not
+   * compounded onto the previous update; the whole drag is one undo step.
+   */
+  const transformBase = useRef<Map<string, string> | null>(null)
+  const onTransform = (m: Affine, phase: 'move' | 'end') => {
+    if (!traced || !doc || !selectedIds.length) {
+      transformBase.current = null
+      return
+    }
+    const ids = new Set(selectedIds)
+    // Captured here, not in the updater: React may run the updater after this
+    // handler has already cleared the ref at the end of the drag.
+    transformBase.current ??= new Map(doc.paths.filter((p) => ids.has(p.id)).map((p) => [p.id, p.d]))
+    const base = transformBase.current
+    commit((e) => {
+      const d = docOf(e, traced)
+      return { ...e, doc: { ...d, paths: d.paths.map((p) => (base.has(p.id) ? { ...p, d: transformPath(base.get(p.id)!, m) } : p)) } }
+    }, `transform-${dragSeq.current}`)
+    if (phase === 'end') {
+      transformBase.current = null
+      dragSeq.current++
+    }
+  }
+  /** Apply a transform to the selection as one step (nudges, typed sizes). */
+  const transformSelection = useCallback(
+    (m: Affine, key: string | null = null) => {
+      if (!selectedIds.length) return
+      const ids = new Set(selectedIds)
+      editDoc((d) => ({ ...d, paths: d.paths.map((p) => (ids.has(p.id) ? { ...p, d: transformPath(p.d, m) } : p)) }), key)
+    },
+    [editDoc, selectedIds],
+  )
+  /**
+   * Typed X/Y/W/H. Like a drag, every keystroke is applied to the shapes as
+   * they were when the field was first changed: typing "120" passes through
+   * W = 1 and 12, and compounding those would round the shape away.
+   */
+  const boxSeq = useRef(0)
+  const boxBase = useRef<{ box: Box; paths: Map<string, string> } | null>(null)
+  const setBox = (field: keyof Box, value: number, lock: boolean) => {
+    if (!traced || !doc || !selectionBox) return
+    const ids = new Set(selectedIds)
+    boxBase.current ??= { box: selectionBox, paths: new Map(doc.paths.filter((p) => ids.has(p.id)).map((p) => [p.id, p.d])) }
+    const { box, paths } = boxBase.current
+    // Everything but the typed field comes from the captured box too, never
+    // from the current one, which the previous keystroke has rounded.
+    const next = { ...box, [field]: value }
+    if (lock && field === 'w' && box.w > 0) next.h = (box.h * value) / box.w
+    if (lock && field === 'h' && box.h > 0) next.w = (box.w * value) / box.h
+    const m = boxToBox(box, next)
+    commit((e) => {
+      const d = docOf(e, traced)
+      return { ...e, doc: { ...d, paths: d.paths.map((p) => (paths.has(p.id) ? { ...p, d: transformPath(paths.get(p.id)!, m) } : p)) } }
+    }, `box-${boxSeq.current}`)
+  }
+  const boxDone = () => {
+    boxBase.current = null
+    boxSeq.current++
+  }
+
+  const onMarquee = (rect: Box, how: SelectMode) => {
+    if (tool === 'nodes') {
+      if (editingSubs) selectNodes(nodesInRect(editingSubs, rect), how)
+      return
+    }
+    const hits = pathsInRect(shown, rect)
+    setSelectedIds((cur) => {
+      if (how === 'set') return hits
+      if (how === 'subtract') return cur.filter((id) => !hits.includes(id))
+      return [...cur, ...hits.filter((id) => !cur.includes(id))]
+    })
+    setSelectedNodes([])
+    if (hits.length) {
+      setPanel('edit')
+      startEditing()
+    }
+  }
+
+  const enterNodes = useCallback(
+    (id: string) => {
+      setSelectedIds([id])
+      setSelectedNodes([])
+      setTool('nodes')
+      setPanel('edit')
+      startEditing()
+    },
+    [startEditing],
+  )
+
   const deleteSelection = useCallback(() => {
-    if (!selectedPath) return
-    const id = selectedPath.id
-    if (selectedNode) {
-      const ref = selectedNode
-      const left = deleteNode(parsePath(selectedPath.d), ref)
+    if (!selectedPaths.length) return
+    if (tool === 'nodes' && selectedNodes.length && editing) {
+      const id = editing.id
+      const refs = selectedNodes
       editDoc((d) => {
         const p = d.paths.find((x) => x.id === id)
         if (!p) return d
-        const subs = deleteNode(parsePath(p.d), ref)
+        const subs = deleteNodes(parsePath(p.d), refs)
         return subs.length ? replacePath(d, id, serializePath(subs)) : deletePath(d, id)
       })
-      setSelectedNode(null)
-      if (!left.length) setSelectedId(null)
+      setSelectedNodes([])
     } else {
-      editDoc((d) => deletePath(d, id))
-      setSelectedId(null)
+      const ids = new Set(selectedPaths.map((p) => p.id))
+      editDoc((d) => ({ ...d, paths: d.paths.filter((p) => !ids.has(p.id)) }))
+      setSelectedIds([])
+      setSelectedNodes([])
     }
-  }, [editDoc, selectedPath, selectedNode])
+  }, [editDoc, selectedPaths, selectedNodes, tool, editing])
 
   const mirror = async () => {
     if (!doc || !axis) return
@@ -273,8 +420,8 @@ export default function App() {
       // disabled meanwhile); colour edits made while paper.js loaded are kept.
       const mirrored = mirrorDoc(paper, doc, axis)
       editDoc(() => mirrored)
-      setSelectedId(null)
-      setSelectedNode(null)
+      setSelectedIds([])
+      setSelectedNodes([])
       // Back to Select, so the washed-out preview stops hiding the result.
       setTool('select')
     } catch (error) {
@@ -284,29 +431,84 @@ export default function App() {
     }
   }
 
-  // Keyboard: undo/redo everywhere except text fields; Delete and Esc act on the selection.
+  /** Arrow-key nudges in trace pixels: the selected nodes with the Nodes tool, else the selected shapes. */
+  // A held arrow key repeats; the repeats undo with the press that started them.
+  const nudgeSeq = useRef(0)
+  const nudge = (dx: number, dy: number, repeat: boolean) => {
+    if (!repeat) nudgeSeq.current++
+    const key = `nudge-${nudgeSeq.current}`
+    if (tool === 'nodes' && editing && selectedNodes.length) {
+      const refs = selectedNodes
+      editPath(editing.id, (subs) => moveNodes(subs, refs, dx, dy), key)
+    } else if (tool === 'select') transformSelection(translate(dx, dy), key)
+  }
+  const chooseTool = useCallback((t: Tool) => {
+    setTool(t)
+    setSelectedNodes([])
+    // Nodes edits one shape and Mirror shows none, so neither keeps a
+    // multi-selection that Delete could act on unseen.
+    if (t === 'nodes') setSelectedIds((ids) => ids.slice(0, 1))
+    else if (t === 'mirror') setSelectedIds([])
+    if (t === 'mirror') void loadPaper().catch(() => {}) // warm it up while the user picks a side
+  }, [])
+
+  // Keyboard. The list the shortcuts panel shows is in components/Shortcuts.tsx; keep them in step.
+  // The handler reads the latest render through a ref, so it is attached once.
+  const onKeyRef = useRef<(e: KeyboardEvent) => void>(() => {})
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
+    const listener = (e: KeyboardEvent) => onKeyRef.current(e)
+    window.addEventListener('keydown', listener)
+    return () => window.removeEventListener('keydown', listener)
+  }, [])
+  {
+    onKeyRef.current = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null
-      const typing = el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !['color', 'range', 'checkbox', 'radio'].includes((el as HTMLInputElement).type)))
+      const typing =
+        !!el &&
+        (el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable || (el.tagName === 'INPUT' && !['color', 'range', 'checkbox', 'radio', 'button'].includes((el as HTMLInputElement).type)))
+      if (typing || shortcutsOpen) return
       const mod = e.metaKey || e.ctrlKey
-      if (mod && !typing && e.key.toLowerCase() === 'z') {
+      const key = e.key.toLowerCase()
+      const hasDoc = !!doc
+      if (mod && key === 'z') {
         e.preventDefault()
-        setHistory((h) => (e.shiftKey ? redo(h) : undo(h)))
-      } else if (mod && !typing && e.key.toLowerCase() === 'y') {
+        historyStep(e.shiftKey ? 'redo' : 'undo')
+      } else if (mod && key === 'y') {
         e.preventDefault()
-        setHistory((h) => redo(h))
-      } else if (!typing && (e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+        historyStep('redo')
+      } else if (mod && key === 'a' && hasDoc) {
+        e.preventDefault()
+        if (tool === 'nodes' && editingSubs) setSelectedNodes(allRefs(editingSubs))
+        else {
+          if (tool !== 'select') setTool('select')
+          setSelectedIds(shown.map((p) => p.id))
+          setSelectedNodes([])
+          setPanel('edit')
+          startEditing()
+        }
+      } else if (mod || e.altKey) {
+        return
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length && tool !== 'mirror') {
         e.preventDefault()
         deleteSelection()
       } else if (e.key === 'Escape') {
-        if (selectedNode) setSelectedNode(null)
-        else setSelectedId(null)
+        if (selectedNodes.length) setSelectedNodes([])
+        else if (selectedIds.length) setSelectedIds([])
+        else if (tool !== 'select') setTool('select')
+      } else if (e.key.startsWith('Arrow') && selectedIds.length && !(el && (el.tagName === 'INPUT' || el.getAttribute('role') === 'slider'))) {
+        e.preventDefault()
+        const d = e.shiftKey ? 10 : 1
+        nudge(e.key === 'ArrowLeft' ? -d : e.key === 'ArrowRight' ? d : 0, e.key === 'ArrowUp' ? -d : e.key === 'ArrowDown' ? d : 0, e.repeat)
+      } else if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
+        e.preventDefault()
+        setShortcutsOpen(true)
+      } else if (hasDoc && !e.shiftKey && (key === 'v' || key === 'a' || key === 'm')) {
+        chooseTool(key === 'v' ? 'select' : key === 'a' ? 'nodes' : 'mirror')
+        setPanel('edit')
+        startEditing()
       }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [selectedId, selectedNode, deleteSelection])
+  }
 
   // Optimise in the background so the numbers shown are the numbers exported.
   useEffect(() => {
@@ -355,8 +557,8 @@ export default function App() {
     guard('Changing a trace setting re-traces the image and replaces your shape edits. Undo brings them back.', 'Discard edits and re-trace', () => {
       if (detached) {
         commit((e) => ({ ...e, doc: null }))
-        setSelectedId(null)
-        setSelectedNode(null)
+        setSelectedIds([])
+        setSelectedNodes([])
       }
       setSettings(next)
     })
@@ -392,6 +594,9 @@ export default function App() {
           <p className="hidden text-[13px] text-ink-muted sm:block">Trace images to SVG, in your browser.</p>
         </div>
         <div className="flex items-center gap-4 text-[13px]">
+          <button onClick={() => setShortcutsOpen(true)} className="text-ink-muted hover:text-ink" aria-keyshortcuts="?" title="Keyboard shortcuts (?)">
+            Shortcuts
+          </button>
           <button onClick={toggle} className="text-ink-muted hover:text-ink" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
             {theme === 'dark' ? 'Light' : 'Dark'}
           </button>
@@ -400,6 +605,8 @@ export default function App() {
           </a>
         </div>
       </header>
+
+      <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
       <input
         ref={fileInput}
@@ -433,12 +640,15 @@ export default function App() {
                   tool={tool}
                   overlays={overlays}
                   background={edits.background}
-                  selectedId={selectedId}
-                  selectedNode={selectedNode}
+                  selectedIds={selectedIds}
+                  selectedNodes={selectedNodes}
                   axis={axis}
                   onSelect={select}
-                  onSelectNode={setSelectedNode}
+                  onSelectNodes={selectNodes}
+                  onMarquee={onMarquee}
+                  onEnterNodes={enterNodes}
                   onDragNode={onDragNode}
+                  onTransform={onTransform}
                   onAxis={(position) => axis && setAxis({ ...axis, position })}
                 />
               </div>
@@ -576,17 +786,20 @@ export default function App() {
             {doc && axis && (
               <EditPanel
                 tool={tool}
-                onTool={(t) => {
-                  setTool(t)
-                  if (t === 'mirror') void loadPaper().catch(() => {}) // warm it up while the user picks a side
-                }}
+                onTool={chooseTool}
                 canUndo={history.past.length > 0}
                 canRedo={history.future.length > 0}
-                onUndo={() => setHistory(undo)}
-                onRedo={() => setHistory(redo)}
+                onUndo={() => historyStep('undo')}
+                onRedo={() => historyStep('redo')}
                 detached={detached}
-                selection={selectedPath ? { id: selectedPath.id, nodes: nodeCount(parsePath(selectedPath.d)), node: !!selectedNode } : null}
+                selection={
+                  selectedPaths.length
+                    ? { key: selectedIds.join(' '), shapes: selectedPaths.length, nodes: editingSubs ? nodeCount(editingSubs) : 0, selectedNodes: tool === 'nodes' ? selectedNodes.length : 0, box: selectionBox }
+                    : null
+                }
                 onDeleteSelection={deleteSelection}
+                onBox={setBox}
+                onBoxDone={boxDone}
                 axis={axis}
                 width={doc.width}
                 height={doc.height}
@@ -600,7 +813,7 @@ export default function App() {
               <Inks
                 inks={inks}
                 edits={edits.inks}
-                selectedInk={selectedPath?.fill ?? null}
+                selectedInk={selectedPaths.length === 1 ? selectedPaths[0].fill : null}
                 onReplace={(hex, to) => {
                   const v = normalizeHex(to)
                   if (v) editInks((i) => recolorInk(i, hex, v), `recolor-${hex}-${recolorSeq.current}`)

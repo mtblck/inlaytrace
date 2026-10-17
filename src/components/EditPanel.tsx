@@ -1,6 +1,9 @@
+import { useState } from 'react'
 import type { Tool } from './Canvas'
 import type { Axis } from '../lib/mirror'
+import type { Box } from '../lib/transform'
 import { Section } from './Controls'
+import { MOD } from './Shortcuts'
 
 type Props = {
   tool: Tool
@@ -10,8 +13,12 @@ type Props = {
   onUndo: () => void
   onRedo: () => void
   detached: boolean
-  selection: { id: string; nodes: number; node: boolean } | null
+  /** `nodes` counts the edited shape's nodes; `selectedNodes` those picked with the Nodes tool. */
+  selection: { key: string; shapes: number; nodes: number; selectedNodes: number; box: Box | null } | null
   onDeleteSelection: () => void
+  /** One typed field of the bounds; `lock` keeps W and H in proportion. Changes in one field undo together. */
+  onBox: (field: keyof Box, value: number, lock: boolean) => void
+  onBoxDone: () => void
   axis: Axis
   width: number
   height: number
@@ -21,11 +28,11 @@ type Props = {
   onMirror: () => void
 }
 
-const mod = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+'
+const mod = MOD === '⌘' ? '⌘' : 'Ctrl+'
 
 /**
- * Editing on top of the trace. Select reshapes paths node by node; Mirror
- * keeps one half and reflects it. The first shape edit detaches the drawing
+ * Editing on top of the trace. Select moves and scales whole shapes; Nodes
+ * reshapes one shape node by node; Mirror keeps one half and reflects it. The first shape edit detaches the drawing
  * from the trace, which the note at the bottom says plainly, because it changes
  * what a trace setting does next.
  */
@@ -48,17 +55,20 @@ export function EditPanel(p: Props) {
         </div>
       }
     >
-      <div role="radiogroup" aria-label="Tool" className="mb-3 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-rule bg-rule">
+      <div role="radiogroup" aria-label="Tool" className="mb-3 grid grid-cols-3 gap-px overflow-hidden rounded-md border border-rule bg-rule">
         {(
           [
-            ['select', 'Select'],
-            ['mirror', 'Mirror'],
+            ['select', 'Select', 'V'],
+            ['nodes', 'Nodes', 'A'],
+            ['mirror', 'Mirror', 'M'],
           ] as const
-        ).map(([t, label]) => (
+        ).map(([t, label, key]) => (
           <button
             key={t}
             role="radio"
             aria-checked={p.tool === t}
+            aria-keyshortcuts={key}
+            title={`${label} (${key})`}
             onClick={() => p.onTool(t)}
             className={`py-1.5 text-[13px] ${p.tool === t ? 'bg-paper font-medium text-accent' : 'bg-paper-sunk text-ink hover:bg-paper'}`}
           >
@@ -72,14 +82,34 @@ export function EditPanel(p: Props) {
           {p.selection ? (
             <>
               <p className="field-hint">
-                Drag a square to move a node, a dot to bend its curve. {p.selection.nodes} nodes.
+                {p.selection.shapes === 1 ? '1 shape' : `${p.selection.shapes} shapes`} selected. Drag to move, drag a square to scale (⇧ in proportion, ⌥ from the centre). Arrows nudge.
               </p>
+              {/* Keyed to the selection, so a half-typed value never carries over to other shapes. */}
+              {p.selection.box && <BoxFields key={p.selection.key} box={p.selection.box} onBox={p.onBox} onDone={p.onBoxDone} />}
               <button className="btn w-full" onClick={p.onDeleteSelection}>
-                {p.selection.node ? 'Delete node' : 'Delete shape'}
+                {p.selection.shapes === 1 ? 'Delete shape' : `Delete ${p.selection.shapes} shapes`}
               </button>
             </>
           ) : (
-            <p className="field-hint">Click a shape to select it and show its nodes. Esc to deselect.</p>
+            <p className="field-hint">Click a shape to select it, ⇧-click to add more, or drag round shapes from empty space. Double-click a shape to edit its nodes.</p>
+          )}
+        </div>
+      )}
+
+      {p.tool === 'nodes' && (
+        <div className="space-y-2">
+          {p.selection ? (
+            <>
+              <p className="field-hint">
+                Drag a square to move a node, a dot to bend its curve; the other handle follows on smooth nodes (hold ⌥ to bend one on its own). Drag round nodes to
+                select several. {p.selection.nodes} nodes{p.selection.selectedNodes > 1 ? `, ${p.selection.selectedNodes} selected` : ''}.
+              </p>
+              <button className="btn w-full" onClick={p.onDeleteSelection}>
+                {p.selection.selectedNodes === 0 ? 'Delete shape' : p.selection.selectedNodes === 1 ? 'Delete node' : `Delete ${p.selection.selectedNodes} nodes`}
+              </button>
+            </>
+          ) : (
+            <p className="field-hint">Click a shape to show its nodes. Esc to deselect.</p>
           )}
         </div>
       )}
@@ -173,5 +203,62 @@ function Choice<T extends string>(props: { label: string; value: T; options: [T,
         ))}
       </div>
     </div>
+  )
+}
+
+const round = (n: number) => Math.round(n * 100) / 100
+
+/**
+ * X, Y, W and H of the selection's bounds, in pixels of the trace. Each field
+ * keeps what you type while it has focus, so a half-typed number never
+ * reshapes the drawing; it applies as you type valid numbers and undoes as one
+ * step per field.
+ */
+function BoxFields({ box, onBox, onDone }: { box: Box; onBox: (k: keyof Box, v: number, lock: boolean) => void; onDone: () => void }) {
+  const [lock, setLock] = useState(false)
+  const set = (k: keyof Box, v: number) => {
+    if (!Number.isFinite(v)) return
+    if ((k === 'w' || k === 'h') && v <= 0) return
+    onBox(k, v, lock)
+  }
+  return (
+    <div className="space-y-1.5">
+      <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
+        {(['x', 'y', 'w', 'h'] as const).map((k) => (
+          <NumberField key={k} label={k.toUpperCase()} value={round(box[k])} onValue={(v) => set(k, v)} onDone={onDone} />
+        ))}
+      </div>
+      <label className="flex items-center gap-1.5 text-[12.5px] text-ink-muted">
+        <input type="checkbox" className="accent-[var(--c-accent)]" checked={lock} onChange={(e) => setLock(e.target.checked)} />
+        Keep proportions
+      </label>
+    </div>
+  )
+}
+
+function NumberField({ label, value, onValue, onDone }: { label: string; value: number; onValue: (v: number) => void; onDone: () => void }) {
+  const [draft, setDraft] = useState<string | null>(null)
+  return (
+    <label className="flex items-center gap-2">
+      <span className="field-label w-3 shrink-0">{label}</span>
+      <input
+        type="number"
+        step="any"
+        aria-label={{ X: 'X position', Y: 'Y position', W: 'Width', H: 'Height' }[label]}
+        className="w-full min-w-0 rounded-md border border-rule bg-paper px-2 py-1 font-mono text-[13px]"
+        value={draft ?? String(value)}
+        onChange={(e) => {
+          setDraft(e.target.value)
+          if (e.target.value.trim() !== '') onValue(Number(e.target.value))
+        }}
+        onBlur={() => {
+          setDraft(null)
+          onDone()
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+        }}
+      />
+    </label>
   )
 }

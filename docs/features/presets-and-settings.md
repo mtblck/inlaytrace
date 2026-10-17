@@ -38,8 +38,9 @@ into their surroundings. Raise it for noisy scans or JPEG speckle.
 
 **Smoothing** (0–3): how loosely the outline is followed. For the shared-edge
 tracer it sets the fitting tolerance: 0.25 + 0.5 × smoothing px, so the Logo
-default of 1.5 is 1 px. Higher means fewer nodes and a smaller file. (At 0 the
-label says *Off*, but the outline is still fitted, to 0.25 px.)
+default of 1.5 is 1 px, and the slider shows that tolerance (±1.00 px). Higher
+means fewer nodes and a smaller file. For Poster it is VTracer's
+simplification, and 0 turns it off.
 
 **Corners** (0–180°): bends sharper than this stay corners; gentler ones become
 curves. See [Curve fitting](../how-it-works/curve-fitting.md) for how a corner

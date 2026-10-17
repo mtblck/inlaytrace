@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react'
-import { PRESETS, presetById, usesShapes, type PresetId, type Settings } from '../engine/presets'
+import { PRESETS, presetById, toleranceFor, usesShapes, type PresetId, type Settings } from '../engine/presets'
 
 type Props = {
   settings: Settings
@@ -90,7 +90,7 @@ export function Controls({ settings, onChange, onPreset }: Props) {
 
           {p !== 'pixel' && (
             <>
-              <Slider label="Smoothing" value={settings.smoothing} min={0} max={3} step={0.25} onChange={(v) => set('smoothing', v)} format={(v) => (v === 0 ? 'Off' : v.toFixed(2))} hint="How loosely the outline is followed. Higher means fewer nodes and a smaller file." />
+              <Slider label="Smoothing" value={settings.smoothing} min={0} max={3} step={0.25} onChange={(v) => set('smoothing', v)} format={(v) => smoothingLabel(p, v)} hint={usesShapes(p) ? 'How far the outline may stray from the pixels. Higher means fewer nodes and a smaller file.' : 'How loosely the outline is followed. Higher means fewer nodes and a smaller file.'} />
               <Slider label="Corners" value={settings.corners} min={0} max={180} step={5} onChange={(v) => set('corners', v)} format={(v) => `${v}°`} hint="Bends sharper than this stay corners; gentler ones become curves." />
             </>
           )}
@@ -175,3 +175,10 @@ function Slider(props: {
     </div>
   )
 }
+
+/**
+ * The flat-art tracer always fits within a tolerance (0.25 px at the bottom of
+ * the scale), so it shows that rather than "Off"; for Poster, 0 really does
+ * turn VTracer's extra simplification off.
+ */
+export const smoothingLabel = (preset: PresetId, v: number) => (usesShapes(preset) ? `±${toleranceFor(v).toFixed(2)} px` : v === 0 ? 'Off' : v.toFixed(2))
