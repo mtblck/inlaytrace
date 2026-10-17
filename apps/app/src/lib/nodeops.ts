@@ -6,7 +6,7 @@
  * the outline where it was unless the edit is meant to change it: adding a
  * node splits a curve exactly (de Casteljau), so the shape doesn't move.
  */
-import { fitChain, isFlat, type Cubic } from '@mtblck/inlay'
+import { fitChain, isFlat, type Cubic } from 'inlaytrace'
 import { isSmooth, type NodeRef, type PathNode, type Pt, type Subpath } from './pathdata'
 
 const sub = (a: Pt, b: Pt): Pt => ({ x: a.x - b.x, y: a.y - b.y })

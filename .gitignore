@@ -1,6 +1,6 @@
 node_modules
 dist
-src/engine/vtracer/
+apps/app/src/engine/vtracer/
 *.local
 .vercel
 *.tsbuildinfo

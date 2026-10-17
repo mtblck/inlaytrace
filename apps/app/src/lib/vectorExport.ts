@@ -88,7 +88,7 @@ function body(drawing: Drawable, wPt: number, hPt: number, ops: { m: string; l: 
 }
 
 /** A one-page PDF, the page exactly the export size, its content Flate-compressed. */
-export function buildPdf(drawing: Drawable, size: ExportSize, title = 'img-to-svg'): Uint8Array {
+export function buildPdf(drawing: Drawable, size: ExportSize, title = 'Inlay'): Uint8Array {
   const w = toPt(size.width, size.unit)
   const h = toPt(size.height, size.unit)
   const content = body(drawing, w, h, { m: 'm', l: 'l', c: 'c', h: 'h', color: (c) => `${c.map(fmt).join(' ')} rg`, fill: 'f' })
@@ -99,7 +99,7 @@ export function buildPdf(drawing: Drawable, size: ExportSize, title = 'img-to-sv
     ['<< /Type /Pages /Kids [3 0 R] /Count 1 >>'],
     [`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${fmt(w)} ${fmt(h)}] /Contents 4 0 R /Resources << >> >>`],
     [`<< /Length ${stream.length} /Filter /FlateDecode >>\nstream\n`, stream, '\nendstream'],
-    [`<< /Title (${esc(title)}) /Producer (img-to-svg, mattblack.space) >>`],
+    [`<< /Title (${esc(title)}) /Producer (Inlay, an image-to-SVG tracer) >>`],
   ]
   const chunks: Uint8Array[] = []
   let offset = 0
@@ -131,7 +131,7 @@ export function buildPdf(drawing: Drawable, size: ExportSize, title = 'img-to-sv
 }
 
 /** Encapsulated PostScript: plain text, bounding box the export size in points. */
-export function buildEps(drawing: Drawable, size: ExportSize, title = 'img-to-svg'): string {
+export function buildEps(drawing: Drawable, size: ExportSize, title = 'Inlay'): string {
   const w = toPt(size.width, size.unit)
   const h = toPt(size.height, size.unit)
   const content = body(drawing, w, h, { m: 'moveto', l: 'lineto', c: 'curveto', h: 'closepath', color: (c) => `${c.map(fmt).join(' ')} setrgbcolor`, fill: 'fill' })
@@ -140,7 +140,7 @@ export function buildEps(drawing: Drawable, size: ExportSize, title = 'img-to-sv
     `%%BoundingBox: 0 0 ${Math.ceil(w)} ${Math.ceil(h)}`,
     `%%HiResBoundingBox: 0 0 ${fmt(w)} ${fmt(h)}`,
     `%%Title: ${title.replace(/[\r\n]/g, ' ')}`,
-    '%%Creator: img-to-svg, mattblack.space',
+    '%%Creator: Inlay, an image-to-SVG tracer',
     '%%Pages: 1',
     '%%EndComments',
     'gsave',

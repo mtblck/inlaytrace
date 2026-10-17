@@ -109,5 +109,5 @@ nodes against VTracer's 278 and about the same bytes, with 31 paths against 25,
 because its shapes are cut out to tile rather than stacked. On a 1024 px
 sprite it took 0.2 s against 0.85 s; on a 1024 px photo picked as pixel art
 (a worst case), 6.5 s and 12 MB against 27 s and 20 MB.
-(`src/engine/pixel.test.ts` checks the sprite on every run.)
+(`apps/app/src/engine/pixel.test.ts` checks the sprite on every run.)
 
