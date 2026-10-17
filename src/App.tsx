@@ -16,6 +16,7 @@ import {
   recolorInk,
   removeInk,
   replacePath,
+  reserveIds,
   restoreInk,
   visiblePaths,
   type Edits,
@@ -31,6 +32,9 @@ import { bounds, effective, fromSlider, snap, step, toSlider, type Zoom } from '
 import { sampleImage } from './lib/sample'
 import { Canvas, type Overlays, type SelectMode, type Tool, type ViewMode } from './components/Canvas'
 import { ShortcutsDialog } from './components/Shortcuts'
+import { ExportOptions } from './components/ExportOptions'
+import { clearSession, loadSession, newSessionId, saveImage, saveState } from './lib/session'
+import { buildEps, buildPdf, pngPixels, withSize, type ExportSize } from './lib/vectorExport'
 import { IconButton, KeyboardIcon, MoonIcon, SunIcon } from './components/IconButton'
 import { EditPanel } from './components/EditPanel'
 import { Controls } from './components/Controls'
@@ -108,35 +112,120 @@ export default function App() {
   const [fitScale, setFitScale] = useState(1)
   const [dragOver, setDragOver] = useState(false)
   const [copied, setCopied] = useState(false)
+  /**
+   * The export width and unit, or null for the drawing's own size. The height
+   * always follows the drawing's current proportions, so a re-trace at a
+   * slightly different shape (Pixel art keeps every source pixel) can't leave
+   * a stale height that stretches the PDF.
+   */
+  const [exportSize, setExportSize] = useState<{ width: number; unit: ExportSize['unit'] } | null>(null)
+  const [pngError, setPngError] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const pixelCache = useRef<{ source: Source; maxEdge: number; upscale: boolean; pixels: Pixels } | null>(null)
 
   // ---- Loading ------------------------------------------------------------
-  const openNow = useCallback(async (file: Blob, name?: string) => {
+  /** The original file, kept so the session can be saved on this device. */
+  const fileRef = useRef<Blob | null>(null)
+  /** `restore` reopens a saved session: its settings and edits instead of fresh ones. */
+  /** Bumped by every open, so a slower earlier one (a restore still decoding) can't land on top of a newer one. */
+  const openSeq = useRef(0)
+  /** The saved session's id for the image on screen: a new one per image, the saved one when restoring. */
+  const sessionId = useRef<string | null>(null)
+  const openNow = useCallback(async (file: Blob, name?: string, restore?: { settings: Settings; edits: Edits; id: string }) => {
+    const seq = ++openSeq.current
     setLoadError(null)
     try {
       const next = await loadSource(file, name ?? (file instanceof File ? file.name : 'image'))
+      if (seq !== openSeq.current) {
+        URL.revokeObjectURL(next.url)
+        return
+      }
+      fileRef.current = file
+      sessionId.current = restore?.id ?? newSessionId()
+      imageSaved.current = !!restore
+      setSessionNote(restore ? 'restored' : null)
       setSource((prev) => {
         if (prev) URL.revokeObjectURL(prev.url)
         return next
       })
       setTrace(null)
-      setHistory(startHistory(NO_EDITS))
-      // Merges name this image's colours; another image starts without them.
-      setSettings((s) => (Object.keys(s.merge).length ? { ...s, merge: {} } : s))
+      if (restore) {
+        reserveIds(restore.edits.doc)
+        setSettings({ ...restore.settings, merge: restore.settings.merge ?? {} })
+      } else {
+        // Merges name this image's colours; another image starts without them.
+        setSettings((s) => (Object.keys(s.merge).length ? { ...s, merge: {} } : s))
+      }
+      setHistory(startHistory(restore ? restore.edits : NO_EDITS))
+      setExportSize(null)
       setPicking(null)
       setSelectedIds([])
       setSelectedNodes([])
       setAxis(null)
       setTool('select')
-      setPanel('trace')
-      setMode('split')
-      viewChosen.current = false
+      setPanel(restore?.edits.doc ? 'edit' : 'trace')
+      setMode(restore ? 'vector' : 'split')
+      viewChosen.current = !!restore
       setZoom(null)
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : String(error))
+      if (seq === openSeq.current) setLoadError(error instanceof Error ? error.message : String(error))
     }
   }, [])
+
+  // ---- The session, kept on this device ----------------------------------------
+  /** 'restored' after bringing back a previous visit; 'saved' once this session is in storage. */
+  const [sessionNote, setSessionNote] = useState<'restored' | 'saved' | null>(null)
+  const restoredOnce = useRef(false)
+  useEffect(() => {
+    // StrictMode runs effects twice in development; restore once.
+    if (restoredOnce.current) return
+    restoredOnce.current = true
+    const seqAtStart = openSeq.current
+    void loadSession().then((saved) => {
+      // Anything opened meanwhile (a drop, a paste, the sample) wins.
+      if (!saved || openSeq.current !== seqAtStart) return
+      void openNow(saved.image.file, saved.image.name, { settings: saved.settings, edits: saved.edits, id: saved.image.id })
+    })
+  }, [openNow])
+  // The image is stored once, after it has traced: one that can't be traced is never brought back.
+  const imageSaved = useRef(false)
+  useEffect(() => {
+    if (!source || !trace || !fileRef.current || !sessionId.current || imageSaved.current) return
+    imageSaved.current = true
+    const id = sessionId.current
+    void saveImage({ id, file: fileRef.current, name: source.name }).then((ok) => ok && sessionId.current === id && setSessionNote((n) => n ?? 'saved'))
+  }, [source, trace])
+  // Settings and edits, as you work.
+  useEffect(() => {
+    if (!source || !trace || !sessionId.current) return
+    const id = sessionId.current
+    const t = setTimeout(() => void saveState({ id, settings, edits }), 600)
+    return () => clearTimeout(t)
+  }, [source, trace, settings, edits])
+  /** Forget everything: the saved session and what's on screen. Always asks. */
+  const startOver = () =>
+    setPending({
+      message: 'Start over? This clears the image and all your edits, here and from this browser’s storage. It can’t be undone.',
+      confirm: 'Start over',
+      run: () => {
+        openSeq.current++
+        void clearSession()
+        fileRef.current = null
+        sessionId.current = null
+        setSource((prev) => {
+          if (prev) URL.revokeObjectURL(prev.url)
+          return null
+        })
+        setTrace(null)
+        setHistory(startHistory(NO_EDITS))
+        setSelectedIds([])
+        setSelectedNodes([])
+        setSettings(settingsFor('logo'))
+        setSessionNote(null)
+        setExportSize(null)
+        setPicking(null)
+      },
+    })
 
   const detached = edits.doc !== null
   /** Run `action` now, or ask first when it would discard shape edits. */
@@ -595,9 +684,40 @@ export default function App() {
   const stats = freshStats ?? (keptStats?.source === source ? keptStats.stats : null)
 
   // ---- Export -------------------------------------------------------------
-  const finalSvg = async () => fresh ?? (await optimizeHere(svg))
+  const size: ExportSize = exportSize && doc ? { ...exportSize, height: (exportSize.width * doc.height) / doc.width } : { width: doc?.width ?? 0, height: doc?.height ?? 0, unit: 'px' }
+  /** The optimised SVG at the export size. */
+  const finalSvg = async () => withSize(fresh ?? (await optimizeHere(svg)), size)
 
   const download = async () => save(new Blob([await finalSvg()], { type: 'image/svg+xml' }), `${source!.name}.svg`)
+
+  /** What PDF and EPS draw: the shapes as shown, with the background. */
+  const drawable = () => ({ width: doc!.width, height: doc!.height, background: edits.background ? normalizeHex(edits.background) : null, paths: visiblePaths(doc!, edits.inks) })
+  const downloadPdf = () => save(new Blob([buildPdf(drawable(), size, source!.name) as BlobPart], { type: 'application/pdf' }), `${source!.name}.pdf`)
+  const downloadEps = () => save(new Blob([buildEps(drawable(), size, source!.name)], { type: 'application/postscript' }), `${source!.name}.eps`)
+  /** A PNG rendered by the browser from the SVG, at the export size × scale (px) or at a dpi (physical units). */
+  const downloadPng = async (scale: number, dpi: number) => {
+    const { width, height } = pngPixels(size, scale, dpi)
+    setPngError(null)
+    if (width * height > MAX_PNG_PIXELS) return setPngError(`${width} × ${height} is larger than browsers can draw. Choose a smaller size or resolution.`)
+    const img = new Image()
+    img.src = URL.createObjectURL(new Blob([withSize(fresh ?? (await optimizeHere(svg)), { width, height, unit: 'px' })], { type: 'image/svg+xml' }))
+    try {
+      await img.decode()
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) throw new Error('no canvas')
+      ctx.drawImage(img, 0, 0, width, height)
+      const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
+      if (!blob) throw new Error('no PNG')
+      save(blob, `${source!.name}.png`)
+    } catch {
+      setPngError('The browser couldn’t make that PNG. Try a smaller size or resolution.')
+    } finally {
+      URL.revokeObjectURL(img.src)
+    }
+  }
 
   const copy = async () => {
     await navigator.clipboard.writeText(await finalSvg())
@@ -607,7 +727,7 @@ export default function App() {
 
   const downloadLayers = async () => {
     const files: Record<string, Uint8Array> = {}
-    for (const f of layerFiles(doc!, edits.inks, source!.name, edits.background)) files[f.name] = strToU8(await optimizeHere(f.svg))
+    for (const f of layerFiles(doc!, edits.inks, source!.name, edits.background)) files[f.name] = strToU8(withSize(await optimizeHere(f.svg), size))
     files[`${source!.name}-all.svg`] = strToU8(await finalSvg())
     const zip = zipSync(files, { level: 6 })
     save(new Blob([zip.buffer as ArrayBuffer], { type: 'application/zip' }), `${source!.name}-layers.zip`)
@@ -857,10 +977,22 @@ export default function App() {
                     {trace && trace.width < source.originalWidth && ` · traced at ${trace.width} × ${trace.height}`}
                   </div>
                 </div>
-                <button className="btn shrink-0" onClick={() => fileInput.current?.click()}>
-                  Replace
-                </button>
+                <div className="flex shrink-0 gap-1.5">
+                  <button className="btn" onClick={() => fileInput.current?.click()}>
+                    Replace
+                  </button>
+                  <button className="btn" onClick={startOver} title="Clear this image and your edits, here and from this browser’s storage">
+                    Start over
+                  </button>
+                </div>
               </div>
+            )}
+            {source && (
+              sessionNote && (
+                <p className="border-b border-rule px-5 py-2 text-[12px] text-ink-faint" data-session={sessionNote}>
+                  {sessionNote === 'restored' ? 'Restored from your last visit. ' : ''}Your image and edits are kept in this browser only, so a reload doesn’t lose them.
+                </p>
+              )
             )}
             {pending && (
               <div role="alertdialog" aria-labelledby="pending-msg" className="border-b border-rule bg-accent-dim px-5 py-4">
@@ -1002,6 +1134,21 @@ export default function App() {
                 Layers (.zip)
               </button>
             </div>
+            {doc && (
+              <ExportOptions
+                size={size}
+                aspect={doc.width / doc.height}
+                onSize={(s) => setExportSize({ width: s.width, unit: s.unit })}
+                maxPixels={MAX_PNG_PIXELS}
+                pngError={pngError}
+                onReset={() => setExportSize(null)}
+                isDefault={exportSize === null}
+                disabled={!trace}
+                onPng={downloadPng}
+                onPdf={downloadPdf}
+                onEps={downloadEps}
+              />
+            )}
           </div>
         </aside>
       </main>
@@ -1113,6 +1260,9 @@ function Stat({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
+
+/** Safari's canvas limit, the smallest of the browsers': anything larger fails to draw. */
+const MAX_PNG_PIXELS = 16_777_216
 
 let svgoHere: Promise<typeof import('svgo/browser')> | undefined
 async function optimizeHere(svg: string) {
