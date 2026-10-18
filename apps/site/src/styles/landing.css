@@ -359,17 +359,41 @@ pre {
   width: calc(100% - 48px);
   max-width: 1072px;
   padding-inline: 0;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 12px;
-  padding-block: 32px 48px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 3fr);
+  gap: 40px;
+  padding-block: 48px 56px;
   border-top: 1px solid var(--line);
   color: var(--text-soft);
-  font-size: 0.9rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
 }
-.foot a + a {
-  margin-left: 18px;
+.foot-about p {
+  margin: 12px 0 0;
+  max-width: 24em;
+}
+.foot-about .foot-fine {
+  margin-top: 16px;
+  font-size: 0.85rem;
+}
+.foot-cols {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+}
+.foot-cols h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+.foot-cols ul {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.foot-cols li + li {
+  margin-top: 8px;
 }
 
 /* ---- Small screens --------------------------------------------------------- */
@@ -400,6 +424,12 @@ pre {
   }
   .foot {
     width: calc(100% - 32px);
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+  .foot-cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 28px;
   }
   .mat figcaption {
     flex-direction: column;
@@ -457,7 +487,11 @@ pre {
   text-align: right;
   padding-right: 0;
 }
-.prose .gap {
-  background: var(--sunk);
-  padding: 0 4px;
+/* In the footer's lists the place says they're links; underline on hover only. */
+.foot-cols a {
+  text-decoration: none;
+}
+.foot-cols a:hover,
+.foot-cols a:focus-visible {
+  text-decoration: underline;
 }
