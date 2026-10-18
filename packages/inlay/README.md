@@ -19,7 +19,10 @@ npm install inlaytrace
 ```
 
 ESM only, with type declarations. Node 20 or newer, any current browser, and
-Web Workers. No dependencies.
+Web Workers. No dependencies and no install scripts. Each release is published
+from this repo's release workflow with
+[provenance](https://docs.npmjs.com/generating-provenance-statements), so npm
+shows which commit built it.
 
 Versions are 0.x while the API settles: a minor version (0.1 → 0.2) may change
 it, and the [changelog](https://github.com/mtblck/inlaytrace/blob/main/packages/inlay/CHANGELOG.md)
