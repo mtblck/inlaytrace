@@ -44,6 +44,8 @@ export async function handle(req: Request, route: string, env: Env, fetchImpl: t
     if (route === 'keepalive' && req.method === 'GET') return await keepalive(req, env, fetchImpl)
     const db = supabase(env, fetchImpl)
     if (!db) {
+      // The app's header asks on every load; with no accounts here, nobody is signed in.
+      if (route === 'account/summary' && req.method === 'GET') return json({ signedIn: false })
       if (env.SUPABASE_SERVICE_ROLE_KEY && !isSecretKey(env.SUPABASE_SERVICE_ROLE_KEY)) console.error('SUPABASE_SERVICE_ROLE_KEY is a publishable (anon) key; it needs the secret (service_role) key.')
       return json({ error: "Accounts aren't set up on this server." }, 503)
     }
@@ -63,6 +65,8 @@ export async function handle(req: Request, route: string, env: Env, fetchImpl: t
         return await signOut(req, db)
       case 'GET account':
         return await account(req, db)
+      case 'GET account/summary':
+        return await account(req, db, false)
       case 'POST account/delete':
         return await deleteAccount(req, db)
       case 'POST account/portal':
@@ -118,10 +122,12 @@ async function signOut(req: Request, db: Supabase) {
   return empty(204, clearSession())
 }
 
-async function account(req: Request, db: Supabase) {
+/** Who's signed in and their balance; with the ledger for the account page, without for the app's header. */
+async function account(req: Request, db: Supabase, withLedger = true) {
   const auth = await authenticate(req, db)
   // Signed out is an ordinary answer here, not an error: the page shows the sign-in form.
   if (!auth) return json({ signedIn: false }, 200, cookies(req)[AT] || cookies(req)[RT] ? clearSession() : [])
+  if (!withLedger) return json({ signedIn: true, email: auth.user.email, balance: await db.balance(auth.user.id) }, 200, auth.setCookies)
   const [balance, ledger] = await Promise.all([db.balance(auth.user.id), db.ledger(auth.user.id)])
   return json({ signedIn: true, email: auth.user.email, balance, ledger }, 200, auth.setCookies)
 }

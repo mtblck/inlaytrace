@@ -1,8 +1,9 @@
 ---
 /**
  * Privacy, in plain words, for the app, the site, the package and HD mode.
- * Every claim here is checkable in the code: the app makes no network requests
- * of its own (its CSP allows connect-src 'self' only), stores the session in
+ * Every claim here is checkable in the code: the app's only request of its own
+ * is the header asking who's signed in (apps/app/src/account/status.ts; its CSP
+ * allows connect-src 'self' only), stores the session in
  * IndexedDB (apps/app/src/lib/session.ts) and preferences in localStorage.
  * Accounts and credits: server/ and supabase/migrations/. Paddle's review needs
  * the seller's legal name and address here, and Paddle named as a recipient.
@@ -30,8 +31,9 @@ import { ADDRESS, CONTACT, SELLER, SELLER_KIND, UPDATED } from '../data/legal'
     <h2>The free app: your images stay with you</h2>
     <p>
       When you open an image in the <a href="/app/">app</a>, your browser decodes it, traces it, lets you edit it and exports the result,
-      all on your device. Nothing is uploaded, and we never receive, see or store your files. The app makes no network requests apart from
-      loading its own code from this site, and its security policy stops its code from sending data anywhere else.
+      all on your device. Nothing is uploaded, and we never receive, see or store your files. Apart from loading its own code, the app
+      makes one small request to this site, to show whether you're signed in and how many HD credits you have; it carries no image. Its
+      security policy stops its code from sending data anywhere else.
     </p>
     <p>
       The optional in-browser AI steps (removing the background, upscaling small images) work the same way: the models are downloaded from
