@@ -7,11 +7,12 @@
  * replaces whatever was waiting, and the worker only ever starts the latest.
  * Superseded requests resolve with `null` so callers can simply ignore them.
  */
-import type { TraceOptions } from './presets'
+import type { Settings, TraceOptions } from './presets'
+import type { Candidate } from './targetSize'
 import type { WorkerRequest, WorkerResponse } from './worker'
 
-type Channel = 'trace' | 'optimize' | 'symmetry'
-type Pending = { request: WorkerRequest; resolve: (r: WorkerResponse | null) => void }
+type Channel = 'trace' | 'optimize' | 'symmetry' | 'size'
+type Pending = { request: WorkerRequest; resolve: (r: WorkerResponse | null) => void; progress?: (r: WorkerResponse) => void }
 
 export class TraceClient {
   private worker?: Worker
@@ -29,6 +30,7 @@ export class TraceClient {
     if (this.worker) return this.worker
     const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
     worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
+      if (e.data.type === 'progress') return void this.inFlight?.progress?.(e.data)
       this.inFlight?.resolve(e.data)
       this.inFlight = undefined
       this.busy = false
@@ -55,6 +57,15 @@ export class TraceClient {
     return this.send('symmetry', { type: 'symmetry', id: this.nextId++, rgba: rgba.slice().buffer, width, height })
   }
 
+  /**
+   * Search trace settings for a file under `target` bytes. Long (many traces),
+   * so the app runs it on a client of its own, leaving the main one free to trace.
+   */
+  fitSize(rgba: Uint8ClampedArray, width: number, height: number, settings: Settings, target: number, progress: (tried: number, best: Candidate) => void) {
+    const request: WorkerRequest = { type: 'size', id: this.nextId++, rgba: rgba.slice().buffer, width, height, settings, target }
+    return this.send('size', request, (r) => r.type === 'progress' && progress(r.tried, r.best))
+  }
+
   optimize(svg: string) {
     return this.send('optimize', { type: 'optimize', id: this.nextId++, svg })
   }
@@ -67,10 +78,10 @@ export class TraceClient {
     this.busy = false
   }
 
-  private send(channel: Channel, request: WorkerRequest) {
+  private send(channel: Channel, request: WorkerRequest, progress?: Pending['progress']) {
     return new Promise<WorkerResponse | null>((resolve) => {
       this.waiting.get(channel)?.resolve(null)
-      this.waiting.set(channel, { request, resolve })
+      this.waiting.set(channel, { request, resolve, progress })
       this.pump()
     })
   }
@@ -79,13 +90,13 @@ export class TraceClient {
     if (this.busy) return
     // Traces first: an optimize of a stale trace is wasted work. Symmetry last:
     // it's only needed once the Mirror tool opens.
-    const channel = (['trace', 'optimize', 'symmetry'] as const).find((c) => this.waiting.has(c))
+    const channel = (['trace', 'optimize', 'symmetry', 'size'] as const).find((c) => this.waiting.has(c))
     if (!channel) return
     const next = this.waiting.get(channel)!
     this.waiting.delete(channel)
     this.busy = true
     this.inFlight = next
-    const transfer = next.request.type === 'trace' || next.request.type === 'symmetry' ? [next.request.rgba] : []
+    const transfer = 'rgba' in next.request ? [next.request.rgba] : []
     this.ensureWorker().postMessage(next.request, transfer)
   }
 }

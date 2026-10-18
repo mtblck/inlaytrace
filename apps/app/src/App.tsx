@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { zipSync, strToU8 } from 'fflate'
 import { TraceClient } from './engine/client'
+import type { SizeRun } from './components/Controls'
 import { canMerge, isInk, maxTraceEdge, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
 import { ACCEPTED, colourAt, hasDarkBackground, loadSource, pixelsOf, type Pixels, type Source } from './lib/image'
 import { formatBytes, normalizeHex, parseTrace, statsOf, type Trace } from './lib/svg'
@@ -47,6 +48,10 @@ type Status = { kind: 'idle' } | { kind: 'tracing' } | { kind: 'done'; ms: numbe
 export default function App() {
   const client = useMemo(() => new TraceClient(), [])
   useEffect(() => () => client.dispose(), [client])
+  // Target size runs dozens of traces: on a worker of its own, so tracing stays responsive.
+  const sizeClient = useMemo(() => new TraceClient(), [])
+  useEffect(() => () => sizeClient.dispose(), [sizeClient])
+  const [sizeRun, setSizeRun] = useState<SizeRun | null>(null)
 
   const [source, setSource] = useState<Source | null>(null)
   const [settings, setSettings] = useState<Settings>(() => settingsFor('logo'))
@@ -169,6 +174,8 @@ export default function App() {
       setSelectedNodes([])
       setAxis(null)
       setDetected(null)
+      sizeClient.dispose()
+      setSizeRun(null)
       axisTouched.current = false
       setTool('select')
       setPanel(restore?.edits.doc ? 'edit' : 'trace')
@@ -795,6 +802,33 @@ export default function App() {
    * (asking first if shapes are edited), and the shared edge disappears; Unmerge
    * in the colour list takes it back.
    */
+  /** Search for settings that fit the SVG under `kb`. */
+  const findSize = async (kb: number) => {
+    if (!source) return
+    const maxEdge = maxTraceEdge(settings.preset)
+    const upscale = settings.preset !== 'pixel'
+    const { rgba, width, height } = pixelsOf(source, maxEdge, upscale)
+    const target = Math.round(kb * 1024)
+    const from = settings
+    setSizeRun({ target, from, tried: 0, best: null, result: null })
+    const res = await sizeClient.fitSize(rgba, width, height, from, target, (tried, best) => setSizeRun((r) => (r && r.from === from ? { ...r, tried, best } : r)))
+    setSizeRun((r) => {
+      if (!r || r.from !== from) return r // cancelled, or another search started
+      if (res?.type === 'sized') return { ...r, tried: res.result.tried, best: res.result.best, result: res.result }
+      return { ...r, error: res?.type === 'error' ? res.message : 'The search stopped.' }
+    })
+  }
+  const cancelSize = () => {
+    sizeClient.dispose()
+    setSizeRun(null)
+  }
+  const applySize = () => {
+    if (!sizeRun?.result) return
+    // Merges are about this image's colours, not something the search changes.
+    changeSettings({ ...sizeRun.result.best.settings, merge: settings.merge })
+    setSizeRun(null)
+  }
+
   const mergeInk = (from: string, into: string) => changeSettings({ ...settings, merge: { ...settings.merge, [from]: into } })
   const unmergeInk = (from: string) => {
     const merge = { ...settings.merge }
@@ -1152,7 +1186,13 @@ export default function App() {
             )}
             </div>
             <div role="tabpanel" id="panel-trace" aria-labelledby="tab-trace" hidden={!!doc && panel !== 'trace'}>
-              <Controls settings={settings} onChange={changeSettings} onPreset={choosePreset} measuredStroke={settings.preset === 'centerline' && settings.strokeWidth === 0 ? (trace?.paths[0]?.stroke ?? null) : null} />
+              <Controls settings={settings} onChange={changeSettings} onPreset={choosePreset} measuredStroke={settings.preset === 'centerline' && settings.strokeWidth === 0 ? (trace?.paths[0]?.stroke ?? null) : null}
+                currentBytes={stats?.bytes ?? null}
+                sizeRun={sizeRun}
+                onFindSize={findSize}
+                onApplySize={applySize}
+                onCancelSize={cancelSize}
+              />
             </div>
           </div>
 
