@@ -27,7 +27,9 @@ under the file name appears once it's saved. *Start over* (beside *Replace*)
 asks, then deletes it; so does clearing this site's data in your browser. A
 private window keeps nothing after it closes. Saved data is checked on the
 way back in, like everything else that becomes markup.
-Your light/dark theme and overlay colours are kept in localStorage.
+Your light/dark theme and overlay colours are kept in localStorage. The app's
+own files (not your images) are cached by its service worker, so it works
+offline; see [Install and offline](install-and-offline.md).
 
 Saving is best-effort: if the browser refuses storage (some private modes,
 full disks, blocked site data), the tool works as before and simply doesn't

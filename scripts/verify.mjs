@@ -1093,6 +1093,24 @@ if (process.env.FIXTURE) {
   await ai.close()
 }
 
+// ---- Installable, and works offline -----------------------------------------
+{
+  const off = await newPage({ width: 1280, height: 800 })
+  await off.goto(url)
+  const manifestHref = await off.locator('link[rel="manifest"]').getAttribute('href')
+  const manifest = await (await off.request.get(new URL(manifestHref, url).href)).json()
+  check(manifest.start_url === '/app/' && manifest.display === 'standalone' && manifest.icons.some((i) => i.sizes === '512x512'), 'the app has a manifest to install from')
+  await off.evaluate(() => navigator.serviceWorker.ready)
+  await off.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 15_000 }).catch(() => {})
+  await off.context().setOffline(true)
+  await off.reload()
+  await off.getByRole('button', { name: 'Try a sample' }).click()
+  await traced(off)
+  check(true, 'offline after one visit, the app loads from its cache and traces')
+  await off.context().setOffline(false)
+  await off.close()
+}
+
 // ---- Dark theme and mobile ------------------------------------------------
 const dark = await newPage({ width: 1440, height: 900 }, 'dark')
 await dark.goto(url)

@@ -57,11 +57,10 @@ fix the result: nodes, curves, colours, background, mirror, with undo.
 at 4× (`npm run score`), and the numbers are written down.
 → [Measuring quality](how-it-works/measuring-quality.md)
 
-## What others do that we don't (yet)
+## What others do that we don't
 
-Each of these is on the [roadmap](roadmap.md):
-
-- **Offline install** (SVGcode).
+Everything this comparison found missing (symmetry, shape fitting, centerline
+tracing, DXF, offline install) has shipped; see the [roadmap](roadmap.md).
 
 Not planned: a full drawing program (Illustrator, Inkscape: pen tool, booleans,
 text). Inlay fixes a trace; for more, export the SVG to one of those.
