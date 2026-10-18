@@ -87,6 +87,20 @@ export function supabase(env: Env, fetchImpl: typeof fetch = fetch) {
     async balance(userId: string) {
       return Number(await call('/rest/v1/rpc/credit_balance', { method: 'POST', body: JSON.stringify({ p_user: userId }) }))
     },
+    /** Credit a Paddle purchase, once per transaction. Returns the balance afterwards. */
+    async grantPurchase(userId: string, transactionId: string, credits: number, details: Record<string, unknown>) {
+      return Number(await call('/rest/v1/rpc/grant_purchase', { method: 'POST', body: JSON.stringify({ p_user: userId, p_transaction: transactionId, p_credits: credits, p_details: details }) }))
+    },
+    /** Take back up to `credits` of a refunded purchase, once per transaction. Null if there's no such purchase. */
+    async reversePurchase(transactionId: string, credits: number, details: Record<string, unknown>) {
+      const b = await call('/rest/v1/rpc/reverse_purchase', { method: 'POST', body: JSON.stringify({ p_transaction: transactionId, p_credits: credits, p_details: details }) })
+      return b === null ? null : Number(b)
+    },
+    /** The purchase row for a Paddle transaction, if any. */
+    async purchase(transactionId: string) {
+      const rows = (await call(`/rest/v1/credit_ledger?select=user_id,delta,details&reason=eq.purchase&paddle_transaction_id=eq.${encodeURIComponent(transactionId)}`)) as { user_id: string; delta: number; details: Record<string, unknown> }[]
+      return rows[0] ?? null
+    },
     async ledger(userId: string, limit = 100) {
       const q = `select=id,delta,reason,details,created_at&user_id=eq.${encodeURIComponent(userId)}&order=created_at.desc&limit=${limit}`
       return (await call(`/rest/v1/credit_ledger?${q}`)) as LedgerEntry[]

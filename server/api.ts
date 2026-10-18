@@ -1,5 +1,5 @@
 /**
- * Inlay's API: accounts for HD credits. Web-standard Request → Response, so the
+ * Inlay's API: accounts and credits for HD mode. Web-standard Request → Response, so the
  * Vercel Function (api/server.ts) and the dev and preview servers run the same
  * code. The free app never calls it; only the account page and, later, HD do.
  *
@@ -10,6 +10,12 @@
  *   GET  account                   { signedIn: false }, or email, balance and
  *                                  recent ledger
  *   POST account/delete { confirm: true }
+ *   POST account/portal            a link to Paddle's portal (receipts, invoices)
+ *   GET  checkout/config           Paddle client token, environment and packs
+ *   POST checkout       { priceId } a Paddle transaction for one pack, tagged
+ *                                  with the signed-in user
+ *   POST paddle/webhook            Paddle notifications (signed): completed
+ *                                  purchases add credits, refunds take them back
  *   GET  keepalive                 Vercel cron: one query a day so the free
  *                                  Supabase project never pauses
  *
@@ -18,7 +24,10 @@
  * already keeps the cookies off cross-site posts, and a cross-site form can't
  * send JSON without a preflight this API never answers.
  */
-import { isSecretKey, supabase, SupabaseError, type Env, type Session, type Supabase, type User } from './supabase.js'
+import { creditsFor, packs, paddle, paddleEnvironment, PaddleError, verifySignature, type PaddleEnv } from './paddle.js'
+import { isSecretKey, supabase, SupabaseError, type Env as SupabaseEnv, type Session, type Supabase, type User } from './supabase.js'
+
+export type Env = SupabaseEnv & PaddleEnv
 
 const AT = 'inlay_at'
 const RT = 'inlay_rt'
@@ -51,10 +60,18 @@ export async function handle(req: Request, route: string, env: Env, fetchImpl: t
         return await account(req, db)
       case 'POST account/delete':
         return await deleteAccount(req, db)
+      case 'POST account/portal':
+        return await portal(req, db, env, fetchImpl)
+      case 'GET checkout/config':
+        return checkoutConfig(env)
+      case 'POST checkout':
+        return await checkout(req, db, env, fetchImpl)
+      case 'POST paddle/webhook':
+        return await webhook(req, db, env)
     }
     return json({ error: 'Not found.' }, 404)
   } catch (e) {
-    if (e instanceof SupabaseError && e.status === 429) return json({ error: 'Too many requests. Wait a minute and try again.' }, 429)
+    if ((e instanceof SupabaseError || e instanceof PaddleError) && e.status === 429) return json({ error: 'Too many requests. Wait a minute and try again.' }, 429)
     console.error(e)
     return json({ error: 'Something went wrong on the server. Try again in a moment.' }, 500)
   }
@@ -111,6 +128,93 @@ async function deleteAccount(req: Request, db: Supabase) {
   if (!auth) return json({ error: 'Signed out.' }, 401, clearSession())
   await db.deleteUser(auth.user.id)
   return empty(204, clearSession())
+}
+
+// ---- Buying credits (Paddle) ----------------------------------------------------
+
+const PADDLE_MISSING = { error: "Payments aren't set up on this server." }
+
+async function portal(req: Request, db: Supabase, env: Env, fetchImpl: typeof fetch) {
+  const pd = paddle(env, fetchImpl)
+  if (!pd) return json(PADDLE_MISSING, 503)
+  const auth = await authenticate(req, db)
+  if (!auth) return json({ error: 'Sign in first.' }, 401, clearSession())
+  const customer = await pd.findCustomer(auth.user.email)
+  if (!customer) return json({ error: 'No purchases yet, so there are no receipts to show.' }, 404, auth.setCookies)
+  return json({ url: await pd.portalUrl(customer) }, 200, auth.setCookies)
+}
+
+/** What the buy page needs to open Paddle's checkout. The client token is public by design. */
+function checkoutConfig(env: Env) {
+  if (!env.PADDLE_CLIENT_TOKEN || !env.PADDLE_API_KEY) return json(PADDLE_MISSING, 503)
+  return json({ environment: paddleEnvironment(env), token: env.PADDLE_CLIENT_TOKEN, packs: packs(env) })
+}
+
+async function checkout(req: Request, db: Supabase, env: Env, fetchImpl: typeof fetch) {
+  const pd = paddle(env, fetchImpl)
+  if (!pd) return json(PADDLE_MISSING, 503)
+  const body = await readJson(req)
+  const priceId = typeof body.priceId === 'string' ? body.priceId : ''
+  if (!creditsFor(env, priceId)) return json({ error: "That pack isn't for sale." }, 400)
+  const auth = await authenticate(req, db)
+  if (!auth) return json({ error: 'Sign in to buy credits.' }, 401, clearSession())
+  // The transaction, not the browser, says whose credits these are.
+  const customer = (await pd.findCustomer(auth.user.email)) ?? (await pd.createCustomer(auth.user.email))
+  const transactionId = await pd.createTransaction(priceId, customer, auth.user.id)
+  return json({ transactionId }, 200, auth.setCookies)
+}
+
+type PaddleEvent = { event_type?: string; data?: Record<string, any> }
+
+/**
+ * Paddle's notifications. Everything here is idempotent (once per transaction
+ * in the ledger), so retries and replays change nothing. Answers 200 to events
+ * it can't act on, so Paddle stops retrying them; problems are logged.
+ */
+async function webhook(req: Request, db: Supabase, env: Env) {
+  const raw = await req.text()
+  if (!env.PADDLE_WEBHOOK_SECRET) return json(PADDLE_MISSING, 503)
+  if (!(await verifySignature(req.headers.get('paddle-signature'), raw, env.PADDLE_WEBHOOK_SECRET))) return json({ error: 'Bad signature.' }, 401)
+  let event: PaddleEvent
+  try {
+    event = JSON.parse(raw)
+  } catch {
+    return json({ error: 'Bad JSON.' }, 400)
+  }
+  const d = event.data ?? {}
+  if (event.event_type === 'transaction.completed') {
+    const userId = d.custom_data?.user_id
+    const items: { price?: { id?: string }; price_id?: string; quantity?: number }[] = d.items ?? []
+    const credits = items.reduce((n, i) => n + creditsFor(env, i.price?.id ?? i.price_id ?? '') * (i.quantity ?? 1), 0)
+    if (typeof userId !== 'string' || !credits) {
+      console.error(`Paddle ${d.id}: completed, but no user (${userId}) or no known pack (${items.map((i) => i.price?.id ?? i.price_id).join(', ')}); no credits granted.`)
+      return json({ ok: true, granted: 0 })
+    }
+    try {
+      await db.grantPurchase(userId, d.id, credits, { price_id: items[0]?.price?.id ?? items[0]?.price_id, customer_id: d.customer_id, total: d.details?.totals?.grand_total ?? d.details?.totals?.total, currency: d.currency_code })
+    } catch (e) {
+      // The account was deleted between paying and the notification: nothing to credit.
+      if (e instanceof SupabaseError && /foreign key|violates/.test(e.message)) {
+        console.error(`Paddle ${d.id}: user ${userId} no longer exists; refund by hand if needed.`)
+        return json({ ok: true, granted: 0 })
+      }
+      throw e
+    }
+    return json({ ok: true, granted: credits })
+  }
+  if (event.event_type === 'adjustment.created' || event.event_type === 'adjustment.updated') {
+    // A refund or chargeback takes the credits back once it's approved.
+    if (!['refund', 'chargeback'].includes(d.action) || d.status !== 'approved' || !d.transaction_id) return json({ ok: true, reversed: 0 })
+    const purchase = await db.purchase(d.transaction_id)
+    if (!purchase) return json({ ok: true, reversed: 0 })
+    // A full refund takes everything back; a partial one, its share of the credits.
+    const paid = Number(purchase.details.total)
+    const refunded = Number(d.totals?.total)
+    const credits = d.type === 'partial' && paid > 0 && refunded > 0 ? Math.ceil((purchase.delta * refunded) / paid) : purchase.delta
+    await db.reversePurchase(d.transaction_id, credits, { adjustment_id: d.id, action: d.action, type: d.type })
+    return json({ ok: true, reversed: credits })
+  }
+  return json({ ok: true })
 }
 
 async function keepalive(req: Request, env: Env, fetchImpl: typeof fetch) {
