@@ -1,5 +1,11 @@
 # inlaytrace
 
+## 0.1.1
+
+### Patch Changes
+
+- The npm page says the package has no dependencies or install scripts, and that releases carry provenance. No code changes.
+
 ## 0.1.0
 
 First published release: the tracer the [Inlay app](https://mattblack.space/tools/img-to-svg/)

@@ -1,6 +1,6 @@
 {
   "name": "inlaytrace",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Trace images into SVG shapes that share their edges exactly: no gaps, no overlaps. Pure TypeScript, no WebAssembly.",
   "type": "module",
   "license": "MIT",
