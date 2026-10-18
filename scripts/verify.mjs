@@ -17,6 +17,7 @@
  * never traces anything, and only a real browser with the real headers sees it.
  */
 import { chromium } from 'playwright'
+import { unzipSync } from 'fflate'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -949,6 +950,32 @@ if (process.env.FIXTURE) {
   await retrace(sv, () => sv.getByRole('button', { name: 'Trace it as an image instead' }).click())
   check((await sv.locator('[data-svg-opened]').count()) === 0, 'and it can be traced as an image instead')
   await sv.close()
+}
+
+// ---- Batch: several images, one zip --------------------------------------------
+{
+  const bt = await newPage({ width: 1440, height: 900 })
+  await bt.goto(url)
+  const a = Buffer.from(await fixturePng(bt, 'emblem.svg'), 'base64')
+  const b = Buffer.from(await fixturePng(bt, 'pinwheel.svg'), 'base64')
+  await bt.locator('input[type=file]').setInputFiles([
+    { name: 'emblem.png', mimeType: 'image/png', buffer: a },
+    { name: 'pinwheel.png', mimeType: 'image/png', buffer: b },
+    { name: 'emblem.png', mimeType: 'image/png', buffer: b },
+    { name: 'drawing.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="5" height="5"/></svg>') },
+  ])
+  const dialog = bt.locator('[data-batch]')
+  await dialog.waitFor()
+  check((await dialog.getByRole('listitem').count()) === 4, 'dropping several images opens the batch, one row each')
+  await dialog.getByRole('button', { name: 'Trace all' }).click()
+  await dialog.getByRole('button', { name: 'Download zip' }).and(bt.locator(':enabled')).waitFor({ timeout: 60_000 })
+  check((await dialog.locator('[data-batch-item="done"]').count()) === 3 && (await dialog.locator('[data-batch-item="skipped"]').count()) === 1, 'three traced, the SVG skipped')
+  const [dl] = await Promise.all([bt.waitForEvent('download'), dialog.getByRole('button', { name: 'Download zip' }).click()])
+  const names = Object.keys(unzipSync(readFileSync(await dl.path())))
+  check(names.sort().join() === 'emblem-2.svg,emblem.svg,pinwheel.svg', `the zip has an SVG per image, same names kept apart (${names.join(', ')})`)
+  check((await bt.getByRole('button', { name: 'Try a sample' }).count()) === 1, 'and nothing opened on the page meanwhile')
+  await dialog.getByRole('button', { name: 'Close' }).click()
+  await bt.close()
 }
 
 // ---- Target size: search the settings for a file that fits -------------------
