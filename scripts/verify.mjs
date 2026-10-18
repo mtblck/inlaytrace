@@ -1364,11 +1364,11 @@ if (siteOrigin) {
   await page.route('https://cdn.paddle.com/paddle/v2/paddle.js', (route) =>
     route.fulfill({
       contentType: 'text/javascript',
-      body: `window.__paddle = { env: null, init: null, opened: [] };
+      body: `window.__paddle = { env: null, init: null, opened: [], closed: 0 };
         window.Paddle = {
           Environment: { set: (e) => { window.__paddle.env = e } },
           Initialize: (o) => { window.__paddle.init = { token: o.token }; window.__paddle.cb = o.eventCallback },
-          Checkout: { open: (o) => window.__paddle.opened.push(o), close: () => {} },
+          Checkout: { open: (o) => window.__paddle.opened.push(o), close: () => { window.__paddle.closed++ } },
         }`,
     }),
   )
@@ -1391,6 +1391,9 @@ if (siteOrigin) {
   await page.evaluate(() => window.__paddle.cb({ name: 'checkout.completed', data: {} }))
   await page.getByText('Added 60 credits.').waitFor({ timeout: 10_000 })
   check((await page.getByRole('status').innerText()).includes('120'), 'after paying, the page waits for the credits and shows the new balance')
+  await page.waitForFunction(() => window.__paddle.closed > 0, null, { timeout: 5000 }).catch(() => {})
+  check((await page.evaluate(() => window.__paddle.closed)) > 0, "Paddle's overlay is closed after payment, so the page underneath shows")
+  check((await page.getByRole('link', { name: 'Back to the app' }).last().getAttribute('href')) === '/app/', 'after paying, there is a way back to the app')
   await shot(page, '18-buy-added')
 
   const out = await newPage({ width: 390, height: 844 })

@@ -42,6 +42,9 @@ export default function Buy() {
           const { pack, before } = buying.current
           buying.current = null
           setBusy(null)
+          // Paddle's overlay would otherwise sit on top with its own "completed"
+          // screen and no way back; close it so this page carries on from here.
+          setTimeout(() => window.Paddle?.Checkout.close(), 1500)
           setView({ kind: 'adding', pack, before })
           void waitForCredits(before).then((balance) => setView(balance === null ? { kind: 'slow', pack } : { kind: 'added', pack, balance }))
         }
@@ -69,9 +72,14 @@ export default function Buy() {
         <a href="/app/" className="font-display text-[22px] leading-none">
           Inlay
         </a>
-        <a href="/app/account/" className="text-[13px] text-ink-muted hover:text-ink">
-          Account
-        </a>
+        <nav className="flex gap-4 text-[13px] text-ink-muted">
+          <a href="/app/" className="hover:text-ink">
+            Back to the app
+          </a>
+          <a href="/app/account/" className="hover:text-ink">
+            Account
+          </a>
+        </nav>
       </header>
       <main className="mx-auto w-[min(640px,calc(100vw-32px))] py-10">
         <h1 className="font-display text-[34px] leading-tight">Buy credits</h1>
@@ -133,17 +141,27 @@ export default function Buy() {
             <p>
               Added {view.pack.credits} credits. You have <span className="font-medium">{view.balance}</span>.
             </p>
-            <a href="/app/account/" className="btn mt-6">
-              Back to your account
-            </a>
+            <div className="mt-6 flex flex-wrap gap-2">
+              <a href="/app/" className="btn btn-primary">
+                Back to the app
+              </a>
+              <a href="/app/account/" className="btn">
+                Your account
+              </a>
+            </div>
           </div>
         )}
         {view.kind === 'slow' && (
           <div className="mt-6" role="status">
             <p>Payment received. Your {view.pack.credits} credits are on their way and will show on your account shortly; Paddle's receipt is in your email.</p>
-            <a href="/app/account/" className="btn mt-6">
-              Back to your account
-            </a>
+            <div className="mt-6 flex flex-wrap gap-2">
+              <a href="/app/" className="btn btn-primary">
+                Back to the app
+              </a>
+              <a href="/app/account/" className="btn">
+                Your account
+              </a>
+            </div>
           </div>
         )}
       </main>
