@@ -301,7 +301,13 @@ export default function App() {
       setPrepError(null)
       return
     }
-    if (preparedRef.current?.key === prepKey) return
+    if (preparedRef.current?.key === prepKey) {
+      // Back to a copy already made: stop anything still running for another one.
+      prepClient.stop()
+      setPrepStatus(null)
+      setPrepError(null)
+      return
+    }
     let live = true
     setPrepError(null)
     setPrepStatus({ stage: settings.removeBackground ? 'background' : 'upscale', done: 0, total: 0 })

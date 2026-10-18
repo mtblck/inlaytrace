@@ -12,6 +12,7 @@
  */
 import * as ort from 'onnxruntime-web/wasm'
 import wasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url'
+import { maskFrom, u2Input, upscaleTiles } from './prepCore'
 
 export type PrepRequest = { type: 'prep'; id: number; rgba: ArrayBuffer; width: number; height: number; background: boolean; upscale: boolean }
 export type PrepStage = 'runtime' | 'background' | 'upscale'
@@ -94,76 +95,34 @@ const post = (message: PrepResponse, transfer: Transferable[] = []) => self.post
 const U2 = 320
 
 /**
- * U²-Net's saliency map as an alpha mask, at the image's size. Preprocessing
- * follows rembg's: 320 × 320, scaled by the brightest value, then ImageNet's
- * mean and deviation; the first output, stretched to 0–1, is the mask.
+ * U²-Net's saliency map as an alpha mask, 320 × 320 (the caller scales it).
+ * Preprocessing follows rembg's (u2Input); the first output, stretched to
+ * 0–1, is the mask. The model sees the colours under any existing
+ * transparency, as rembg does, not black.
  */
 async function removeBackground(rgba: Uint8ClampedArray, width: number, height: number, id: number) {
   const s = await session('u2netp.onnx', 'background', id)
   post({ type: 'progress', id, stage: 'background', done: 0, total: 0 })
-  const small = await resize(rgba, width, height, U2, U2)
-  let max = 1
-  for (let i = 0; i < U2 * U2; i++) for (let c = 0; c < 3; c++) max = Math.max(max, small[i * 4 + c])
-  const mean = [0.485, 0.456, 0.406]
-  const std = [0.229, 0.224, 0.225]
-  const input = new Float32Array(3 * U2 * U2)
-  for (let c = 0; c < 3; c++) for (let i = 0; i < U2 * U2; i++) input[c * U2 * U2 + i] = (small[i * 4 + c] / max - mean[c]) / std[c]
-  const out = await s.run({ [s.inputNames[0]]: new ort.Tensor('float32', input, [1, 3, U2, U2]) })
-  const pred = out[s.outputNames[0]].data as Float32Array
-  let lo = Infinity
-  let hi = -Infinity
-  for (const v of pred) {
-    lo = Math.min(lo, v)
-    hi = Math.max(hi, v)
-  }
-  const data = new Uint8ClampedArray(U2 * U2)
-  for (let i = 0; i < data.length; i++) data[i] = Math.round(((pred[i] - lo) / (hi - lo || 1)) * 255)
-  return { data, width: U2, height: U2 }
+  const opaque = new Uint8ClampedArray(rgba)
+  for (let i = 3; i < opaque.length; i += 4) opaque[i] = 255
+  const small = await resize(opaque, width, height, U2, U2)
+  const out = await s.run({ [s.inputNames[0]]: new ort.Tensor('float32', u2Input(small, U2), [1, 3, U2, U2]) })
+  return { data: maskFrom(out[s.outputNames[0]].data as Float32Array), width: U2, height: U2 }
 }
 
 // ---- Upscaling --------------------------------------------------------------------
 
-const TILE = 96
-const PAD = 8
-
 /**
- * Real-ESRGAN ×4, in tiles (each with a margin, so seams don't show), RGB in
- * 0–1. Alpha is scaled smoothly on its own; the network only sees colour.
+ * Real-ESRGAN ×4, in tiles with a margin (prepCore.ts), so seams don't show.
+ * Alpha is scaled smoothly on its own; the network only sees colour.
  */
 async function upscale(rgba: Uint8ClampedArray, width: number, height: number, id: number) {
   const s = await session('realesr-general-x4v3.onnx', 'upscale', id)
+  const run = async (input: Float32Array, tw: number, th: number) => (await s.run({ [s.inputNames[0]]: new ort.Tensor('float32', input, [1, 3, th, tw]) }))[s.outputNames[0]].data as Float32Array
+  post({ type: 'progress', id, stage: 'upscale', done: 0, total: 1 })
+  const out = await upscaleTiles(rgba, width, height, run, (done, total) => post({ type: 'progress', id, stage: 'upscale', done, total }))
   const W = width * 4
   const H = height * 4
-  const out = new Uint8ClampedArray(W * H * 4)
-  const tiles: [number, number][] = []
-  for (let ty = 0; ty < height; ty += TILE) for (let tx = 0; tx < width; tx += TILE) tiles.push([tx, ty])
-  let done = 0
-  post({ type: 'progress', id, stage: 'upscale', done, total: tiles.length })
-  for (const [tx, ty] of tiles) {
-    const x0 = Math.max(0, tx - PAD)
-    const y0 = Math.max(0, ty - PAD)
-    const x1 = Math.min(width, tx + TILE + PAD)
-    const y1 = Math.min(height, ty + TILE + PAD)
-    const tw = x1 - x0
-    const th = y1 - y0
-    const input = new Float32Array(3 * tw * th)
-    for (let y = 0; y < th; y++)
-      for (let x = 0; x < tw; x++) {
-        const o = ((y0 + y) * width + x0 + x) * 4
-        for (let c = 0; c < 3; c++) input[c * tw * th + y * tw + x] = rgba[o + c] / 255
-      }
-    const res = await s.run({ [s.inputNames[0]]: new ort.Tensor('float32', input, [1, 3, th, tw]) })
-    const pred = res[s.outputNames[0]].data as Float32Array
-    const pw = tw * 4
-    const ph = th * 4
-    // Copy only the tile's own area, not its margin.
-    for (let y = (ty - y0) * 4; y < (Math.min(height, ty + TILE) - y0) * 4; y++)
-      for (let x = (tx - x0) * 4; x < (Math.min(width, tx + TILE) - x0) * 4; x++) {
-        const o = ((y0 * 4 + y) * W + x0 * 4 + x) * 4
-        for (let c = 0; c < 3; c++) out[o + c] = Math.round(Math.min(1, Math.max(0, pred[c * pw * ph + y * pw + x])) * 255)
-      }
-    post({ type: 'progress', id, stage: 'upscale', done: ++done, total: tiles.length })
-  }
   const alpha = new Uint8ClampedArray(width * height)
   for (let i = 0; i < alpha.length; i++) alpha[i] = rgba[i * 4 + 3]
   const big = await resizeGray(alpha, width, height, W, H)
