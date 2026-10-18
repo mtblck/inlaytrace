@@ -8,7 +8,7 @@ sandbox can't reach the model hosts). Writes:
 
 Run by .github/workflows/hd-models.yml. Env: GITHUB_TOKEN (to list releases),
 REMOVE_BG_KEY (optional: without it the comparison is skipped),
-BIREFNET_ASSET (optional: an exact release asset name to use).
+BIREFNET_ASSETS (optional: comma-separated release asset names to try).
 """
 import hashlib
 import io
@@ -116,21 +116,21 @@ def sheet(name: str, panels: list[tuple[str, Image.Image]], height=360) -> str:
 
 # ---- BiRefNet ------------------------------------------------------------------
 
-def birefnet_asset() -> tuple[str, str]:
-    """The release asset to use: BIREFNET_ASSET if set, else the lightest general-purpose ONNX."""
+def birefnet_assets() -> list[tuple[str, str]]:
+    """The release assets to try: BIREFNET_ASSETS (comma-separated names) if set, else the lightest general-purpose ONNX."""
     r = requests.get("https://api.github.com/repos/ZhengPeng7/BiRefNet/releases?per_page=100", headers=GH, timeout=60)
     r.raise_for_status()
     assets = [(a["name"], a["browser_download_url"], a["size"]) for rel in r.json() for a in rel["assets"] if a["name"].endswith(".onnx")]
     log("BiRefNet ONNX assets: " + ", ".join(f"{n} ({s / 1e6:.0f} MB)" for n, _, s in assets))
-    want = os.environ.get("BIREFNET_ASSET")
+    want = [w.strip() for w in os.environ.get("BIREFNET_ASSETS", "").split(",") if w.strip()]
     if want:
-        for n, u, _ in assets:
-            if n == want:
-                return n, u
-        sys.exit(f"No asset named {want}")
+        found = [(n, u) for w in want for n, u, _ in assets if n == w]
+        if len(found) != len(want):
+            sys.exit(f"Not all of {want} are release assets")
+        return found
     general = [a for a in assets if "general" in a[0].lower() and "lite" in a[0].lower() and "2k" not in a[0].lower()]
     pick = min(general or assets, key=lambda a: a[2])
-    return pick[0], pick[1]
+    return [(pick[0], pick[1])]
 
 
 def birefnet_mask(sess: ort.InferenceSession, img: Image.Image) -> Image.Image:
@@ -200,30 +200,41 @@ def main():
     manifest = []
     md = ["# HD models: report", "", "Made by `scripts/hd-models/prepare.py` on a GitHub Actions runner (CPU only).", ""]
 
-    # Background removal
-    name, url = birefnet_asset()
-    bpath = download(url, MODELS / "birefnet.onnx")
-    manifest.append({"file": "birefnet.onnx", "asset": name, "source": url, "licence": "MIT (BiRefNet)", "bytes": bpath.stat().st_size, "sha256": sha256(bpath)})
-    sess = ort.InferenceSession(str(bpath), providers=["CPUExecutionProvider"])
-    log(f"BiRefNet: {name}, {bpath.stat().st_size / 1e6:.0f} MB, input {sess.get_inputs()[0].shape}, outputs {[o.shape for o in sess.get_outputs()]}")
-    md += ["## Background removal: BiRefNet against remove.bg", "", f"BiRefNet asset: `{name}`.", "",
-           "| Image | Size | BiRefNet time | Mask difference from remove.bg |", "| --- | --- | --- | --- |"]
+    # Background removal: each chosen BiRefNet model against remove.bg (called once per image).
+    chosen = birefnet_assets()
+    sessions = []
+    for name, url in chosen:
+        short = name.removesuffix(".onnx")
+        path = download(url, MODELS / f"birefnet-{short}.onnx")
+        manifest.append({"file": path.name, "asset": name, "source": url, "licence": "MIT (BiRefNet)", "bytes": path.stat().st_size, "sha256": sha256(path)})
+        sess = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
+        log(f"BiRefNet {name}: {path.stat().st_size / 1e6:.0f} MB, input {sess.get_inputs()[0].shape}, outputs {[o.shape for o in sess.get_outputs()]}")
+        sessions.append((short, sess))
+    md += ["## Background removal: BiRefNet against remove.bg", "",
+           "Mask difference: the mean absolute difference between the two alpha masks, and the share of pixels on opposite sides of 50%.", "",
+           "| Image | Size | " + " | ".join(f"{s} time | {s} vs remove.bg" for s, _ in sessions) + " |",
+           "| --- | --- | " + " | ".join("--- | ---" for _ in sessions) + " |"]
     rows, figs = [], []
     for key, img in images.items():
-        t = time.perf_counter()
-        mask = birefnet_mask(sess, img)
-        secs = time.perf_counter() - t
-        ours = img.convert("RGBA")
-        ours.putalpha(mask)
         theirs = remove_bg(img)
-        diff = "n/a"
-        panels = [("Original", img), ("BiRefNet", on_checker(ours))]
+        panels = [("Original", img)]
+        cells = []
+        for short, sess in sessions:
+            t = time.perf_counter()
+            mask = birefnet_mask(sess, img)
+            secs = time.perf_counter() - t
+            ours = img.convert("RGBA")
+            ours.putalpha(mask)
+            panels.append((short, on_checker(ours)))
+            diff = "n/a"
+            if theirs is not None:
+                a = np.asarray(mask, dtype=np.float32) / 255
+                b = np.asarray(theirs.getchannel("A"), dtype=np.float32) / 255
+                diff = f"{np.abs(a - b).mean() * 100:.2f}% / {(np.abs(a - b) > 0.5).mean() * 100:.2f}%"
+            cells += [f"{secs:.1f} s", diff]
         if theirs is not None:
-            a = np.asarray(mask, dtype=np.float32) / 255
-            b = np.asarray(theirs.getchannel("A"), dtype=np.float32) / 255
-            diff = f"{np.abs(a - b).mean() * 100:.2f}% mean, {(np.abs(a - b) > 0.5).mean() * 100:.2f}% of pixels flipped"
             panels.append(("remove.bg", on_checker(theirs)))
-        rows.append(f"| {key} | {img.width} × {img.height} | {secs:.1f} s | {diff} |")
+        rows.append(f"| {key} | {img.width} × {img.height} | " + " | ".join(cells) + " |")
         figs.append(f"### {key}\n\n![{key}]({sheet('bg-' + key, panels)})\n")
     md += rows + [""] + figs
 
