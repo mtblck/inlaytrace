@@ -5,3 +5,7 @@ dist
 *.tsbuildinfo
 apps/site/src/content/docs/docs/
 apps/site/.astro/
+
+# HD model work (scripts/hd-models), made on a CI runner
+/models/
+/report/

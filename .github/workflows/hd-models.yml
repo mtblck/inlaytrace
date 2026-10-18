@@ -1,0 +1,72 @@
+# HD mode's models: fetch BiRefNet (background removal) and Real-ESRGAN x4plus
+# (upscaling), convert to ONNX, try them against remove.bg and the in-browser
+# model, store the weights in Vercel Blob, and publish the report and the
+# models' manifest to the hd-models-report branch. Runs here because the dev
+# sandbox can't reach the model hosts. Manual, or on a push to hd-models.
+name: HD models
+
+on:
+  workflow_dispatch:
+    inputs:
+      birefnet_assets:
+        description: BiRefNet release assets to try, comma-separated
+        required: false
+        default: BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx
+  push:
+    branches: [hd-models]
+    paths: ['scripts/hd-models/**', '.github/workflows/hd-models.yml', 'server/upscale*.ts']
+
+permissions:
+  contents: write
+
+jobs:
+  models:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Python packages
+        run: |
+          pip install --index-url https://download.pytorch.org/whl/cpu torch==2.5.1
+          pip install onnx==1.17.0 onnxruntime==1.20.1 numpy==2.1.3 pillow==11.0.0 requests==2.32.3 scikit-image==0.24.0 cairosvg==2.7.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - name: Fetch, convert and compare
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REMOVE_BG_KEY: ${{ secrets.REMOVE_BG_KEY }}
+          # The tiny general model, unless a manual run names others. The full one (973 MB)
+          # was killed for memory on the runner (16 GB), so it can't run in a 3 GB function either.
+          BIREFNET_ASSETS: ${{ inputs.birefnet_assets || 'BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx' }}
+        run: python scripts/hd-models/prepare.py
+      - name: The real upscaler through the server's code (onnxruntime-node)
+        continue-on-error: true
+        env:
+          HD_MODEL_PATH: models/realesrgan-x4plus.onnx
+          HD_SMOKE_OUT: report/server-smoke.txt
+        run: |
+          npm ci
+          npx vitest run --project server upscale.model 2>&1 | tail -20
+      - name: Upload the models to Vercel Blob
+        env:
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+        # Its output goes into the report, which is published either way (CI logs aren't readable from the dev sandbox).
+        run: |
+          set -o pipefail
+          { npm install --no-save --prefix scripts/hd-models @vercel/blob@2.8.0 && node scripts/hd-models/upload.mjs; } 2>&1 | tee report/upload-log.txt
+      - name: Publish the report and manifest
+        if: always()
+        run: |
+          # No manifest when prepare.py failed early; publish the report and log anyway.
+          cp models/manifest.json report/ || true
+          cd report
+          git init -q -b hd-models-report
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "HD models report for ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" hd-models-report
