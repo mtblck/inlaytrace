@@ -45,10 +45,13 @@ import { sampleImage } from './lib/sample'
 import { Canvas, type Overlays, type SelectMode, type Tool, type ViewMode } from './components/Canvas'
 import { ShortcutsDialog } from './components/Shortcuts'
 import { ExportOptions } from './components/ExportOptions'
+import { Hd } from './components/Hd'
+import { UPSCALE } from '../../../server/pricing'
 import { clearSession, loadSession, newSessionId, saveImage, saveState } from './lib/session'
 import { buildDxf, buildEps, buildPdf, pngPixels, withSize, type ExportSize } from './lib/vectorExport'
 import { IconButton, KeyboardIcon, MoonIcon, SunIcon } from './components/IconButton'
 import { EditPanel } from './components/EditPanel'
+import { AccountNav } from './components/AccountNav'
 import { Controls } from './components/Controls'
 import { Inks } from './components/Inks'
 import { useTheme } from './lib/theme'
@@ -1033,6 +1036,7 @@ export default function App() {
           <IconButton label={theme === 'dark' ? 'Use light theme' : 'Use dark theme'} onClick={toggle}>
             {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
           </IconButton>
+          <AccountNav />
         </div>
       </header>
 
@@ -1369,6 +1373,18 @@ export default function App() {
                 onPdf={downloadPdf}
                 onEps={downloadEps}
                 onDxf={downloadDxf}
+              />
+            )}
+            {/* HD (beta), never for an opened SVG: a full-size trace for images bigger than the app traces, or a 4× upscale for small ones. */}
+            {traceSource && !traceSource.svg && (Math.max(traceSource.bitmap.width, traceSource.bitmap.height) > maxTraceEdge(settings.preset) || traceSource.bitmap.width * traceSource.bitmap.height <= UPSCALE.maxPixels) && (
+              <Hd
+                key={traceSource.url}
+                kind={Math.max(traceSource.bitmap.width, traceSource.bitmap.height) > maxTraceEdge(settings.preset) ? 'trace' : 'upscale'}
+                bitmap={traceSource.bitmap}
+                settings={settings}
+                traceEdge={maxTraceEdge(settings.preset)}
+                onSave={(blob) => save(blob, `${source!.name}-hd.${blob.type === 'image/png' ? 'png' : 'svg'}`)}
+                onOpen={(blob) => void openNow(blob, `${source!.name}-hd.${blob.type === 'image/png' ? 'png' : 'svg'}`)}
               />
             )}
           </div>

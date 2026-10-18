@@ -5,7 +5,13 @@
   "outputDirectory": "dist",
   "functions": {
     "api/server.ts": {
-      "maxDuration": 15
+      "maxDuration": 15,
+      "excludeFiles": "node_modules/onnxruntime-node/**"
+    },
+    "api/hd.ts": {
+      "maxDuration": 300,
+      "memory": 3009,
+      "excludeFiles": "node_modules/onnxruntime-node/bin/napi-v6/{darwin,win32,linux/arm64}/**"
     }
   },
   "crons": [
@@ -52,6 +58,10 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/api/hd/(.*)",
+      "destination": "/api/hd?__route=hd/$1"
+    },
     {
       "source": "/api/(.*)",
       "destination": "/api/server?__route=$1"

@@ -25,6 +25,7 @@ function fakeSupabase(opts: { validAccess?: string[]; refreshOk?: boolean; otpSt
     if (url.pathname === '/auth/v1/logout') return ok(null, 204)
     if (url.pathname.startsWith('/auth/v1/admin/users/')) return ok({})
     if (url.pathname === '/rest/v1/rpc/credit_balance') return ok(45)
+    if (url.pathname === '/rest/v1/hd_runs') return ok([])
     if (url.pathname === '/rest/v1/credit_ledger') return ok([{ id: 2, delta: -2, reason: 'use', details: {}, created_at: '2026-10-18T12:00:00Z' }])
     return ok({ msg: 'unexpected' }, 500)
   }) as typeof fetch
@@ -106,6 +107,26 @@ describe('account', () => {
     expect(r.headers.get('cache-control')).toBe('no-store')
   })
 
+  it('summary gives email and balance without reading the ledger', async () => {
+    const sb = fakeSupabase()
+    const r = await handle(get('account/summary', 'inlay_at=at-1'), 'account/summary', env, sb.fetchImpl)
+    expect(await r.json()).toEqual({ signedIn: true, email: USER.email, balance: 45 })
+    expect(sb.calls.some((c) => c.path.startsWith('/rest/v1/credit_ledger'))).toBe(false)
+  })
+
+  it('summary is signed out, not an error, on a server without accounts', async () => {
+    const r = await handle(get('account/summary'), 'account/summary', {}, fakeSupabase().fetchImpl)
+    expect(r.status).toBe(200)
+    expect(await r.json()).toEqual({ signedIn: false })
+  })
+
+  it('summary asks Supabase nothing when there are no session cookies', async () => {
+    const sb = fakeSupabase()
+    const r = await handle(get('account/summary'), 'account/summary', env, sb.fetchImpl)
+    expect(await r.json()).toEqual({ signedIn: false })
+    expect(sb.calls).toHaveLength(0)
+  })
+
   it('refreshes an expired access token and sets the new cookies', async () => {
     const sb = fakeSupabase({ validAccess: [], refreshOk: true })
     const r = await handle(get('account', 'inlay_at=stale; inlay_rt=rt-1'), 'account', env, sb.fetchImpl)
@@ -170,6 +191,14 @@ describe('guards', () => {
     expect((await handle(get('nope'), 'nope', env, fakeSupabase().fetchImpl)).status).toBe(404)
   })
 
+  it('HD needs a signed-in user, same-origin posts and raw bytes for uploads', async () => {
+    const sb = fakeSupabase()
+    expect((await handle(post('hd/start', { kind: 'trace' }), 'hd/start', env, sb.fetchImpl)).status).toBe(401)
+    expect((await handle(post('hd/start', { kind: 'trace' }, 'inlay_at=at-1', { origin: 'https://evil.example' }), 'hd/start', env, sb.fetchImpl)).status).toBe(403)
+    expect((await handle(post('hd/upload', {}, 'inlay_at=at-1'), 'hd/upload', env, sb.fetchImpl)).status).toBe(415)
+    expect((await handle(get('hd/nope', 'inlay_at=at-1'), 'hd/nope', env, sb.fetchImpl)).status).toBe(404)
+  })
+
   it('runs the keepalive only for Vercel cron', async () => {
     const sb = fakeSupabase()
     expect((await handle(get('keepalive'), 'keepalive', env, sb.fetchImpl)).status).toBe(404)
@@ -177,7 +206,8 @@ describe('guards', () => {
     expect((await handle(get('keepalive', '', { authorization: 'Bearer x' }), 'keepalive', { ...env, CRON_SECRET: undefined }, sb.fetchImpl)).status).toBe(404)
     expect(sb.calls).toHaveLength(0)
     expect((await handle(get('keepalive', '', { authorization: 'Bearer cron-secret' }), 'keepalive', env, sb.fetchImpl)).status).toBe(204)
-    expect(sb.calls.map((c) => c.path)).toEqual(['/rest/v1/rpc/credit_balance'])
+    // A query to keep the project awake, then the sweep for HD files older than an hour.
+    expect(sb.calls.map((c) => c.path.split('?')[0])).toEqual(['/rest/v1/rpc/credit_balance', '/rest/v1/hd_runs'])
   })
 
   const jwt = (role: string) => `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ role })).toString('base64url')}.sig`

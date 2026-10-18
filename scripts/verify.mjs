@@ -18,6 +18,7 @@
  */
 import { chromium } from 'playwright'
 import { unzipSync } from 'fflate'
+import { encode as encodePng } from 'fast-png'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -775,6 +776,11 @@ await page.keyboard.press('Escape')
 const closed = await dialog.waitFor({ state: 'hidden', timeout: 3000 }).then(() => true, () => false)
 check(closed, 'Esc closes the shortcuts panel')
 
+// The header offers sign-in to someone with no session (or when /api isn't set up).
+const signIn = page.locator('header [data-account="signed-out"]')
+const signInShown = await signIn.waitFor({ timeout: 5000 }).then(() => true, () => false)
+check(signInShown && (await signIn.getAttribute('href')) === '/app/account/', 'the header shows Sign in, linking to the account page')
+
 // Header icons: the keyboard opens the same panel; the tooltip shows on keyboard focus; sun/moon switches theme.
 const kb = page.getByRole('button', { name: 'Keyboard shortcuts' })
 await kb.click()
@@ -1261,6 +1267,60 @@ if (siteOrigin) {
     check(over <= 0, `no horizontal scroll on a phone at /${path} (${over}px)`)
     if (!path) await shot(phone, '13-landing-mobile')
   }
+}
+
+// ---- HD trace (beta) ---------------------------------------------------------------
+// A 2600 × 1800 image: bigger than the app traces, so HD is offered. The server
+// is a stand-in (server/hd.test.ts tests the real one); this checks the app's
+// side: nothing is sent until the cost is confirmed, then the parts flow.
+{
+  console.log('\n  hd trace\n')
+  const W = 2600
+  const H = 1800
+  const data = new Uint8Array(W * H * 4)
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) data.set(Math.hypot(x - 1300, y - 900) < 600 ? [30, 60, 140, 255] : [250, 248, 240, 255], (y * W + x) * 4)
+  const big = Buffer.from(encodePng({ width: W, height: H, data, channels: 4, depth: 8 }))
+  const hd = await newPage({ width: 1440, height: 900 })
+  const apiCalls = []
+  let uploaded = 0
+  await hd.route('**/api/**', async (route) => {
+    const req = route.request()
+    const path = new URL(req.url()).pathname.replace('/api/', '')
+    apiCalls.push(path)
+    const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
+    if (path === 'account') return json({ signedIn: true, email: 'ada@example.com', balance: 10, ledger: [] })
+    if (path === 'account/summary') return json({ signedIn: true, email: 'ada@example.com', balance: uploaded ? 8 : 10 })
+    if (path === 'hd/start') return json({ run: '00000000-0000-0000-0000-000000000001', credits: 2, partBytes: 4194304 })
+    if (path === 'hd/upload') return (uploaded++, route.fulfill({ status: 204 }))
+    if (path === 'hd/run') return json({ parts: 1, contentType: 'image/svg+xml', bytes: 120, credits: 2 })
+    if (path === 'hd/result') return route.fulfill({ status: 200, contentType: 'application/octet-stream', body: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"><path fill="#1e3c8c" d="M700 900a600 600 0 1 0 1200 0a600 600 0 1 0-1200 0Z"/></svg>` })
+    return json({ error: 'Not found.' }, 404)
+  })
+  await hd.goto(url)
+  await hd.locator('input[type=file]').setInputFiles({ name: 'big.png', mimeType: 'image/png', buffer: big })
+  await traced(hd)
+  const summary = hd.locator('[data-hd="trace"] summary')
+  check((await summary.innerText()).includes('2,600 × 1,800, 2 credits'), `a big image offers HD with its size and cost (${(await summary.innerText()).replace(/\s+/g, ' ')})`)
+  // The header asks who's signed in; nothing else, and nothing about the image, goes out.
+  check(apiCalls.every((p) => p === 'account/summary'), `nothing is sent to the server just for opening a big image (${apiCalls.join(', ') || 'no calls'})`)
+  check((await hd.locator('header [data-balance]').innerText()) === '10 credits', 'the header shows the balance when signed in')
+  await summary.click()
+  await hd.getByRole('button', { name: 'Trace in HD for 2 credits' }).click()
+  await hd.getByRole('button', { name: 'Start HD trace' }).click()
+  await hd.getByRole('button', { name: 'Download HD' }).waitFor({ timeout: 60_000 })
+  check(uploaded >= 1 && apiCalls.includes('hd/run') && apiCalls.includes('hd/result'), `confirming uploads the image in parts, runs, and fetches the result (${uploaded} part(s))`)
+  const after = await hd.locator('header [data-balance]').filter({ hasText: '8 credits' }).waitFor({ timeout: 5000 }).then(() => true, () => false)
+  check(after, 'the header balance updates after an HD run')
+  await shot(hd, '19-hd-done')
+  const small = await newPage({ width: 1440, height: 900 })
+  await small.goto(url)
+  await small.getByRole('button', { name: 'Try a sample' }).click()
+  await traced(small)
+  const offers = await small.locator('[data-hd]').evaluateAll((els) => els.map((e) => e.getAttribute('data-hd')))
+  const dims = await small.evaluate(() => document.querySelector('aside')?.innerText.match(/(\d+) × (\d+)/)?.slice(1).map(Number))
+  const smallEnough = dims && dims[0] * dims[1] <= 500_000
+  check(!offers.includes('trace') && (smallEnough ? offers.includes('upscale') : offers.length === 0), `a small image offers no HD trace${smallEnough ? ', and offers HD upscale (2 credits)' : ''} (${offers.join(', ') || 'none'})`)
 }
 
 // ---- The account page (sign-in and credits for HD) ----------------------------

@@ -13,7 +13,7 @@ export const PACKS = [
 ] as const
 
 /**
- * What an HD run costs by the image's size, smallest first. Provisional until
+ * What an HD trace costs by the image's size, smallest first. Provisional until
  * HD ships: the server will charge with costFor(), so changing a tier here
  * changes the page and the charge together.
  */
@@ -23,8 +23,17 @@ export const COST = [
   { maxMegapixels: Infinity, credits: 4, label: 'Larger' },
 ] as const
 
-/** Credits for an HD run on a width × height image. */
-export function costFor(width: number, height: number): number {
+/**
+ * HD upscaling (Real-ESRGAN x4plus, 4×): one price, for inputs up to half a
+ * megapixel. Through server/upscale.ts on a GitHub runner's CPU it took 88 s per
+ * megapixel of input (320 × 240 in 6.8 s), so half a megapixel is about 45 s:
+ * room to spare in the function's 300 s on slower CPUs. Raise it with care.
+ */
+export const UPSCALE = { credits: 2, maxPixels: 500_000, factor: 4, label: 'Upscaling 4×, images up to 0.5 megapixels (about 700 × 700)' } as const
+
+/** Credits for an HD run of `kind` on a width × height image. */
+export function costFor(width: number, height: number, kind: 'trace' | 'upscale' = 'trace'): number {
+  if (kind === 'upscale') return UPSCALE.credits
   const mp = (width * height) / 1_000_000
   return COST.find((c) => mp <= c.maxMegapixels)!.credits
 }

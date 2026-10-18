@@ -41,7 +41,7 @@ let api
 const loadApi = async () => {
   if (!api) {
     const { createServer: vite } = await import('vite')
-    const server = await vite({ root, configFile: false, logLevel: 'error', server: { middlewareMode: true, hmr: false }, appType: 'custom' })
+    const server = await vite({ root, configFile: false, logLevel: 'error', server: { middlewareMode: true, hmr: false }, appType: 'custom', resolve: { alias: { inlaytrace: join(root, 'packages/inlay/src/index.ts') } } })
     api = await server.ssrLoadModule('/server/node.ts')
   }
   return api

@@ -46,10 +46,10 @@ export function placeTile(out: Uint8ClampedArray, outWidth: number, pred: ArrayL
     }
 }
 
-/** Upscale RGB 4× tile by tile with `run` (planar 0–1 in, planar 0–1 out at 4×); alpha is left at 0 for the caller. */
-export async function upscaleTiles(rgba: ArrayLike<number>, width: number, height: number, run: (input: Float32Array, tw: number, th: number) => Promise<ArrayLike<number>>, progress?: (done: number, total: number) => void) {
+/** Upscale RGB 4× tile by tile with `run` (planar 0–1 in, planar 0–1 out at 4×); alpha is left at 0 for the caller. The server (HD) uses bigger tiles: less margin to recompute. */
+export async function upscaleTiles(rgba: ArrayLike<number>, width: number, height: number, run: (input: Float32Array, tw: number, th: number) => Promise<ArrayLike<number>>, progress?: (done: number, total: number) => void, tile = TILE) {
   const out = new Uint8ClampedArray(width * SCALE * height * SCALE * 4)
-  const all = tiles(width, height)
+  const all = tiles(width, height, tile)
   let done = 0
   for (const t of all) {
     placeTile(out, width * SCALE, await run(tileInput(rgba, width, t), t.tw, t.th), t)

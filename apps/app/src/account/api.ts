@@ -29,6 +29,7 @@ async function call<T>(path: string, body?: unknown): Promise<T> {
 
 export const api = {
   account: () => call<AccountResponse>('account'),
+  accountSummary: () => call<{ signedIn: true; email: string; balance: number } | { signedIn: false }>('account/summary'),
   start: (email: string) => call<void>('auth/start', { email }),
   exchange: (code: string) => call<{ email: string }>('auth/exchange', { code }),
   signOut: () => call<void>('auth/signout', {}),
