@@ -5,7 +5,10 @@
  * Failure modes that are invisible until production:
  *  - The app's CSP losing the worker allowance: tracing runs in a Web Worker,
  *    and without it the page loads, the drop zone works, and nothing traces.
- *    (It no longer allows 'wasm-unsafe-eval': the app runs no WebAssembly.)
+ *  - WebAssembly reaching further than it needs to. Only the AI worker
+ *    (assets/prep-*.js, background removal and upscaling) compiles any, so
+ *    only its own response carries 'wasm-unsafe-eval'; the page's CSP, which
+ *    governs everything else the app runs, doesn't allow it.
  *  - The site's CSP not allowing an inline script the docs framework (Starlight)
  *    writes: theme, search and sidebar quietly stop working. It's
  *    script-src 'self' plus each script's sha256; --dist hashes every inline
@@ -25,6 +28,9 @@ const APP = '/app'
 /** The app's address before inlaytrace.com; links to it are out there, so it must keep redirecting. */
 const OLD = '/tools/img-to-svg'
 const SITE_SOURCE = `/((?!${APP.slice(1)}/).*)`
+/** The app's CSP covers everything under it except the AI worker, which gets its own. */
+const APP_SOURCE = `${APP}/((?!assets/prep-).*)`
+const PREP_SOURCE = `${APP}/assets/prep-(.*)`
 const problems = []
 
 if (config.outputDirectory !== 'dist') problems.push('outputDirectory must be "dist" (the site and the app both build into it).')
@@ -39,13 +45,17 @@ if (redirectTo(`${OLD}/(.*)`) !== `https://inlaytrace.com${APP}/$1` || redirectT
 const cspOf = (source) => (config.headers ?? []).find((b) => b.source === source)?.headers.find((h) => h.key === 'Content-Security-Policy')?.value
 const directive = (csp, name) => (csp ?? '').split(';').map((d) => d.trim()).find((d) => d.startsWith(`${name} `)) ?? ''
 const blocksWithCsp = (config.headers ?? []).filter((b) => b.headers.some((h) => h.key === 'Content-Security-Policy')).map((b) => b.source)
-if (blocksWithCsp.sort().join() !== [SITE_SOURCE, `${APP}/(.*)`].sort().join())
-  problems.push(`CSP must be set by exactly two blocks, "${SITE_SOURCE}" (site) and "${APP}/(.*)" (app), so they never stack. Found: ${blocksWithCsp.join(', ')}`)
+if (blocksWithCsp.sort().join() !== [SITE_SOURCE, APP_SOURCE, PREP_SOURCE].sort().join())
+  problems.push(`CSP must be set by exactly three blocks, "${SITE_SOURCE}" (site), "${APP_SOURCE}" (app) and "${PREP_SOURCE}" (the AI worker), so they never stack. Found: ${blocksWithCsp.join(', ')}`)
 
-const appCsp = cspOf(`${APP}/(.*)`)
-// The app has run no WebAssembly since Poster moved to Inlay (#53), so it doesn't get to compile any.
-if (directive(appCsp, 'script-src').includes("'wasm-unsafe-eval'")) problems.push("The app's CSP allows 'wasm-unsafe-eval', but the app runs no WebAssembly; take it out.")
+const appCsp = cspOf(APP_SOURCE)
+// Tracing is plain JavaScript; only the AI worker compiles WebAssembly, under its own CSP.
+if (directive(appCsp, 'script-src').includes("'wasm-unsafe-eval'")) problems.push("The app's CSP allows 'wasm-unsafe-eval'; only the AI worker (its own block) should.")
 if (!/worker-src[^;]*'self'/.test(appCsp ?? '')) problems.push("The app's CSP worker-src must allow 'self' for the tracing worker.")
+const prepCsp = cspOf(PREP_SOURCE)
+// The worker's CSP is the app's plus WebAssembly, nothing else.
+if (prepCsp !== appCsp?.replace("script-src 'self';", "script-src 'self' 'wasm-unsafe-eval';"))
+  problems.push(`The AI worker's CSP (${PREP_SOURCE}) must be the app's with 'wasm-unsafe-eval' added to script-src, and nothing else.`)
 const siteCsp = cspOf(SITE_SOURCE)
 const siteScripts = directive(siteCsp, 'script-src')
 if (siteScripts.includes("'unsafe-inline'")) problems.push("The site's CSP allows 'unsafe-inline' scripts; list each inline script's hash instead.")
@@ -55,6 +65,9 @@ if (process.argv.includes('--dist')) {
   const dist = new URL('../dist/', import.meta.url).pathname
   if (!existsSync(join(dist, 'index.html'))) problems.push('dist/index.html is missing: the landing page did not build.')
   if (!existsSync(join(dist, APP.slice(1), 'index.html'))) problems.push(`dist${APP}/index.html is missing: the app did not build.`)
+  // The AI worker's CSP is matched by file name: if the chunk is renamed, it would load under the app's and fail.
+  const assets = existsSync(join(dist, APP.slice(1), 'assets')) ? readdirSync(join(dist, APP.slice(1), 'assets')) : []
+  if (!assets.some((f) => /^prep-.*\.js$/.test(f))) problems.push(`No dist${APP}/assets/prep-*.js: the AI worker chunk was renamed, so ${PREP_SOURCE}'s CSP no longer reaches it.`)
   const walk = (d) => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : f.endsWith('.html') ? [join(d, f)] : []))
   const missing = new Map()
   for (const f of walk(dist)) {

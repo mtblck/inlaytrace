@@ -49,13 +49,16 @@ export type Settings = {
    * hex → traced hex. A new preset starts with none.
    */
   merge: Record<string, string>
+  /** AI steps before tracing (prep.ts): about the image, so a preset keeps them. */
+  removeBackground: boolean
+  aiUpscale: boolean
 }
 
 export type Preset = {
   id: PresetId
   label: string
   hint: string
-  defaults: Omit<Settings, 'preset' | 'merge'>
+  defaults: Omit<Settings, 'preset' | 'merge' | 'removeBackground' | 'aiUpscale'>
 }
 
 export const PRESETS: Preset[] = [
@@ -99,7 +102,7 @@ export const PRESETS: Preset[] = [
 
 export const presetById = (id: PresetId) => PRESETS.find((p) => p.id === id)!
 
-export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {} })
+export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {}, removeBackground: false, aiUpscale: false })
 
 /** One ink, thresholded: line art and centerline. */
 export const isInk = (id: PresetId) => id === 'lineart' || id === 'centerline'

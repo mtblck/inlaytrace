@@ -42,6 +42,7 @@ See [Editing shapes](features/editing-shapes.md), [Colours and background](featu
 
 | Item | What shipped | Ticket |
 | --- | --- | --- |
+| **Background removal and upscaling** | *Prepare*: U²-Net (Apache 2.0) removes the background, Real-ESRGAN (BSD 3-Clause) upscales small images 4×, both in the browser with ONNX Runtime (MIT), the models from this site on first use. Only that worker may run WebAssembly. See [Presets and settings](features/presets-and-settings.md#prepare). | [#39](https://github.com/mtblck/inlaytrace/issues/39) |
 | **Centerline tracing** | A *Centerline* preset: single strokes down the middle of the ink (a skeleton, pruned and joined through crossings, fitted like outlines), with the width measured or set. On a pen drawing, 6 strokes for the 6 drawn, width within 1%. Our own code; AutoTrace is GPL. See [Presets and settings](features/presets-and-settings.md). | [#38](https://github.com/mtblck/inlaytrace/issues/38) |
 | **Shape fitting** | *Exact shapes* (on for Logo, Illustration and Line art) draws an outline that is a circle, ellipse, (rounded) rectangle or regular polygon as that shape exactly; on the sample badge, 0.70% → 0.54% wrong pixels. See [Presets and settings](features/presets-and-settings.md). | [#37](https://github.com/mtblck/inlaytrace/issues/37) |
 | **Symmetry detection** | The Mirror tool opens set up for the mirror axis or turn the image has (95%+ match), and gains *Turn*: keep one slice and repeat it round a centre. See [Mirror](features/mirror.md). | [#36](https://github.com/mtblck/inlaytrace/issues/36) |
@@ -50,7 +51,6 @@ See [Editing shapes](features/editing-shapes.md), [Colours and background](featu
 
 | Item | Why | Ticket |
 | --- | --- | --- |
-| **Background removal and upscaling** | In-browser models for photos and low-res logos, held to the licence rule (MIT/BSD/Apache weights only). | [#39](https://github.com/mtblck/inlaytrace/issues/39) |
 | **Target file size** | "Make it under 10 KB": search the settings for the best trace that fits. | [#40](https://github.com/mtblck/inlaytrace/issues/40) |
 | **Groups and layer reordering** | Treat several shapes as one; move a shape above or below another. | [#41](https://github.com/mtblck/inlaytrace/issues/41) |
 | **DXF export** | For CNC and laser cutting. | [#42](https://github.com/mtblck/inlaytrace/issues/42) |

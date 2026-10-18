@@ -170,10 +170,12 @@ two look the same, and the page's claim is about corners and straight edges. On
 this sample VTracer's shared edges stay within 0.06 px of each other, so the page
 does not claim it leaves gaps.
 
-**The CSP is tested, not trusted.** There are two, and Vercel applies every
+**The CSP is tested, not trusted.** There are three, and Vercel applies every
 matching header block, so they're scoped never to overlap. The app's needs a
 worker allowance (without it the page loads, accepts a drop, and never traces)
-and, since it runs no WebAssembly, must not allow `'wasm-unsafe-eval'`. The site's is `script-src 'self'` plus
+and must not allow `'wasm-unsafe-eval'`; the AI worker's file
+(`/app/assets/prep-*.js`) gets the same policy plus `'wasm-unsafe-eval'`, since
+a dedicated worker runs under the policy its own script is served with. The site's is `script-src 'self'` plus
 `'wasm-unsafe-eval'` for search (Pagefind) and the sha256 of each inline script
 Starlight writes (theme, sidebar). `npm run hosting:check` fails the build if any
 of that goes missing; after the build, `--dist` hashes every inline script in
@@ -300,3 +302,16 @@ even widths (the skeleton can't sit on the middle), so it is the ink's area
 over the skeleton's length instead: 9.58 px for strokes drawn 9.6 px wide.
 Strokes that carry straight through a crossing are joined, so a plus sign is two
 pen strokes, not four.
+
+**AI steps run in a worker with its own policy (#39).** Background removal
+(U²-Net small, Apache 2.0, 4.4 MB) and 4× upscaling (Real-ESRGAN general v3,
+BSD 3-Clause, converted from its PyTorch release to ONNX unchanged, 4.9 MB) run
+with ONNX Runtime Web's WebAssembly backend (MIT, 3.7 MB compressed), one
+thread so no cross-origin isolation is needed. Rather than allow WebAssembly
+for the whole app again, only the worker's script is served with
+`'wasm-unsafe-eval'`; Chromium compiles under the worker's policy, and the page
+stays without it. On a 600 px photo background removal took about 3 s the first
+time (download included); upscaling a 120 × 80 mark about 2 s. The steps give a
+prepared copy of the image that is traced and compared against instead of the
+original; the original is still what's saved.
+
