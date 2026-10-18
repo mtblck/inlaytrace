@@ -551,6 +551,7 @@ const csp = response?.headers()['content-security-policy'] ?? ''
 check(csp.includes("'wasm-unsafe-eval'"), 'CSP allows WebAssembly')
 check(/worker-src[^;]*'self'/.test(csp) && !csp.includes("'sha256-"), "the app gets its own CSP (workers allowed), not the site's")
 check((await page.getByRole('link', { name: 'Inlay', exact: true }).getAttribute('href')) === '/', 'the Inlay wordmark leads to the landing page')
+check((await page.getByRole('navigation', { name: 'About Inlay' }).getByRole('link', { name: 'Privacy' }).getAttribute('href')) === '/privacy/', 'the app links to the privacy page')
 await shot(page, '01-empty')
 
 await page.getByRole('button', { name: 'Try a sample' }).click()
@@ -925,6 +926,8 @@ if (siteOrigin) {
   // The app's old address (mattblack.space/tools/img-to-svg/ before inlaytrace.com) keeps working.
   const old = await landing.request.get(new URL('tools/img-to-svg/some/deep/link', siteOrigin).href, { maxRedirects: 0 })
   check(old.status() === 308 && old.headers().location === 'https://inlaytrace.com/app/some/deep/link', `the old app address redirects to inlaytrace.com/app/ (${old.status()} → ${old.headers().location})`)
+  const privacy = await landing.request.get(new URL('privacy/', siteOrigin).href)
+  check(privacy.ok() && (await privacy.text()).includes('Your images never leave your device'), 'the privacy page loads')
   const guessed = await landing.request.get(new URL('docs/', siteOrigin).href)
   check(guessed.ok() && guessed.url().endsWith('/docs/overview/'), `/docs/ leads to the docs (${guessed.url()})`)
   const docs = await newPage({ width: 1440, height: 900 })

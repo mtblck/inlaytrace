@@ -1155,6 +1155,19 @@ export default function App() {
               />
             )}
           </div>
+
+          {/* No room for a page footer, so one quiet line ends the sidebar. */}
+          <nav aria-label="About Inlay" className="flex gap-4 border-t border-rule px-5 py-2.5 text-[12px] text-ink-muted">
+            <a href="/docs/overview/" className="hover:text-ink">
+              Docs
+            </a>
+            <a href="/privacy/" className="hover:text-ink">
+              Privacy
+            </a>
+            <a href="https://github.com/mtblck/inlaytrace" className="hover:text-ink">
+              Source
+            </a>
+          </nav>
         </aside>
       </main>
     </div>

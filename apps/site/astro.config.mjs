@@ -40,6 +40,7 @@ export default defineConfig({
             { label: 'Roadmap', link: '/docs/roadmap/' },
             { label: 'Design notes', link: '/docs/design-notes/' },
             { label: 'Research', link: '/docs/research/' },
+            { label: 'Privacy', link: '/privacy/' },
           ],
         },
       ],

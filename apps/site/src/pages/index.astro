@@ -5,13 +5,14 @@
  * sample badge, so the shapes, the close-up and the numbers are measured. The
  * 2048 px timings are the exception: timed by hand (docs/design-notes.md).
  */
-import '../styles/fonts.css'
-import '../styles/landing.css'
+import Page from '../layouts/Page.astro'
 import sample from '../data/sample.json'
 import { parsePath } from 'inlaytrace'
 
 /** The app (apps/app), served beside this site. */
 const APP = '/app/'
+const description =
+  'Inlay traces logos, illustrations, line art and pixel art into SVG. Every edge between two colours is traced once and shared, so the shapes fit together exactly. Free, open source, runs in your browser.'
 /** Flip when inlaytrace is on npm (#55). */
 const PUBLISHED = true
 
@@ -53,36 +54,7 @@ const artView = `${ax + crop.x * s} ${ay + crop.y * s} ${crop.w * s} ${crop.h * 
 const dot = crop.w / 90
 ---
 
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Inlay: trace images into vector shapes that fit together</title>
-    <meta
-      name="description"
-      content="Inlay traces logos, illustrations, line art and pixel art into SVG. Every edge between two colours is traced once and shared, so the shapes fit together exactly. Free, open source, runs in your browser."
-    />
-    <meta name="color-scheme" content="light dark" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <!-- The theme picked in the docs' menu (Starlight's key), before first paint. Its sha256 is in vercel.json's CSP. -->
-    <script is:inline>
-      try {
-        const t = localStorage.getItem('starlight-theme')
-        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t
-      } catch {}
-    </script>
-  </head>
-  <body>
-    <header class="top">
-      <a class="wordmark" href="/" aria-label="Inlay, home">Inlay</a>
-      <nav aria-label="Site">
-        <a href="/docs/package/getting-started/">Docs</a>
-        <a href={APP}>App</a>
-      </nav>
-    </header>
-
-    <main>
+<Page title="Inlay: trace images into vector shapes that fit together" description={description}>
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-text">
           <h1 id="hero-title">Vector shapes, cut to fit.</h1>
@@ -190,13 +162,5 @@ toSvg(result) // '<svg …>'`}</code></pre>
           </div>
         </div>
       </section>
-    </main>
-
-    <footer class="foot">
-      <p>Inlay is MIT licensed. Made by <a href="https://mattblack.space">Matt Black</a>.</p>
-      <p><a href="/docs/package/getting-started/">Docs</a> <a href="/docs/how-it-differs/">Compared with other tools</a> <a href={APP}>App</a></p>
-    </footer>
-
-    <script src="../scripts/landing.ts"></script>
-  </body>
-</html>
+  <script src="../scripts/landing.ts"></script>
+</Page>
