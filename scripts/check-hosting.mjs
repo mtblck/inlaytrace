@@ -59,6 +59,10 @@ const apiAt = rewrites.findIndex((r) => r.source === '/api/(.*)' && r.destinatio
 if (apiAt < 0) problems.push('Missing the API rewrite /api/(.*) → /api/server?__route=$1.')
 else if (apiAt > rewrites.findIndex((r) => r.source === `${APP}/(.*)`)) problems.push("The API rewrite must come before the app's fallback.")
 if (!config.functions?.['api/server.ts']) problems.push('vercel.json functions must configure api/server.ts (the API).')
+// HD jobs run in their own function, with time and memory for full-size images.
+const hdAt = rewrites.findIndex((r) => r.source === '/api/hd/(.*)' && r.destination === '/api/hd?__route=hd/$1')
+if (hdAt < 0 || hdAt > apiAt) problems.push('Missing the HD rewrite /api/hd/(.*) → /api/hd?__route=hd/$1, before the general /api/(.*) one.')
+if (!(config.functions?.['api/hd.ts']?.maxDuration >= 120)) problems.push('vercel.json functions must give api/hd.ts (HD jobs) a maxDuration of at least 120 s.')
 if (!(config.crons ?? []).some((c) => c.path === '/api/keepalive')) problems.push('Missing the daily cron to /api/keepalive; without it the free Supabase project pauses after a week.')
 
 const cspOf = (source) => (config.headers ?? []).find((b) => b.source === source)?.headers.find((h) => h.key === 'Content-Security-Policy')?.value

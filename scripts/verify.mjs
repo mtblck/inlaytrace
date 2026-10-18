@@ -18,6 +18,7 @@
  */
 import { chromium } from 'playwright'
 import { unzipSync } from 'fflate'
+import { encode as encodePng } from 'fast-png'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -1261,6 +1262,52 @@ if (siteOrigin) {
     check(over <= 0, `no horizontal scroll on a phone at /${path} (${over}px)`)
     if (!path) await shot(phone, '13-landing-mobile')
   }
+}
+
+// ---- HD trace (beta) ---------------------------------------------------------------
+// A 2600 × 1800 image: bigger than the app traces, so HD is offered. The server
+// is a stand-in (server/hd.test.ts tests the real one); this checks the app's
+// side: nothing is sent until the cost is confirmed, then the parts flow.
+{
+  console.log('\n  hd trace\n')
+  const W = 2600
+  const H = 1800
+  const data = new Uint8Array(W * H * 4)
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) data.set(Math.hypot(x - 1300, y - 900) < 600 ? [30, 60, 140, 255] : [250, 248, 240, 255], (y * W + x) * 4)
+  const big = Buffer.from(encodePng({ width: W, height: H, data, channels: 4, depth: 8 }))
+  const hd = await newPage({ width: 1440, height: 900 })
+  const apiCalls = []
+  let uploaded = 0
+  await hd.route('**/api/**', async (route) => {
+    const req = route.request()
+    const path = new URL(req.url()).pathname.replace('/api/', '')
+    apiCalls.push(path)
+    const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
+    if (path === 'account') return json({ signedIn: true, email: 'ada@example.com', balance: 10, ledger: [] })
+    if (path === 'hd/start') return json({ run: '00000000-0000-0000-0000-000000000001', credits: 2, partBytes: 4194304 })
+    if (path === 'hd/upload') return (uploaded++, route.fulfill({ status: 204 }))
+    if (path === 'hd/run') return json({ parts: 1, contentType: 'image/svg+xml', bytes: 120, credits: 2 })
+    if (path === 'hd/result') return route.fulfill({ status: 200, contentType: 'application/octet-stream', body: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"><path fill="#1e3c8c" d="M700 900a600 600 0 1 0 1200 0a600 600 0 1 0-1200 0Z"/></svg>` })
+    return json({ error: 'Not found.' }, 404)
+  })
+  await hd.goto(url)
+  await hd.locator('input[type=file]').setInputFiles({ name: 'big.png', mimeType: 'image/png', buffer: big })
+  await traced(hd)
+  const summary = hd.locator('[data-hd] summary')
+  check((await summary.innerText()).includes('2,600 × 1,800, 2 credits'), `a big image offers HD with its size and cost (${(await summary.innerText()).replace(/\s+/g, ' ')})`)
+  check(apiCalls.length === 0, 'nothing is sent to the server just for opening a big image')
+  await summary.click()
+  await hd.getByRole('button', { name: 'Trace in HD for 2 credits' }).click()
+  await hd.getByRole('button', { name: 'Start HD trace' }).click()
+  await hd.getByRole('button', { name: 'Download HD' }).waitFor({ timeout: 60_000 })
+  check(uploaded >= 1 && apiCalls.includes('hd/run') && apiCalls.includes('hd/result'), `confirming uploads the image in parts, runs, and fetches the result (${uploaded} part(s))`)
+  await shot(hd, '19-hd-done')
+  const small = await newPage({ width: 1440, height: 900 })
+  await small.goto(url)
+  await small.getByRole('button', { name: 'Try a sample' }).click()
+  await traced(small)
+  check((await small.locator('[data-hd]').count()) === 0, 'a small image offers no HD (nothing to gain)')
 }
 
 // ---- The account page (sign-in and credits for HD) ----------------------------

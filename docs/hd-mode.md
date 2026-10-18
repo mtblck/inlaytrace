@@ -118,6 +118,16 @@ Each run costs well under a cent in Vercel CPU and memory. Vercel Pro (already
 paid, $20 a month across Matt's projects) is required anyway, because the Hobby
 plan forbids taking payments.
 
+## Status
+
+- **Full-size tracing** (beta): `server/hd.ts`, in its own function (`api/hd.ts`,
+  300 s, 3 GB). A 6000 × 4000 image traces in about 6 s on a laptop CPU, using
+  about 600 MB. Images and results travel in 4 MB parts through `/api` (Vercel's
+  body limit), are kept in the private `hd` storage bucket only for the run,
+  and the daily cron sweeps anything older than an hour.
+- **Background removal and upscaling**: models next (weights fetched by a GitHub
+  Actions job, kept in Vercel Blob), with the remove.bg comparison.
+
 ## Open
 
 - **Paddle's live approval:** a pricing page, terms, a refund policy and a

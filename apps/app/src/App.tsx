@@ -45,6 +45,7 @@ import { sampleImage } from './lib/sample'
 import { Canvas, type Overlays, type SelectMode, type Tool, type ViewMode } from './components/Canvas'
 import { ShortcutsDialog } from './components/Shortcuts'
 import { ExportOptions } from './components/ExportOptions'
+import { Hd } from './components/Hd'
 import { clearSession, loadSession, newSessionId, saveImage, saveState } from './lib/session'
 import { buildDxf, buildEps, buildPdf, pngPixels, withSize, type ExportSize } from './lib/vectorExport'
 import { IconButton, KeyboardIcon, MoonIcon, SunIcon } from './components/IconButton'
@@ -1371,6 +1372,17 @@ export default function App() {
                 onDxf={downloadDxf}
               />
             )}
+            {/* HD (beta): only for images bigger than the app traces, and never for an opened SVG. */}
+            {traceSource && !traceSource.svg && Math.max(traceSource.bitmap.width, traceSource.bitmap.height) > maxTraceEdge(settings.preset) && (
+              <Hd
+                key={traceSource.url}
+                bitmap={traceSource.bitmap}
+                settings={settings}
+                traceEdge={maxTraceEdge(settings.preset)}
+                onSave={(svg) => save(new Blob([svg], { type: 'image/svg+xml' }), `${source!.name}-hd.svg`)}
+                onOpen={(svg) => void openNow(new Blob([svg], { type: 'image/svg+xml' }), `${source!.name}-hd.svg`)}
+              />
+            )}
           </div>
 
           {/* No room for a page footer, so one quiet line ends the sidebar. */}
@@ -1386,6 +1398,9 @@ export default function App() {
             </a>
             <a href="https://ko-fi.com/inlay" className="hover:text-ink">
               Support
+            </a>
+            <a href="/app/account/" className="ml-auto hover:text-ink">
+              Account
             </a>
           </nav>
         </aside>
