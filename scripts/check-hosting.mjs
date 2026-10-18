@@ -3,9 +3,9 @@
  * build: before (the config) and after, with --dist (the built pages).
  *
  * Failure modes that are invisible until production:
- *  - The app's CSP losing 'wasm-unsafe-eval' or the worker allowance. Poster's
- *    tracer is WebAssembly in a Web Worker; without them the page loads, the
- *    drop zone works, and nothing traces.
+ *  - The app's CSP losing the worker allowance: tracing runs in a Web Worker,
+ *    and without it the page loads, the drop zone works, and nothing traces.
+ *    (It no longer allows 'wasm-unsafe-eval': the app runs no WebAssembly.)
  *  - The site's CSP not allowing an inline script the docs framework (Starlight)
  *    writes: theme, search and sidebar quietly stop working. It's
  *    script-src 'self' plus each script's sha256; --dist hashes every inline
@@ -43,7 +43,8 @@ if (blocksWithCsp.sort().join() !== [SITE_SOURCE, `${APP}/(.*)`].sort().join())
   problems.push(`CSP must be set by exactly two blocks, "${SITE_SOURCE}" (site) and "${APP}/(.*)" (app), so they never stack. Found: ${blocksWithCsp.join(', ')}`)
 
 const appCsp = cspOf(`${APP}/(.*)`)
-if (!directive(appCsp, 'script-src').includes("'wasm-unsafe-eval'")) problems.push("The app's CSP script-src lacks 'wasm-unsafe-eval'; the WebAssembly tracer cannot compile.")
+// The app has run no WebAssembly since Poster moved to Inlay (#53), so it doesn't get to compile any.
+if (directive(appCsp, 'script-src').includes("'wasm-unsafe-eval'")) problems.push("The app's CSP allows 'wasm-unsafe-eval', but the app runs no WebAssembly; take it out.")
 if (!/worker-src[^;]*'self'/.test(appCsp ?? '')) problems.push("The app's CSP worker-src must allow 'self' for the tracing worker.")
 const siteCsp = cspOf(SITE_SOURCE)
 const siteScripts = directive(siteCsp, 'script-src')

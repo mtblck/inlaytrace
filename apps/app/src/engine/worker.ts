@@ -4,12 +4,11 @@
  * page. Both are synchronous inside the worker; the client is responsible for
  * making sure only the latest request is ever waiting (see client.ts).
  */
-import { init } from './vtracer/vtracer.js'
-import wasmUrl from './vtracer/vtracer.wasm?url'
-import { needsVtracer, runTrace } from './run'
+import { runTrace } from './run'
+import type { TraceOptions } from './presets'
 
 export type WorkerRequest =
-  | { type: 'trace'; id: number; rgba: ArrayBuffer; width: number; height: number; options: Record<string, unknown> }
+  | { type: 'trace'; id: number; rgba: ArrayBuffer; width: number; height: number; options: TraceOptions }
   | { type: 'optimize'; id: number; svg: string }
 
 export type WorkerResponse =
@@ -28,7 +27,6 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
   try {
     if (req.type === 'trace') {
       const start = performance.now()
-      if (needsVtracer(req.options)) await init(wasmUrl)
       const svg = runTrace(new Uint8Array(req.rgba), req.width, req.height, req.options)
       post({ type: 'traced', id: req.id, svg, ms: Math.round(performance.now() - start) })
     } else {

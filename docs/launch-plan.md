@@ -143,7 +143,7 @@ apps/
 packages/
   inlay/      the library: published as inlaytrace
 docs/         Markdown docs (Boards + the site)
-scripts/      score, verify, vendoring, hosting checks
+scripts/      score, verify, hosting checks
 ```
 
 Community files at the root: README (the project's front door), LICENSE (MIT),

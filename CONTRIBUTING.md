@@ -20,10 +20,11 @@ npm install
 npm run dev          # the app: http://localhost:5173/app/
 npm run site:dev     # the landing page and docs: http://localhost:4321/
 npm test             # the app's and the package's tests, plus every preset through the real tracer
-npm run build        # vendors VTracer, checks hosting config, type-checks, builds the site and the app
+npm run build        # checks hosting config, type-checks, builds the site and the app
 npm run preview      # serves the build as Vercel will: routes, redirects, security headers
 npm run verify       # end-to-end in a real browser (needs `preview` running)
 npm run score        # trace the sample, score each preset against the clean art
+npm run score:photos # score Poster on three photos, against VTracer
 npm run site:assets  # re-measure the landing page's evidence
 ```
 
@@ -43,7 +44,8 @@ mode, phone width). It fails on any console error or CSP violation.
 Anything in `packages/inlay` that changes output, or a preset in
 `apps/app/src/engine/presets.ts`:
 
-1. `npm run score` before and after. Say what changed in the PR (wrong pixels,
+1. `npm run score` before and after, and `npm run score:photos` if it could
+   touch Poster. Say what changed in the PR (wrong pixels or mean error,
    nodes, size). A change that looks better on one image can be worse on the
    sample; the score is the referee.
 2. Check more than one JPEG quality. Encoders differ between browsers, and

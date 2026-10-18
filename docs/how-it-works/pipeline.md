@@ -32,7 +32,7 @@ which the unit tests also call, so the tests and the app can't drift apart:
   tracer, with a palette from [histogram peaks](palettes.md) (or ink/paper for
   line art).
 - **Pixel art** → Inlay with the image's exact colours, keeping every pixel.
-- **Poster** → [VTracer](vtracer.md), compiled from Rust to WebAssembly.
+- **Poster** → Inlay with a [quantized palette](palettes.md) and stacked shapes.
 
 For line art with **Light on dark**, the worker inverts the pixels first, since
 line art always traces the dark side.

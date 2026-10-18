@@ -1,5 +1,7 @@
 /**
- * Purpose-named presets mapped onto VTracer 1.0 options.
+ * Purpose-named presets, all traced by Inlay (packages/inlay) since Poster
+ * moved over in #53. The history below is how they were tuned, first on
+ * VTracer.
  *
  * The numbers were tuned on VTracer's own sample set (an illustration, a pencil
  * drawing, pixel art and a photographic poster). The single biggest lever is
@@ -21,7 +23,8 @@
  *    gold sun came out pale peach). Picking the palette from histogram peaks
  *    instead recovered the source colours almost exactly and cut mean error
  *    from 3.28 to 1.47 on the badge, and from 11.1 to 4.3 on the illustration.
- *    On a photo it was worse (9.9 to 15.3), so Poster keeps the quantizer.
+ *    On a photo it was worse (9.9 to 15.3), so Poster kept the quantizer; since
+ *    #53 it quantizes with Inlay (quantizePalette, k-means in OKLab).
  */
 export type PresetId = 'logo' | 'illustration' | 'lineart' | 'photo' | 'pixel'
 
@@ -88,11 +91,8 @@ export const presetById = (id: PresetId) => PRESETS.find((p) => p.id === id)!
 
 export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {} })
 
-/** Merging colours needs the shared-edge tracer's palette mode: Logo and Illustration. */
+/** Merging colours: the flat-art presets, whose palettes are real colours (Poster's are cluster averages). */
 export const canMerge = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'pixel'
-
-/** Presets traced by the shared-edge tracer (packages/inlay) rather than VTracer. */
-export const usesInlay = (id: PresetId) => id !== 'photo'
 
 /**
  * Smoothing 0–3 → fitting tolerance in px. The Logo default (1.5) lands on
@@ -100,30 +100,39 @@ export const usesInlay = (id: PresetId) => id !== 'photo'
  */
 export const toleranceFor = (smoothing: number) => 0.25 + 0.5 * smoothing
 
+/** What the worker traces with (run.ts turns it into Inlay's options). */
+export type TraceOptions = {
+  mode: 'palette' | 'binary'
+  speckle: number
+  tolerance: number
+  cornerAngle: number
+  /** Palette mode: how many colours, and how they're picked from the image. */
+  colors?: number
+  palette?: 'peak' | 'exact' | 'quantize'
+  merge?: Record<string, string>
+  pixels?: boolean
+  stacked?: boolean
+  /** Binary mode. */
+  threshold?: number | null
+  invert?: boolean
+}
+
 /**
- * Translate the UI's settings into the worker's trace options: the shared-edge
- * tracer for flat art, VTracer's own options for posters and pixel art.
+ * Translate the UI's settings into the worker's trace options. Every preset
+ * is Inlay now; they differ in how the palette is picked and how shapes are
+ * drawn. Poster moved from VTracer in #53, where on three photos it was 17%
+ * closer to the photo with 57% fewer shapes and a 30% smaller file.
  */
-export function toVtracerOptions(s: Settings): Record<string, unknown> {
-  if (usesInlay(s.preset)) {
-    const fit = { engine: 'inlay', speckle: s.speckle, tolerance: toleranceFor(s.smoothing), cornerAngle: s.corners }
-    if (s.preset === 'lineart') return { ...fit, mode: 'binary', threshold: s.threshold, ...(s.lightInk ? { invert: true } : {}) }
-    const merge = Object.keys(s.merge ?? {}).length ? { merge: s.merge } : {}
-    // Pixel art: its exact colours, every pixel kept, boundaries as pixel staircases.
-    if (s.preset === 'pixel') return { ...fit, mode: 'palette', peakColors: s.colors, pixels: true, ...merge }
-    // The worker picks the palette from histogram peaks (peakPalette in packages/inlay).
-    return { ...fit, mode: 'palette', peakColors: s.colors, ...merge }
-  }
-  const o: Record<string, unknown> = {
-    filterSpeckle: s.speckle,
-    hierarchical: s.shapes,
-  }
-  // Poster: VTracer's spline fitting and quantizer suit photos' soft bands.
-  o.mode = 'spline'
-  o.cornerThreshold = s.corners
-  if (s.smoothing > 0) o.simplify = s.smoothing
-  o.maxColors = s.colors
-  return o
+export function toTraceOptions(s: Settings): TraceOptions {
+  const fit = { speckle: s.speckle, tolerance: toleranceFor(s.smoothing), cornerAngle: s.corners }
+  if (s.preset === 'lineart') return { ...fit, mode: 'binary', threshold: s.threshold, ...(s.lightInk ? { invert: true } : {}) }
+  const merge = Object.keys(s.merge ?? {}).length ? { merge: s.merge } : {}
+  // Pixel art: its exact colours, every pixel kept, boundaries as pixel staircases.
+  if (s.preset === 'pixel') return { ...fit, mode: 'palette', colors: s.colors, palette: 'exact', pixels: true, ...merge }
+  // Poster: photos have no histogram peaks, so the palette is quantized (k-means in OKLab), and shapes stack by default.
+  if (s.preset === 'photo') return { ...fit, mode: 'palette', colors: s.colors, palette: 'quantize', stacked: s.shapes === 'stacked' }
+  // Logo and Illustration: flat art's real colours are the histogram's peaks.
+  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', ...merge }
 }
 
 /** Pixel art keeps every source pixel; everything else is traced at this size at most. */

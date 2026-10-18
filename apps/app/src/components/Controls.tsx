@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react'
-import { PRESETS, presetById, toleranceFor, usesInlay, type PresetId, type Settings } from '../engine/presets'
+import { PRESETS, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
 
 type Props = {
   settings: Settings
@@ -90,13 +90,13 @@ export function Controls({ settings, onChange, onPreset }: Props) {
 
           {p !== 'pixel' && (
             <>
-              <Slider label="Smoothing" value={settings.smoothing} min={0} max={3} step={0.25} onChange={(v) => set('smoothing', v)} format={(v) => smoothingLabel(p, v)} hint={usesInlay(p) ? 'How far the outline may stray from the pixels. Higher means fewer nodes and a smaller file.' : 'How loosely the outline is followed. Higher means fewer nodes and a smaller file.'} />
+              <Slider label="Smoothing" value={settings.smoothing} min={0} max={3} step={0.25} onChange={(v) => set('smoothing', v)} format={smoothingLabel} hint="How far the outline may stray from the pixels. Higher means fewer nodes and a smaller file." />
               <Slider label="Corners" value={settings.corners} min={0} max={180} step={5} onChange={(v) => set('corners', v)} format={(v) => `${v}°`} hint="Bends sharper than this stay corners; gentler ones become curves." />
             </>
           )}
 
-          {/* Flat-art presets always share edges exactly (no gaps, no overlaps), so there is nothing to choose. */}
-          {!usesInlay(p) && (
+          {/* Flat-art presets are cut out (what vinyl and screen print want); only Poster offers stacked, for smaller files. */}
+          {p === 'photo' && (
             <div className="space-y-1.5">
               <span className="field-label">Shapes</span>
               <div role="radiogroup" aria-label="Shapes" className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-rule bg-rule">
@@ -176,9 +176,5 @@ function Slider(props: {
   )
 }
 
-/**
- * The flat-art tracer always fits within a tolerance (0.25 px at the bottom of
- * the scale), so it shows that rather than "Off"; for Poster, 0 really does
- * turn VTracer's extra simplification off.
- */
-export const smoothingLabel = (preset: PresetId, v: number) => (usesInlay(preset) ? `±${toleranceFor(v).toFixed(2)} px` : v === 0 ? 'Off' : v.toFixed(2))
+/** Smoothing shows the fitting tolerance it sets: Inlay always fits within one (±0.25 px at the bottom of the scale). */
+export const smoothingLabel = (v: number) => `±${toleranceFor(v).toFixed(2)} px`

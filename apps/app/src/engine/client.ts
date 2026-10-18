@@ -7,6 +7,7 @@
  * replaces whatever was waiting, and the worker only ever starts the latest.
  * Superseded requests resolve with `null` so callers can simply ignore them.
  */
+import type { TraceOptions } from './presets'
 import type { WorkerRequest, WorkerResponse } from './worker'
 
 type Channel = 'trace' | 'optimize'
@@ -43,7 +44,7 @@ export class TraceClient {
     return worker
   }
 
-  trace(rgba: Uint8ClampedArray, width: number, height: number, options: Record<string, unknown>) {
+  trace(rgba: Uint8ClampedArray, width: number, height: number, options: TraceOptions) {
     // Copy rather than transfer: the caller keeps its pixels for the next trace.
     const buffer = rgba.slice().buffer
     return this.send('trace', { type: 'trace', id: this.nextId++, rgba: buffer, width, height, options })

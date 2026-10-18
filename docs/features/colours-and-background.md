@@ -56,8 +56,9 @@ Merges are a trace setting (`merge: { from: into }`, traced colours).
 Inlay labels every pixel with the full palette first, so
 anti-aliased edges are judged against both colours, then relabels merged
 colours as their targets (following chains) before any region is built
-(`mergeLabels` in `packages/inlay/src/inlay.ts`). Poster uses VTracer, which has no such
-step, so it doesn't offer it; Line art has one colour.
+(`mergeLabels` in `packages/inlay/src/inlay.ts`). Poster's colours are cluster
+averages rather than the image's real colours, so it doesn't offer it; Line
+art has one colour.
 
 The eyedropper reads the original image's pixels once per image into a
 full-size buffer (`colourAt` in `apps/app/src/lib/image.ts`) and maps the click from the

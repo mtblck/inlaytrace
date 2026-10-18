@@ -13,7 +13,7 @@ where it deliberately goes its own way. Competitor details were checked on
 
 | Tool | Where it runs | Cost | Tracing | Editing |
 | --- | --- | --- | --- | --- |
-| **Inlay** | Your browser; nothing uploaded | Free | Inlay, our shared-edge tracer (flat and pixel art); VTracer (photos) | Colours (replace, merge, remove), background, select/move/scale shapes, nodes and handles, mirror, undo |
+| **Inlay** | Your browser; nothing uploaded | Free | Inlay, our shared-edge tracer, for everything from logos and pixel art to photos | Colours (replace, merge, remove), background, select/move/scale shapes, nodes and handles, mirror, undo |
 | **Vectorizer.ai** | Their servers (kept 24 h) | Paid downloads | Proprietary; symmetry and shape fitting | "Refine result": palette, recolour/merge/remove regions, toggle symmetries, fit shapes, sharpen/round corners. No node editing |
 | **Vector Magic** | Their servers, or a paid desktop app | Paid | Proprietary | Edits the colour regions before re-vectorising |
 | **Illustrator Image Trace** | Desktop | Subscription | Proprietary; presets, colour/path/corner/noise controls | Full editor after *Expand* |

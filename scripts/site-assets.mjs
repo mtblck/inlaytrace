@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { createServer } from 'vite'
 import { chromium } from 'playwright'
+import { vtracer } from './vtracer.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SIZE = 640
@@ -33,11 +34,8 @@ const CROP = { x: 200, y: 240 } // the left peak and its snowcap
 
 const vite = await createServer({ root: join(root, 'apps/app'), logLevel: 'error', server: { middlewareMode: true }, appType: 'custom' })
 const { runTrace } = await vite.ssrLoadModule('/src/engine/run.ts')
-const { settingsFor, toVtracerOptions } = await vite.ssrLoadModule('/src/engine/presets.ts')
-const { init } = await vite.ssrLoadModule('/src/engine/vtracer/vtracer.js')
-const { parsePath } = await vite.ssrLoadModule('inlaytrace')
-globalThis.fetch = async () => new Response(readFileSync(join(root, 'apps/app/src/engine/vtracer/vtracer.wasm')), { headers: { 'content-type': 'application/wasm' } })
-await init('vtracer.wasm')
+const { settingsFor, toTraceOptions } = await vite.ssrLoadModule('/src/engine/presets.ts')
+const { parsePath, peakPalette } = await vite.ssrLoadModule('inlaytrace')
 const ART = readFileSync(join(root, 'apps/app/src/lib/sample.ts'), 'utf8').match(/const ART = `([\s\S]*?)`/)[1]
 
 const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {})
@@ -70,8 +68,8 @@ const paths = (svg) =>
     const at = (n) => tag.match(new RegExp(`\\b${n}="([^"]*)"`))?.[1]
     return { d: at('d'), fill: at('fill'), ...(at('transform') ? { transform: at('transform') } : {}) }
   })
-const inlaySvg = runTrace(pixels.slice(), SIZE, SIZE, toVtracerOptions(settingsFor('logo')))
-const vtSvg = runTrace(pixels.slice(), SIZE, SIZE, { mode: 'spline', hierarchical: 'cutout', filterSpeckle: 8, cornerThreshold: 45, simplify: 1.5, peakColors: 8, layerDifference: 32 })
+const inlaySvg = runTrace(pixels.slice(), SIZE, SIZE, toTraceOptions(settingsFor('logo')))
+const vtSvg = vtracer(pixels.slice(), SIZE, SIZE, { mode: 'spline', hierarchical: 'cutout', filterSpeckle: 8, cornerThreshold: 45, simplify: 1.5, palette: peakPalette(pixels, 8), layerDifference: 32 })
 const inlay = paths(inlaySvg)
 const percolour = paths(vtSvg)
 

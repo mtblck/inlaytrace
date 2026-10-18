@@ -26,11 +26,7 @@ const K = 4
 // Load the app's own TypeScript modules through Vite, so this scores exactly what ships.
 const vite = await createServer({ root: join(root, 'apps/app'), logLevel: 'error', server: { middlewareMode: true }, appType: 'custom' })
 const { runTrace } = await vite.ssrLoadModule('/src/engine/run.ts')
-const { PRESETS, settingsFor, toVtracerOptions, usesInlay } = await vite.ssrLoadModule('/src/engine/presets.ts')
-const { init } = await vite.ssrLoadModule('/src/engine/vtracer/vtracer.js')
-globalThis.fetch = async () =>
-  new Response(readFileSync(join(root, 'apps/app/src/engine/vtracer/vtracer.wasm')), { headers: { 'content-type': 'application/wasm' } })
-await init('vtracer.wasm')
+const { PRESETS, settingsFor, toTraceOptions } = await vite.ssrLoadModule('/src/engine/presets.ts')
 
 const ART = readFileSync(join(root, 'apps/app/src/lib/sample.ts'), 'utf8').match(/const ART = `([\s\S]*?)`/)[1]
 const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {})
@@ -89,11 +85,11 @@ console.log('  Preset         Tracer     Wrong px   Nodes  Paths   Size')
 for (const p of PRESETS) {
   if (p.id === 'lineart' || p.id === 'pixel') continue // one colour / no smoothing: not comparable on a colour badge
   const t = performance.now()
-  const svg = runTrace(pixels.slice(), SIZE, SIZE, toVtracerOptions(settingsFor(p.id)))
+  const svg = runTrace(pixels.slice(), SIZE, SIZE, toTraceOptions(settingsFor(p.id)))
   const ms = performance.now() - t
   const r = await score(svg)
   console.log(
-    `  ${p.label.padEnd(14)} ${(usesInlay(p.id) ? 'Inlay' : 'VTracer').padEnd(10)} ${r.wrong.toFixed(2).padStart(7)}%  ${String(r.nodes).padStart(6)} ${String(r.paths).padStart(6)} ${r.kb.toFixed(1).padStart(5)} KB  (${ms.toFixed(0)} ms)`,
+    `  ${p.label.padEnd(14)} ${'Inlay'.padEnd(10)} ${r.wrong.toFixed(2).padStart(7)}%  ${String(r.nodes).padStart(6)} ${String(r.paths).padStart(6)} ${r.kb.toFixed(1).padStart(5)} KB  (${ms.toFixed(0)} ms)`,
   )
 }
 console.log()
