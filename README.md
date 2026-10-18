@@ -15,11 +15,15 @@ It comes two ways:
   the original, fix colours and shapes, and download SVG, PDF, EPS or PNG.
   Nothing is uploaded. **[Open the app](https://mattblack.space/tools/img-to-svg/)**
   (moving to inlaytrace.com).
-- **The package**, `inlaytrace`, is the tracer on its own: pure TypeScript, no
-  WebAssembly, for browsers, Web Workers and Node. Not on npm yet; until it is,
-  it's TypeScript source, so Node needs a TypeScript-aware loader.
+- **The package**, [`inlaytrace`](https://www.npmjs.com/package/inlaytrace), is
+  the tracer on its own: no dependencies and no WebAssembly, for browsers, Web
+  Workers and Node 20+.
 
 ## Use the package
+
+```bash
+npm install inlaytrace
+```
 
 ```ts
 import { trace, toSvg, peakPalette } from 'inlaytrace'

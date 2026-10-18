@@ -8,8 +8,10 @@ Inlay is also a library, `inlaytrace`: the same tracer the app uses, for your
 own code. Pure TypeScript with no DOM and no WebAssembly, so it runs in
 browsers, Web Workers and Node. MIT licensed.
 
-> Not yet published to npm: until then it lives in the repo as a workspace
-> package (`packages/inlay`). These pages document the API as it will ship.
+It's on npm as [`inlaytrace`](https://www.npmjs.com/package/inlaytrace)
+(`npm install inlaytrace`). Versions are 0.x while the API settles; the
+[changelog](https://github.com/mtblck/inlaytrace/blob/main/packages/inlay/CHANGELOG.md)
+says what changed.
 
 - [Getting started](package/getting-started.md): install, and a first trace
   in the browser and in Node.
