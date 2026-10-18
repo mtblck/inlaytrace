@@ -9,8 +9,8 @@ name: Release
 # running, so no npm token is stored anywhere, and the release carries a
 # provenance statement linking it to this repo and commit. The trusted
 # publisher may only *stage*: nothing is public until a maintainer approves it
-# with two-factor authentication (`npx npm@latest stage list inlaytrace`, then
-# `npx npm@latest stage approve <id>`). After approving, run this workflow from
+# with two-factor authentication (`npx npm@11.21.1 stage list inlaytrace`, then
+# `npx npm@11.21.1 stage approve <id>`). After approving, run this workflow from
 # the Actions tab: it finds the version on npm, publishes nothing, and tags it.
 on:
   push:
@@ -70,7 +70,7 @@ jobs:
         working-directory: packages/inlay
         run: |
           npm stage publish --access public --provenance
-          echo "::notice::inlaytrace@${{ steps.version.outputs.version }} is staged. Approve it with 'npx npm@latest stage list inlaytrace' and 'npx npm@latest stage approve <id>', then re-run this workflow to tag it."
+          echo "::notice::inlaytrace@${{ steps.version.outputs.version }} is staged. Approve it with 'npx npm@11.21.1 stage list inlaytrace' and 'npx npm@11.21.1 stage approve <id>', then re-run this workflow to tag it."
       # Every run, not only publishing ones: if a publish succeeded but its tag
       # push failed, a re-run (which publishes nothing) still makes the tag.
       - name: Tag the release
