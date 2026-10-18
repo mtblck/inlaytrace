@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { costFor, UPSCALE } from '../../../../server/pricing'
 import { api } from '../account/api'
+import { refreshAccount, setBalance } from '../account/status'
 import type { Settings } from '../engine/presets'
 import { hdRun, type HdKind, type HdProgress } from '../lib/hd'
 import { formatBytes } from '../lib/svg'
@@ -56,6 +57,7 @@ export function Hd(p: Props) {
     setPhase({ kind: 'checking' })
     try {
       const a = await api.account()
+      if (a.signedIn) setBalance(a.email, a.balance)
       setPhase(a.signedIn ? { kind: 'confirm', balance: a.balance } : { kind: 'signedOut' })
     } catch (e) {
       setPhase({ kind: 'error', message: e instanceof Error ? e.message : String(e) })
@@ -69,6 +71,9 @@ export function Hd(p: Props) {
       setPhase({ kind: 'done', result })
     } catch (e) {
       setPhase({ kind: 'error', message: e instanceof Error ? e.message : String(e) })
+    } finally {
+      // Spent, or refunded after a failure: either way the header's count changed.
+      void refreshAccount()
     }
   }
 

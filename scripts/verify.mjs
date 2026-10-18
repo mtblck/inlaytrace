@@ -776,6 +776,11 @@ await page.keyboard.press('Escape')
 const closed = await dialog.waitFor({ state: 'hidden', timeout: 3000 }).then(() => true, () => false)
 check(closed, 'Esc closes the shortcuts panel')
 
+// The header offers sign-in to someone with no session (or when /api isn't set up).
+const signIn = page.locator('header [data-account="signed-out"]')
+const signInShown = await signIn.waitFor({ timeout: 5000 }).then(() => true, () => false)
+check(signInShown && (await signIn.getAttribute('href')) === '/app/account/', 'the header shows Sign in, linking to the account page')
+
 // Header icons: the keyboard opens the same panel; the tooltip shows on keyboard focus; sun/moon switches theme.
 const kb = page.getByRole('button', { name: 'Keyboard shortcuts' })
 await kb.click()
@@ -1285,6 +1290,7 @@ if (siteOrigin) {
     apiCalls.push(path)
     const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
     if (path === 'account') return json({ signedIn: true, email: 'ada@example.com', balance: 10, ledger: [] })
+    if (path === 'account/summary') return json({ signedIn: true, email: 'ada@example.com', balance: uploaded ? 8 : 10 })
     if (path === 'hd/start') return json({ run: '00000000-0000-0000-0000-000000000001', credits: 2, partBytes: 4194304 })
     if (path === 'hd/upload') return (uploaded++, route.fulfill({ status: 204 }))
     if (path === 'hd/run') return json({ parts: 1, contentType: 'image/svg+xml', bytes: 120, credits: 2 })
@@ -1296,12 +1302,16 @@ if (siteOrigin) {
   await traced(hd)
   const summary = hd.locator('[data-hd="trace"] summary')
   check((await summary.innerText()).includes('2,600 × 1,800, 2 credits'), `a big image offers HD with its size and cost (${(await summary.innerText()).replace(/\s+/g, ' ')})`)
-  check(apiCalls.length === 0, 'nothing is sent to the server just for opening a big image')
+  // The header asks who's signed in; nothing else, and nothing about the image, goes out.
+  check(apiCalls.every((p) => p === 'account/summary'), `nothing is sent to the server just for opening a big image (${apiCalls.join(', ') || 'no calls'})`)
+  check((await hd.locator('header [data-balance]').innerText()) === '10 credits', 'the header shows the balance when signed in')
   await summary.click()
   await hd.getByRole('button', { name: 'Trace in HD for 2 credits' }).click()
   await hd.getByRole('button', { name: 'Start HD trace' }).click()
   await hd.getByRole('button', { name: 'Download HD' }).waitFor({ timeout: 60_000 })
   check(uploaded >= 1 && apiCalls.includes('hd/run') && apiCalls.includes('hd/result'), `confirming uploads the image in parts, runs, and fetches the result (${uploaded} part(s))`)
+  const after = await hd.locator('header [data-balance]').filter({ hasText: '8 credits' }).waitFor({ timeout: 5000 }).then(() => true, () => false)
+  check(after, 'the header balance updates after an HD run')
   await shot(hd, '19-hd-done')
   const small = await newPage({ width: 1440, height: 900 })
   await small.goto(url)

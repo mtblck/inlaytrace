@@ -51,6 +51,7 @@ import { clearSession, loadSession, newSessionId, saveImage, saveState } from '.
 import { buildDxf, buildEps, buildPdf, pngPixels, withSize, type ExportSize } from './lib/vectorExport'
 import { IconButton, KeyboardIcon, MoonIcon, SunIcon } from './components/IconButton'
 import { EditPanel } from './components/EditPanel'
+import { AccountNav } from './components/AccountNav'
 import { Controls } from './components/Controls'
 import { Inks } from './components/Inks'
 import { useTheme } from './lib/theme'
@@ -1035,6 +1036,7 @@ export default function App() {
           <IconButton label={theme === 'dark' ? 'Use light theme' : 'Use dark theme'} onClick={toggle}>
             {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
           </IconButton>
+          <AccountNav />
         </div>
       </header>
 
@@ -1400,9 +1402,6 @@ export default function App() {
             </a>
             <a href="https://ko-fi.com/inlay" className="hover:text-ink">
               Support
-            </a>
-            <a href="/app/account/" className="ml-auto hover:text-ink">
-              Account
             </a>
           </nav>
         </aside>
