@@ -86,12 +86,27 @@ change in the same PR as HD itself.
 
 Never in the repo, never in chat.
 
+## What HD does
+
+All three, each priced by image size, each with a **free low-resolution
+preview**: credits buy the full-resolution result, as remove.bg sells it. Only
+work done on the server costs credits. Exports (SVG, PNG, PDF, EPS, DXF) stay
+free: they run in the browser, in MIT code, and were promised to stay free.
+
+- **Background removal** with BiRefNet (MIT). About 4 s for 1024 px on an M1 Max
+  CPU, so perhaps 10–15 s on a Vercel Function. The ONNX model is about 220 MB,
+  near the 250 MB function limit, so it may need the half-precision version.
+  Compare against remove.bg on our own test images before setting a price.
+- **Heavier upscaling** with Real-ESRGAN x4plus (BSD): tens of seconds to a
+  couple of minutes on CPU, within Pro's function duration.
+- **Very large images** traced on the server, beyond what a browser tab holds.
+
+Each run costs well under a cent in Vercel CPU and memory. Vercel Pro (already
+paid, $20 a month across Matt's projects) is required anyway, because the Hobby
+plan forbids taking payments.
+
 ## Open
 
-- **What HD does that the browser can't.** The browser already traces a 2048 px
-  image in about 1.3 s. Candidates: very large images, a heavier upscaling model,
-  and better background removal (check the licence: Bria's RMBG is
-  non-commercial). This decides the cost by size and the spend caps.
 - **Paddle's live approval:** a pricing page, terms, a refund policy and a
   privacy policy, live on inlaytrace.com before the review.
 
