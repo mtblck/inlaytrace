@@ -40,13 +40,14 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
   (VTracer's quantizer drifted flat colours). Poster quantizes (`quantizePalette`, k-means in OKLab) and stacks
   shapes (`stacked`). Re-score any preset change (`score`, and `score:photos` for Poster) before shipping.
 - **No GPL/AGPL in the bundle** (no Potrace, no `@imgly/*`); AI weights must be
-  MIT/BSD/Apache. Repo is MIT.
+  MIT/BSD/Apache (`apps/app/public/models/NOTICE.txt`: U²-Net Apache, Real-ESRGAN BSD). Repo is MIT.
 - **Paths:** one Vercel project (`img-to-svg`) at inlaytrace.com: site at `/`, docs at `/docs/`, app at
   `/app/` (Vite `base`, built to the root's `dist/app`). The old `/tools/img-to-svg/(.*)` must keep
   redirecting (308, absolute) to `https://inlaytrace.com/app/$1`; `hosting:check` guards it, and
   mb-portfolio redirects mattblack.space's copy of that path the same way.
-- **Two CSPs** in `vercel.json`, scoped not to overlap: the app's needs `worker-src 'self'` and must *not* allow
-  `'wasm-unsafe-eval'` (it runs none); the site's allows it for Pagefind and lists a sha256 per Starlight inline script. `hosting:check` guards both, and the build's
+- **Three CSPs** in `vercel.json`, scoped not to overlap: the app's needs `worker-src 'self'` and must *not* allow
+  `'wasm-unsafe-eval'`; the AI worker (`/app/assets/prep-*.js`, ONNX Runtime) gets the app's plus `'wasm-unsafe-eval'`;
+  the site's allows it for Pagefind and lists a sha256 per Starlight inline script. `hosting:check` guards all three, and the build's
   `--dist` pass names any new hash to add. `npm run preview` is `scripts/serve.mjs`, which mimics Vercel.
 - **Edits = `{ inks, doc }`** (`apps/app/src/lib/doc.ts`): ink edits keyed by traced hex; `doc` null
   until a geometric edit detaches it, then settings changes must confirm. paper.js is

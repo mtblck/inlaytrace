@@ -10,6 +10,12 @@ The image is decoded, traced, edited and exported in your browser. There is no
 upload, no server step, no analytics and no third-party script. Tracing runs in
 a Web Worker; SVGO and paper.js are loaded from the same site, on first use.
 
+The optional AI steps (*Remove the background*, *Upscale 4× with AI*) run in
+the browser too. Their runtime (ONNX Runtime, about 3.7 MB compressed) and
+models (about 4.5 MB each) are downloaded **from this site** the first time a
+step is used; the image is processed on your device and nothing about it is
+sent anywhere. The browser tests check that the steps contact no other site.
+
 ## What's kept in your browser
 
 So a reload or a closed tab doesn't lose work, the current session is kept in
@@ -30,16 +36,22 @@ restore.
 ## A strict content security policy
 
 The app allows scripts only from itself, plus `worker-src 'self' blob:` for
-the worker. No inline scripts, no `eval` (paper.js is the core build, which
-has none), and no WebAssembly: the app has run none since Poster moved to
-Inlay, so its policy doesn't allow compiling any. (The docs site allows
-WebAssembly for its search, on its own policy.)
+the worker. No inline scripts and no `eval` (paper.js is the core build, which
+has none). The page doesn't allow WebAssembly either. Only the AI worker
+(background removal and upscaling) compiles any, so only that one file is
+served with `'wasm-unsafe-eval'`, its policy otherwise the same as the app's.
+`'wasm-unsafe-eval'` lets a script compile WebAssembly; it doesn't allow
+`eval`, inline scripts or anything from another site, and the WebAssembly can
+only come from this site, since `connect-src` is `'self'`. (The docs site
+allows WebAssembly for its search, on its own policy.)
 
 The policy is **tested, not trusted**. Without the worker allowance the page
 loads, accepts a drop and never traces. So:
 
 - `npm run hosting:check` fails the build if the worker allowance goes
-  missing, or if WebAssembly is allowed again.
+  missing, if the page's policy allows WebAssembly, if the AI worker's policy
+  differs from the app's by anything but `'wasm-unsafe-eval'`, or if the AI
+  worker's file is renamed so that its policy no longer reaches it.
 - `npm run preview` serves the real headers from `vercel.json`, so local testing
   runs under the production policy.
 - `npm run verify` fails on any CSP violation in the console.

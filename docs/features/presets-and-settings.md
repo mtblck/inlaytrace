@@ -19,6 +19,22 @@ re-traces within about 120 ms of the last change.
 | **Poster** | Photos flattened into colour bands | Inlay (quantized palette) | 24 colours, specks 8 px, smoothing 1, corners 90°, stacked |
 | **Pixel art** | Hard edges, nothing smoothed | Inlay (pixel staircase) | Its exact colours (up to 32), no speck filter, up to 4096 px |
 
+## Prepare
+
+Two optional AI steps run before tracing, in your browser:
+
+- **Remove the background**: U²-Net finds the subject and everything else
+  becomes transparent, so it isn't traced. Best on photos and product shots;
+  logos on a plain background usually don't need it (removing that colour in
+  Edit → Colours is exact).
+- **Upscale 4× with AI** (images under 512 px): Real-ESRGAN rebuilds a small,
+  blurry image at four times the size, with sharper edges, before tracing.
+
+The models download from this site the first time (4.4 and 4.9 MB, plus the
+3.7 MB runtime), then the browser caches them; the image isn't uploaded. The
+traced, compared-against image is the prepared one. Both settings are kept
+when you change preset.
+
 ## Settings
 
 **Colours** (2–64): the cap on palette colours. Fewer means a smaller file. Set

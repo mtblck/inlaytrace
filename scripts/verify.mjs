@@ -574,7 +574,7 @@ const page = await newPage({ width: 1440, height: 900 })
 const response = await page.goto(url)
 check(response?.ok(), `page loads (${response?.status()})`)
 const csp = response?.headers()['content-security-policy'] ?? ''
-check(!csp.includes("'wasm-unsafe-eval'"), 'the app\'s CSP allows no WebAssembly (it runs none)')
+check(!csp.includes("'wasm-unsafe-eval'"), "the app page's CSP allows no WebAssembly (only the AI worker may)")
 check(/worker-src[^;]*'self'/.test(csp) && !csp.includes("'sha256-"), "the app gets its own CSP (workers allowed), not the site's")
 check((await page.getByRole('link', { name: 'Inlay', exact: true }).getAttribute('href')) === '/', 'the Inlay wordmark leads to the landing page')
 check((await page.getByRole('navigation', { name: 'About Inlay' }).getByRole('link', { name: 'Privacy' }).getAttribute('href')) === '/privacy/', 'the app links to the privacy page')
@@ -984,6 +984,53 @@ if (process.env.FIXTURE) {
   check(await cl.getByRole('radio', { name: 'Mirror' }).isDisabled(), 'Mirror is off for strokes (its booleans work on filled shapes)')
   await shot(cl, '07c-centerline')
   await cl.close()
+}
+
+// ---- AI preparation: background removal and upscaling, in the browser -------
+{
+  const ai = await newPage({ width: 1440, height: 900 })
+  const requests = []
+  ai.on('request', (r) => requests.push(new URL(r.url())))
+  await ai.goto(url)
+  await ai.locator('input[type=file]').setInputFiles(new URL('./fixtures/photos/coffee.jpg', import.meta.url).pathname)
+  await traced(ai)
+  check((await alphaAt(ai, await exportSvg(ai), 2, 2)) === 255, 'before removing the background, the corner is drawn')
+  await retrace(ai, async () => {
+    await ai.getByLabel('Remove the background').check()
+    await ai.locator('[data-prep-status]').waitFor({ state: 'detached', timeout: 120_000 })
+  })
+  check((await ai.getByRole('alert').count()) === 0, 'background removal runs (U²-Net, in the browser)')
+  check((await alphaAt(ai, await exportSvg(ai), 2, 2)) === 0, 'and the background is gone from the trace (the corner is transparent)')
+  const prep = requests.find((u) => /\/assets\/prep-.*\.js$/.test(u.pathname))
+  const prepCsp = prep ? (await ai.request.get(prep.href)).headers()['content-security-policy'] ?? '' : ''
+  check(prep && /script-src 'self' 'wasm-unsafe-eval';/.test(prepCsp), "the AI worker's own CSP allows WebAssembly")
+  check(requests.every((u) => u.origin === new URL(url).origin || u.protocol === 'blob:' || u.protocol === 'data:'), 'everything the AI step loads comes from this site; nothing else is contacted')
+
+  // Upscaling is for small images: a 120 px mark.
+  const small = await ai.evaluate(async () => {
+    const c = new OffscreenCanvas(120, 80)
+    const x = c.getContext('2d')
+    x.fillStyle = '#fff'
+    x.fillRect(0, 0, 120, 80)
+    x.fillStyle = '#c33'
+    x.beginPath()
+    x.arc(40, 40, 25, 0, 7)
+    x.fill()
+    const u = new Uint8Array(await (await c.convertToBlob({ type: 'image/png' })).arrayBuffer())
+    let s = ''
+    for (const v of u) s += String.fromCharCode(v)
+    return btoa(s)
+  })
+  await ai.locator('input[type=file]').setInputFiles({ name: 'small.png', mimeType: 'image/png', buffer: Buffer.from(small, 'base64') })
+  await traced(ai)
+  await ai.getByLabel('Remove the background').uncheck()
+  await retrace(ai, async () => {
+    await ai.getByLabel('Upscale 4× with AI').check()
+    await ai.locator('[data-prep-status]').waitFor({ state: 'detached', timeout: 120_000 })
+  })
+  check((await ai.getByRole('alert').count()) === 0, 'AI upscaling runs on a small image (Real-ESRGAN, in the browser)')
+  await shot(ai, '07u-upscaled')
+  await ai.close()
 }
 
 // ---- Dark theme and mobile ------------------------------------------------

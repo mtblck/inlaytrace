@@ -1,4 +1,5 @@
 import { useId, useState, type ReactNode } from 'react'
+import type { PrepStage } from '../engine/prep'
 import { PRESETS, hasExactShapes, isInk, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
 import type { Candidate, SizeSearch } from '../engine/targetSize'
 import { formatBytes } from '../lib/svg'
@@ -12,6 +13,8 @@ type Props = {
   onPreset: (id: PresetId) => void
   /** Centerline: the stroke width the last trace measured from the ink, for the Auto label. */
   measuredStroke?: number | null
+  /** The AI steps: whether the image is small enough to upscale, and what's running. */
+  prep?: { smallImage: boolean; status: { stage: PrepStage; done: number; total: number } | null; error: string | null }
   /** The optimised SVG's size now, and the target-size search. */
   currentBytes?: number | null
   sizeRun?: SizeRun | null
@@ -20,7 +23,7 @@ type Props = {
   onCancelSize?: () => void
 }
 
-export function Controls({ settings, onChange, onPreset, measuredStroke, ...size }: Props) {
+export function Controls({ settings, onChange, onPreset, measuredStroke, prep, ...size }: Props) {
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) => onChange({ ...settings, [key]: value })
   const p = settings.preset
   const defaults = presetById(p).defaults
@@ -49,6 +52,8 @@ export function Controls({ settings, onChange, onPreset, measuredStroke, ...size
           })}
         </div>
       </Section>
+
+      {prep && <Prepare settings={settings} set={set} prep={prep} />}
 
       <Section
         title="Adjust"
@@ -325,3 +330,47 @@ function Slider(props: {
 
 /** Smoothing shows the fitting tolerance it sets: Inlay always fits within one (±0.25 px at the bottom of the scale). */
 export const smoothingLabel = (v: number) => `±${toleranceFor(v).toFixed(2)} px`
+
+const STAGE: Record<PrepStage, string> = { runtime: 'Loading the AI runtime', background: 'Removing the background', upscale: 'Upscaling' }
+
+/**
+ * Optional AI steps before tracing. Both run in this browser; the models are
+ * fetched from this site the first time, which the hints say plainly.
+ */
+function Prepare({ settings, set, prep }: { settings: Settings; set: <K extends keyof Settings>(key: K, value: Settings[K]) => void; prep: NonNullable<Props['prep']> }) {
+  const s = prep.status
+  const busy = s && (s.total ? `${STAGE[s.stage]}… ${s.stage === 'upscale' && s.done < s.total && s.total < 1000 ? `${Math.round((s.done / s.total) * 100)}%` : `${(s.done / 1048576).toFixed(1)} of ${(s.total / 1048576).toFixed(1)} MB`}` : `${STAGE[s.stage]}…`)
+  return (
+    <Section title="Prepare">
+      <div className="space-y-3">
+        <label className="flex items-start gap-2 text-[13px]">
+          <input type="checkbox" className="mt-0.5 accent-[var(--c-accent)]" checked={settings.removeBackground} onChange={(e) => set('removeBackground', e.target.checked)} />
+          <span>
+            Remove the background
+            <span className="field-hint block">An AI model (U²-Net, 4.4 MB) finds the subject. Best on photos and product shots.</span>
+          </span>
+        </label>
+        <label className={`flex items-start gap-2 text-[13px] ${prep.smallImage ? '' : 'opacity-60'}`}>
+          <input type="checkbox" className="mt-0.5 accent-[var(--c-accent)]" checked={settings.aiUpscale} disabled={!prep.smallImage} onChange={(e) => set('aiUpscale', e.target.checked)} />
+          <span>
+            Upscale 4× with AI
+            <span className="field-hint block">
+              {prep.smallImage ? 'For small, blurry logos: Real-ESRGAN (4.9 MB) sharpens edges before tracing. Takes a few seconds.' : 'For images under 512 px; this one is big enough already.'}
+            </span>
+          </span>
+        </label>
+        <p className="field-hint">Both run in your browser; your image isn't uploaded. The models download from this site the first time.</p>
+        {busy && (
+          <p className="text-[12.5px]" role="status" data-prep-status="">
+            {busy}
+          </p>
+        )}
+        {prep.error && (
+          <p role="alert" className="text-[12.5px] text-accent">
+            {prep.error}
+          </p>
+        )}
+      </div>
+    </Section>
+  )
+}

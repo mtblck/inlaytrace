@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { zipSync, strToU8 } from 'fflate'
 import { TraceClient } from './engine/client'
+import { PrepClient } from './engine/prepClient'
+import type { PrepStage } from './engine/prep'
 import type { SizeRun } from './components/Controls'
 import { canMerge, isInk, maxTraceEdge, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
-import { ACCEPTED, colourAt, hasDarkBackground, loadSource, pixelsOf, type Pixels, type Source } from './lib/image'
+import { ACCEPTED, colourAt, hasDarkBackground, loadSource, pixelsOf, UPSCALE_BELOW, type Pixels, type Source } from './lib/image'
 import { formatBytes, normalizeHex, parseTrace, statsOf, type Trace } from './lib/svg'
 import {
   buildSvg,
@@ -48,6 +50,12 @@ type Status = { kind: 'idle' } | { kind: 'tracing' } | { kind: 'done'; ms: numbe
 export default function App() {
   const client = useMemo(() => new TraceClient(), [])
   useEffect(() => () => client.dispose(), [client])
+  const prepClient = useMemo(() => new PrepClient(), [])
+  useEffect(() => () => prepClient.stop(), [prepClient])
+  const [prepared, setPrepared] = useState<{ key: string; source: Source } | null>(null)
+  const preparedRef = useRef<{ key: string; source: Source } | null>(null)
+  const [prepStatus, setPrepStatus] = useState<{ stage: PrepStage; done: number; total: number } | null>(null)
+  const [prepError, setPrepError] = useState<string | null>(null)
   // Target size runs dozens of traces: on a worker of its own, so tracing stays responsive.
   const sizeClient = useMemo(() => new TraceClient(), [])
   useEffect(() => () => sizeClient.dispose(), [sizeClient])
@@ -280,9 +288,62 @@ export default function App() {
     return () => window.removeEventListener('paste', onPaste)
   }, [open])
 
+  // ---- AI preparation ---------------------------------------------------------
+  // Background removal and 4× upscaling run before tracing, in a worker of
+  // their own, and give a prepared copy of the image that's traced (and
+  // compared against) instead. Upscaling only applies to small images.
+  const wantUpscale = settings.aiUpscale && !!source && Math.max(source.bitmap.width, source.bitmap.height) < UPSCALE_BELOW
+  const prepKey = source && (settings.removeBackground || wantUpscale) ? `${source.url}|${settings.removeBackground}|${wantUpscale}` : null
+  useEffect(() => {
+    if (!source || !prepKey) {
+      prepClient.stop()
+      setPrepStatus(null)
+      setPrepError(null)
+      return
+    }
+    if (preparedRef.current?.key === prepKey) {
+      // Back to a copy already made: stop anything still running for another one.
+      prepClient.stop()
+      setPrepStatus(null)
+      setPrepError(null)
+      return
+    }
+    let live = true
+    setPrepError(null)
+    setPrepStatus({ stage: settings.removeBackground ? 'background' : 'upscale', done: 0, total: 0 })
+    const native = pixelsOf(source, Infinity, false)
+    void prepClient
+      .prepare(native.rgba, native.width, native.height, { background: settings.removeBackground, upscale: wantUpscale }, (stage, done, total) => live && setPrepStatus({ stage, done, total }))
+      .then(async (r) => {
+        if (!live || !r) return
+        if (r instanceof Error) {
+          setPrepStatus(null)
+          setPrepError(r.message)
+          return
+        }
+        const img = new ImageData(r.rgba as Uint8ClampedArray<ArrayBuffer>, r.width, r.height)
+        const canvas = new OffscreenCanvas(r.width, r.height)
+        canvas.getContext('2d')!.putImageData(img, 0, 0)
+        const [bitmap, blob] = await Promise.all([createImageBitmap(img), canvas.convertToBlob({ type: 'image/png' })])
+        if (!live) return
+        if (preparedRef.current) URL.revokeObjectURL(preparedRef.current.source.url)
+        preparedRef.current = { key: prepKey, source: { ...source, url: URL.createObjectURL(blob), bitmap } }
+        setPrepared(preparedRef.current)
+        setPrepStatus(null)
+      })
+    return () => {
+      live = false
+    }
+    // Settings other than the two steps don't change what's prepared.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, prepKey, prepClient])
+  /** What gets traced: the prepared image when a step is on (none until it's ready), else the original. */
+  const traceSource = prepKey ? (prepared?.key === prepKey ? prepared.source : null) : source
+
   // ---- Tracing ------------------------------------------------------------
   useEffect(() => {
-    if (!source) return
+    if (!traceSource) return
+    const source = traceSource
     const timer = setTimeout(async () => {
       const maxEdge = maxTraceEdge(settings.preset)
       const upscale = settings.preset !== 'pixel'
@@ -327,7 +388,7 @@ export default function App() {
       }
     }, 120)
     return () => clearTimeout(timer)
-  }, [client, source, settings])
+  }, [client, traceSource, settings])
 
   // The trace as a document. New ids per trace, so a selection never points
   // into a stale trace.
@@ -802,10 +863,11 @@ export default function App() {
 
   /** Search for settings that fit the SVG under `kb`. */
   const findSize = async (kb: number) => {
-    if (!source) return
+    // The image as traced: the prepared copy when an AI step is on.
+    if (!traceSource) return
     const maxEdge = maxTraceEdge(settings.preset)
     const upscale = settings.preset !== 'pixel'
-    const { rgba, width, height } = pixelsOf(source, maxEdge, upscale)
+    const { rgba, width, height } = pixelsOf(traceSource, maxEdge, upscale)
     const target = Math.round(kb * 1024)
     const from = settings
     setSizeRun({ target, from, tried: 0, best: null, result: null })
@@ -851,7 +913,7 @@ export default function App() {
     if (!picking || !source || !doc) return
     // An ink that a re-trace took away has nothing to recolour.
     if (picking.target !== 'background' && !inks.some((i) => i.hex === picking.target)) return setPicking(null)
-    const hex = colourAt(source, at.x / doc.width, at.y / doc.height)
+    const hex = colourAt(traceSource ?? source, at.x / doc.width, at.y / doc.height)
     // A transparent pixel has no colour: stay armed for another click.
     if (!hex) return
     applyPicked(picking.target, hex)
@@ -877,6 +939,8 @@ export default function App() {
     // Reset (the same preset again) puts the sliders back but keeps merges:
     // they're decisions about this image's colours, not settings to tune.
     if (id === settings.preset) next.merge = settings.merge
+    next.removeBackground = settings.removeBackground
+    next.aiUpscale = settings.aiUpscale
     if (isInk(id) && source && hasDarkBackground(source)) next.lightInk = true
     changeSettings(next)
   }
@@ -955,7 +1019,7 @@ export default function App() {
                   </div>
                 )}
                 <Canvas
-                  imageUrl={source.url}
+                  imageUrl={(traceSource ?? source).url}
                   paths={shown}
                   width={doc!.width}
                   height={doc!.height}
@@ -1189,7 +1253,12 @@ export default function App() {
             )}
             </div>
             <div role="tabpanel" id="panel-trace" aria-labelledby="tab-trace" hidden={!!doc && panel !== 'trace'}>
-              <Controls settings={settings} onChange={changeSettings} onPreset={choosePreset} measuredStroke={settings.preset === 'centerline' && settings.strokeWidth === 0 ? (trace?.paths[0]?.stroke ?? null) : null}
+              <Controls
+                settings={settings}
+                onChange={changeSettings}
+                onPreset={choosePreset}
+                measuredStroke={settings.preset === 'centerline' && settings.strokeWidth === 0 ? (trace?.paths[0]?.stroke ?? null) : null}
+                prep={{ smallImage: !!source && Math.max(source.bitmap.width, source.bitmap.height) < UPSCALE_BELOW, status: prepStatus, error: prepError }}
                 currentBytes={stats?.bytes ?? null}
                 sizeRun={sizeRun}
                 onFindSize={findSize}

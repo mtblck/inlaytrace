@@ -1,0 +1,15 @@
+Model weights served with the Inlay app, used only in your browser.
+
+u2netp.onnx
+  U^2-Net (small), salient object detection, used for background removal.
+  Xuebin Qin et al., "U2-Net: Going Deeper with Nested U-Structure for
+  Salient Object Detection", Pattern Recognition, 2020.
+  Weights: https://github.com/xuebinqin/U-2-Net (Apache License 2.0), as
+  exported to ONNX by rembg (https://github.com/danielgatis/rembg, MIT).
+
+realesr-general-x4v3.onnx
+  Real-ESRGAN, general x4 v3 (SRVGGNetCompact), used for upscaling.
+  Xintao Wang et al., "Real-ESRGAN: Training Real-World Blind
+  Super-Resolution with Pure Synthetic Data", ICCVW 2021.
+  Weights: https://github.com/xinntao/Real-ESRGAN (BSD 3-Clause License),
+  release v0.2.5.0, converted from PyTorch to ONNX (opset 17) unchanged.
