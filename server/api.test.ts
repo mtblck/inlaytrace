@@ -144,6 +144,19 @@ describe('account', () => {
 })
 
 describe('guards', () => {
+  it('ignores a malformed cookie set by something else on the site', async () => {
+    const r = await handle(get('account', 'pref=100%; inlay_at=at-1'), 'account', env, fakeSupabase().fetchImpl)
+    expect(r.status).toBe(200)
+    expect((await r.json()).email).toBe(USER.email)
+  })
+
+  it('reports rate limiting on code exchange as such, not as an expired link', async () => {
+    const limited = (async () => new Response(JSON.stringify({ msg: 'rate limit' }), { status: 429 })) as unknown as typeof fetch
+    const r = await handle(post('auth/exchange', { code: 'good-code' }, 'inlay_pkce=v123'), 'auth/exchange', env, limited)
+    expect(r.status).toBe(429)
+    expect((await r.json()).error).toMatch(/wait a minute/i)
+  })
+
   it('rejects posts from another origin and posts that are not JSON', async () => {
     const sb = fakeSupabase()
     expect((await handle(post('auth/start', { email: 'ada@example.com' }, '', { origin: 'https://evil.example' }), 'auth/start', env, sb.fetchImpl)).status).toBe(403)

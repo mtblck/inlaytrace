@@ -80,7 +80,8 @@ async function exchange(req: Request, db: Supabase) {
   try {
     session = await db.exchangeCode(code, verifier)
   } catch (e) {
-    if (e instanceof SupabaseError && e.status < 500) return json({ error: 'That sign-in link has expired or was already used. Ask for a new one.', code: 'expired' }, 400)
+    // Rate limiting (429) goes to the outer handler's message; asking for a new link would make it worse.
+    if (e instanceof SupabaseError && e.status < 500 && e.status !== 429) return json({ error: 'That sign-in link has expired or was already used. Ask for a new one.', code: 'expired' }, 400)
     throw e
   }
   return json({ email: session.user.email }, 200, [...sessionCookies(session), clear(PKCE, '/api/auth')])
@@ -178,9 +179,18 @@ export function cookies(req: Request): Record<string, string> {
   const out: Record<string, string> = {}
   for (const part of (req.headers.get('cookie') ?? '').split(';')) {
     const i = part.indexOf('=')
-    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim())
+    if (i > 0) out[part.slice(0, i).trim()] = safeDecode(part.slice(i + 1).trim())
   }
   return out
+}
+
+/** Another cookie on the site with a stray % must not break every request. */
+const safeDecode = (v: string) => {
+  try {
+    return decodeURIComponent(v)
+  } catch {
+    return v
+  }
 }
 
 function cookie(name: string, value: string, o: { path: string; maxAge: number }) {
