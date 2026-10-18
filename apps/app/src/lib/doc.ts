@@ -129,7 +129,8 @@ function grouped(paths: { d: string; fill: string; stroke?: number; group?: stri
     let j = i + 1
     if (g) while (j < paths.length && paths[j].group === g) j++
     const run = paths.slice(i, j).map(pathMarkup)
-    out.push(...(g ? [`<g id="${g}">`, ...run.map((m) => `  ${m}`), '</g>'] : run))
+    // A group left with one member (the rest deleted) is just that path.
+    out.push(...(run.length > 1 ? [`<g id="${g}">`, ...run.map((m) => `  ${m}`), '</g>'] : run))
     i = j
   }
   return out
