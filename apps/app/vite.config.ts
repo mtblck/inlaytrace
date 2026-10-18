@@ -6,7 +6,6 @@ import { createHash } from 'node:crypto'
 import { join, relative } from 'node:path'
 import type { Plugin } from 'vite'
 import { fileURLToPath } from 'node:url'
-import { serveApi } from '../../server/node'
 
 // `vite preview` serves the production headers from vercel.json, so a CSP that
 // would block the WebAssembly tracer fails locally instead of only on Vercel.
@@ -68,12 +67,24 @@ function serviceWorker(): Plugin {
   }
 }
 
-/** /api/* (accounts for HD credits) in `vite dev`, as the Vercel Function serves it. */
+/**
+ * /api/* (accounts, credits, HD) in `vite dev`, as the Vercel Functions serve it.
+ * Loaded through Vite on the first request, not imported here: the server
+ * reaches the tracer by package name, which this config file's own loader
+ * would resolve to the package's dist/ (unbuilt in a fresh checkout).
+ */
 function api(): Plugin {
   return {
     name: 'inlay-api',
     configureServer(server) {
-      server.middlewares.use((req, res, next) => void serveApi(req, res).then((done) => done || next(), next))
+      const node = fileURLToPath(new URL('../../server/node.ts', import.meta.url))
+      server.middlewares.use((req, res, next) => {
+        if (!(req.url ?? '').startsWith('/api/')) return next()
+        void server
+          .ssrLoadModule(node)
+          .then((m) => m.serveApi(req, res))
+          .then((done) => done || next(), next)
+      })
     },
   }
 }
