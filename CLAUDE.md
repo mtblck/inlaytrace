@@ -52,6 +52,8 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
 - **Edits = `{ inks, doc }`** (`apps/app/src/lib/doc.ts`): ink edits keyed by traced hex; `doc` null
   until a geometric edit detaches it, then settings changes must confirm. paper.js is
   lazy-loaded for mirror only; keep it out of the main chunk.
-- No Supabase. A future paid "HD" mode is a Vercel Function with spend caps.
+- **HD mode (paid, in progress, `docs/hd-mode.md`):** Supabase project `hjmhsrxagrquqgtfzyfx` holds accounts and the
+  credit ledger (`supabase/migrations/`), reached only from `/api` with the service-role key; Paddle sells credit packs.
+  The free app stays account-free and local, and its CSP stays `connect-src 'self'`.
 - **Claude commits for Matt as `mtblck <105079242+mtblck@users.noreply.github.com>`.** Vercel blocks
   deploys whose author email isn't linked to Matt's account (seen on mb-portfolio).
