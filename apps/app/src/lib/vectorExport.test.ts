@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { unzlibSync, strFromU8 } from 'fflate'
-import { buildEps, buildPdf, convert, pngPixels, withSize, type Drawable } from './vectorExport'
+import { buildDxf, DXF_TOLERANCE, flattenCubic, buildEps, buildPdf, convert, pngPixels, withSize, type Drawable } from './vectorExport'
 
 const drawing: Drawable = {
   width: 100,
@@ -85,5 +85,53 @@ describe('centerline strokes', () => {
     const eps = buildEps(strokes, { width: 100, height: 50, unit: 'pt' })
     expect(eps).toContain('4 setlinewidth 1 setlinecap 1 setlinejoin')
     expect(eps).toMatch(/^stroke$/m)
+  })
+})
+
+describe('DXF', () => {
+  const dxf = buildDxf(drawing, { width: 200, height: 100, unit: 'mm' })
+  const lines = dxf.trim().split('\n')
+  const pairs = Array.from({ length: lines.length / 2 }, (_, i) => [Number(lines[i * 2]), lines[i * 2 + 1]] as const)
+  it('is R12, one layer per colour, units in the header', () => {
+    expect(lines.length % 2).toBe(0)
+    expect(dxf).toContain('$ACADVER\n1\nAC1009')
+    expect(dxf).toContain('$INSUNITS\n70\n4') // millimetres
+    expect(pairs.filter(([c, v]) => c === 0 && v === 'LAYER')).toHaveLength(2)
+    expect(dxf).toContain('INK_FF0000')
+    expect(dxf).toContain('INK_0000FF')
+    expect(lines[lines.length - 1]).toBe('EOF')
+  })
+  it('draws each outline as a closed polyline at the export size, y up', () => {
+    expect(pairs.filter(([c, v]) => c === 0 && v === 'POLYLINE')).toHaveLength(2)
+    // The rectangle's corner (10, 10) at 2 mm a unit, from the bottom: (20, 80).
+    expect(dxf).toMatch(/VERTEX\n8\nINK_FF0000\n10\n20\n20\n80\n/)
+  })
+  it('flattens curves to within the stated tolerance', () => {
+    // A quarter circle, radius 100: every point on the curve is within the tolerance of the polyline.
+    const k = 0.5522847498 * 100
+    const [a, b, c, d] = [{ x: 100, y: 0 }, { x: 100, y: k }, { x: k, y: 100 }, { x: 0, y: 100 }]
+    const pts = [a]
+    flattenCubic(a, b, c, d, DXF_TOLERANCE, pts)
+    const toLine = (p: { x: number; y: number }) =>
+      Math.min(
+        ...pts.slice(1).map((q, i) => {
+          const s = pts[i]
+          const dx = q.x - s.x
+          const dy = q.y - s.y
+          const t = Math.max(0, Math.min(1, ((p.x - s.x) * dx + (p.y - s.y) * dy) / (dx * dx + dy * dy)))
+          return Math.hypot(p.x - s.x - t * dx, p.y - s.y - t * dy)
+        }),
+      )
+    let worst = 0
+    for (let i = 0; i <= 400; i++) {
+      const t = i / 400
+      const u = 1 - t
+      const p = { x: u * u * u * a.x + 3 * u * u * t * b.x + 3 * u * t * t * c.x + t * t * t * d.x, y: u * u * u * a.y + 3 * u * u * t * b.y + 3 * u * t * t * c.y + t * t * t * d.y }
+      worst = Math.max(worst, toLine(p))
+    }
+    expect(worst).toBeLessThanOrEqual(DXF_TOLERANCE)
+    expect(pts.length).toBeLessThan(64) // and not wastefully many
+    // The DXF's own curve got split too.
+    expect((dxf.slice(dxf.indexOf('8\nINK_0000FF\n66')).match(/VERTEX/g) ?? []).length).toBeGreaterThan(12)
   })
 })

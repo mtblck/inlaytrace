@@ -176,3 +176,140 @@ export function buildEps(drawing: Drawable, size: ExportSize, title = 'Inlay'): 
     '',
   ].join('\n')
 }
+
+// ---- DXF ----------------------------------------------------------------------
+
+/** How far a DXF polyline may stray from the curve it stands for, in drawing (trace) pixels. */
+export const DXF_TOLERANCE = 0.05
+
+/** AutoCAD's 255 indexed colours aren't needed: the nearest of the basic and grey ones is enough to tell layers apart. */
+const ACI: [number, number[]][] = [
+  [1, [255, 0, 0]],
+  [2, [255, 255, 0]],
+  [3, [0, 255, 0]],
+  [4, [0, 255, 255]],
+  [5, [0, 0, 255]],
+  [6, [255, 0, 255]],
+  [7, [0, 0, 0]],
+  [8, [128, 128, 128]],
+  [9, [192, 192, 192]],
+  [30, [255, 127, 0]],
+  [40, [255, 191, 0]],
+]
+const nearestAci = (hex: string) => {
+  const c = rgb(hex).map((v) => v * 255)
+  return ACI.reduce((best, [i, a]) => {
+    const d = (a[0] - c[0]) ** 2 + (a[1] - c[1]) ** 2 + (a[2] - c[2]) ** 2
+    return d < best.d ? { i, d } : best
+  }, { i: 7, d: Infinity }).i
+}
+
+/** A cubic as points, split until each piece is within `tol` of a straight line. */
+export function flattenCubic(a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }, d: { x: number; y: number }, tol: number, out: { x: number; y: number }[], depth = 0) {
+  // Control points' distance from the chord bounds the curve's.
+  const dx = d.x - a.x
+  const dy = d.y - a.y
+  const len = Math.hypot(dx, dy)
+  // With the ends together (a one-node loop), the handles' distance from the end is the bound.
+  const off =
+    len < 1e-9
+      ? Math.max(Math.hypot(b.x - a.x, b.y - a.y), Math.hypot(c.x - a.x, c.y - a.y))
+      : Math.max(Math.abs((b.x - a.x) * dy - (b.y - a.y) * dx), Math.abs((c.x - a.x) * dy - (c.y - a.y) * dx)) / len
+  if (off <= tol || depth > 16) {
+    out.push(d)
+    return
+  }
+  const m = (p: { x: number; y: number }, q: { x: number; y: number }) => ({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 })
+  const ab = m(a, b)
+  const bc = m(b, c)
+  const cd = m(c, d)
+  const abc = m(ab, bc)
+  const bcd = m(bc, cd)
+  const mid = m(abc, bcd)
+  flattenCubic(a, ab, abc, mid, tol, out, depth + 1)
+  flattenCubic(mid, bcd, cd, d, tol, out, depth + 1)
+}
+
+/**
+ * DXF (R12, the version every CAD and cutting program reads): one layer per
+ * colour, named for it, each outline (or centerline stroke) a 2D polyline,
+ * curves flattened to within DXF_TOLERANCE px of the drawing, scaled to the
+ * export size in its unit (y up, as DXF has it). Closed outlines are closed
+ * polylines; a cutter cuts holes as their own loops.
+ */
+export function buildDxf(drawing: Drawable, size: ExportSize): string {
+  const sx = size.width / drawing.width
+  const sy = size.height / drawing.height
+  const map = (p: { x: number; y: number }) => [p.x * sx, size.height - p.y * sy]
+  const layers = [...new Set(drawing.paths.map((p) => p.fill))]
+  const layerName = (hex: string) => `INK_${hex.slice(1).toUpperCase()}`
+  const out: (string | number)[] = []
+  const g = (code: number, value: string | number) => out.push(code, value)
+  // Header: units for programs that read them ($INSUNITS: 1 in, 4 mm; 0 unitless for px and pt).
+  g(0, 'SECTION')
+  g(2, 'HEADER')
+  g(9, '$ACADVER')
+  g(1, 'AC1009')
+  g(9, '$INSUNITS')
+  g(70, size.unit === 'mm' ? 4 : size.unit === 'in' ? 1 : 0)
+  g(9, '$EXTMIN')
+  g(10, 0)
+  g(20, 0)
+  g(9, '$EXTMAX')
+  g(10, fmt(size.width))
+  g(20, fmt(size.height))
+  g(0, 'ENDSEC')
+  g(0, 'SECTION')
+  g(2, 'TABLES')
+  g(0, 'TABLE')
+  g(2, 'LAYER')
+  g(70, layers.length)
+  for (const hex of layers) {
+    g(0, 'LAYER')
+    g(2, layerName(hex))
+    g(70, 0)
+    g(62, nearestAci(hex))
+    g(6, 'CONTINUOUS')
+  }
+  g(0, 'ENDTAB')
+  g(0, 'ENDSEC')
+  g(0, 'SECTION')
+  g(2, 'ENTITIES')
+  const tol = DXF_TOLERANCE
+  for (const path of drawing.paths) {
+    for (const s of parsePath(path.d)) {
+      const n = s.nodes
+      if (n.length < 2 && !(s.closed && n.length)) continue
+      const pts = [{ x: n[0].x, y: n[0].y }]
+      const segs = s.closed ? n.length : n.length - 1
+      for (let i = 0; i < segs; i++) {
+        const a = n[i]
+        const b = n[(i + 1) % n.length]
+        if (!a.out && !b.in) pts.push({ x: b.x, y: b.y })
+        else flattenCubic(a, a.out ?? a, b.in ?? b, b, tol, pts)
+      }
+      // A closed loop ends where it starts; the closed flag draws that edge.
+      if (s.closed && pts.length > 1) pts.pop()
+      g(0, 'POLYLINE')
+      g(8, layerName(path.fill))
+      g(66, 1)
+      g(10, 0)
+      g(20, 0)
+      g(30, 0)
+      g(70, s.closed ? 1 : 0)
+      for (const p of pts) {
+        const [x, y] = map(p)
+        g(0, 'VERTEX')
+        g(8, layerName(path.fill))
+        g(10, fmt(x))
+        g(20, fmt(y))
+        g(30, 0)
+      }
+      g(0, 'SEQEND')
+      g(8, layerName(path.fill))
+    }
+  }
+  g(0, 'ENDSEC')
+  g(0, 'EOF')
+  return out.join('\n') + '\n'
+}

@@ -45,7 +45,7 @@ import { Canvas, type Overlays, type SelectMode, type Tool, type ViewMode } from
 import { ShortcutsDialog } from './components/Shortcuts'
 import { ExportOptions } from './components/ExportOptions'
 import { clearSession, loadSession, newSessionId, saveImage, saveState } from './lib/session'
-import { buildEps, buildPdf, pngPixels, withSize, type ExportSize } from './lib/vectorExport'
+import { buildDxf, buildEps, buildPdf, pngPixels, withSize, type ExportSize } from './lib/vectorExport'
 import { IconButton, KeyboardIcon, MoonIcon, SunIcon } from './components/IconButton'
 import { EditPanel } from './components/EditPanel'
 import { Controls } from './components/Controls'
@@ -835,6 +835,7 @@ export default function App() {
   /** What PDF and EPS draw: the shapes as shown, with the background. */
   const drawable = () => ({ width: doc!.width, height: doc!.height, background: edits.background ? normalizeHex(edits.background) : null, paths: visiblePaths(doc!, edits.inks) })
   const downloadPdf = () => save(new Blob([buildPdf(drawable(), size, source!.name) as BlobPart], { type: 'application/pdf' }), `${source!.name}.pdf`)
+  const downloadDxf = () => save(new Blob([buildDxf(drawable(), size)], { type: 'application/dxf' }), `${source!.name}.dxf`)
   const downloadEps = () => save(new Blob([buildEps(drawable(), size, source!.name)], { type: 'application/postscript' }), `${source!.name}.eps`)
   /** A PNG rendered by the browser from the SVG, at the export size × scale (px) or at a dpi (physical units). */
   const downloadPng = async (scale: number, dpi: number) => {
@@ -1356,6 +1357,7 @@ export default function App() {
                 onPng={downloadPng}
                 onPdf={downloadPdf}
                 onEps={downloadEps}
+                onDxf={downloadDxf}
               />
             )}
           </div>
