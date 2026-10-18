@@ -51,7 +51,9 @@ export function describe(e: LedgerEntry): string {
     case 'refund_use':
       return 'Credits back for an HD run that failed'
     case 'reversal':
-      return 'Purchase refunded'
+      return 'Refund: credits taken back'
+    case 'adjustment':
+      return e.details.released_adjustment ? 'Refund declined: credits returned' : 'Adjustment'
     default:
       return 'Adjustment'
   }

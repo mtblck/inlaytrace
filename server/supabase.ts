@@ -100,6 +100,11 @@ export function supabase(env: Env, fetchImpl: typeof fetch = fetch) {
       const b = await call('/rest/v1/rpc/reverse_purchase', { method: 'POST', body: JSON.stringify({ p_transaction: transactionId, p_adjustment: adjustmentId, p_credits: credits, p_details: details }) })
       return b === null ? null : Number(b)
     },
+    /** Cancel the hold for a refund Paddle rejected: the credits come back, once. Null if nothing was held. */
+    async releaseReversal(adjustmentId: string, details: Record<string, unknown>) {
+      const b = await call('/rest/v1/rpc/release_reversal', { method: 'POST', body: JSON.stringify({ p_adjustment: adjustmentId, p_details: details }) })
+      return b === null ? null : Number(b)
+    },
     /** The purchase row for a Paddle transaction, if any. */
     async purchase(transactionId: string) {
       const rows = (await call(`/rest/v1/credit_ledger?select=user_id,delta,details&reason=eq.purchase&paddle_transaction_id=eq.${encodeURIComponent(transactionId)}`)) as { user_id: string; delta: number; details: Record<string, unknown> }[]
