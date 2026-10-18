@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { parseTrace, statsOf } from './svg'
 import {
+  arrange,
+  groupPaths,
+  ungroupPaths,
+  withGroups,
+  type Doc,
   buildSvg,
   deletePath,
   docFromTrace,
@@ -174,5 +179,40 @@ describe('centerline strokes', () => {
     expect(buildSvg(doc)).toContain('<path d="M1 1L9 9" fill="none" stroke="#123456" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>')
     expect(buildSvg(doc, { recolor: { '#123456': '#ff0000' }, removed: [] })).toContain('stroke="#ff0000"')
     expect(inksOf(doc)).toEqual([{ hex: '#123456', count: 1 }])
+  })
+})
+
+describe('groups and paint order', () => {
+  const doc = (ids: string): Doc => ({ width: 10, height: 10, paths: ids.split('').map((id) => ({ id, d: 'M0 0L1 0L1 1Z', fill: '#000000' })) })
+  const order = (d: Doc) => d.paths.map((p) => p.id).join('')
+
+  it('group gathers the members where the topmost was, and selecting one selects all', () => {
+    const g = groupPaths(doc('abcde'), ['b', 'd'])
+    expect(order(g)).toBe('acbde')
+    expect(new Set(g.paths.filter((p) => p.group).map((p) => p.group)).size).toBe(1)
+    expect(withGroups(g, ['b']).sort()).toEqual(['b', 'd'])
+    expect(order(ungroupPaths(g, ['d']))).toBe('acbde')
+    expect(ungroupPaths(g, ['d']).paths.every((p) => !p.group)).toBe(true)
+  })
+
+  it('exports a group as a <g> round its paths, in paint order', () => {
+    const svg = buildSvg(groupPaths(doc('abc'), ['a', 'b']))
+    expect(svg).toMatch(/<g id="g\d+">\n {2}<path[^>]*\/>\n {2}<path[^>]*\/>\n<\/g>\n<path/)
+  })
+
+  it('moves paths forward, backward, to the front and to the back', () => {
+    expect(order(arrange(doc('abcde'), ['b'], 'forward'))).toBe('acbde')
+    expect(order(arrange(doc('abcde'), ['b', 'c'], 'forward'))).toBe('adbce') // a run moves as one
+    expect(order(arrange(doc('abcde'), ['d'], 'backward'))).toBe('abdce')
+    expect(order(arrange(doc('abcde'), ['b', 'd'], 'front'))).toBe('acebd')
+    expect(order(arrange(doc('abcde'), ['b', 'd'], 'back'))).toBe('bdace')
+    expect(order(arrange(doc('abcde'), ['e'], 'forward'))).toBe('abcde') // already on top
+  })
+
+  it('moves a group as one, and steps past a whole group', () => {
+    const g = groupPaths(doc('abcde'), ['b', 'c']) // a [b c] d e
+    expect(order(arrange(g, ['b'], 'forward'))).toBe('adbce')
+    expect(order(arrange(g, ['d'], 'backward'))).toBe('adbce') // past the whole group, not into it
+    expect(order(arrange(g, ['a'], 'forward'))).toBe('bcade')
   })
 })

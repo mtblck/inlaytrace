@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { checkEdits, checkSettings } from './session'
 import { settingsFor } from '../engine/presets'
+import { buildSvg, groupPaths, reserveGroups } from './doc'
 
 describe('restoring a saved session', () => {
   it('fills settings from the preset and keeps only well-typed saved fields', () => {
@@ -23,5 +24,35 @@ describe('restoring a saved session', () => {
     expect(e.inks).toEqual({ recolor: { '#ff0000': '#00ff00' }, removed: ['#0000ff'] })
     expect(e.background).toBeNull()
     expect(e.doc!.paths).toHaveLength(1)
+  })
+})
+
+describe('groups in a saved session', () => {
+  it('keep their ids, drop malformed ones, and new groups get fresh ids', () => {
+    const saved = {
+      inks: { recolor: {}, removed: [] },
+      background: null,
+      doc: {
+        width: 10,
+        height: 10,
+        paths: [
+          { id: 'p1', d: 'M0 0L1 0L1 1Z', fill: '#000000', group: 'g7' },
+          { id: 'p2', d: 'M0 0L1 0L1 1Z', fill: '#000000', group: 'g7' },
+          { id: 'p3', d: 'M0 0L1 0L1 1Z', fill: '#000000', group: '"><script>' },
+          { id: 'p4', d: 'M0 0L1 0L1 1Z', fill: '#000000' },
+        ],
+      },
+    }
+    const doc = checkEdits(saved).doc!
+    expect(doc.paths.map((p) => p.group)).toEqual(['g7', 'g7', undefined, undefined])
+    reserveGroups(doc)
+    const regrouped = groupPaths(doc, ['p3', 'p4'])
+    expect(regrouped.paths.find((p) => p.id === 'p3')!.group).not.toBe('g7')
+    expect(Number(regrouped.paths.find((p) => p.id === 'p3')!.group!.slice(1))).toBeGreaterThan(7)
+  })
+
+  it('a group left with one shape exports as just that shape', () => {
+    const doc = checkEdits({ inks: { recolor: {}, removed: [] }, background: null, doc: { width: 10, height: 10, paths: [{ id: 'p1', d: 'M0 0L1 0L1 1Z', fill: '#000000', group: 'g3' }] } }).doc!
+    expect(buildSvg(doc)).not.toContain('<g')
   })
 })

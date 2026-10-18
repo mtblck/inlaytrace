@@ -6,6 +6,7 @@
  */
 import { detectSymmetry, type Symmetry } from 'inlaytrace'
 import { runTrace } from './run'
+import { SVGO } from './svgo'
 import type { Settings, TraceOptions } from './presets'
 import { searchSize, type Candidate, type SizeSearch } from './targetSize'
 
@@ -40,7 +41,7 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
     } else if (req.type === 'size') {
       svgo ??= import('svgo/browser')
       const { optimize } = await svgo
-      const measure = (svg: string) => new TextEncoder().encode(optimize(svg, { multipass: true, floatPrecision: 2, plugins: ['preset-default'] }).data).length
+      const measure = (svg: string) => new TextEncoder().encode(optimize(svg, SVGO).data).length
       const result = searchSize(new Uint8Array(req.rgba), req.width, req.height, req.settings, req.target, measure, (tried, best) => post({ type: 'progress', id: req.id, tried, best }))
       post({ type: 'sized', id: req.id, result })
     } else if (req.type === 'symmetry') {
@@ -48,11 +49,7 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
     } else {
       svgo ??= import('svgo/browser')
       const { optimize } = await svgo
-      const { data } = optimize(req.svg, {
-        multipass: true,
-        floatPrecision: 2,
-        plugins: ['preset-default'],
-      })
+      const { data } = optimize(req.svg, SVGO)
       post({ type: 'optimized', id: req.id, svg: data })
     }
   } catch (error) {
