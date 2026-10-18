@@ -1,8 +1,9 @@
 /**
  * Export sizes, and the drawing as PDF and EPS, built here rather than by a
  * library: both are a handful of path operators per shape. Every shape becomes
- * a filled vector path (nonzero fill, as in the SVG), so print shops and
- * cutters get real curves, not a picture.
+ * a filled vector path (nonzero fill, as in the SVG), or for centerline a
+ * round-capped stroke, so print shops, cutters and plotters get real curves,
+ * not a picture.
  */
 import { zlibSync, strToU8 } from 'fflate'
 import { parsePath } from './pathdata'
@@ -17,7 +18,7 @@ export const convert = (v: number, from: Unit, to: Unit) => (v * PT[from]) / PT[
 export type ExportSize = { width: number; height: number; unit: Unit }
 
 /** Shapes as drawn: colour already resolved (recolours applied, removed inks gone). */
-export type Drawable = { width: number; height: number; background: string | null; paths: { d: string; fill: string }[] }
+export type Drawable = { width: number; height: number; background: string | null; paths: { d: string; fill: string; stroke?: number }[] }
 
 const fmt = (n: number) => {
   const r = Math.round(n * 1000) / 1000
@@ -74,7 +75,9 @@ function pathOps(d: string, map: (x: number, y: number) => [number, number], ops
   return out.join('\n')
 }
 
-function body(drawing: Drawable, wPt: number, hPt: number, ops: { m: string; l: string; c: string; h: string; color: (c: number[]) => string; fill: string }) {
+type Ops = { m: string; l: string; c: string; h: string; color: (c: number[]) => string; fill: string; strokeStyle: (c: number[], width: number) => string; stroke: string }
+
+function body(drawing: Drawable, wPt: number, hPt: number, ops: Ops) {
   const sx = wPt / drawing.width
   const sy = hPt / drawing.height
   const map = (x: number, y: number): [number, number] => [x * sx, hPt - y * sy]
@@ -82,7 +85,10 @@ function body(drawing: Drawable, wPt: number, hPt: number, ops: { m: string; l: 
   if (drawing.background) parts.push(`${ops.color(rgb(drawing.background))}\n${['0 0', `${fmt(wPt)} 0`, `${fmt(wPt)} ${fmt(hPt)}`, `0 ${fmt(hPt)}`].map((q, i) => `${q} ${i ? ops.l : ops.m}`).join('\n')}\n${ops.h}\n${ops.fill}`)
   for (const path of drawing.paths) {
     const geometry = pathOps(path.d, map, ops)
-    if (geometry) parts.push(`${ops.color(rgb(path.fill))}\n${geometry}\n${ops.fill}`)
+    if (!geometry) continue
+    // A stroke's width scales with the drawing (the mean of the two scales, for a stretched export).
+    if (path.stroke) parts.push(`${ops.strokeStyle(rgb(path.fill), (path.stroke * (sx + sy)) / 2)}\n${geometry}\n${ops.stroke}`)
+    else parts.push(`${ops.color(rgb(path.fill))}\n${geometry}\n${ops.fill}`)
   }
   return parts.join('\n')
 }
@@ -91,7 +97,17 @@ function body(drawing: Drawable, wPt: number, hPt: number, ops: { m: string; l: 
 export function buildPdf(drawing: Drawable, size: ExportSize, title = 'Inlay'): Uint8Array {
   const w = toPt(size.width, size.unit)
   const h = toPt(size.height, size.unit)
-  const content = body(drawing, w, h, { m: 'm', l: 'l', c: 'c', h: 'h', color: (c) => `${c.map(fmt).join(' ')} rg`, fill: 'f' })
+  const content = body(drawing, w, h, {
+    m: 'm',
+    l: 'l',
+    c: 'c',
+    h: 'h',
+    color: (c) => `${c.map(fmt).join(' ')} rg`,
+    fill: 'f',
+    // Round caps and joins (1 J, 1 j), as in the SVG.
+    strokeStyle: (c, width) => `${c.map(fmt).join(' ')} RG ${fmt(width)} w 1 J 1 j`,
+    stroke: 'S',
+  })
   const stream = zlibSync(strToU8(content), { level: 9 })
   const esc = (s: string) => s.replace(/[\\()]/g, '\\$&').replace(/[^\x20-\x7e]/g, '?')
   const objects: (string | Uint8Array)[][] = [
@@ -134,7 +150,16 @@ export function buildPdf(drawing: Drawable, size: ExportSize, title = 'Inlay'): 
 export function buildEps(drawing: Drawable, size: ExportSize, title = 'Inlay'): string {
   const w = toPt(size.width, size.unit)
   const h = toPt(size.height, size.unit)
-  const content = body(drawing, w, h, { m: 'moveto', l: 'lineto', c: 'curveto', h: 'closepath', color: (c) => `${c.map(fmt).join(' ')} setrgbcolor`, fill: 'fill' })
+  const content = body(drawing, w, h, {
+    m: 'moveto',
+    l: 'lineto',
+    c: 'curveto',
+    h: 'closepath',
+    color: (c) => `${c.map(fmt).join(' ')} setrgbcolor`,
+    fill: 'fill',
+    strokeStyle: (c, width) => `${c.map(fmt).join(' ')} setrgbcolor ${fmt(width)} setlinewidth 1 setlinecap 1 setlinejoin`,
+    stroke: 'stroke',
+  })
   return [
     '%!PS-Adobe-3.0 EPSF-3.0',
     `%%BoundingBox: 0 0 ${Math.ceil(w)} ${Math.ceil(h)}`,

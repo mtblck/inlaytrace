@@ -26,6 +26,20 @@ describe('parseTrace', () => {
   })
 })
 
+describe('centerline strokes', () => {
+  it('are read as strokes: the colour from stroke, the width from stroke-width', () => {
+    const t = parseTrace('<svg width="10" height="10"><path d="M1 1L9 9" fill="none" stroke="#123456" stroke-width="2.5" stroke-linecap="round"/><path d="M0 0L1 0L1 1Z" fill="#ff0000"/></svg>')
+    expect(t.paths).toEqual([
+      { d: 'M1 1L9 9', fill: '#123456', stroke: 2.5 },
+      { d: 'M0 0L1 0L1 1Z', fill: '#ff0000' },
+    ])
+  })
+  it('skip a stroke with no usable colour or width', () => {
+    expect(parseTrace('<svg width="10" height="10"><path d="M1 1L9 9" fill="none" stroke="url(#x)" stroke-width="2"/></svg>').paths).toEqual([])
+    expect(parseTrace('<svg width="10" height="10"><path d="M1 1L9 9" fill="none" stroke="#123456"/></svg>').paths).toEqual([])
+  })
+})
+
 describe('helpers', () => {
   it('normalises hex', () => {
     expect(normalizeHex('#ABC')).toBe('#aabbcc')

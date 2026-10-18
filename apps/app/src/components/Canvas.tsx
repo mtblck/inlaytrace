@@ -9,7 +9,7 @@ export type Tool = 'select' | 'nodes' | 'mirror'
 /** How a click or marquee combines with the current selection: Shift adds (or toggles), Alt removes. */
 export type SelectMode = 'set' | 'add' | 'toggle' | 'subtract'
 export type Overlays = { paths: boolean; pathColor: string; nodes: boolean; nodeColor: string }
-export type ShownPath = { id: string; d: string; fill: string }
+export type ShownPath = { id: string; d: string; fill: string; stroke?: number }
 
 type Props = {
   imageUrl: string
@@ -461,7 +461,7 @@ export function Canvas(props: Props) {
           >
             {props.background && <rect width={width} height={height} fill={props.background} data-background="" />}
             {props.paths.map((p) => (
-              <VectorPath key={p.id} d={p.d} fill={p.fill} />
+              <VectorPath key={p.id} d={p.d} fill={p.fill} stroke={p.stroke} />
             ))}
           </svg>
 
@@ -477,7 +477,7 @@ export function Canvas(props: Props) {
             }}
           >
             {tool !== 'mirror' &&
-              props.paths.map((p) => <HitPath key={p.id} id={p.id} d={p.d} movable={tool === 'select' && selectedSet.has(p.id)} onDown={onShapeDown} onDouble={onShapeDouble} />)}
+              props.paths.map((p) => <HitPath key={p.id} id={p.id} d={p.d} stroke={p.stroke} unit={p.stroke ? unit : 1} movable={tool === 'select' && selectedSet.has(p.id)} onDown={onShapeDown} onDouble={onShapeDouble} />)}
 
             {overlays.paths && (
               <g fill="none" stroke={overlays.pathColor} strokeWidth={1} pointerEvents="none">
@@ -692,19 +692,22 @@ export function Canvas(props: Props) {
 
 // Each shape is its own memoised element: dragging a node changes one path,
 // and the thousands of others in a busy trace skip re-rendering entirely.
-const VectorPath = memo(function VectorPath({ d, fill }: { d: string; fill: string }) {
+const VectorPath = memo(function VectorPath({ d, fill, stroke }: { d: string; fill: string; stroke?: number }) {
+  // A centerline stroke: drawn in its colour, not filled, as it will be exported.
+  if (stroke) return <path d={d} fill="none" stroke={fill} strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" />
   return <path d={d} fill={fill} />
 })
 const OutlinePath = memo(function OutlinePath({ d }: { d: string }) {
   return <path d={d} vectorEffect="non-scaling-stroke" />
 })
-type HitProps = { id: string; d: string; movable: boolean; onDown: (e: RPointerEvent, id: string) => void; onDouble: (id: string) => void }
-const HitPath = memo(function HitPath({ id, d, movable, onDown, onDouble }: HitProps) {
+type HitProps = { id: string; d: string; stroke?: number; unit: number; movable: boolean; onDown: (e: RPointerEvent, id: string) => void; onDouble: (id: string) => void }
+const HitPath = memo(function HitPath({ id, d, stroke, unit, movable, onDown, onDouble }: HitProps) {
   return (
     <path
       d={d}
       fill="transparent"
-      pointerEvents="fill"
+      // A stroke is hit on its line (at least HIT_PX across on screen), not on the area it encloses.
+      {...(stroke ? { fill: 'none', stroke: 'transparent', strokeWidth: Math.max(stroke, HIT_PX * unit), pointerEvents: 'stroke' } : { pointerEvents: 'fill' })}
       data-path-id={id}
       style={{ cursor: movable ? 'move' : 'pointer' }}
       onPointerDown={(e) => onDown(e, id)}

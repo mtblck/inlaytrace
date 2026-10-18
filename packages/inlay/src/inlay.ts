@@ -258,7 +258,7 @@ function labelPalette(rgba: ArrayLike<number>, w: number, h: number, palette: st
   return { labels: fixed, colors, drawn }
 }
 
-function labelBinary(rgba: ArrayLike<number>, w: number, h: number, threshold: number | null) {
+export function labelBinary(rgba: ArrayLike<number>, w: number, h: number, threshold: number | null) {
   const n = w * h
   const lum = new Uint8Array(n)
   const alpha = new Uint8Array(n)
@@ -455,7 +455,7 @@ function components(labels: Int32Array, w: number, h: number, keep: (label: numb
  * label they took and are stranded as a new speck. On photos that left
  * thousands of fragments, and a larger `speckle` left more, not fewer.
  */
-function mergeSpecks(labels: Int32Array, w: number, h: number, minArea: number) {
+export function mergeSpecks(labels: Int32Array, w: number, h: number, minArea: number) {
   if (minArea <= 1) return
   for (let pass = 0; pass < 8; pass++) if (!mergeSpecksOnce(labels, w, h, minArea)) return
 }

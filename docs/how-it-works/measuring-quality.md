@@ -55,6 +55,19 @@ symmetry copies the kept part's error along with its shape, so accuracy barely
 moves either way; the turn costs nodes where the copies meet the cut-out
 background. Detection takes about 0.3 s at 640 px.
 
+Last, a pen drawing (`scripts/fixtures/strokes.svg`: six strokes 3 units wide
+on a 200-unit drawing, so 9.6 px at 640 px) traced with Centerline and, for
+comparison, Line art:
+
+| Preset | Wrong pixels at 4× | Strokes | Nodes | Size | Stroke width |
+| --- | --- | --- | --- | --- | --- |
+| Centerline | 0.83% | 6 | 35 | 1.1 KB | 9.58 px (measured) |
+| Line art | 0.36% | (outlines) | 86 | 2.7 KB | |
+
+Centerline finds one stroke per drawn stroke and the width to within 1%. It's
+less exact than outlines because a skeleton cuts the inside of a sharp corner
+and stops short of a round end, which is what a plotter's pen fills back in.
+
 Run it before shipping any change to the tracer, the fitter or a preset.
 
 ## `npm run score:photos`: Poster on photos

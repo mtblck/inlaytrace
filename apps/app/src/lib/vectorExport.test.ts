@@ -69,3 +69,21 @@ describe('EPS', () => {
     expect(eps).toContain('10 40 moveto')
   })
 })
+
+describe('centerline strokes', () => {
+  const strokes: Drawable = { width: 100, height: 50, background: null, paths: [{ d: 'M10 10L90 40', fill: '#112233', stroke: 4 }] }
+  it('are stroked, round-capped and open in a PDF, their width scaled with the page', () => {
+    const pdf = buildPdf(strokes, { width: 200, height: 100, unit: 'pt' })
+    const text = strFromU8(pdf, true)
+    const content = strFromU8(unzlibSync(pdf.slice(text.indexOf('stream\n') + 7, text.indexOf('\nendstream'))))
+    expect(content).toContain('RG 8 w 1 J 1 j') // 4 px at 2 pt a px
+    expect(content.match(/^S$/gm)).toHaveLength(1)
+    expect(content).not.toMatch(/^f$/m)
+    expect(content).not.toMatch(/^h$/m) // an open stroke isn't closed
+  })
+  it('and in EPS', () => {
+    const eps = buildEps(strokes, { width: 100, height: 50, unit: 'pt' })
+    expect(eps).toContain('4 setlinewidth 1 setlinecap 1 setlinejoin')
+    expect(eps).toMatch(/^stroke$/m)
+  })
+})

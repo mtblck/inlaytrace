@@ -17,7 +17,7 @@ Worker so the page stays responsive.
 
 ## What it does
 
-1. **Trace.** Pick what the image is (Logo, Illustration, Line art, Poster,
+1. **Trace.** Pick what the image is (Logo, Illustration, Line art, Centerline, Poster,
    Pixel art). Each preset routes to the tracer and settings that suit it.
 2. **Check.** Compare the SVG against the original with a split slider, a
    difference blend that lights up wherever they disagree, or the SVG on its

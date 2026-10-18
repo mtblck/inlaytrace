@@ -28,6 +28,8 @@ The pixels go to a Web Worker (`apps/app/src/engine/worker.ts`), so a long trace
 freezes the page. The worker runs one function, `runTrace` (`apps/app/src/engine/run.ts`),
 which the unit tests also call, so the tests and the app can't drift apart:
 
+- **Centerline** → Inlay's skeleton tracer (`packages/inlay/src/centerline.ts`):
+  single strokes down the middle of the ink.
 - **Logo, Illustration, Line art** → [Inlay](inlay.md), our shared-edge
   tracer, with a palette from [histogram peaks](palettes.md) (or ink/paper for
   line art).

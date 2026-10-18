@@ -17,7 +17,8 @@
 import { normalizeHex, type Trace } from './svg'
 import { mapPoints, parsePath, serializePath, type Pt } from './pathdata'
 
-export type DocPath = { id: string; d: string; fill: string }
+/** `fill` is the path's colour; with `stroke` (a width in px) the path is stroked in it, not filled. */
+export type DocPath = { id: string; d: string; fill: string; stroke?: number }
 export type Doc = { width: number; height: number; paths: DocPath[] }
 export type InkEdits = { recolor: Record<string, string>; removed: string[] }
 /**
@@ -66,6 +67,7 @@ export function docFromTrace(trace: Trace): Doc {
       // Transforms are baked in so every edit works in one coordinate space.
       d: p.transform ? bakeTransform(p.d, p.transform) : p.d,
       fill: p.fill,
+      ...(p.stroke ? { stroke: p.stroke } : {}),
     })),
   }
 }
@@ -88,13 +90,13 @@ export function shownFill(inks: InkEdits, fill: string): string | null {
 
 /** Paths as drawn: removed inks dropped, recolours applied, anything malformed skipped. */
 export function visiblePaths(doc: Doc, inks: InkEdits, only?: string) {
-  const out: { id: string; d: string; fill: string }[] = []
+  const out: { id: string; d: string; fill: string; stroke?: number }[] = []
   for (const p of doc.paths) {
     if (only && p.fill !== only) continue
     const fill = shownFill(inks, p.fill)
     // Edited `d` is ours, but it is still checked: this string becomes markup.
     if (!fill || !isSafe(p)) continue
-    out.push({ id: p.id, d: p.d, fill })
+    out.push({ id: p.id, d: p.d, fill, ...(validStroke(p.stroke) ? { stroke: p.stroke } : {}) })
   }
   return out
 }
@@ -110,10 +112,22 @@ export function buildSvg(doc: Doc, inks: InkEdits = NO_INKS, only?: string, back
   const body = [
     // First, so it sits behind every shape.
     ...(bg ? [`<rect width="${w}" height="${h}" fill="${bg}"/>`] : []),
-    ...visiblePaths(doc, inks, only).map((p) => `<path d="${p.d}" fill="${p.fill}"/>`),
+    ...visiblePaths(doc, inks, only).map((p) => pathMarkup(p)),
   ].join('\n')
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n${body}\n</svg>\n`
 }
+
+const validStroke = (s: unknown): s is number => typeof s === 'number' && Number.isFinite(s) && s > 0
+
+/** One path as markup: filled, or a round-capped stroke in its colour. */
+export function pathMarkup(p: { d: string; fill: string; stroke?: number }) {
+  return p.stroke
+    ? `<path d="${p.d}" fill="none" stroke="${p.fill}" stroke-width="${Math.round(p.stroke * 100) / 100}" stroke-linecap="round" stroke-linejoin="round"/>`
+    : `<path d="${p.d}" fill="${p.fill}"/>`
+}
+
+/** Whether a document draws strokes (centerline) rather than filled shapes. */
+export const hasStrokes = (doc: Doc) => doc.paths.some((p) => p.stroke)
 
 /**
  * One SVG per remaining ink, each in the ink's (possibly recoloured) colour,

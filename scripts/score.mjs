@@ -187,6 +187,26 @@ for (const [file, title] of [
     console.log(`  ${label.padEnd(14)} ${r.wrong.toFixed(2).padStart(7)}%  ${asym.toFixed(2).padStart(9)}%  ${String(r.nodes).padStart(6)} ${r.kb.toFixed(1).padStart(5)} KB${ms ? `  (${ms.toFixed(0)} ms)` : ''}`)
   }
 }
+
+// ---- Centerline -------------------------------------------------------------
+// A pen drawing: Centerline's single strokes against Line art's outlines, both
+// scored against the clean drawing. Strokes are where a plotter lifts its pen.
+{
+  const art = await prepare(readFileSync(join(root, 'scripts/fixtures/strokes.svg'), 'utf8'))
+  console.log(`\n  Pen drawing (strokes ${(3 * SIZE) / 200} px wide), ${SIZE} px JPEG q72\n`)
+  console.log('  Preset         Wrong px   Strokes  Nodes   Size   Stroke width')
+  for (const id of ['centerline', 'lineart']) {
+    const t = performance.now()
+    const svg = runTrace(art.slice(), SIZE, SIZE, toTraceOptions(settingsFor(id)))
+    const ms = performance.now() - t
+    const r = await score(svg)
+    const subpaths = (svg.match(/M/g) ?? []).length
+    const width = svg.match(/stroke-width="([\d.]+)"/)?.[1]
+    console.log(
+      `  ${PRESETS.find((p) => p.id === id).label.padEnd(14)} ${r.wrong.toFixed(2).padStart(6)}%  ${String(id === 'centerline' ? subpaths : '–').padStart(7)} ${String(r.nodes).padStart(6)} ${r.kb.toFixed(1).padStart(5)} KB  ${width ? `${width} px` : '–'}  (${ms.toFixed(0)} ms)`,
+    )
+  }
+}
 console.log()
 await browser.close()
 await vite.close()

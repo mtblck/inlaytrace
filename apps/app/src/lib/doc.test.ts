@@ -166,3 +166,13 @@ describe('undo and redo', () => {
     expect(h.present).toBe(50)
   })
 })
+
+describe('centerline strokes', () => {
+  const t = parseTrace('<svg width="10" height="10"><path d="M1 1L9 9" fill="none" stroke="#123456" stroke-width="2.5"/></svg>')
+  it('export as round-capped strokes, and recolour like any ink', () => {
+    const doc = docFromTrace(t)
+    expect(buildSvg(doc)).toContain('<path d="M1 1L9 9" fill="none" stroke="#123456" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>')
+    expect(buildSvg(doc, { recolor: { '#123456': '#ff0000' }, removed: [] })).toContain('stroke="#ff0000"')
+    expect(inksOf(doc)).toEqual([{ hex: '#123456', count: 1 }])
+  })
+})

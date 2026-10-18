@@ -13,7 +13,7 @@ where it deliberately goes its own way. Competitor details were checked on
 
 | Tool | Where it runs | Cost | Tracing | Editing |
 | --- | --- | --- | --- | --- |
-| **Inlay** | Your browser; nothing uploaded | Free | Inlay, our shared-edge tracer, for everything from logos and pixel art to photos | Colours (replace, merge, remove), background, select/move/scale shapes, nodes and handles, mirror and turn (detected), undo |
+| **Inlay** | Your browser; nothing uploaded | Free | Inlay, our shared-edge tracer, for everything from logos and pixel art to photos, plus centerline strokes | Colours (replace, merge, remove), background, select/move/scale shapes, nodes and handles, mirror and turn (detected), undo |
 | **Vectorizer.ai** | Their servers (kept 24 h) | Paid downloads | Proprietary; symmetry and shape fitting | "Refine result": palette, recolour/merge/remove regions, toggle symmetries, fit shapes, sharpen/round corners. No node editing |
 | **Vector Magic** | Their servers, or a paid desktop app | Paid | Proprietary | Edits the colour regions before re-vectorising |
 | **Illustrator Image Trace** | Desktop | Subscription | Proprietary; presets, colour/path/corner/noise controls | Full editor after *Expand* |
@@ -62,7 +62,6 @@ at 4× (`npm run score`), and the numbers are written down.
 Each of these is on the [roadmap](roadmap.md):
 
 - **More formats**: DXF (Vectorizer.ai); offline install (SVGcode).
-- **Centerline tracing** (AutoTrace) for plotters and engraving.
 
 Not planned: a full drawing program (Illustrator, Inkscape: pen tool, booleans,
 text). Inlay fixes a trace; for more, export the SVG to one of those.

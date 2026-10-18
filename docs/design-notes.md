@@ -288,3 +288,15 @@ a further 10%, but softens real edges; it's left for a future setting. At
 2048 px Poster takes 3.4–5.1 s on these photos in Node, about 15% longer than
 VTracer took (2.9–4.5 s), and the SVG is about 30% larger at that size; at the
 photos' own size (450–640 px wide) it's both smaller and closer.
+
+**Centerline is a skeleton, not an outline (#38).** Plotters and engravers want
+one stroke per line. AutoTrace does this but is GPL, so Inlay grew its own: the
+ink is thinned (Zhang–Suen), then any pixel whose neighbours stay connected
+without it is dropped, because Zhang–Suen leaves the line two pixels thick at
+staircases, and every one of those read as a junction: a ring came out as four
+strokes until that pass, and as one after. The width started as twice the
+median distance transform along the skeleton, but that is out by a pixel on
+even widths (the skeleton can't sit on the middle), so it is the ink's area
+over the skeleton's length instead: 9.58 px for strokes drawn 9.6 px wide.
+Strokes that carry straight through a crossing are joined, so a plus sign is two
+pen strokes, not four.

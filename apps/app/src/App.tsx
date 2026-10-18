@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { zipSync, strToU8 } from 'fflate'
 import { TraceClient } from './engine/client'
-import { canMerge, maxTraceEdge, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
+import { canMerge, isInk, maxTraceEdge, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
 import { ACCEPTED, colourAt, hasDarkBackground, loadSource, pixelsOf, type Pixels, type Source } from './lib/image'
 import { formatBytes, normalizeHex, parseTrace, statsOf, type Trace } from './lib/svg'
 import {
@@ -9,6 +9,7 @@ import {
   deletePath,
   docFromTrace,
   docOf,
+  hasStrokes,
   inksOf,
   layerFiles,
   NO_EDITS,
@@ -328,6 +329,11 @@ export default function App() {
   const svg = useMemo(() => (doc ? buildSvg(doc, edits.inks, undefined, edits.background) : ''), [doc, edits.inks, edits.background])
   const shown = useMemo(() => (doc ? visiblePaths(doc, edits.inks) : []), [doc, edits.inks])
   const inks = useMemo(() => (doc ? inksOf(doc) : []), [doc])
+  const strokes = useMemo(() => !!doc && hasStrokes(doc), [doc])
+  // Strokes can't be mirrored: leave the Mirror tool if a trace turns into them.
+  useEffect(() => {
+    if (strokes && tool === 'mirror') setTool('select')
+  }, [strokes, tool])
 
   // Shapes that no longer exist (re-trace, undo past their creation) drop out
   // of the selection, and so do nodes that no longer exist in the edited shape.
@@ -692,7 +698,7 @@ export default function App() {
         e.preventDefault()
         setShortcutsOpen(true)
       } else if (hasDoc && !e.shiftKey && (key === 'v' || key === 'a' || key === 'm')) {
-        chooseTool(key === 'v' ? 'select' : key === 'a' ? 'nodes' : 'mirror')
+        if (key !== 'm' || !strokes) chooseTool(key === 'v' ? 'select' : key === 'a' ? 'nodes' : 'mirror')
         setPanel('edit')
         startEditing()
       }
@@ -834,7 +840,7 @@ export default function App() {
     // Reset (the same preset again) puts the sliders back but keeps merges:
     // they're decisions about this image's colours, not settings to tune.
     if (id === settings.preset) next.merge = settings.merge
-    if (id === 'lineart' && source && hasDarkBackground(source)) next.lightInk = true
+    if (isInk(id) && source && hasDarkBackground(source)) next.lightInk = true
     changeSettings(next)
   }
 
@@ -1108,6 +1114,7 @@ export default function App() {
                 width={doc.width}
                 height={doc.height}
                 onAxis={moveAxis}
+                strokes={strokes}
                 detected={detected?.axis ?? null}
                 mirroring={mirroring}
                 mirrorError={mirrorError}
@@ -1145,7 +1152,7 @@ export default function App() {
             )}
             </div>
             <div role="tabpanel" id="panel-trace" aria-labelledby="tab-trace" hidden={!!doc && panel !== 'trace'}>
-              <Controls settings={settings} onChange={changeSettings} onPreset={choosePreset} />
+              <Controls settings={settings} onChange={changeSettings} onPreset={choosePreset} measuredStroke={settings.preset === 'centerline' && settings.strokeWidth === 0 ? (trace?.paths[0]?.stroke ?? null) : null} />
             </div>
           </div>
 

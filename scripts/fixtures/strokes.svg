@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- A pen drawing for the Centerline score in npm run score (made for this repo, MIT). -->
+  <rect width="200" height="200" fill="#ffffff"/>
+  <g fill="none" stroke="#1a1a1a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M30 150 L30 90 L80 50 L130 90 L130 150 Z"/>
+    <path d="M65 150 L65 115 L95 115 L95 150"/>
+    <path d="M145 150 C150 120 165 105 175 100 C185 95 190 80 180 70"/>
+    <circle cx="160" cy="45" r="16"/>
+    <path d="M20 170 C60 160 100 180 140 168 S180 165 190 172"/>
+    <path d="M40 75 L40 40 L55 40 L55 62"/>
+  </g>
+</svg>

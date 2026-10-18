@@ -26,7 +26,7 @@
  *    On a photo it was worse (9.9 to 15.3), so Poster kept the quantizer; since
  *    #53 it quantizes with Inlay (quantizePalette, k-means in OKLab).
  */
-export type PresetId = 'logo' | 'illustration' | 'lineart' | 'photo' | 'pixel'
+export type PresetId = 'logo' | 'illustration' | 'lineart' | 'centerline' | 'photo' | 'pixel'
 
 export type Settings = {
   preset: PresetId
@@ -42,6 +42,8 @@ export type Settings = {
   shapes: 'stacked' | 'cutout'
   /** Flat-art presets: draw circles, ellipses, (rounded) rectangles and regular polygons exactly. */
   exact: boolean
+  /** Centerline only: the stroke width in px, or 0 to use the width measured from the ink. */
+  strokeWidth: number
   /**
    * Colours folded into others before tracing (Logo and Illustration), traced
    * hex → traced hex. A new preset starts with none.
@@ -61,37 +63,46 @@ export const PRESETS: Preset[] = [
     id: 'logo',
     label: 'Logo',
     hint: 'Few flat colours, crisp corners',
-    defaults: { colors: 8, threshold: null, lightInk: false, speckle: 8, smoothing: 1.5, corners: 45, shapes: 'cutout', exact: true },
+    defaults: { colors: 8, threshold: null, lightInk: false, speckle: 8, smoothing: 1.5, corners: 45, shapes: 'cutout', exact: true, strokeWidth: 0 },
   },
   {
     id: 'illustration',
     label: 'Illustration',
     hint: 'More colours, smooth curves',
-    defaults: { colors: 16, threshold: null, lightInk: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked', exact: true },
+    defaults: { colors: 16, threshold: null, lightInk: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked', exact: true, strokeWidth: 0 },
   },
   {
     id: 'lineart',
     label: 'Line art',
     hint: 'Ink drawings and scans, one colour',
-    defaults: { colors: 2, threshold: 128, lightInk: false, speckle: 6, smoothing: 1.5, corners: 45, shapes: 'stacked', exact: true },
+    defaults: { colors: 2, threshold: 128, lightInk: false, speckle: 6, smoothing: 1.5, corners: 45, shapes: 'stacked', exact: true, strokeWidth: 0 },
+  },
+  {
+    id: 'centerline',
+    label: 'Centerline',
+    hint: 'Single strokes for plotters and engraving',
+    defaults: { colors: 2, threshold: 128, lightInk: false, speckle: 4, smoothing: 1.5, corners: 45, shapes: 'stacked', exact: false, strokeWidth: 0 },
   },
   {
     id: 'photo',
     label: 'Poster',
     hint: 'Photos flattened into colour bands',
-    defaults: { colors: 24, threshold: null, lightInk: false, speckle: 8, smoothing: 1, corners: 90, shapes: 'stacked', exact: false },
+    defaults: { colors: 24, threshold: null, lightInk: false, speckle: 8, smoothing: 1, corners: 90, shapes: 'stacked', exact: false, strokeWidth: 0 },
   },
   {
     id: 'pixel',
     label: 'Pixel art',
     hint: 'Hard edges, nothing smoothed',
-    defaults: { colors: 32, threshold: null, lightInk: false, speckle: 0, smoothing: 0, corners: 0, shapes: 'stacked', exact: false },
+    defaults: { colors: 32, threshold: null, lightInk: false, speckle: 0, smoothing: 0, corners: 0, shapes: 'stacked', exact: false, strokeWidth: 0 },
   },
 ]
 
 export const presetById = (id: PresetId) => PRESETS.find((p) => p.id === id)!
 
 export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {} })
+
+/** One ink, thresholded: line art and centerline. */
+export const isInk = (id: PresetId) => id === 'lineart' || id === 'centerline'
 
 /** Exact shapes: the flat-art presets (a photo has none, and pixel art keeps its staircase). */
 export const hasExactShapes = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'lineart'
@@ -107,7 +118,7 @@ export const toleranceFor = (smoothing: number) => 0.25 + 0.5 * smoothing
 
 /** What the worker traces with (run.ts turns it into Inlay's options). */
 export type TraceOptions = {
-  mode: 'palette' | 'binary'
+  mode: 'palette' | 'binary' | 'centerline'
   speckle: number
   tolerance: number
   cornerAngle: number
@@ -119,7 +130,9 @@ export type TraceOptions = {
   stacked?: boolean
   /** Draw circles, ellipses, (rounded) rectangles and regular polygons exactly. */
   shapes?: boolean
-  /** Binary mode. */
+  /** Centerline mode: the stroke width in px; measured when left out. */
+  strokeWidth?: number
+  /** Binary and centerline modes. */
   threshold?: number | null
   invert?: boolean
 }
@@ -132,6 +145,7 @@ export type TraceOptions = {
  */
 export function toTraceOptions(s: Settings): TraceOptions {
   const fit = { speckle: s.speckle, tolerance: toleranceFor(s.smoothing), cornerAngle: s.corners, ...(s.exact && hasExactShapes(s.preset) ? { shapes: true } : {}) }
+  if (s.preset === 'centerline') return { ...fit, mode: 'centerline', threshold: s.threshold, ...(s.strokeWidth > 0 ? { strokeWidth: s.strokeWidth } : {}), ...(s.lightInk ? { invert: true } : {}) }
   if (s.preset === 'lineart') return { ...fit, mode: 'binary', threshold: s.threshold, ...(s.lightInk ? { invert: true } : {}) }
   const merge = Object.keys(s.merge ?? {}).length ? { merge: s.merge } : {}
   // Pixel art: its exact colours, every pixel kept, boundaries as pixel staircases.

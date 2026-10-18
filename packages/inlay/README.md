@@ -63,6 +63,9 @@ toSvg(result) // '<svg …>…</svg>'
   Béziers between them).
 - `parsePath(d)` / `serializePath(subpaths)`: path data as editable nodes with
   absolute handles, and back. Round trips are idempotent after the first pass.
+- `centerline(rgba, width, height, options)` / `traceCenterline(…)`: single
+  strokes down the middle of the ink, for pen plotters and engraving, with the
+  stroke width measured from the ink (or set).
 - `detectSymmetry(rgba, width, height)`: the likeliest mirror axes and
   rotational orders in an image, each scored by how much of the drawing
   matches (the app offers to enforce one at 95% or more).
