@@ -1,0 +1,67 @@
+---
+/**
+ * Privacy, in plain words, for the app, the site and the package. Every
+ * claim here is checkable in the code: the app makes no network requests of
+ * its own (its CSP allows connect-src 'self' only), stores the session in
+ * IndexedDB (apps/app/src/lib/session.ts) and preferences in localStorage.
+ * Update the date when anything here changes.
+ */
+import Page from '../layouts/Page.astro'
+---
+
+<Page
+  title="Privacy · Inlay"
+  description="Inlay never receives your images: they're traced in your browser and never leave your device. No accounts, no cookies, no analytics."
+>
+  <article class="prose" aria-labelledby="privacy-title">
+    <h1 id="privacy-title">Privacy</h1>
+    <p class="lede">Your images never leave your device. Inlay has no server to send them to.</p>
+
+    <h2>Your images</h2>
+    <p>
+      When you open an image in the <a href="/app/">app</a>, your browser decodes it, traces it, lets you edit it and exports the result,
+      all on your device. Nothing is uploaded, and we never receive, see or store your files. The app makes no network requests apart from
+      loading its own code from this site, and its security policy stops its code from sending data anywhere else.
+    </p>
+
+    <h2>What stays in your browser</h2>
+    <p>
+      So a reload or a closed tab doesn't lose your work, the app keeps your current image, its settings and your edits in your browser's own
+      storage. That copy is on your device only: we can't see it, and other sites can't read it. <strong>Start over</strong> in the app
+      deletes it, and so does clearing this site's data in your browser. A private window keeps nothing once it's closed.
+    </p>
+    <p>
+      The app and the docs also remember your light or dark theme, and the app remembers the overlay colours you pick, in the same browser
+      storage.
+    </p>
+
+    <h2>What we don't do</h2>
+    <ul>
+      <li>No accounts and no sign-in.</li>
+      <li>No cookies.</li>
+      <li>No analytics, tracking or advertising.</li>
+      <li>No third-party scripts or fonts: everything is served from inlaytrace.com.</li>
+    </ul>
+
+    <h2>Hosting</h2>
+    <p>
+      The site is hosted by Vercel. Like any web host, Vercel's servers record basic details of each request (such as your IP address, browser
+      and the page requested) to deliver the site and keep it secure. We don't use those records to identify or follow you. See <a
+        href="https://vercel.com/legal/privacy-policy">Vercel's privacy policy</a>.
+    </p>
+
+    <h2>The npm package</h2>
+    <p>
+      <code>inlaytrace</code> runs inside your own code and makes no network requests. What happens to the images you trace with it is up to
+      your application.
+    </p>
+
+    <h2>Questions</h2>
+    <p>
+      Email <a href="mailto:hello@inlaytrace.com">hello@inlaytrace.com</a>. Inlay is open source, so you can also <a
+        href="https://github.com/mtblck/inlaytrace">read the code</a> to check any of this.
+    </p>
+
+    <p class="fine">Last updated 17 October 2026.</p>
+  </article>
+</Page>

@@ -405,3 +405,32 @@ pre {
     flex-direction: column;
   }
 }
+
+/* ---- Text pages (Privacy) -------------------------------------------------- */
+.prose {
+  max-width: 40em;
+  padding-block: 48px 72px;
+}
+.prose h1 {
+  font-size: clamp(2.2rem, 4.4vw, 3.2rem);
+  max-width: none;
+}
+.prose .lede {
+  margin-top: 16px;
+}
+.prose h2 {
+  margin-top: 40px;
+  font-size: 1.35rem;
+  font-weight: 720;
+  letter-spacing: -0.01em;
+}
+.prose p,
+.prose ul {
+  margin: 12px 0 0;
+}
+.prose li + li {
+  margin-top: 6px;
+}
+.prose .fine {
+  margin-top: 40px;
+}
