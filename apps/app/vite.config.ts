@@ -50,14 +50,18 @@ function serviceWorker(): Plugin {
         }
       }
       walk(outDir)
-      const shell = files.filter((f) => f !== 'sw.js' && !/\.(onnx|wasm)$/.test(f) && !f.startsWith('models/')).sort()
+      const onUse = (f: string) => /\.(onnx|wasm)$/.test(f) || f.startsWith('models/')
+      const shell = files.filter((f) => f !== 'sw.js' && !onUse(f)).sort()
       const hash = createHash('sha256')
       for (const f of shell) hash.update(f).update(readFileSync(join(outDir, f)))
+      const models = createHash('sha256')
+      for (const f of files.filter(onUse).sort()) models.update(f).update(readFileSync(join(outDir, f)))
       const urls = [BASE, ...shell.filter((f) => f !== 'index.html').map((f) => BASE + f)]
       const sw = readFileSync(join(here, 'sw.template.js'), 'utf8')
         .replace("'__VERSION__'", JSON.stringify(hash.digest('hex').slice(0, 12)))
         .replace('__SHELL__', JSON.stringify(urls))
         .replace("'__BASE__'", JSON.stringify(BASE))
+        .replace("'__ON_USE_VERSION__'", JSON.stringify(models.digest('hex').slice(0, 12)))
       writeFileSync(join(outDir, 'sw.js'), sw)
     },
   }

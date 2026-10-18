@@ -15,7 +15,8 @@ const VERSION = '__VERSION__'
 const SHELL = __SHELL__
 const BASE = '__BASE__'
 const SHELL_CACHE = `inlay-shell-${VERSION}`
-const ON_USE_CACHE = 'inlay-on-use'
+// Versioned by the models' and runtime's contents, so a replaced model is fetched again.
+const ON_USE_CACHE = `inlay-on-use-${'__ON_USE_VERSION__'}`
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(SHELL_CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()))
@@ -25,7 +26,13 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('inlay-shell-') && k !== SHELL_CACHE).map((k) => caches.delete(k))))
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((k) => (k.startsWith('inlay-shell-') && k !== SHELL_CACHE) || (k.startsWith('inlay-on-use') && k !== ON_USE_CACHE))
+            .map((k) => caches.delete(k)),
+        ),
+      )
       .then(() => self.clients.claim()),
   )
 })
