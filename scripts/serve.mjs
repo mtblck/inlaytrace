@@ -37,8 +37,9 @@ const file = (path) => {
 createServer((req, res) => {
   const path = (req.url ?? '/').split('?')[0]
   for (const r of config.redirects ?? []) {
-    if (matches(r.source, path)) {
-      res.writeHead(r.permanent ? 308 : 307, { Location: r.destination })
+    const m = matches(r.source, path)
+    if (m) {
+      res.writeHead(r.permanent ? 308 : 307, { Location: r.destination.replace(/\$(\d)/g, (_, i) => m[Number(i)] ?? '') })
       return res.end()
     }
   }

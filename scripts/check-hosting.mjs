@@ -21,7 +21,9 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 
 const config = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'))
-const APP = '/tools/img-to-svg'
+const APP = '/app'
+/** The app's address before inlaytrace.com; links to it are out there, so it must keep redirecting. */
+const OLD = '/tools/img-to-svg'
 const SITE_SOURCE = `/((?!${APP.slice(1)}/).*)`
 const problems = []
 
@@ -30,6 +32,9 @@ if (!(config.rewrites ?? []).some((r) => r.source === `${APP}/(.*)` && r.destina
   problems.push(`Missing the app's SPA fallback ${APP}/(.*) → ${APP}/index.html.`)
 for (const key of ['cleanUrls', 'trailingSlash', 'routes']) if (key in config) problems.push(`"${key}" is set; it has been seen to stop rewrites applying.`)
 if ((config.redirects ?? []).some((r) => r.source === '/')) problems.push('"/" redirects somewhere; it is the landing page.')
+const redirectTo = (source) => (config.redirects ?? []).find((r) => r.source === source && r.permanent)?.destination
+if (redirectTo(`${OLD}/(.*)`) !== `https://inlaytrace.com${APP}/$1` || redirectTo(OLD) !== `https://inlaytrace.com${APP}/`)
+  problems.push(`The old app address must redirect permanently to the new one, with an absolute URL (the portfolio proxies it): ${OLD}(/…) → https://inlaytrace.com${APP}/(…).`)
 
 const cspOf = (source) => (config.headers ?? []).find((b) => b.source === source)?.headers.find((h) => h.key === 'Content-Security-Policy')?.value
 const directive = (csp, name) => (csp ?? '').split(';').map((d) => d.trim()).find((d) => d.startsWith(`${name} `)) ?? ''

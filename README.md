@@ -13,8 +13,7 @@ It comes two ways:
 
 - **The app** traces an image in your browser, lets you check the result against
   the original, fix colours and shapes, and download SVG, PDF, EPS or PNG.
-  Nothing is uploaded. **[Open the app](https://mattblack.space/tools/img-to-svg/)**
-  (moving to inlaytrace.com).
+  Nothing is uploaded. **[Open the app](https://inlaytrace.com/app/)**
 - **The package**, [`inlaytrace`](https://www.npmjs.com/package/inlaytrace), is
   the tracer on its own: no dependencies and no WebAssembly, for browsers, Web
   Workers and Node 20+.
@@ -87,7 +86,7 @@ Vector Magic, Illustrator, Inkscape and SVGcode.
 
 ```bash
 npm install
-npm run dev     # the app: http://localhost:5173/tools/img-to-svg/
+npm run dev     # the app: http://localhost:5173/app/
 npm test
 ```
 

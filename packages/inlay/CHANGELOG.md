@@ -8,7 +8,7 @@
 
 ## 0.1.0
 
-First published release: the tracer the [Inlay app](https://mattblack.space/tools/img-to-svg/)
+First published release: the tracer the [Inlay app](https://inlaytrace.com/app/)
 uses for logos, illustrations, line art and pixel art, built as ESM with type
 declarations.
 

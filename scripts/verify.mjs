@@ -3,7 +3,7 @@
  *
  *   npm run build && npm run preview &
  *   npm run verify                                   # local preview
- *   npm run verify -- https://mattblack.space/tools/img-to-svg/
+ *   npm run verify -- https://inlaytrace.com/app/
  *
  * Checks the app at the URL, then the site (landing page and docs) at that
  * URL's origin. Under mattblack.space the origin is the portfolio, so the site
@@ -20,7 +20,7 @@ import { chromium } from 'playwright'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const url = process.argv[2] ?? 'http://localhost:4173/tools/img-to-svg/'
+const url = process.argv[2] ?? 'http://localhost:4173/app/'
 const shots = process.env.SHOTS
 if (shots) mkdirSync(shots, { recursive: true })
 
@@ -921,6 +921,9 @@ if (siteOrigin) {
   check(await quiet.getByRole('button', { name: 'Lift the pieces' }).isHidden(), 'with reduced motion the pieces sit still and the replay button is hidden')
   await still.close()
 
+  // The app's old address (mattblack.space/tools/img-to-svg/ before inlaytrace.com) keeps working.
+  const old = await landing.request.get(new URL('tools/img-to-svg/some/deep/link', siteOrigin).href, { maxRedirects: 0 })
+  check(old.status() === 308 && old.headers().location === 'https://inlaytrace.com/app/some/deep/link', `the old app address redirects to inlaytrace.com/app/ (${old.status()} → ${old.headers().location})`)
   const guessed = await landing.request.get(new URL('docs/', siteOrigin).href)
   check(guessed.ok() && guessed.url().endsWith('/docs/overview/'), `/docs/ leads to the docs (${guessed.url()})`)
   const docs = await newPage({ width: 1440, height: 900 })

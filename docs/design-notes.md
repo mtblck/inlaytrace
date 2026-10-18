@@ -150,12 +150,14 @@ from the SVGO-optimised output, computed in the background after each change,
 not from the raw trace. Before this, the panel showed 41 KB for a file that
 downloaded at 31 KB.
 
-**Paths are the same on both hosts.** The app builds to `dist/tools/img-to-svg` (at the repo root, which Vercel serves)
-with a matching Vite `base`, so assets live at `/tools/img-to-svg/assets/…` on
-this project's own Vercel URL *and* through mattblack.space's rewrite. The
-portfolio proxies the path without translating it. The site builds to the rest
-of `dist/` (landing page at `/`, docs at `/docs/…`) and goes first, because
-Astro empties its output folder.
+**One domain, two halves.** The app started as a tool at
+mattblack.space/tools/img-to-svg/, proxied by the portfolio, so it was built to
+live at that same path on both hosts. With inlaytrace.com it moved to `/app/`,
+beside the landing page at `/` and the docs at `/docs/`, all one Vercel
+project. The old path redirects permanently, with an absolute URL so the
+portfolio's proxy passes the redirect through rather than following it. The
+site builds to `dist/` first, because Astro empties its output folder, and the
+app builds into `dist/app` after it.
 
 **One copy of each doc.** `docs/*.md` is the source: Boards reads it, and
 `scripts/sync-docs.mjs` copies it into Starlight at build time (title from the

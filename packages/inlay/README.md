@@ -9,7 +9,7 @@ curves. Pixel art keeps its exact staircase.
 Pure TypeScript with no DOM and no WebAssembly: it runs in browsers, Web
 Workers and Node. MIT licensed.
 
-It is the tracer behind the [Inlay app](https://mattblack.space/tools/img-to-svg/)
+It is the tracer behind the [Inlay app](https://inlaytrace.com/app/)
 for logos, illustrations, line art and pixel art.
 
 ## Install

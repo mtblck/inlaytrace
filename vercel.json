@@ -5,8 +5,18 @@
   "outputDirectory": "dist",
   "redirects": [
     {
+      "source": "/app",
+      "destination": "/app/",
+      "permanent": true
+    },
+    {
       "source": "/tools/img-to-svg",
-      "destination": "/tools/img-to-svg/",
+      "destination": "https://inlaytrace.com/app/",
+      "permanent": true
+    },
+    {
+      "source": "/tools/img-to-svg/(.*)",
+      "destination": "https://inlaytrace.com/app/$1",
       "permanent": true
     },
     {
@@ -22,8 +32,8 @@
   ],
   "rewrites": [
     {
-      "source": "/tools/img-to-svg/(.*)",
-      "destination": "/tools/img-to-svg/index.html"
+      "source": "/app/(.*)",
+      "destination": "/app/index.html"
     }
   ],
   "headers": [
@@ -57,7 +67,7 @@
       ]
     },
     {
-      "source": "/((?!tools/img-to-svg/).*)",
+      "source": "/((?!app/).*)",
       "headers": [
         {
           "key": "Content-Security-Policy",
@@ -66,7 +76,7 @@
       ]
     },
     {
-      "source": "/tools/img-to-svg/(.*)",
+      "source": "/app/(.*)",
       "headers": [
         {
           "key": "Content-Security-Policy",
@@ -75,7 +85,7 @@
       ]
     },
     {
-      "source": "/tools/img-to-svg/assets/(.*)",
+      "source": "/app/assets/(.*)",
       "headers": [
         {
           "key": "Cache-Control",

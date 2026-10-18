@@ -11,18 +11,16 @@ const vercel = JSON.parse(readFileSync(new URL('../../vercel.json', import.meta.
 type HeaderBlock = { source: string; headers: { key: string; value: string }[] }
 const productionHeaders: Record<string, string> = Object.fromEntries(
   (vercel.headers as HeaderBlock[])
-    .filter((b) => b.source === '/(.*)' || b.source === '/tools/img-to-svg/(.*)')
+    .filter((b) => b.source === '/(.*)' || b.source === '/app/(.*)')
     .flatMap((b) => b.headers.map((h) => [h.key, h.value])),
 )
 
 /**
- * Until inlaytrace.com is live (#61) the app is served at
- * mattblack.space/tools/img-to-svg/ through a rewrite in the portfolio, and at
- * its own Vercel URL. Building into dist/tools/img-to-svg with a matching base
- * puts every file at the same path on both hosts, so the portfolio's rewrite
- * never has to translate paths. At the cutover this becomes '/app/'.
+ * The app lives at inlaytrace.com/app/, beside the landing page and docs
+ * (apps/site, at the root). Its old address, mattblack.space/tools/img-to-svg/,
+ * redirects here (vercel.json, and the portfolio's own redirect).
  */
-export const BASE = '/tools/img-to-svg/'
+export const BASE = '/app/'
 const here = fileURLToPath(new URL('.', import.meta.url))
 
 export default defineConfig({

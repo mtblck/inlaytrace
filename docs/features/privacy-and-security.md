@@ -52,7 +52,7 @@ everything that becomes markup is checked first:
 
 ## Hosting
 
-The app is its own Vercel project, served under mattblack.space through a
-rewrite. It's built to live at `/tools/img-to-svg/` on both domains, so the
-portfolio proxies it without translating paths, and the tool owns its own
-security headers.
+The site and the app are one Vercel project at inlaytrace.com: the landing
+page and docs at the root, the app at `/app/`, each with its own security
+policy. The app's old address, mattblack.space/tools/img-to-svg/, redirects
+there permanently.
