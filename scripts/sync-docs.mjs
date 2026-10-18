@@ -27,7 +27,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const src = join(root, 'docs')
 const out = join(root, 'apps/site/src/content/docs/docs')
 const REPO = 'https://github.com/mtblck/inlaytrace/blob/main'
-const INTERNAL = new Set(['launch-plan.md'])
+const INTERNAL = new Set(['launch-plan.md', 'hd-mode.md'])
 
 const walk = (dir) => readdirSync(dir).flatMap((f) => (statSync(join(dir, f)).isDirectory() ? walk(join(dir, f)) : f.endsWith('.md') ? [join(dir, f)] : []))
 const files = walk(src)

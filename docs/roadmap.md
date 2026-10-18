@@ -57,7 +57,7 @@ See [Editing shapes](features/editing-shapes.md), [Colours and background](featu
 
 | Item | Why | Ticket |
 | --- | --- | --- |
-| **HD mode** | A paid, server-side trace for very large images: a Vercel Function with spend caps, opt-in, clearly marked as leaving the device. No database. | [#46](https://github.com/mtblck/inlaytrace/issues/46) |
+| **HD mode** | A paid, opt-in server-side trace, clearly marked as leaving the device, paid for with credit packs through Paddle; buying needs an account (Supabase). The free app is unchanged. [Plan](hd-mode.md). | [#46](https://github.com/mtblck/inlaytrace/issues/46) |
 
 ## Not planned
 
