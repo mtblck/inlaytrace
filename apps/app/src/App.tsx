@@ -284,8 +284,12 @@ export default function App() {
         pixelCache.current = cached
       }
       const { rgba, width, height } = cached.pixels
+      setStatus({ kind: 'tracing' })
+      const res = await client.trace(rgba, width, height, toTraceOptions(settings))
+      if (!res) return // superseded by a newer request
       if (symmetryOf.current !== cached.pixels) {
         // Once per set of pixels, not per trace: settings don't change the answer.
+        // Asked after the trace, so detection never delays the first preview.
         const pixels = (symmetryOf.current = cached.pixels)
         void client.symmetry(rgba, width, height).then((res) => {
           if (symmetryOf.current !== pixels) return
@@ -293,15 +297,16 @@ export default function App() {
           if (res?.type !== 'symmetry') return void (symmetryOf.current = null)
           const found = likelyAxis(res.found)
           setDetected({ pixels, axis: found })
-          if (found && !axisTouched.current) {
-            const { score: _, ...axis } = found
-            setAxis(axis as Axis)
+          if (!axisTouched.current) {
+            // An untouched axis follows the image: the detected one, or (none
+            // found) back to the centre, since these pixels may be another size.
+            if (found) {
+              const { score: _, ...axis } = found
+              setAxis(axis as Axis)
+            } else setAxis(null)
           }
         })
       }
-      setStatus({ kind: 'tracing' })
-      const res = await client.trace(rgba, width, height, toTraceOptions(settings))
-      if (!res) return // superseded by a newer request
       if (res.type === 'error') setStatus({ kind: 'error', message: res.message })
       else if (res.type === 'traced') {
         try {
