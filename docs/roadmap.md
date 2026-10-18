@@ -42,13 +42,13 @@ See [Editing shapes](features/editing-shapes.md), [Colours and background](featu
 
 | Item | What shipped | Ticket |
 | --- | --- | --- |
+| **Shape fitting** | *Exact shapes* (on for Logo, Illustration and Line art) draws an outline that is a circle, ellipse, (rounded) rectangle or regular polygon as that shape exactly; on the sample badge, 0.70% → 0.54% wrong pixels. See [Presets and settings](features/presets-and-settings.md). | [#37](https://github.com/mtblck/inlaytrace/issues/37) |
 | **Symmetry detection** | The Mirror tool opens set up for the mirror axis or turn the image has (95%+ match), and gains *Turn*: keep one slice and repeat it round a centre. See [Mirror](features/mirror.md). | [#36](https://github.com/mtblck/inlaytrace/issues/36) |
 
 ## Next: bigger bets
 
 | Item | Why | Ticket |
 | --- | --- | --- |
-| **Shape fitting** | Recognise circles, ellipses, rounded rectangles and regular polygons and write them as exact shapes. | [#37](https://github.com/mtblck/inlaytrace/issues/37) |
 | **Centerline tracing** | Single strokes for plotters, engraving and handwriting, rather than outlines. | [#38](https://github.com/mtblck/inlaytrace/issues/38) |
 | **Background removal and upscaling** | In-browser models for photos and low-res logos, held to the licence rule (MIT/BSD/Apache weights only). | [#39](https://github.com/mtblck/inlaytrace/issues/39) |
 | **Target file size** | "Make it under 10 KB": search the settings for the best trace that fits. | [#40](https://github.com/mtblck/inlaytrace/issues/40) |

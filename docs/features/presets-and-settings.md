@@ -45,6 +45,14 @@ smaller file.
 curves. See [Curve fitting](../how-it-works/curve-fitting.md) for how a corner
 is told apart from a tight curve.
 
+**Exact shapes** (Logo, Illustration, Line art; on by default): an outline
+that is a circle, an ellipse, a rectangle, a rounded rectangle or a regular
+polygon is drawn as that exact shape, with true right angles and equal sides,
+instead of curves fitted to its pixels. Only outlines that follow the shape
+closely all the way round count, and only those with a single colour round
+them (a circle overlapping another shape stays fitted). Turn it off to keep
+every outline as traced.
+
 **Shapes** (Poster only): *Stacked* draws each shape whole, larger shapes
 first, so smaller ones sit on top: a little less path data, and no hairline
 seams where shapes meet. *Cut out* gives every shape holes where others sit,

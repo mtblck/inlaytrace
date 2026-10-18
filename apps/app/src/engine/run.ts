@@ -16,7 +16,7 @@ export function runTrace(pixels: Uint8Array, width: number, height: number, o: T
       pixels[i + 1] = 255 - pixels[i + 1]
       pixels[i + 2] = 255 - pixels[i + 2]
     }
-  const fit = { speckle: o.speckle, tolerance: o.tolerance, cornerAngle: o.cornerAngle, pixels: !!o.pixels, stacked: !!o.stacked }
+  const fit = { speckle: o.speckle, tolerance: o.tolerance, cornerAngle: o.cornerAngle, pixels: !!o.pixels, stacked: !!o.stacked, shapes: !!o.shapes }
   if (o.mode === 'binary') return traceInlay(pixels, width, height, { ...fit, mode: 'binary', threshold: o.threshold ?? null })
   const palette = PALETTES[o.palette ?? 'peak'](pixels, o.colors ?? 8)
   return traceInlay(pixels, width, height, { ...fit, mode: 'palette', palette, merge: o.merge })

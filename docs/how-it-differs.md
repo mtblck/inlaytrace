@@ -61,8 +61,6 @@ at 4× (`npm run score`), and the numbers are written down.
 
 Each of these is on the [roadmap](roadmap.md):
 
-- **Shape fitting** (Vectorizer.ai): recognises circles, ellipses, rounded
-  rectangles and stars and writes them as true shapes.
 - **More formats**: DXF (Vectorizer.ai); offline install (SVGcode).
 - **Centerline tracing** (AutoTrace) for plotters and engraving.
 
