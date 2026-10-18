@@ -46,10 +46,12 @@ jobs:
       - name: Upload the models to Vercel Blob
         env:
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+        # Its output goes into the report, which is published either way (CI logs aren't readable from the dev sandbox).
         run: |
-          npm install --no-save --prefix scripts/hd-models @vercel/blob@2.8.0
-          node scripts/hd-models/upload.mjs
+          set -o pipefail
+          { npm install --no-save --prefix scripts/hd-models @vercel/blob@2.8.0 && node scripts/hd-models/upload.mjs; } 2>&1 | tee report/upload-log.txt
       - name: Publish the report and manifest
+        if: always()
         run: |
           cp models/manifest.json report/
           cd report

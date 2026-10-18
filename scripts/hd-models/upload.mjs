@@ -19,7 +19,17 @@ const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'))
 for (const m of manifest) {
   // The hash in the path: a new model never replaces one a running function is using.
   const pathname = `hd-models/${m.sha256.slice(0, 12)}/${m.file}`
-  const blob = await put(pathname, readFileSync(join(dir, m.file)), { access: 'public', token, addRandomSuffix: false, allowOverwrite: true, multipart: true, contentType: 'application/octet-stream' })
+  const body = readFileSync(join(dir, m.file))
+  const options = { token, addRandomSuffix: false, allowOverwrite: true, multipart: true, contentType: 'application/octet-stream' }
+  let blob
+  try {
+    blob = await put(pathname, body, { ...options, access: 'public' })
+  } catch (e) {
+    // A store set up for private files refuses public ones; the function then reads with the token.
+    console.log(`Public upload refused (${e.message}); trying private.`)
+    blob = await put(pathname, body, { ...options, access: 'private' })
+    m.access = 'private'
+  }
   m.url = blob.url
   console.log(`${m.file} → ${blob.url}`)
 }
