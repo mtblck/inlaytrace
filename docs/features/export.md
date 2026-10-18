@@ -15,7 +15,7 @@ The bottom of the panel, with live **Paths**, **Nodes** and **Size**.
 ## Size and other formats
 
 *Size and other formats*, under the buttons, sets the size every download uses
-and offers PNG, PDF and EPS.
+and offers PNG, PDF, EPS and DXF.
 
 - **Size**: width and height in px, mm, in or pt (96 px to the inch). Height
   follows the drawing's proportions. The SVG gets that width and height, so it
@@ -31,6 +31,13 @@ and offers PNG, PDF and EPS.
   stream, checked with `qpdf --check` and by rendering it back.
 - **EPS**: the same paths as PostScript, with a bounding box of the export
   size, for print and cutting software that still asks for it.
+- **DXF**: for CAD, CNC routers and laser cutters. One layer per colour (named
+  for it, `INK_1E3C8C`, with the nearest CAD colour), every outline a closed
+  polyline and every Centerline stroke an open one. Curves are flattened to
+  within 0.05 px of the drawing (0.05 mm on a 640 px trace exported at
+  640 mm), at the export size in its unit, with millimetres and inches named
+  in the header. It's DXF R12, which every CAD and cutting program reads;
+  checked by opening it with ezdxf, whose audit finds nothing to fix.
 
 ## What's in the SVG
 

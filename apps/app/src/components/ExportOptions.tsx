@@ -16,6 +16,7 @@ type Props = {
   pngError: string | null
   onPdf: () => void
   onEps: () => void
+  onDxf: () => void
 }
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -84,7 +85,7 @@ export function ExportOptions(p: Props) {
           </select>
         </div>
         <p className="field-hint">
-          Used by every download: the SVG’s width and height, the PDF and EPS page, and the PNG. Proportions follow the drawing; 96 px to the inch.{' '}
+          Used by every download: the SVG’s width and height, the PDF and EPS page, the DXF’s units, and the PNG. Proportions follow the drawing; 96 px to the inch.{' '}
           {!p.isDefault && (
             <button className="underline underline-offset-2 hover:text-ink" onClick={p.onReset}>
               Reset to the traced size
@@ -123,12 +124,15 @@ export function ExportOptions(p: Props) {
             {p.pngError ?? 'That PNG is larger than browsers can draw. Choose a smaller size or resolution.'}
           </p>
         )}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <button className="btn" disabled={p.disabled} onClick={p.onPdf} title="Vector PDF, one page at the export size">
             PDF
           </button>
           <button className="btn" disabled={p.disabled} onClick={p.onEps} title="Encapsulated PostScript, for print and cutting software">
             EPS
+          </button>
+          <button className="btn" disabled={p.disabled} onClick={p.onDxf} title="DXF for CAD, CNC and laser cutting: one layer per colour, curves as polylines">
+            DXF
           </button>
         </div>
       </div>
