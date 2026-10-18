@@ -86,6 +86,7 @@ export function checkSettings(x: unknown): Settings {
   for (const k of ['colors', 'speckle', 'smoothing', 'corners'] as const) if (typeof x[k] === 'number' && Number.isFinite(x[k])) out[k] = x[k] as number
   if (x.threshold === null || typeof x.threshold === 'number') out.threshold = x.threshold as number | null
   if (typeof x.lightInk === 'boolean') out.lightInk = x.lightInk
+  if (typeof x.exact === 'boolean') out.exact = x.exact
   if (x.shapes === 'stacked' || x.shapes === 'cutout') out.shapes = x.shapes
   if (isObj(x.merge)) out.merge = Object.fromEntries(Object.entries(x.merge).filter(([a, b]) => normalizeHex(a) && typeof b === 'string' && normalizeHex(b)) as [string, string][])
   return out

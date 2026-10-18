@@ -23,9 +23,14 @@ Current results:
 
 | Preset | Tracer | Wrong pixels at 4× | Nodes | Size |
 | --- | --- | --- | --- | --- |
-| Logo | shared edges | 0.70% | 177 | 5.4 KB |
-| Illustration | shared edges | 0.59% | 201 | 6.5 KB |
+| Logo | shared edges, exact shapes | 0.54% | 175 | 5.4 KB |
+| Illustration | shared edges, exact shapes | 0.49% | 193 | 6.2 KB |
 | Poster | shared edges, quantized, stacked | 3.25% | 1258 | 43.6 KB |
+
+Exact shapes (#37) took Logo from 0.70% / 177 nodes and Illustration from
+0.59% / 201: the badge's big disc is now a true circle rather than four fitted
+curves. The sun overlaps the mountains, so its outline isn't one closed edge and
+stays fitted.
 
 Poster scored 1.13% / 948 nodes / 24.4 KB here when VTracer traced it. It's
 worse on this badge now because it's the wrong preset for one: a quantized

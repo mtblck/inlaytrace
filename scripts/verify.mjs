@@ -295,7 +295,14 @@ async function shapeOpChecks(page, label, id) {
   check(await page.getByText('±2.00 px').isVisible(), `${label}: the Simplify slider is at ±2 px`)
   await page.waitForTimeout(400) // the count is worked out once the selection settles
   const button = page.getByRole('button', { name: /Simplify:|Already as simple/ })
-  const text = await button.innerText()
+  let text = await button.innerText()
+  // A shape drawn exactly (a true circle) may already be as simple at ±2: try looser.
+  for (const t of ['3', '4']) {
+    if (/→/.test(text)) break
+    await page.getByLabel('Simplify').fill(t)
+    await page.waitForTimeout(200)
+    text = await button.innerText()
+  }
   const m = text.match(/(\d+) → (\d+)/)
   if (m) {
     await button.click()
@@ -303,8 +310,8 @@ async function shapeOpChecks(page, label, id) {
     check(after.includes(`(${m[2]} nodes)`) || after.includes(`${m[2]} →`), `${label}: Simplify does what it says (${m[1]} → ${m[2]} nodes; now "${after}")`)
     await page.keyboard.press(`${MOD}+z`)
     check((await page.locator(`path[data-path-id="${id}"]`).getAttribute('d')) === d0, `${label}: one Undo reverts Simplify`)
-  } else if (label === 'sample') check(false, `sample: Simplify has something to remove at ±2 px ("${text}")`)
-  else console.log(`         ${label}: shape already as simple at ±2 px ("${text}")`)
+  } else if (label === 'sample') check(false, `sample: Simplify has something to remove by ±4 px ("${text}")`)
+  else console.log(`         ${label}: shape already as simple at ±4 px ("${text}")`)
 }
 
 /** Select tool: move, scale, typed size, nudge, multi-select, marquee, select all. */
@@ -455,9 +462,12 @@ async function editorChecks(page, label, n) {
   let best = 0
   let bestArea = -1
   const sheet = await page.locator('svg[aria-label="Traced SVG"]').boundingBox()
+  // The largest shape with plenty of fitted nodes (an exact circle has four, and nothing to simplify).
+  const drawn = page.locator(`svg[aria-label="Traced SVG"] path`)
   for (let i = 0; i < (await hits.count()); i++) {
     const b = await hits.nth(i).boundingBox()
-    if (b && b.width * b.height > bestArea && b.width < sheet.width * 0.9) [best, bestArea] = [i, b.width * b.height]
+    const nodes = ((await drawn.nth(i).getAttribute('d')) ?? '').match(/[LC]/g)?.length ?? 0
+    if (b && b.width * b.height > bestArea && b.width < sheet.width * 0.9 && nodes >= 24) [best, bestArea] = [i, b.width * b.height]
   }
   const target = hits.nth(best)
   const id = await target.getAttribute('data-path-id')
@@ -849,6 +859,20 @@ if (process.env.FIXTURE) {
   console.log(`         fixture: ${await fx.locator('aside .num').first().innerText()}, light ink auto-selected: ${light}`)
   await shot(fx, '06-fixture')
   await editorChecks(fx, 'fixture', '07')
+}
+
+// ---- Exact shapes: on by default for flat art, and can be turned off -------
+{
+  const ex = await newPage({ width: 1440, height: 900 })
+  await ex.goto(url)
+  await ex.getByRole('button', { name: 'Try a sample' }).click()
+  await traced(ex)
+  const circle = async () => (await ex.locator(`${VECTOR}`).evaluateAll((ps) => ps.map((p) => p.getAttribute('d')))).some((d) => /^M[\d. ]+(C[\d. ]+){4}Z/.test(d) || /Z\s*M[\d. ]+(C[\d. ]+){4}Z/.test(d))
+  check((await ex.getByRole('radiogroup', { name: 'Exact shapes' }).getByRole('radio', { name: 'On' }).getAttribute('aria-checked')) === 'true', 'Exact shapes is on for Logo')
+  check(await circle(), "the sample's big disc is drawn as an exact circle (four curves)")
+  await retrace(ex, () => ex.getByRole('radiogroup', { name: 'Exact shapes' }).getByRole('radio', { name: 'Off' }).click())
+  check(!(await circle()), 'turning Exact shapes off fits it as traced')
+  await ex.close()
 }
 
 // ---- Symmetry: detected, offered, enforced ---------------------------------

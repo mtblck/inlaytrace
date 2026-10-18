@@ -14,6 +14,7 @@ Every trace takes the same fitting options and one of two modes.
 | `cornerAngle` | number, degrees | Turns sharper than this stay sharp corners; gentler ones become curves. |
 | `speckle` | number, px | Regions smaller than `speckle` × `speckle` pixels merge into whatever surrounds them. 0 keeps everything. |
 | `smoothing` | number, px (optional) | Half-window of the smoothing over the pixel staircase. Default 12; it narrows by itself on tight curves. |
+| `shapes` | boolean (optional) | Exact shapes: an outline that has one neighbour all the way round and is a circle, an ellipse, a rectangle, a rounded rectangle or a regular polygon (3–12 sides) is drawn as that shape exactly, rather than as fitted curves. Only outlines that fit within 0.3 px RMS (0.85 px at worst) qualify, so a shape that's nearly round stays as traced. Both sides of the edge get the same shape, so shapes still tile. Default false. |
 | `pixels` | boolean (optional) | Pixel art: no clean-up and no curve fitting; every boundary is its exact pixel staircase. |
 | `stacked` | boolean (optional) | Stacked shapes, for photos: each shape is drawn whole, without the holes other shapes sit in, and larger shapes come first. The picture is the same as cut-out shapes, with less path data and no hairline seams between shapes. Holes onto transparency are kept. Default: cut out, which is what vinyl cutters and screen printers want. |
 
@@ -63,9 +64,9 @@ These are the Inlay app's presets.
 
 | Image | Options |
 | --- | --- |
-| Logo: few flat colours, crisp corners | `palette: peakPalette(px, 8)`, `speckle: 8`, `tolerance: 1`, `cornerAngle: 45` |
-| Illustration: more colours, smooth curves | `palette: peakPalette(px, 16)`, `speckle: 4`, `tolerance: 0.75`, `cornerAngle: 60` |
-| Line art: one ink | `mode: 'binary'`, `threshold: 128`, `speckle: 6`, `tolerance: 1`, `cornerAngle: 45` |
+| Logo: few flat colours, crisp corners | `palette: peakPalette(px, 8)`, `speckle: 8`, `tolerance: 1`, `cornerAngle: 45`, `shapes: true` |
+| Illustration: more colours, smooth curves | `palette: peakPalette(px, 16)`, `speckle: 4`, `tolerance: 0.75`, `cornerAngle: 60`, `shapes: true` |
+| Line art: one ink | `mode: 'binary'`, `threshold: 128`, `speckle: 6`, `tolerance: 1`, `cornerAngle: 45`, `shapes: true` |
 | Pixel art | `palette: exactPalette(px, 32)`, `pixels: true`, `speckle: 0`, `tolerance: 0.25`, `cornerAngle: 0` |
 | Poster: a photo in flat colour bands | `palette: quantizePalette(px, 24)`, `stacked: true`, `speckle: 8`, `tolerance: 0.75`, `cornerAngle: 90` |
 

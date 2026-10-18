@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react'
-import { PRESETS, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
+import { PRESETS, hasExactShapes, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
 
 type Props = {
   settings: Settings
@@ -93,6 +93,30 @@ export function Controls({ settings, onChange, onPreset }: Props) {
               <Slider label="Smoothing" value={settings.smoothing} min={0} max={3} step={0.25} onChange={(v) => set('smoothing', v)} format={smoothingLabel} hint="How far the outline may stray from the pixels. Higher means fewer nodes and a smaller file." />
               <Slider label="Corners" value={settings.corners} min={0} max={180} step={5} onChange={(v) => set('corners', v)} format={(v) => `${v}°`} hint="Bends sharper than this stay corners; gentler ones become curves." />
             </>
+          )}
+
+          {hasExactShapes(p) && (
+            <div className="space-y-1.5">
+              <span className="field-label">Exact shapes</span>
+              <div role="radiogroup" aria-label="Exact shapes" className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-rule bg-rule">
+                {([true, false] as const).map((v) => (
+                  <button
+                    key={String(v)}
+                    role="radio"
+                    aria-checked={settings.exact === v}
+                    onClick={() => set('exact', v)}
+                    className={`py-1.5 text-[13px] ${settings.exact === v ? 'bg-paper font-medium text-accent' : 'bg-paper-sunk text-ink hover:bg-paper'}`}
+                  >
+                    {v ? 'On' : 'Off'}
+                  </button>
+                ))}
+              </div>
+              <p className="field-hint">
+                {settings.exact
+                  ? 'Circles, ellipses, rectangles and regular polygons are drawn as true shapes.'
+                  : 'Every outline is fitted as traced, even where it is nearly a circle or a square.'}
+              </p>
+            </div>
           )}
 
           {/* Flat-art presets are cut out (what vinyl and screen print want); only Poster offers stacked, for smaller files. */}

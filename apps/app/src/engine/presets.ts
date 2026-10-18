@@ -40,6 +40,8 @@ export type Settings = {
   smoothing: number
   corners: number
   shapes: 'stacked' | 'cutout'
+  /** Flat-art presets: draw circles, ellipses, (rounded) rectangles and regular polygons exactly. */
+  exact: boolean
   /**
    * Colours folded into others before tracing (Logo and Illustration), traced
    * hex → traced hex. A new preset starts with none.
@@ -59,37 +61,40 @@ export const PRESETS: Preset[] = [
     id: 'logo',
     label: 'Logo',
     hint: 'Few flat colours, crisp corners',
-    defaults: { colors: 8, threshold: null, lightInk: false, speckle: 8, smoothing: 1.5, corners: 45, shapes: 'cutout' },
+    defaults: { colors: 8, threshold: null, lightInk: false, speckle: 8, smoothing: 1.5, corners: 45, shapes: 'cutout', exact: true },
   },
   {
     id: 'illustration',
     label: 'Illustration',
     hint: 'More colours, smooth curves',
-    defaults: { colors: 16, threshold: null, lightInk: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked' },
+    defaults: { colors: 16, threshold: null, lightInk: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked', exact: true },
   },
   {
     id: 'lineart',
     label: 'Line art',
     hint: 'Ink drawings and scans, one colour',
-    defaults: { colors: 2, threshold: 128, lightInk: false, speckle: 6, smoothing: 1.5, corners: 45, shapes: 'stacked' },
+    defaults: { colors: 2, threshold: 128, lightInk: false, speckle: 6, smoothing: 1.5, corners: 45, shapes: 'stacked', exact: true },
   },
   {
     id: 'photo',
     label: 'Poster',
     hint: 'Photos flattened into colour bands',
-    defaults: { colors: 24, threshold: null, lightInk: false, speckle: 8, smoothing: 1, corners: 90, shapes: 'stacked' },
+    defaults: { colors: 24, threshold: null, lightInk: false, speckle: 8, smoothing: 1, corners: 90, shapes: 'stacked', exact: false },
   },
   {
     id: 'pixel',
     label: 'Pixel art',
     hint: 'Hard edges, nothing smoothed',
-    defaults: { colors: 32, threshold: null, lightInk: false, speckle: 0, smoothing: 0, corners: 0, shapes: 'stacked' },
+    defaults: { colors: 32, threshold: null, lightInk: false, speckle: 0, smoothing: 0, corners: 0, shapes: 'stacked', exact: false },
   },
 ]
 
 export const presetById = (id: PresetId) => PRESETS.find((p) => p.id === id)!
 
 export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {} })
+
+/** Exact shapes: the flat-art presets (a photo has none, and pixel art keeps its staircase). */
+export const hasExactShapes = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'lineart'
 
 /** Merging colours: the flat-art presets, whose palettes are real colours (Poster's are cluster averages). */
 export const canMerge = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'pixel'
@@ -112,6 +117,8 @@ export type TraceOptions = {
   merge?: Record<string, string>
   pixels?: boolean
   stacked?: boolean
+  /** Draw circles, ellipses, (rounded) rectangles and regular polygons exactly. */
+  shapes?: boolean
   /** Binary mode. */
   threshold?: number | null
   invert?: boolean
@@ -124,7 +131,7 @@ export type TraceOptions = {
  * closer to the photo with 57% fewer shapes and a 30% smaller file.
  */
 export function toTraceOptions(s: Settings): TraceOptions {
-  const fit = { speckle: s.speckle, tolerance: toleranceFor(s.smoothing), cornerAngle: s.corners }
+  const fit = { speckle: s.speckle, tolerance: toleranceFor(s.smoothing), cornerAngle: s.corners, ...(s.exact && hasExactShapes(s.preset) ? { shapes: true } : {}) }
   if (s.preset === 'lineart') return { ...fit, mode: 'binary', threshold: s.threshold, ...(s.lightInk ? { invert: true } : {}) }
   const merge = Object.keys(s.merge ?? {}).length ? { merge: s.merge } : {}
   // Pixel art: its exact colours, every pixel kept, boundaries as pixel staircases.

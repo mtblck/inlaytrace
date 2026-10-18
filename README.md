@@ -50,8 +50,8 @@ against the clean art ([how this is measured](docs/how-it-works/measuring-qualit
 
 | | Inlay | VTracer (cut-out shapes) |
 | --- | --- | --- |
-| Pixels wrong | **0.70%** | 0.85% |
-| Nodes | **177** | 271 |
+| Pixels wrong | **0.54%** | 0.85% |
+| Nodes | **175** | 271 |
 | Time for a 2048 px image¹ | **1.3 s** | 17.5 s |
 
 ¹ Timed by hand, one run each, when Inlay replaced VTracer

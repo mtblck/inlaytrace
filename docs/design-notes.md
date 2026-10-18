@@ -60,6 +60,7 @@ wobble and rounded corners count):
 | VTracer, previous Logo settings | 0.86% | 259 | 7.3 KB |
 | Shared edges, fitted per chain | 0.74% | 167 | 5.0 KB |
 | + corners by their sides, round ends, lines inside curves | 0.70% | 177 | 5.4 KB |
+| + exact shapes (#37) | 0.54% | 175 | 5.4 KB |
 
 (Re-measured later for the landing page, VTracer comes out at 0.85% and 271
 nodes; see [measuring quality](how-it-works/measuring-quality.md).)

@@ -68,7 +68,8 @@ describe('presets against the real engine', () => {
     }
     // And the control: dark ink on the same card does trace from the corner.
     const dark = trace(card, w, h, toTraceOptions(settingsFor('lineart')))
-    expect(dark.paths.some((p) => /^M\s*0[ ,]/.test(p.d))).toBe(true) // starts on the card edge
+    const edge = (d: string) => d.match(/^M\s*([\d.]+)[ ,]([\d.]+)/)!.slice(1).map(Number).some((v) => v === 0 || v === w)
+    expect(dark.paths.some((p) => edge(p.d))).toBe(true) // starts on the card's edge
     expect(toTraceOptions(settingsFor('lineart')).invert).toBeUndefined()
   })
 

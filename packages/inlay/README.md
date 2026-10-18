@@ -95,8 +95,9 @@ every export.
 ## Measured
 
 On a 640 px JPEG of a five-colour badge, scored by rendering at 4× against the
-clean source art: 0.70% wrong pixels with 177 nodes, against 0.85% with 271
-nodes for VTracer tracing each colour on its own. At 2048 px it traces in about
+clean source art: 0.54% wrong pixels with 175 nodes with `shapes` on (0.70%
+and 177 without), against 0.85% with 271 nodes for VTracer tracing each colour
+on its own. At 2048 px it traces in about
 1.3 s (VTracer: 17.5 s, timed by hand). On pixel art both draw every pixel exactly; Inlay uses
 about 14% fewer nodes and is about 4× faster on a 1024 px sprite.
 

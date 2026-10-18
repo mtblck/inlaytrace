@@ -30,6 +30,7 @@
  * points. That is what lets two shapes share one fitted edge exactly.
  */
 import type { Pt } from './path'
+import { fitShape } from './shapes'
 
 export type FitOptions = {
   /** Max distance in pixels between the outline and the fitted path. */
@@ -38,6 +39,11 @@ export type FitOptions = {
   cornerAngle: number
   /** Half-window in px of the smoothing over the pixel staircase (default 12). */
   smoothing?: number
+  /**
+   * Draw a closed outline that is a circle, an ellipse, a (rounded) rectangle
+   * or a regular polygon as that exact shape (see shapes.ts). Default false.
+   */
+  shapes?: boolean
 }
 
 /** A cubic Bézier: start, two handles, end. A straight line has handles on the chord. */
@@ -90,6 +96,11 @@ export function fitChain(points: Pt[], closed: boolean, o: FitOptions): Cubic[] 
   // An open chain's ends are junctions, already nodes: a corner within
   // MIN_GAP px of one would only add a stub segment beside it.
   const corners = findCorners(pts, closed, o.cornerAngle).filter((c) => closed || (dist(c.at, pts[0]) >= MIN_GAP && dist(c.at, pts[n - 1]) >= MIN_GAP))
+
+  if (closed && o.shapes) {
+    const shape = fitShape(points, corners.map((c) => c.at))
+    if (shape) return shape.cubics
+  }
 
   if (closed && corners.length === 0) {
     // A smooth loop (a circle, a blob): fit it from an arbitrary start, with

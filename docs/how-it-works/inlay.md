@@ -58,6 +58,17 @@ Every chain becomes lines and curves exactly once, by the
 [curve fitter](curve-fitting.md). Nothing about the fit depends on which side
 it's viewed from.
 
+With `shapes` on, a closed chain (one neighbour all the way round) is first
+checked against exact shapes (`packages/inlay/src/shapes.ts`). The pixel
+region's area, centroid and second moments give the candidate directly: an
+ellipse with semi-axes a and b has variances a²/4 and b²/4 along its axes, a
+w × h rectangle w²/12 and h²/12, and a rounded rectangle's corner radius is
+what its corners lose from the bounding box's area. A regular polygon's size
+comes from its area and its turn from the corners the fitter found. The
+candidate is kept only if the midpoints of the outline's pixel edges lie within
+0.3 px of it (RMS) and 0.85 px at worst; otherwise the chain is fitted as
+usual. Because the chain is shared, both neighbours get the same exact shape.
+
 ### 5. Build the shapes
 
 Each region's outline is its chains joined end to end, reversing the ones it
@@ -80,7 +91,8 @@ On the sample badge, scored at 4× against the clean art
 | --- | --- | --- | --- |
 | VTracer (previous Logo settings) | 0.86% | 259 | 7.3 KB |
 | Shared edges, first version | 0.74% | 167 | 5.0 KB |
-| Current | 0.70% | 177 | 5.4 KB |
+| Corners by their sides, round ends | 0.70% | 177 | 5.4 KB |
+| Current: + exact shapes | 0.54% | 175 | 5.4 KB |
 
 On a 2048 px image it traces in about 1.3 s, where VTracer took 17.5 s on the
 same image.
