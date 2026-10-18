@@ -2,8 +2,8 @@
 @import "./fonts.css";
 
 /* ---------------------------------------------------------------------------
-   Palette — copied from mb-portfolio/src/index.css so the tool reads as part of
-   mattblack.space when served under it. Warm paper and ink, one vermillion
+   Palette — first copied from mb-portfolio/src/index.css, when the app lived
+   under mattblack.space. Warm paper and ink, one vermillion
    accent used only for signal (the active control, the split handle, path
    outlines), never as a fill behind text. `ink-faint` clears 4.5:1 on both
    paper tones; it was measured there, so don't lighten it by eye.

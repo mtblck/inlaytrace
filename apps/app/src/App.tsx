@@ -831,15 +831,12 @@ export default function App() {
           <p className="hidden text-[13px] text-ink-muted sm:block">Image to SVG, in your browser.</p>
         </div>
         <div className="flex items-center gap-1 text-[13px]">
-          <IconButton label={theme === 'dark' ? 'Use light theme' : 'Use dark theme'} onClick={toggle}>
-            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
-          </IconButton>
           <IconButton label="Keyboard shortcuts" hint="Keyboard shortcuts (?)" aria-keyshortcuts="?" onClick={() => setShortcutsOpen(true)}>
             <KeyboardIcon />
           </IconButton>
-          <a href="https://mattblack.space" className="ml-3 text-ink-muted hover:text-ink">
-            mattblack.space
-          </a>
+          <IconButton label={theme === 'dark' ? 'Use light theme' : 'Use dark theme'} onClick={toggle}>
+            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+          </IconButton>
         </div>
       </header>
 
