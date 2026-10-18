@@ -7,7 +7,8 @@ export default defineConfig({
     projects: [
       'apps/app/vite.config.ts',
       { test: { name: 'inlaytrace', root: 'packages/inlay', environment: 'node' } },
-      { test: { name: 'server', root: 'server', environment: 'node' } },
+      // The server imports the tracer by name, as the app does: its source, not dist/.
+      { resolve: { alias: { inlaytrace: new URL('./packages/inlay/src/index.ts', import.meta.url).pathname } }, test: { name: 'server', root: 'server', environment: 'node' } },
     ],
   },
 })

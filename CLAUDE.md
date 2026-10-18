@@ -18,7 +18,8 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
 
 ## Load-bearing decisions
 
-- **Client-only.** Tracing runs in a Web Worker (`apps/app/src/engine/`). Images never leave the device.
+- **Client-only.** Tracing runs in a Web Worker (`apps/app/src/engine/`). Images never leave the device, except
+  for HD (paid, opt-in per image, `server/hd.ts`), which traces the same image at full size on the server.
 - **Layout:** `apps/app` (Vite root; its config sets `root`, so scripts run it from the repo root with
   `-c apps/app/vite.config.ts`), `apps/site` (Astro + Starlight: landing at `/`, docs at `/docs/`),
   `packages/inlay`, root `vitest.config.ts` running app and package as projects.

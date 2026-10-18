@@ -7,7 +7,7 @@
   "scripts": {
     "fonts": "node scripts/build-fonts.mjs",
     "dev": "vite -c apps/app/vite.config.ts",
-    "build": "npm run hosting:check && npm run lint && npm run site:build && vite build -c apps/app/vite.config.ts && node scripts/check-hosting.mjs --dist",
+    "build": "npm run hosting:check && npm run lint && npm run build -w packages/inlay && npm run site:build && vite build -c apps/app/vite.config.ts && node scripts/check-hosting.mjs --dist",
     "preview": "node scripts/serve.mjs",
     "test": "vitest run",
     "lint": "tsc -p apps/app && tsc -p packages/inlay && tsc -p server",
@@ -44,5 +44,11 @@
   "workspaces": [
     "apps/*",
     "packages/*"
-  ]
+  ],
+  "dependencies": {
+    "@vercel/blob": "2.8.0",
+    "fast-png": "8.0.0",
+    "jpeg-js": "0.4.4",
+    "onnxruntime-node": "1.30.0"
+  }
 }

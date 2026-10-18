@@ -118,6 +118,26 @@ Each run costs well under a cent in Vercel CPU and memory. Vercel Pro (already
 paid, $20 a month across Matt's projects) is required anyway, because the Hobby
 plan forbids taking payments.
 
+## Status
+
+- **Full-size tracing** (beta): `server/hd.ts`, in its own function (`api/hd.ts`,
+  300 s, 3 GB). A 6000 × 4000 image traces in about 6 s on a laptop CPU, using
+  about 600 MB. Images and results travel in 4 MB parts through `/api` (Vercel's
+  body limit), are kept in the private `hd` storage bucket only for the run,
+  and the daily cron sweeps anything older than an hour.
+- **Upscaling** (beta): Real-ESRGAN x4plus (BSD-3) on the server with
+  onnxruntime-node, 2 credits for inputs up to 0.5 MP (`server/pricing.ts`), tiled
+  as in the browser (192 px tiles). About 14 s per 256 × 256 tile on a runner CPU,
+  so the cap keeps a run inside the function's 300 s; a run past 270 s gives up and
+  refunds. The model comes from the private Vercel Blob store (`server/models.ts`).
+- **Background removal: skipped for the beta.** Only BiRefNet's tiny model fits a
+  3 GB function (the full one ran out of memory on a 16 GB runner). Against
+  remove.bg it matched on a product photo and logos (under 0.5% of the mask) and
+  beat the free U²-Net on the cat and the rocket, but cut the astronaut's helmet off
+  (12%) and lost a tower behind the rocket. Not good enough to charge for. A GPU
+  service with the full model is the way back, at a privacy cost. Report:
+  `hd-models-report` branch.
+
 ## Open
 
 - **Paddle's live approval:** a pricing page, terms, a refund policy and a

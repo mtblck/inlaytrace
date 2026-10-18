@@ -17,6 +17,7 @@
  *   POST paddle/webhook            Paddle notifications (signed): completed
  *                                  purchases add credits; refunds hold them while
  *                                  pending, take them back, or release them
+ *   POST hd/start, hd/upload, hd/run; GET hd/result   HD jobs (server/hd.ts)
  *   GET  keepalive                 Vercel cron: one query a day so the free
  *                                  Supabase project never pauses
  *
@@ -25,10 +26,11 @@
  * already keeps the cookies off cross-site posts, and a cross-site form can't
  * send JSON without a preflight this API never answers.
  */
+import { cleanup, resultPart, runJob, startRun, uploadPart, type HdEnv } from './hd.js'
 import { creditsFor, packs, paddle, paddleEnvironment, PaddleError, verifySignature, type PaddleEnv } from './paddle.js'
 import { isSecretKey, supabase, SupabaseError, type Env as SupabaseEnv, type Session, type Supabase, type User } from './supabase.js'
 
-export type Env = SupabaseEnv & PaddleEnv
+export type Env = SupabaseEnv & PaddleEnv & HdEnv
 
 const AT = 'inlay_at'
 const RT = 'inlay_rt'
@@ -45,6 +47,8 @@ export async function handle(req: Request, route: string, env: Env, fetchImpl: t
       if (env.SUPABASE_SERVICE_ROLE_KEY && !isSecretKey(env.SUPABASE_SERVICE_ROLE_KEY)) console.error('SUPABASE_SERVICE_ROLE_KEY is a publishable (anon) key; it needs the secret (service_role) key.')
       return json({ error: "Accounts aren't set up on this server." }, 503)
     }
+    // HD jobs (server/hd.ts): the upload route takes raw bytes, so it has its own check.
+    if (route.startsWith('hd/')) return await hdRoute(req, route, db, env)
     if (req.method === 'POST') {
       const bad = checkPost(req)
       if (bad) return bad
@@ -242,12 +246,49 @@ async function webhook(req: Request, db: Supabase, env: Env, fetchImpl: typeof f
   return json({ ok: true })
 }
 
+// ---- HD (server/hd.ts) ----------------------------------------------------------------
+
+async function hdRoute(req: Request, route: string, db: Supabase, env: Env): Promise<Response> {
+  const url = new URL(req.url)
+  const origin = req.headers.get('origin')
+  if (req.method === 'POST' && origin && origin !== url.origin) return json({ error: 'Not allowed.' }, 403)
+  const auth = await authenticate(req, db)
+  if (!auth) return json({ error: 'Sign in to use HD.' }, 401, clearSession())
+  const send = (r: { status: number; body?: unknown; bytes?: Uint8Array; contentType?: string }) => {
+    if (r.bytes) {
+      const headers = new Headers({ 'Content-Type': r.contentType ?? 'application/octet-stream', 'Cache-Control': 'no-store' })
+      for (const c of auth.setCookies) headers.append('Set-Cookie', c)
+      return new Response(r.bytes as unknown as BodyInit, { status: r.status, headers })
+    }
+    return r.body === undefined ? empty(r.status, auth.setCookies) : json(r.body, r.status, auth.setCookies)
+  }
+  const isJson = (req.headers.get('content-type') ?? '').startsWith('application/json')
+  switch (`${req.method} ${route}`) {
+    case 'POST hd/start':
+      return isJson ? send(await startRun(db, auth.user, await readJson(req), env)) : json({ error: 'Send JSON.' }, 415)
+    case 'POST hd/upload':
+      if ((req.headers.get('content-type') ?? '') !== 'application/octet-stream') return json({ error: 'Send the part as application/octet-stream.' }, 415)
+      return send(await uploadPart(db, auth.user, url.searchParams.get('run') ?? '', url.searchParams.get('part'), new Uint8Array(await req.arrayBuffer())))
+    case 'POST hd/run': {
+      if (!isJson) return json({ error: 'Send JSON.' }, 415)
+      const body = await readJson(req)
+      return send(await runJob(db, auth.user, String(body.run ?? ''), env))
+    }
+    case 'GET hd/result':
+      return send(await resultPart(db, auth.user, url.searchParams.get('run') ?? '', url.searchParams.get('part')))
+  }
+  return json({ error: 'Not found.' }, 404)
+}
+
 async function keepalive(req: Request, env: Env, fetchImpl: typeof fetch) {
   // Vercel sends `Authorization: Bearer $CRON_SECRET` on cron requests; nobody else knows it.
   if (!env.CRON_SECRET || req.headers.get('authorization') !== `Bearer ${env.CRON_SECRET}`) return json({ error: 'Not found.' }, 404)
   const db = supabase(env, fetchImpl)
   if (!db) return json({ error: "Accounts aren't set up on this server." }, 503)
   await db.balance('00000000-0000-0000-0000-000000000000')
+  // Also the daily sweep of HD files: nothing stays in storage more than an hour or so past its run.
+  const cleaned = await cleanup(db)
+  if (cleaned) console.log(`keepalive: cleaned ${cleaned} HD run(s)`)
   return empty(204)
 }
 

@@ -10,6 +10,12 @@ The image is decoded, traced, edited and exported in your browser. There is no
 upload, no server step, no analytics and no third-party script. Tracing runs in
 a Web Worker; SVGO and paper.js are loaded from the same site, on first use.
 
+The one exception is [HD](hd.md), which is paid, in beta, and
+happens only when you confirm it for an image: that image is uploaded, traced
+at full size on Inlay's server, and deleted as soon as the result is back. The
+app sends nothing to the server before you confirm, and talks only to its own
+site even then.
+
 The optional AI steps (*Remove the background*, *Upscale 4× with AI*) run in
 the browser too. Their runtime (ONNX Runtime, about 3.7 MB compressed) and
 models (about 4.5 MB each) are downloaded **from this site** the first time a

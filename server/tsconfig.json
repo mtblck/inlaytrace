@@ -10,7 +10,9 @@
     "skipLibCheck": true,
     "noEmit": true,
     "isolatedModules": true,
-    "types": ["node"]
+    "allowImportingTsExtensions": true,
+    "types": ["node"],
+    "paths": { "inlaytrace": ["../packages/inlay/src/index.ts"] }
   },
   "include": [".", "../api"]
 }

@@ -16,6 +16,26 @@ export type Session = { accessToken: string; refreshToken: string; expiresIn: nu
 export type User = { id: string; email: string }
 export type LedgerEntry = { id: number; delta: number; reason: string; details: Record<string, unknown>; created_at: string }
 
+export type HdRun = {
+  id: string
+  user_id: string
+  kind: 'trace' | 'background' | 'upscale'
+  width: number
+  height: number
+  credits: number
+  parts_in: number
+  content_type: string
+  options: Record<string, unknown>
+  status: 'uploading' | 'running' | 'done' | 'failed'
+  use_id: number | null
+  parts_out: number | null
+  result_type: string | null
+  error: string | null
+  created_at: string
+  finished_at: string | null
+  cleaned_at: string | null
+}
+
 export class SupabaseError extends Error {
   constructor(
     readonly status: number,
@@ -109,6 +129,56 @@ export function supabase(env: Env, fetchImpl: typeof fetch = fetch) {
     async purchase(transactionId: string) {
       const rows = (await call(`/rest/v1/credit_ledger?select=user_id,delta,details&reason=eq.purchase&paddle_transaction_id=eq.${encodeURIComponent(transactionId)}`)) as { user_id: string; delta: number; details: Record<string, unknown> }[]
       return rows[0] ?? null
+    },
+    /** Pay for an HD run: the ledger row's id, or null when the balance is too low. Serialised per user. */
+    async spendCredits(userId: string, credits: number, details: Record<string, unknown>): Promise<number | null> {
+      const b = await call('/rest/v1/rpc/spend_credits', { method: 'POST', body: JSON.stringify({ p_user: userId, p_credits: credits, p_details: details }) })
+      return b === null ? null : Number(b)
+    },
+    /** Give back an HD run's credits when it failed. Once per use. */
+    async refundUse(useId: number) {
+      return Number(await call('/rest/v1/rpc/refund_use', { method: 'POST', body: JSON.stringify({ p_use: useId }) }))
+    },
+
+    // ---- HD runs (public.hd_runs) and their files (storage bucket "hd") ----
+    async createRun(run: Omit<HdRun, 'id' | 'status' | 'use_id' | 'parts_out' | 'result_type' | 'error' | 'created_at' | 'finished_at' | 'cleaned_at'>): Promise<HdRun> {
+      const rows = (await call('/rest/v1/hd_runs', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(run) })) as HdRun[]
+      return rows[0]
+    },
+    async run(id: string): Promise<HdRun | null> {
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return null
+      const rows = (await call(`/rest/v1/hd_runs?id=eq.${id}&select=*`)) as HdRun[]
+      return rows[0] ?? null
+    },
+    /** Update a run; with `from`, only if its status is still `from` (so two requests can't both start it). Returns whether a row changed. */
+    async updateRun(id: string, patch: Partial<HdRun>, from?: HdRun['status']): Promise<boolean> {
+      const rows = (await call(`/rest/v1/hd_runs?id=eq.${id}${from ? `&status=eq.${from}` : ''}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(patch) })) as HdRun[]
+      return rows.length > 0
+    },
+    /** How many HD runs started since `since` (ISO), for everyone or one user, optionally only those in some statuses. */
+    async countRuns(since: string, userId?: string, statuses?: HdRun['status'][]): Promise<number> {
+      const q = [`created_at=gte.${encodeURIComponent(since)}`, userId ? `user_id=eq.${userId}` : '', statuses ? `status=in.(${statuses.join(',')})` : '', 'select=id'].filter(Boolean).join('&')
+      const res = await fetchImpl(`${base}/rest/v1/hd_runs?${q}`, { method: 'HEAD', headers: { ...service, Prefer: 'count=exact' } })
+      if (!res.ok) throw new SupabaseError(res.status, `Supabase ${res.status}`)
+      return Number(res.headers.get('content-range')?.split('/')[1] ?? 0)
+    },
+    /** Runs whose files may still be in storage and that started before `before`. */
+    async staleRuns(before: string): Promise<HdRun[]> {
+      return (await call(`/rest/v1/hd_runs?cleaned_at=is.null&created_at=lt.${encodeURIComponent(before)}&select=*&limit=200`)) as HdRun[]
+    },
+    async putFile(path: string, bytes: Uint8Array, contentType: string) {
+      const res = await fetchImpl(`${base}/storage/v1/object/hd/${path}`, { method: 'POST', headers: { ...service, 'Content-Type': contentType, 'x-upsert': 'true' }, body: bytes as unknown as BodyInit })
+      if (!res.ok) throw new SupabaseError(res.status, `Storage ${res.status}: ${(await res.text()).slice(0, 200)}`)
+    },
+    async getFile(path: string): Promise<Uint8Array | null> {
+      const res = await fetchImpl(`${base}/storage/v1/object/hd/${path}`, { headers: service })
+      if (res.status === 404 || res.status === 400) return null
+      if (!res.ok) throw new SupabaseError(res.status, `Storage ${res.status}`)
+      return new Uint8Array(await res.arrayBuffer())
+    },
+    async deleteFiles(paths: string[]) {
+      if (!paths.length) return
+      await call('/storage/v1/object/hd', { method: 'DELETE', body: JSON.stringify({ prefixes: paths }) })
     },
     async ledger(userId: string, limit = 100) {
       const q = `select=id,delta,reason,details,created_at&user_id=eq.${encodeURIComponent(userId)}&order=created_at.desc&limit=${limit}`
