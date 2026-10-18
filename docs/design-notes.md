@@ -14,16 +14,14 @@ every learned model on icons and clearly beats them on illustrations, at a
 fraction of a second instead of 10–80 seconds on a GPU. AI belongs *around* the
 tracer (background removal, upscaling), which is the next phase.
 
-**VTracer 1.0 is vendored with a rewritten loader.** The official
+**VTracer was vendored with a rewritten loader, until #53.** The official
 `@visioncortex/vtracer` package is a `wasm-pack --target nodejs` build: the wasm
 is portable, but the glue reads it with `fs.readFileSync`, so it cannot load in
 a browser. The community browser build wraps the older 0.8 engine and misses
-1.0's palette and simplification options. Rebuilding with `--target web` needs
-the wasm32 Rust toolchain on every machine that builds this, so instead
-`scripts/vendor-vtracer.mjs` rewrites the glue to ESM with an async
-`init(url)`. The rewrite asserts every substitution matched and pins the package
-version, so an upstream change fails the build rather than shipping a module
-that throws in the browser.
+1.0's palette and simplification options, so a script rewrote the glue to ESM
+with an async `init(url)`, asserting every substitution matched. Once Inlay
+took Poster too, the app stopped shipping VTracer; it's now a benchmark only,
+loaded in Node as published (`scripts/vtracer.mjs`).
 
 **Flat art traces each edge once.** VTracer traces every colour region on
 its own and smooths the pixel outline into curves without knowing where the
@@ -86,11 +84,9 @@ clean-up and the fitting and joins straight runs. Its palette is the image's
 exact colours, because histogram peaks drop a one-pixel eye for being rare and
 fold close shades together. On a test sprite both engines draw every pixel
 exactly; Inlay uses 14% fewer nodes, about the same bytes, and on a 1024 px
-sprite is 4× faster (0.2 s against 0.85 s). Only Poster keeps VTracer: photos
-have no flat regions or histogram peaks, and cut-out shapes cost size there.
-Whether Inlay can take Poster too (a stacked mode and a quantized palette,
-scored on real photos) is
-[#53](https://github.com/mtblck/inlaytrace/issues/53).
+sprite is 4× faster (0.2 s against 0.85 s). That left Poster on VTracer, since
+photos have no flat regions or histogram peaks and cut-out shapes cost size
+there, until [#53](https://github.com/mtblck/inlaytrace/issues/53) (below).
 
 **Tuning the presets.** Each candidate setting was scored by tracing, rendering
 the SVG back in Chromium, and measuring the error against the *clean source
@@ -115,10 +111,10 @@ Two of those were surprises worth remembering:
   real colours are sharp peaks in the histogram, with anti-aliasing a thin
   spread between them, so `packages/inlay/src/palette.ts` takes the peaks (5-bit bins,
   most frequent first, accepted only if perceptually distinct in OKLab) and
-  passes them to VTracer as a fixed palette. That recovered the source colours
+  passed them to VTracer as a fixed palette (Inlay uses them the same way now). That recovered the source colours
   almost exactly, and on a real illustration cut mean error from 11.1 to 4.3.
   On a photo it made things worse (9.9 → 15.3), since photos have no peaks, so
-  the Poster preset keeps VTracer's quantizer.
+  Poster kept VTracer's quantizer; it now uses Inlay's own (`quantizePalette`).
 
 `layerDifference` and cut-out shapes follow the same pattern: big wins on flat
 art, costs on photos, so they are per-preset rather than global.
@@ -174,9 +170,9 @@ this sample VTracer's shared edges stay within 0.06 px of each other, so the pag
 does not claim it leaves gaps.
 
 **The CSP is tested, not trusted.** There are two, and Vercel applies every
-matching header block, so they're scoped never to overlap. The app's needs
-`'wasm-unsafe-eval'` and a worker allowance: without them the page loads,
-accepts a drop, and never traces. The site's is `script-src 'self'` plus
+matching header block, so they're scoped never to overlap. The app's needs a
+worker allowance (without it the page loads, accepts a drop, and never traces)
+and, since it runs no WebAssembly, must not allow `'wasm-unsafe-eval'`. The site's is `script-src 'self'` plus
 `'wasm-unsafe-eval'` for search (Pagefind) and the sha256 of each inline script
 Starlight writes (theme, sidebar). `npm run hosting:check` fails the build if any
 of that goes missing; after the build, `--dist` hashes every inline script in
@@ -287,4 +283,7 @@ all three photos (mean error 14.3 → 11.8, 57% fewer shapes, 30% smaller), so
 the app dropped VTracer, its WebAssembly and the `'wasm-unsafe-eval'` allowance.
 Stacking itself saves less than expected on photos (about 3%): most photo
 regions are small and have few holes. A radius-2 blur before tracing cut error
-a further 10%, but softens real edges; it's left for a future setting.
+a further 10%, but softens real edges; it's left for a future setting. At
+2048 px Poster takes 3.4–5.1 s on these photos in Node, about 15% longer than
+VTracer took (2.9–4.5 s), and the SVG is about 30% larger at that size; at the
+photos' own size (450–640 px wide) it's both smaller and closer.

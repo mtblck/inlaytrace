@@ -110,6 +110,30 @@ describe('stacked shapes', () => {
   })
 })
 
+describe('stacked shapes around nested transparency', () => {
+  // A red panel holding a blue square, holding a transparent window: the
+  // window doesn't touch the panel, so only the depth check keeps it open.
+  const w = 40
+  const h = 40
+  const px = new Uint8ClampedArray(w * h * 4)
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      let c = [245, 240, 230, 255]
+      if (x >= 4 && x < 36 && y >= 4 && y < 36) c = [210, 50, 40, 255]
+      if (x >= 12 && x < 28 && y >= 12 && y < 28) c = [30, 60, 140, 255]
+      if (x >= 17 && x < 23 && y >= 17 && y < 23) c = [0, 0, 0, 0]
+      px.set(c, (y * w + x) * 4)
+    }
+  const opts = { mode: 'palette' as const, palette: ['#f5f0e6', '#d23228', '#1e3c8c'], speckle: 0, tolerance: 0.5, cornerAngle: 45 }
+
+  it('leave the window empty, as cut-out shapes do', () => {
+    const cut = render(trace(px, w, h, opts))
+    const stacked = render(trace(px, w, h, { ...opts, stacked: true }))
+    expect(stacked[20 * w + 20]).toBe('')
+    expect(stacked).toEqual(cut)
+  })
+})
+
 describe('quantizePalette', () => {
   /** A smooth gradient with two flat patches: no histogram peaks to speak of. */
   function photoLike() {
@@ -134,6 +158,11 @@ describe('quantizePalette', () => {
     const two = new Uint8ClampedArray(16 * 4 * 4)
     for (let i = 0; i < 16 * 4; i++) two.set(i % 2 ? [255, 0, 0, 255] : [0, 0, 255, 255], i * 4)
     expect(quantizePalette(two, 8).sort()).toEqual(['#0000ff', '#ff0000'])
+  })
+
+  it('takes at least one colour, even for 0 or NaN', () => {
+    expect(quantizePalette(photoLike(), 0)).toHaveLength(1)
+    expect(quantizePalette(photoLike(), NaN)).toHaveLength(1)
   })
 
   it('ignores transparent pixels', () => {

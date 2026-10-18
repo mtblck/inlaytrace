@@ -46,8 +46,9 @@ export type InlayOptions = FitOptions & {
    * over them. Every hole's outline is exactly the outline of what fills it,
    * so the picture is the same as cut-out shapes, with less path data (each
    * hole isn't drawn a second time) and no hairline seams where anti-aliased
-   * edges meet. Holes onto transparency are kept. Default: cut out, which is
-   * what a vinyl cutter or a screen printer wants.
+   * edges meet. A hole with transparency anywhere inside it, however deep, is
+   * kept, so transparency stays transparent. Default: cut out, which is what a
+   * vinyl cutter or a screen printer wants.
    */
   stacked?: boolean
 } & (
@@ -102,15 +103,18 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
     if (c.right !== VOID) addOriented(byComp, c.right, { ...c, cubics: reverse(cubics), reversed: true })
   }
 
+  // Stacked shapes paint over their holes, so a hole stays wherever there is
+  // transparency inside it, however deep: one pixel of each transparent area.
+  const voids = o.stacked ? voidSeeds(comp, w, h) : []
   const shapes: { subs: Subpath[]; fill: string; area: number }[] = []
   for (const [id, chains] of byComp) {
     let loops = assemble(chains)
     if (!loops.length) continue
     let area = compArea[id]
     if (o.stacked) {
-      // The outline is the loop enclosing the most; a hole stays only if it opens onto nothing.
+      // The outline is the loop enclosing the most; a hole stays if there's transparency anywhere inside it.
       const outer = loops.reduce((a, b) => (Math.abs(b.area) > Math.abs(a.area) ? b : a))
-      loops = loops.filter((l) => l === outer || l.touchesVoid)
+      loops = loops.filter((l) => l === outer || l.touchesVoid || voids.some((p) => encloses(l.pts, p)))
       area = Math.abs(outer.area)
     }
     shapes.push({ subs: loops.map((l) => l.sub), fill: colors[compLabel[id]], area })
@@ -598,7 +602,8 @@ function addOriented(map: Map<number, Oriented[]>, id: number, c: Oriented) {
 
 const reverse = (cubics: Cubic[]): Cubic[] => cubics.map(([a, b, c, d]) => [d, c, b, a] as Cubic).reverse()
 
-type Loop = { sub: Subpath; area: number; touchesVoid: boolean }
+/** A region's closed loop: its fitted subpath, signed area, whether VOID is across any of it, and its exact pixel-crack outline. */
+type Loop = { sub: Subpath; area: number; touchesVoid: boolean; pts: Pt[] }
 /** The region on the far side of a chain, as this region walks it. */
 const across = (c: Oriented) => (c.reversed ? c.left : c.right)
 
@@ -610,7 +615,7 @@ function assemble(chains: Oriented[]): Loop[] {
   const subs: Loop[] = []
   const open: Oriented[] = []
   for (const c of chains) {
-    if (c.closed) subs.push(loopOf(c.cubics, across(c) === VOID))
+    if (c.closed) subs.push(loopOf(c.cubics, across(c) === VOID, c.pts))
     else open.push(c)
   }
   const start = (c: Oriented) => (c.reversed ? c.to : c.from)
@@ -628,11 +633,13 @@ function assemble(chains: Oriented[]): Loop[] {
   for (const first of open) {
     if (used.has(first)) continue
     const loop: Cubic[] = []
+    const pts: Pt[] = []
     let touchesVoid = false
     let c: Oriented | undefined = first
     while (c && !used.has(c)) {
       used.add(c)
       loop.push(...c.cubics)
+      pts.push(...c.pts)
       if (across(c) === VOID) touchesVoid = true
       if (end(c) === start(first)) break
       const into = lastDir(c)
@@ -642,16 +649,54 @@ function assemble(chains: Oriented[]): Loop[] {
         .filter((n) => !used.has(n))
         .sort((a, b) => cross(into, firstDir(a)) - cross(into, firstDir(b)))[0]
     }
-    if (loop.length) subs.push(loopOf(loop, touchesVoid))
+    if (loop.length) subs.push(loopOf(loop, touchesVoid, pts))
   }
   return subs
 }
 
 /** A loop and its signed area (shoelace over its cubics' end points: enough to rank and orient). */
-function loopOf(cubics: Cubic[], touchesVoid: boolean): Loop {
+function loopOf(cubics: Cubic[], touchesVoid: boolean, pts: Pt[]): Loop {
   let area = 0
   for (const [a, , , d] of cubics) area += a.x * d.y - d.x * a.y
-  return { sub: toSubpath(cubics), area: area / 2, touchesVoid }
+  return { sub: toSubpath(cubics), area: area / 2, touchesVoid, pts }
+}
+
+/** One pixel centre from each 4-connected area of VOID (transparent pixels) in the image. */
+function voidSeeds(comp: Int32Array, w: number, h: number): Pt[] {
+  const seen = new Uint8Array(w * h)
+  const seeds: Pt[] = []
+  const stack: number[] = []
+  for (let start = 0; start < w * h; start++) {
+    if (comp[start] !== VOID || seen[start]) continue
+    seeds.push({ x: (start % w) + 0.5, y: Math.floor(start / w) + 0.5 })
+    seen[start] = 1
+    stack.push(start)
+    while (stack.length) {
+      const i = stack.pop()!
+      const x = i % w
+      for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w])
+        if (j >= 0 && j < w * h && comp[j] === VOID && !seen[j]) {
+          seen[j] = 1
+          stack.push(j)
+        }
+    }
+  }
+  return seeds
+}
+
+/**
+ * Whether a point is inside a loop's pixel-crack outline (even-odd ray cast).
+ * The outline runs along pixel edges and the point is a pixel centre, so it is
+ * never on the line.
+ */
+function encloses(pts: Pt[], p: Pt): boolean {
+  let inside = false
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const a = pts[i]
+    const b = pts[j]
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside
+  }
+  return inside
 }
 
 const neg = (p: Pt): Pt => ({ x: -p.x, y: -p.y })

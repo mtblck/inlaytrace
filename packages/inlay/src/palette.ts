@@ -80,7 +80,9 @@ export function oklab([r, g, b]: Rgb): Rgb {
  * common colour, and each next one is the colour farthest from those chosen,
  * weighted by how common it is (k-means++ without the dice), so a photo traces
  * the same way every time. Each colour returned is the true mean of the pixels
- * in its cluster, most common first.
+ * in its cluster, most common first. `maxColors` is rounded and taken as at
+ * least 1 (so 0 or NaN gives one colour); fewer come back when the image has
+ * fewer distinct colours, and none when every pixel is transparent.
  */
 export function quantizePalette(rgba: ArrayLike<number>, maxColors: number, { iterations = 16 }: { iterations?: number } = {}): string[] {
   const bins = new Map<number, { n: number; r: number; g: number; b: number }>()
@@ -101,7 +103,7 @@ export function quantizePalette(rgba: ArrayLike<number>, maxColors: number, { it
       const rgb: Rgb = [bin.r / bin.n, bin.g / bin.n, bin.b / bin.n]
       return { n: bin.n, rgb, lab: oklab(rgb) }
     })
-  const k = Math.min(Math.max(1, Math.round(maxColors)), points.length)
+  const k = Math.min(Number.isFinite(maxColors) ? Math.max(1, Math.round(maxColors)) : 1, points.length)
   if (!k) return []
 
   // Seeds: the most common colour, then repeatedly the farthest (count × distance²).
@@ -153,7 +155,8 @@ export function quantizePalette(rgba: ArrayLike<number>, maxColors: number, { it
     if (!moved) break
   }
 
-  // Report each cluster as the mean RGB of its pixels: a colour the photo really has.
+  // Report each cluster as the mean RGB of its pixels (a blend of the photo's colours, not a
+  // drift towards a neighbour cluster).
   const out = centres.map(() => ({ n: 0, r: 0, g: 0, b: 0 }))
   points.forEach((p, i) => {
     const o = out[assign[i]]

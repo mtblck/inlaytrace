@@ -36,7 +36,7 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
   compiler): without them npm versions disagree about the lockfile and `npm ci` fails on some (10, 11.4, 11.7).
 - **VTracer is a benchmark only** (devDependency `@visioncortex/vtracer`, loaded in Node by `scripts/vtracer.mjs`):
   `score`, `score:photos`, `site:assets` and two tests compare against it. The app ships no WebAssembly.
-- **Logo/Illustration palettes come from histogram peaks** (`packages/inlay/src/palette.ts`),
+- **Logo/Illustration palettes come from histogram peaks** (`packages/inlay/src/palette.ts`)
   (VTracer's quantizer drifted flat colours). Poster quantizes (`quantizePalette`, k-means in OKLab) and stacks
   shapes (`stacked`). Re-score any preset change (`score`, and `score:photos` for Poster) before shipping.
 - **No GPL/AGPL in the bundle** (no Potrace, no `@imgly/*`); AI weights must be
