@@ -827,7 +827,12 @@ export default function App() {
     >
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-rule px-5">
         <div className="flex items-baseline gap-3">
-          <h1 className="font-display text-[26px] leading-none tracking-tight">Inlay</h1>
+          <h1 className="font-display text-[26px] leading-none tracking-tight">
+            {/* The landing page and docs live beside the app, at the site root. */}
+            <a href="/" className="rounded-sm text-ink no-underline hover:text-ink-muted" title="Inlay home">
+              Inlay
+            </a>
+          </h1>
           <p className="hidden text-[13px] text-ink-muted sm:block">Image to SVG, in your browser.</p>
         </div>
         <div className="flex items-center gap-1 text-[13px]">
