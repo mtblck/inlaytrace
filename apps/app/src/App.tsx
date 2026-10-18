@@ -1384,6 +1384,9 @@ export default function App() {
             <a href="https://github.com/mtblck/inlaytrace" className="hover:text-ink">
               Source
             </a>
+            <a href="https://ko-fi.com/inlay" className="hover:text-ink">
+              Support
+            </a>
           </nav>
         </aside>
       </main>

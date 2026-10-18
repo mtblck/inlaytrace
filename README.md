@@ -94,6 +94,10 @@ npm test
 [CONTRIBUTING](CONTRIBUTING.md) has the rest: every command, how changes are
 checked, and what to include in a bug report.
 
+## Support
+
+Inlay is free. If it has saved you time, you can [buy it a coffee on Ko-fi](https://ko-fi.com/inlay).
+
 ## Licence
 
 MIT. SVGO, fflate and paper.js are MIT. VTracer (MIT OR Apache-2.0) is only a
