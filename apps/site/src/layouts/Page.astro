@@ -12,7 +12,7 @@ interface Props {
 }
 const { title, description } = Astro.props
 /** The app (apps/app), served beside this site. */
-export const APP = '/app/'
+const APP = '/app/'
 ---
 
 <!doctype html>
@@ -47,13 +47,8 @@ export const APP = '/app/'
 
     <footer class="foot">
       <p>Inlay is MIT licensed. Made by <a href="https://mattblack.space">Matt Black</a>.</p>
-      <p>
-        <a href="/docs/package/getting-started/">Docs</a>
-        <a href="/docs/how-it-differs/">Compared with other tools</a>
-        <a href="/privacy/">Privacy</a>
-        <a href="https://github.com/mtblck/inlaytrace">Source</a>
-        <a href={APP}>App</a>
-      </p>
+      <!-- One line: Astro drops the whitespace at a line break, which would run the links together. -->
+      <p><a href="/docs/package/getting-started/">Docs</a> <a href="/docs/how-it-differs/">Compared with other tools</a> <a href="/privacy/">Privacy</a> <a href="https://github.com/mtblck/inlaytrace">Source</a> <a href={APP}>App</a></p>
     </footer>
 
   </body>
