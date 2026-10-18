@@ -1,33 +1,54 @@
 {
   "name": "inlaytrace",
   "version": "0.1.0",
-  "description": "A raster-to-vector tracer whose shapes share their edges exactly: no gaps, no overlaps.",
-  "private": true,
+  "description": "Trace images into SVG shapes that share their edges exactly: no gaps, no overlaps. Pure TypeScript, no WebAssembly.",
   "type": "module",
   "license": "MIT",
   "author": "Matt Black (https://mattblack.space)",
+  "homepage": "https://github.com/mtblck/inlaytrace/tree/main/packages/inlay#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mtblck/inlaytrace.git",
+    "directory": "packages/inlay"
+  },
+  "bugs": "https://github.com/mtblck/inlaytrace/issues",
   "keywords": [
     "vectorize",
+    "vectorization",
     "trace",
-    "bitmap",
-    "svg",
     "image-tracing",
-    "vector"
+    "bitmap-to-vector",
+    "raster-to-vector",
+    "svg",
+    "pixel-art"
   ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
   },
+  "types": "./dist/index.d.ts",
   "files": [
-    "src",
-    "!src/**/*.test.ts",
-    "!src/fixtures"
+    "dist",
+    "CHANGELOG.md"
   ],
   "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
+    "build": "tsdown",
+    "check": "publint --strict && attw --pack --profile esm-only",
     "test": "vitest run --root ../..  packages/inlay",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "prepublishOnly": "npm run build"
   },
   "devDependencies": {
-    "fflate": "0.8.3"
+    "@arethetypeswrong/cli": "0.18.5",
+    "fflate": "0.8.3",
+    "publint": "0.3.25",
+    "tsdown": "0.23.1"
   }
 }

@@ -12,8 +12,18 @@ Workers and Node. MIT licensed.
 It is the tracer behind the [Inlay app](https://mattblack.space/tools/img-to-svg/)
 for logos, illustrations, line art and pixel art.
 
-> Status: lives in the Inlay repo beside the app, as a workspace package, while
-> its API settles. Not yet published to npm.
+## Install
+
+```bash
+npm install inlaytrace
+```
+
+ESM only, with type declarations. Node 20 or newer, any current browser, and
+Web Workers. No dependencies.
+
+Versions are 0.x while the API settles: a minor version (0.1 → 0.2) may change
+it, and the [changelog](https://github.com/mtblck/inlaytrace/blob/main/packages/inlay/CHANGELOG.md)
+says how.
 
 ## Use
 
@@ -68,17 +78,21 @@ toSvg(result) // '<svg …>…</svg>'
 5. **Assemble** each region from its chains (reversed where it sees them from
    the other side). Neighbours share the same fitted edge exactly.
 
-The full write-up, with measurements, is in the repo's
-[docs](../../docs/how-it-works/inlay.md).
+The full write-up, with measurements, is in the
+[docs](https://github.com/mtblck/inlaytrace/blob/main/docs/how-it-works/inlay.md);
+[getting started](https://github.com/mtblck/inlaytrace/blob/main/docs/package/getting-started.md)
+covers reading pixels in the browser and in Node, and the
+[API reference](https://github.com/mtblck/inlaytrace/blob/main/docs/package/api.md)
+every export.
 
 ## Measured
 
 On a 640 px JPEG of a five-colour badge, scored by rendering at 4× against the
-clean source art: 0.70% wrong pixels with 177 nodes and no gaps between shapes,
-against VTracer's 0.86% with 259 nodes. At 2048 px it traces in about 1.3 s
-(VTracer: 17.5 s). On pixel art both draw every pixel exactly; Inlay uses
+clean source art: 0.70% wrong pixels with 177 nodes, against 0.85% with 271
+nodes for VTracer tracing each colour on its own. At 2048 px it traces in about
+1.3 s (VTracer: 17.5 s, timed by hand). On pixel art both draw every pixel exactly; Inlay uses
 about 14% fewer nodes and is about 4× faster on a 1024 px sprite.
 
 ## License
 
-MIT
+MIT. Source, issues and the app: [mtblck/inlaytrace](https://github.com/mtblck/inlaytrace).

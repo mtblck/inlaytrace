@@ -30,6 +30,9 @@ export default defineConfig({
   root: here,
   base: BASE,
   plugins: [react(), tailwindcss()],
+  // In this repo the app uses the tracer's TypeScript source, so there's no
+  // package build in the dev loop; npm users get the built dist/.
+  resolve: { alias: [{ find: /^inlaytrace$/, replacement: `${here}../../packages/inlay/src/index.ts` }] },
   build: {
     // The repo root's dist/, which Vercel serves.
     outDir: `${here}../../dist${BASE}`,

@@ -10,7 +10,7 @@ order: 1
 npm install inlaytrace
 ```
 
-The package is ES modules only, with type declarations. Node 18 or newer, any
+The package is ES modules only, with type declarations. Node 20 or newer, any
 current browser, and Web Workers.
 
 ## Trace in the browser

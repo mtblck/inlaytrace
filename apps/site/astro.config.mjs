@@ -1,5 +1,6 @@
 import { defineConfig } from 'astro/config'
 import starlight from '@astrojs/starlight'
+import { fileURLToPath } from 'node:url'
 
 /**
  * The Inlay site: a landing page (src/pages/index.astro) and the docs (Starlight,
@@ -11,7 +12,11 @@ export default defineConfig({
   outDir: '../../dist',
   build: { format: 'directory', inlineStylesheets: 'never' },
   // No inline scripts of ours: the CSP allows Starlight's few by hash only.
-  vite: { build: { assetsInlineLimit: 0 } },
+  vite: {
+    build: { assetsInlineLimit: 0 },
+    // The landing page uses the tracer's source, as the app does; no package build first.
+    resolve: { alias: [{ find: /^inlaytrace$/, replacement: fileURLToPath(new URL('../../packages/inlay/src/index.ts', import.meta.url)) }] },
+  },
   integrations: [
     starlight({
       title: 'Inlay',

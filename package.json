@@ -18,9 +18,13 @@
     "site:sync": "node scripts/sync-docs.mjs",
     "site:build": "npm run site:sync && astro build --root apps/site",
     "site:dev": "npm run site:sync && astro dev --root apps/site",
-    "site:assets": "node scripts/site-assets.mjs"
+    "site:assets": "node scripts/site-assets.mjs",
+    "version-packages": "changeset version && npm install --package-lock-only"
   },
   "devDependencies": {
+    "@changesets/cli": "3.0.3",
+    "@emnapi/core": "1.11.3",
+    "@emnapi/runtime": "1.11.3",
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "26.6.5",
     "@types/react": "19.3.0",
