@@ -32,7 +32,8 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
   tsconfig paths, site astro.config), so no build in the dev loop; npm gets `dist/` from tsdown
   (`npm run build -w packages/inlay`, `check` runs publint + attw, `test/smoke.mjs` loads it in plain Node).
   Releases: a changeset per user-visible change; `npx changeset version` PR; merging publishes (release.yml,
-  trusted publishing). npm 11 only: npm 10 can't install from this lockfile.
+  trusted publishing). Root devDeps pin `@emnapi/core`/`@emnapi/runtime` (optional peers of tsdown's
+  compiler): without them npm versions disagree about the lockfile and `npm ci` fails on some (10, 11.4, 11.7).
 - **VTracer 1.0 (Poster only) via `scripts/vendor-vtracer.mjs`**, which rewrites the official Node
   package's glue to browser ESM. Output in `apps/app/src/engine/vtracer/` is generated and
   gitignored. Bumping the package means re-checking that script's substitutions.

@@ -13,9 +13,7 @@ image attached to an issue is public.
 
 ## Setting up
 
-Node 24, or any Node 20+ with npm 11 (`npm install -g npm@11`): npm 10 can't
-install from the lockfile npm 11 writes. One install covers everything (npm
-workspaces):
+Node 20 or newer (CI uses 24) and npm. One install covers everything (npm workspaces):
 
 ```bash
 npm install
