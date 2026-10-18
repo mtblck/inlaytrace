@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent } from 'react'
-import type { Axis } from '../lib/mirror'
+import { turnRadius, turnSlice, type Axis } from '../lib/mirror'
 import { isSmooth, parsePath, type NodePart, type NodeRef, type Pt, type Subpath } from '../lib/pathdata'
 import { angleAt, HANDLE_SET, handlePoint, hasRef, normRect, pathBounds, rotateAbout, scaleFromHandle, translate, union, type Affine, type Box, type Handle } from '../lib/transform'
 import { anchorScroll, effective, snap, step, wheelFactor, type Zoom } from '../lib/zoom'
@@ -51,7 +51,8 @@ type Props = {
   /** The eyedropper is armed: the next click on the image picks a colour from the original there (SVG units). */
   picking: boolean
   onPick: (at: Pt) => void
-  onAxis: (position: number) => void
+  /** The mirror axis or turn centre, dragged to a new place. */
+  onAxis: (axis: Axis) => void
 }
 
 // On-screen sizes, constant at every zoom: divided by the sheet's scale to get
@@ -312,7 +313,7 @@ export function Canvas(props: Props) {
       if (!d.moved && !far(d, e)) return
       d.moved = true
       setMarquee(normRect(d.start, p))
-    } else props.onAxis(clampAxis(props.axis!, p, width, height))
+    } else props.onAxis(moveAxis(props.axis!, p, width, height))
   }
   const onUp = (e: RPointerEvent) => {
     const d = drag.current
@@ -730,8 +731,32 @@ function moveBy(start: Pt, p: Pt, constrain: boolean) {
   return translate(dx, dy)
 }
 
-/** The mirror axis: a draggable line, with the side being replaced washed out. */
+/**
+ * The mirror axis, a draggable line with the side being replaced washed out;
+ * or for a turn, the circle it applies in, washed out but for the kept slice,
+ * and a draggable centre.
+ */
 function AxisOverlay({ axis, width, height, unit, onGrab }: { axis: Axis; width: number; height: number; unit: number; onGrab: (e: RPointerEvent) => void }) {
+  if (axis.orientation === 'rotation') {
+    const { cx, cy } = axis
+    const { from, to } = turnSlice(axis.order)
+    const r = turnRadius(axis, width, height)
+    const ray = (t: number) => `${cx + r * Math.cos(t)} ${cy + r * Math.sin(t)}`
+    const large = to - from > Math.PI ? 1 : 0
+    const circle = `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0Z`
+    // What gets replaced: the circle with the kept slice cut out (even-odd).
+    const wedge = `M${cx} ${cy}L${ray(from)}A${r} ${r} 0 ${large} 1 ${ray(to)}Z`
+    const edges = `M${ray(from)}L${cx} ${cy}L${ray(to)}`
+    return (
+      <g data-overlay="axis">
+        <path d={circle + wedge} fillRule="evenodd" fill="var(--c-paper)" opacity={0.55} pointerEvents="none" />
+        <path d={circle} fill="none" stroke="var(--c-accent)" strokeWidth={1} strokeDasharray="2 4" vectorEffect="non-scaling-stroke" pointerEvents="none" />
+        <path d={edges} fill="none" stroke="var(--c-accent)" strokeWidth={2} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" pointerEvents="none" />
+        <circle cx={cx} cy={cy} r={5 * unit} fill="var(--c-accent)" pointerEvents="none" />
+        <circle cx={cx} cy={cy} r={HIT_PX * unit} fill="transparent" style={{ cursor: 'move' }} onPointerDown={onGrab} data-axis-handle="" />
+      </g>
+    )
+  }
   const v = axis.orientation === 'vertical'
   const a = axis.position
   // The discarded side, which the reflection will replace.
@@ -752,8 +777,9 @@ function AxisOverlay({ axis, width, height, unit, onGrab }: { axis: Axis; width:
   )
 }
 
-function clampAxis(axis: Axis, p: Pt, width: number, height: number) {
-  const v = axis.orientation === 'vertical'
-  const max = v ? width : height
-  return Math.round(Math.min(max, Math.max(0, v ? p.x : p.y)) * 10) / 10
+/** The axis dragged to `p`: kept on the picture, to a tenth of a unit. */
+function moveAxis(axis: Axis, p: Pt, width: number, height: number): Axis {
+  const clamp = (n: number, max: number) => Math.round(Math.min(max, Math.max(0, n)) * 10) / 10
+  if (axis.orientation === 'rotation') return { ...axis, cx: clamp(p.x, width), cy: clamp(p.y, height) }
+  return { ...axis, position: axis.orientation === 'vertical' ? clamp(p.x, width) : clamp(p.y, height) }
 }

@@ -10,7 +10,7 @@
 import type { TraceOptions } from './presets'
 import type { WorkerRequest, WorkerResponse } from './worker'
 
-type Channel = 'trace' | 'optimize'
+type Channel = 'trace' | 'optimize' | 'symmetry'
 type Pending = { request: WorkerRequest; resolve: (r: WorkerResponse | null) => void }
 
 export class TraceClient {
@@ -50,6 +50,11 @@ export class TraceClient {
     return this.send('trace', { type: 'trace', id: this.nextId++, rgba: buffer, width, height, options })
   }
 
+  /** Look for mirror and rotational symmetry in the pixels the trace uses. */
+  symmetry(rgba: Uint8ClampedArray, width: number, height: number) {
+    return this.send('symmetry', { type: 'symmetry', id: this.nextId++, rgba: rgba.slice().buffer, width, height })
+  }
+
   optimize(svg: string) {
     return this.send('optimize', { type: 'optimize', id: this.nextId++, svg })
   }
@@ -72,14 +77,15 @@ export class TraceClient {
 
   private pump() {
     if (this.busy) return
-    // Traces first: an optimize of a stale trace is wasted work.
-    const channel: Channel | undefined = this.waiting.has('trace') ? 'trace' : this.waiting.has('optimize') ? 'optimize' : undefined
+    // Traces first: an optimize of a stale trace is wasted work. Symmetry last:
+    // it's only needed once the Mirror tool opens.
+    const channel = (['trace', 'optimize', 'symmetry'] as const).find((c) => this.waiting.has(c))
     if (!channel) return
     const next = this.waiting.get(channel)!
     this.waiting.delete(channel)
     this.busy = true
     this.inFlight = next
-    const transfer = next.request.type === 'trace' ? [next.request.rgba] : []
+    const transfer = next.request.type === 'trace' || next.request.type === 'symmetry' ? [next.request.rgba] : []
     this.ensureWorker().postMessage(next.request, transfer)
   }
 }

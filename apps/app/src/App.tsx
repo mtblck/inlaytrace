@@ -22,7 +22,7 @@ import {
   type Edits,
 } from './lib/doc'
 import { push, redo, startHistory, undo, type History } from './lib/history'
-import { centreAxis, mirrorDoc, type Axis } from './lib/mirror'
+import { centreAxis, likelyAxis, mirrorDoc, type Axis } from './lib/mirror'
 import { loadPaper } from './lib/paper'
 import { deleteNodes, moveHandle, moveNode, moveNodes, parsePath, serializePath, nodeCount, type NodePart, type NodeRef, type Pt } from './lib/pathdata'
 import { addNode, nearestOnPath, roundNode, sharpenNode, simplifySubpaths, smoothNode } from './lib/nodeops'
@@ -94,6 +94,11 @@ export default function App() {
   /** The eyedropper is armed for an ink (its traced hex) or the background. */
   const [picking, setPicking] = useState<{ target: string } | null>(null)
   const [axis, setAxis] = useState<Axis | null>(null)
+  /** The likeliest symmetry in the traced pixels, and which pixels it was found in. */
+  const [detected, setDetected] = useState<{ pixels: Pixels; axis: (Axis & { score: number }) | null } | null>(null)
+  /** Whether the user has moved the axis since this image opened; until then a detected one replaces it. */
+  const axisTouched = useRef(false)
+  const symmetryOf = useRef<Pixels | null>(null)
   const [mirroring, setMirroring] = useState(false)
   const [mirrorError, setMirrorError] = useState<string | null>(null)
   /** An action that would throw away shape edits, waiting for the user to confirm. */
@@ -162,6 +167,8 @@ export default function App() {
       setSelectedIds([])
       setSelectedNodes([])
       setAxis(null)
+      setDetected(null)
+      axisTouched.current = false
       setTool('select')
       setPanel(restore?.edits.doc ? 'edit' : 'trace')
       setMode(restore ? 'vector' : 'split')
@@ -277,6 +284,21 @@ export default function App() {
         pixelCache.current = cached
       }
       const { rgba, width, height } = cached.pixels
+      if (symmetryOf.current !== cached.pixels) {
+        // Once per set of pixels, not per trace: settings don't change the answer.
+        const pixels = (symmetryOf.current = cached.pixels)
+        void client.symmetry(rgba, width, height).then((res) => {
+          if (symmetryOf.current !== pixels) return
+          // Dropped (the worker restarted) or failed: the next trace asks again.
+          if (res?.type !== 'symmetry') return void (symmetryOf.current = null)
+          const found = likelyAxis(res.found)
+          setDetected({ pixels, axis: found })
+          if (found && !axisTouched.current) {
+            const { score: _, ...axis } = found
+            setAxis(axis as Axis)
+          }
+        })
+      }
       setStatus({ kind: 'tracing' })
       const res = await client.trace(rgba, width, height, toTraceOptions(settings))
       if (!res) return // superseded by a newer request
@@ -561,6 +583,11 @@ export default function App() {
       setSelectedNodes([])
     }
   }, [editDoc, selectedPaths, selectedNodes, tool, editing])
+
+  const moveAxis = (a: Axis) => {
+    axisTouched.current = true
+    setAxis(a)
+  }
 
   const mirror = async () => {
     if (!doc || !axis) return
@@ -904,7 +931,7 @@ export default function App() {
                   onAddNode={onAddNode}
                   picking={!!picking}
                   onPick={onPick}
-                  onAxis={(position) => axis && setAxis({ ...axis, position })}
+                  onAxis={moveAxis}
                 />
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rule px-4 py-2.5">
@@ -1075,7 +1102,8 @@ export default function App() {
                 axis={axis}
                 width={doc.width}
                 height={doc.height}
-                onAxis={setAxis}
+                onAxis={moveAxis}
+                detected={detected?.axis ?? null}
                 mirroring={mirroring}
                 mirrorError={mirrorError}
                 onMirror={mirror}

@@ -851,6 +851,60 @@ if (process.env.FIXTURE) {
   await editorChecks(fx, 'fixture', '07')
 }
 
+// ---- Symmetry: detected, offered, enforced ---------------------------------
+{
+  const sym = await newPage({ width: 1440, height: 900 })
+  await sym.goto(url)
+  /** A fixture SVG rasterised to a PNG, as a user would drop it. */
+  const png = (file) =>
+    sym.evaluate(async (svg) => {
+      const img = new Image()
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+      await img.decode()
+      const c = new OffscreenCanvas(480, 480)
+      c.getContext('2d').drawImage(img, 0, 0, 480, 480)
+      const bytes = new Uint8Array(await (await c.convertToBlob({ type: 'image/png' })).arrayBuffer())
+      let s = ''
+      for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+      return btoa(s)
+    }, readFileSync(new URL(`./fixtures/${file}`, import.meta.url), 'utf8'))
+
+  await sym.locator('input[type=file]').setInputFiles({ name: 'pinwheel.png', mimeType: 'image/png', buffer: Buffer.from(await png('pinwheel.svg'), 'base64') })
+  await traced(sym)
+  await sym.getByRole('tab', { name: /Edit/ }).click()
+  await sym.getByRole('radio', { name: 'Mirror' }).click()
+  const note = sym.locator('[data-detected]')
+  await note.waitFor({ timeout: 15000 })
+  check(/repeats 5 times/.test(await note.innerText()), `a five-fold mark is detected as one (“${(await note.innerText()).trim()}”)`)
+  check((await sym.getByRole('radio', { name: 'Turn' }).getAttribute('aria-checked')) === 'true', 'the detected turn is set up in the Mirror tool')
+  await shot(sym, '07s-turn-detected')
+  const svgBefore = await exportSvg(sym)
+  await sym.getByRole('button', { name: 'Repeat the top slice 5 times' }).click()
+  await sym.getByRole('radio', { name: 'Select', exact: true, checked: true }).waitFor({ timeout: 15000 })
+  const svgAfter = await exportSvg(sym)
+  check(svgAfter !== svgBefore && (svgAfter.match(/<path\b/g) ?? []).length >= 2, 'repeating the slice replaces the drawing with turned copies')
+  await shot(sym, '07t-turned')
+
+  // A mirror-symmetric mark: the detected axis, and a way back to it after moving it.
+  const emblem = Buffer.from(await png('emblem.svg'), 'base64')
+  await sym.locator('input[type=file]').setInputFiles({ name: 'emblem.png', mimeType: 'image/png', buffer: emblem })
+  const discard = sym.getByRole('button', { name: /Discard/ })
+  if (await discard.isVisible().catch(() => false)) await discard.click()
+  await traced(sym)
+  await sym.getByRole('tab', { name: /Edit/ }).click()
+  await sym.getByRole('radio', { name: 'Mirror' }).click()
+  const found = sym.locator('[data-detected]', { hasText: 'vertical axis' })
+  await found.waitFor({ timeout: 15000 })
+  // The trace may be upscaled, so the middle is half the traced width, not 240.
+  const at = Number(/x = ([\d.]+)/.exec(await found.innerText())[1])
+  const middle = Number(await sym.locator('#axis-pos').getAttribute('max')) / 2
+  check(Math.abs(at - middle) <= 1, `a mirror-symmetric mark is detected as one, at its middle (x = ${at} of ${middle * 2})`)
+  await sym.locator('#axis-pos').fill('100')
+  await sym.getByRole('button', { name: 'Use this axis' }).click()
+  check(Number(await sym.locator('#axis-pos').inputValue()) === at, `Use this axis puts the detected axis back (${await sym.locator('#axis-pos').inputValue()})`)
+  await sym.close()
+}
+
 // ---- Dark theme and mobile ------------------------------------------------
 const dark = await newPage({ width: 1440, height: 900 }, 'dark')
 await dark.goto(url)

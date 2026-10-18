@@ -32,6 +32,24 @@ worse on this badge now because it's the wrong preset for one: a quantized
 palette spends colours on the anti-aliased edges that Logo's histogram peaks
 ignore. Poster is judged on photos, below.
 
+Then two symmetric marks drawn for the test (`scripts/fixtures/emblem.svg`, a
+mirror-symmetric shield, and `pinwheel.svg`, five-fold with no mirror axis) go
+through the same JPEG round trip, are traced with Logo, and are scored again
+after the Mirror tool enforces whatever `detectSymmetry` found. *Asymmetry* is
+the share of the drawing that differs from its own reflection (or turn):
+
+| Mark | Detected | | Wrong pixels at 4× | Asymmetry | Nodes | Size |
+| --- | --- | --- | --- | --- | --- | --- |
+| Emblem | vertical axis at 320 (100%) | traced | 0.18% | 0.25% | 72 | 2.4 KB |
+| | | mirrored | 0.16% | 0.00% | 81 | 2.7 KB |
+| Pinwheel | turn of order 5 at (320, 320) (97.6%) | traced | 0.27% | 1.63% | 68 | 2.6 KB |
+| | | turned | 0.31% | 0.00% | 107 | 3.9 KB |
+
+The next-best candidate scores 70% and 35%, far below the 95% bar. Enforcing
+symmetry copies the kept part's error along with its shape, so accuracy barely
+moves either way; the turn costs nodes where the copies meet the cut-out
+background. Detection takes about 0.3 s at 640 px.
+
 Run it before shipping any change to the tracer, the fitter or a preset.
 
 ## `npm run score:photos`: Poster on photos
@@ -78,7 +96,10 @@ Unit tests (Vitest) pin what the output must be, not just that it runs:
   point.
 - On a real JPEG crop of the sample (`packages/inlay/src/fixtures/sample-caps.ts`), no
   two consecutive nodes are closer than 3 px.
-- Every preset runs through the real engine; mirror output is symmetric; path
+- Every preset runs through the real engine; mirror and turn output is
+  symmetric, and a background outside the turn keeps its corners; symmetry
+  detection finds an off-centre axis, a five-fold turn, and nothing in a
+  lopsided drawing; path
   data round-trips without drift; undo/redo and colour edits behave.
 
 ## `npm run verify`: the real app in a real browser
@@ -89,5 +110,7 @@ security headers, on the sample and optionally on an image of your own
 tracing and presets, colour replace and remove, the background, export and the
 layers zip, the compare views and zoom (including that a pinch keeps the point
 under the cursor in place), overlays, node selection and drag, undo/redo,
-mirror symmetry measured on the exported SVG, and the discard prompts. It runs
+mirror symmetry measured on the exported SVG, detected symmetry (a five-fold
+mark set up as a turn and repeated; a shield's axis found and restored with
+*Use this axis*), and the discard prompts. It runs
 in CI on every pull request.

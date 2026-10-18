@@ -24,7 +24,7 @@ Worker so the page stays responsive.
    own with path and node overlays. Zoom with a slider or a trackpad pinch.
 3. **Edit.** Replace or remove colours, add a background, select shapes to move
    and scale them, drag nodes and bend curves, delete nodes or shapes, and
-   mirror one half onto the other. Every edit is undoable, and `?` lists the
+   mirror or turn the drawing to make it exactly symmetrical. Every edit is undoable, and `?` lists the
    keyboard shortcuts.
 4. **Export.** One optimised SVG, a copy to the clipboard, or a zip with one SVG
    per colour for screen printing and vinyl cutting.
@@ -61,6 +61,6 @@ Worker so the page stays responsive.
 | `packages/inlay/src/fit.ts` | Curve fitting: corners, smoothing, lines and Béziers |
 | `packages/inlay/src/palette.ts` | Palettes from histogram peaks |
 | `apps/app/src/lib/doc.ts`, `history.ts`, `pathdata.ts` | The editable document, undo, path data |
-| `apps/app/src/lib/mirror.ts` | Mirroring with paper.js booleans |
+| `apps/app/src/lib/mirror.ts` | Mirroring and turning with paper.js booleans; picking the likeliest detected symmetry |
 | `apps/app/src/components/` | Canvas, controls, edit panel, colours |
 | `scripts/` | `verify` (browser E2E), `score` and `score:photos` (quality, against VTracer as a benchmark), hosting checks |

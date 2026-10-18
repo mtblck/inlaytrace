@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- A symmetric test emblem for npm run score (made for this repo, MIT). -->
+  <rect width="200" height="200" fill="#f4efe4"/>
+  <path d="M100 18 L168 44 C168 110 140 158 100 182 C60 158 32 110 32 44 Z" fill="#1d3b6e"/>
+  <path d="M100 52 L122 96 L100 150 L78 96 Z" fill="#e3a72f"/>
+  <path d="M58 60 C70 58 80 66 82 80 C70 82 60 76 58 60 Z M142 60 C130 58 120 66 118 80 C130 82 140 76 142 60 Z" fill="#c8402f"/>
+  <circle cx="100" cy="166" r="6" fill="#f4efe4"/>
+</svg>
