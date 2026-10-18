@@ -3,6 +3,7 @@ import { zipSync, strToU8 } from 'fflate'
 import { TraceClient } from './engine/client'
 import { PrepClient } from './engine/prepClient'
 import type { PrepStage } from './engine/prep'
+import type { SizeRun } from './components/Controls'
 import { canMerge, isInk, maxTraceEdge, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
 import { ACCEPTED, colourAt, hasDarkBackground, loadSource, pixelsOf, UPSCALE_BELOW, type Pixels, type Source } from './lib/image'
 import { formatBytes, normalizeHex, parseTrace, statsOf, type Trace } from './lib/svg'
@@ -55,6 +56,10 @@ export default function App() {
   const preparedRef = useRef<{ key: string; source: Source } | null>(null)
   const [prepStatus, setPrepStatus] = useState<{ stage: PrepStage; done: number; total: number } | null>(null)
   const [prepError, setPrepError] = useState<string | null>(null)
+  // Target size runs dozens of traces: on a worker of its own, so tracing stays responsive.
+  const sizeClient = useMemo(() => new TraceClient(), [])
+  useEffect(() => () => sizeClient.dispose(), [sizeClient])
+  const [sizeRun, setSizeRun] = useState<SizeRun | null>(null)
 
   const [source, setSource] = useState<Source | null>(null)
   const [settings, setSettings] = useState<Settings>(() => settingsFor('logo'))
@@ -177,6 +182,8 @@ export default function App() {
       setSelectedNodes([])
       setAxis(null)
       setDetected(null)
+      sizeClient.dispose()
+      setSizeRun(null)
       axisTouched.current = false
       setTool('select')
       setPanel(restore?.edits.doc ? 'edit' : 'trace')
@@ -843,7 +850,38 @@ export default function App() {
       }
       setSettings(next)
       setPicking(null)
+      // A size search (or its result) was for the settings before this change.
+      sizeClient.dispose()
+      setSizeRun(null)
     })
+
+  /** Search for settings that fit the SVG under `kb`. */
+  const findSize = async (kb: number) => {
+    // The image as traced: the prepared copy when an AI step is on.
+    if (!traceSource) return
+    const maxEdge = maxTraceEdge(settings.preset)
+    const upscale = settings.preset !== 'pixel'
+    const { rgba, width, height } = pixelsOf(traceSource, maxEdge, upscale)
+    const target = Math.round(kb * 1024)
+    const from = settings
+    setSizeRun({ target, from, tried: 0, best: null, result: null })
+    const res = await sizeClient.fitSize(rgba, width, height, from, target, (tried, best) => setSizeRun((r) => (r && r.from === from ? { ...r, tried, best } : r)))
+    setSizeRun((r) => {
+      if (!r || r.from !== from) return r // cancelled, or another search started
+      if (res?.type === 'sized') return { ...r, tried: res.result.tried, best: res.result.best, result: res.result }
+      return { ...r, error: res?.type === 'error' ? res.message : 'The search stopped.' }
+    })
+  }
+  const cancelSize = () => {
+    sizeClient.dispose()
+    setSizeRun(null)
+  }
+  const applySize = () => {
+    if (!sizeRun?.result) return
+    // Only what the search changes, on top of the settings as they are now.
+    const { colors, speckle, smoothing } = sizeRun.result.best.settings
+    changeSettings({ ...settings, colors, speckle, smoothing })
+  }
 
   /**
    * Fold one traced colour into another. It's a trace setting, so it re-traces
@@ -1215,6 +1253,11 @@ export default function App() {
                 onPreset={choosePreset}
                 measuredStroke={settings.preset === 'centerline' && settings.strokeWidth === 0 ? (trace?.paths[0]?.stroke ?? null) : null}
                 prep={{ smallImage: !!source && Math.max(source.bitmap.width, source.bitmap.height) < UPSCALE_BELOW, status: prepStatus, error: prepError }}
+                currentBytes={stats?.bytes ?? null}
+                sizeRun={sizeRun}
+                onFindSize={findSize}
+                onApplySize={applySize}
+                onCancelSize={cancelSize}
               />
             </div>
           </div>

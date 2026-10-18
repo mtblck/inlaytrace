@@ -891,6 +891,33 @@ if (process.env.FIXTURE) {
   await ex.close()
 }
 
+// ---- Target size: search the settings for a file that fits -------------------
+{
+  const ts = await newPage({ width: 1440, height: 900 })
+  await ts.goto(url)
+  await ts.getByRole('button', { name: 'Try a sample' }).click()
+  await traced(ts)
+  const sizeNow = async () => {
+    await ts.getByText(/Traced in [\d,]+ ms$/).waitFor()
+    const t = await ts.locator('dt', { hasText: /^Size$/ }).locator('xpath=following-sibling::dd').innerText()
+    return parseFloat(t) * (/KB/.test(t) ? 1024 : 1)
+  }
+  await ts.waitForTimeout(800) // the size shown is the optimised file's, worked out just after the trace
+  const before = await sizeNow()
+  const target = Math.floor((before * 0.92) / 102.4) / 10 // a little under the current size, in KB
+  await ts.getByLabel('Target size in KB').fill(String(target))
+  await ts.getByRole('button', { name: 'Find settings' }).click()
+  const result = ts.locator('[data-size-result]')
+  await result.waitFor({ timeout: 60_000 })
+  const text = await result.innerText()
+  check(/\(from [\d.]+ KB\)/.test(text), `Target size finds settings under ${target} KB (“${text.split('\n')[0]}”)`)
+  await retrace(ts, () => ts.getByRole('button', { name: 'Use these settings' }).click())
+  await ts.waitForTimeout(800)
+  const after = await sizeNow()
+  check(after <= target * 1024 + 51, `and using them gives that size (${(before / 1024).toFixed(1)} → ${(after / 1024).toFixed(1)} KB)`)
+  await ts.close()
+}
+
 // ---- Symmetry: detected, offered, enforced ---------------------------------
 {
   const sym = await newPage({ width: 1440, height: 900 })

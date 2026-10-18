@@ -1,6 +1,11 @@
-import { useId, type ReactNode } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import type { PrepStage } from '../engine/prep'
 import { PRESETS, hasExactShapes, isInk, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
+import type { Candidate, SizeSearch } from '../engine/targetSize'
+import { formatBytes } from '../lib/svg'
+
+/** A target-size search: running (no result yet), done, or failed. */
+export type SizeRun = { target: number; from: Settings; tried: number; best: Candidate | null; result: SizeSearch | null; error?: string }
 
 type Props = {
   settings: Settings
@@ -10,9 +15,15 @@ type Props = {
   measuredStroke?: number | null
   /** The AI steps: whether the image is small enough to upscale, and what's running. */
   prep?: { smallImage: boolean; status: { stage: PrepStage; done: number; total: number } | null; error: string | null }
+  /** The optimised SVG's size now, and the target-size search. */
+  currentBytes?: number | null
+  sizeRun?: SizeRun | null
+  onFindSize?: (kb: number) => void
+  onApplySize?: () => void
+  onCancelSize?: () => void
 }
 
-export function Controls({ settings, onChange, onPreset, measuredStroke, prep }: Props) {
+export function Controls({ settings, onChange, onPreset, measuredStroke, prep, ...size }: Props) {
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) => onChange({ ...settings, [key]: value })
   const p = settings.preset
   const defaults = presetById(p).defaults
@@ -165,7 +176,104 @@ export function Controls({ settings, onChange, onPreset, measuredStroke, prep }:
           )}
         </div>
       </Section>
+
+      {size.onFindSize && <TargetSize {...size} onFindSize={size.onFindSize} />}
     </>
+  )
+}
+
+/** The settings a search chose, in words: only what differs from where it started. */
+function changes(from: Settings, to: Settings) {
+  const out: string[] = []
+  if (to.colors !== from.colors) out.push(`${to.colors} colours`)
+  if (to.speckle !== from.speckle) out.push(`specks ${to.speckle} px`)
+  if (to.smoothing !== from.smoothing) out.push(`smoothing ${to.smoothing}`)
+  return out.length ? out.join(', ') : 'the current settings'
+}
+
+/**
+ * Target size: type a size, and the app searches the settings for the most
+ * accurate trace under it, then says what it chose before anything changes.
+ */
+function TargetSize(p: Omit<Props, 'settings' | 'onChange' | 'onPreset' | 'measuredStroke'> & { onFindSize: (kb: number) => void }) {
+  const [kb, setKb] = useState('10')
+  const run = p.sizeRun
+  const n = Number(kb)
+  const valid = Number.isFinite(n) && n > 0
+  const r = run?.result
+  return (
+    <Section title="Target size">
+      <div className="space-y-3">
+        <form
+          className="flex items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (valid) p.onFindSize(n)
+          }}
+        >
+          <label className="flex-1">
+            <span className="field-label">Fit the SVG under</span>
+            <span className="mt-1 flex items-center gap-1.5">
+              <input
+                type="number"
+                min={0.1}
+                step={0.1}
+                value={kb}
+                onChange={(e) => setKb(e.target.value)}
+                className="w-full rounded-md border border-rule bg-paper px-2 py-1.5 font-mono text-[13px]"
+                aria-label="Target size in KB"
+              />
+              <span className="text-[13px] text-ink-muted">KB</span>
+            </span>
+          </label>
+          <button type="submit" className="btn h-[34px]" disabled={!valid || (!!run && !r && !run.error)}>
+            Find settings
+          </button>
+        </form>
+        {!run && <p className="field-hint">Tries smoother curves, fewer specks and fewer colours, and keeps the most accurate trace that fits.{p.currentBytes ? ` Now ${formatBytes(p.currentBytes)}.` : ''}</p>}
+        {run && !r && !run.error && (
+          <div className="flex items-center justify-between gap-3 text-[12.5px]" role="status">
+            <span>
+              Searching… {run.tried} {run.tried === 1 ? 'trace' : 'traces'}
+              {run.best ? `, best so far ${formatBytes(run.best.bytes)}` : ''}
+            </span>
+            <button className="text-ink-muted underline hover:text-ink" onClick={p.onCancelSize}>
+              Stop
+            </button>
+          </div>
+        )}
+        {run?.error && (
+          <p role="alert" className="text-[12.5px] text-accent">
+            {run.error}
+          </p>
+        )}
+        {r && (
+          <div className="space-y-2 text-[12.5px]" role="status" data-size-result="">
+            {r.start.bytes <= run.target ? (
+              <p>It already fits: {formatBytes(r.start.bytes)}.</p>
+            ) : r.fits ? (
+              <p>
+                {formatBytes(r.best.bytes)} (from {formatBytes(r.start.bytes)}) with {changes(run.from, r.best.settings)}. Average error {r.start.error.toFixed(1)} → {r.best.error.toFixed(1)} (0–255, lower is closer).
+              </p>
+            ) : (
+              <p>
+                Couldn't get under {formatBytes(run.target)}. The smallest found is {formatBytes(r.best.bytes)} with {changes(run.from, r.best.settings)}. Removing a colour or editing shapes may get further.
+              </p>
+            )}
+            <div className="flex gap-2">
+              {r.start.bytes > run.target && r.best.bytes < r.start.bytes && (
+                <button className="btn btn-primary flex-1" onClick={p.onApplySize}>
+                  Use these settings
+                </button>
+              )}
+              <button className="btn" onClick={p.onCancelSize}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </Section>
   )
 }
 

@@ -87,6 +87,27 @@ seams where shapes meet. *Cut out* gives every shape holes where others sit,
 so none overlaps (for vinyl and screen print layers). Both look the same, and
 both share every edge exactly. The flat-art presets are always cut out.
 
+## Target size
+
+Under the settings, *Target size*: type a size in KB and press *Find
+settings*. The app traces the image again and again, starting from the current
+settings, and each time takes whichever change costs the least accuracy for
+the bytes it saves: smoother curves (+0.5 smoothing), a bigger speck filter, or
+one colour fewer (bigger steps while the file is far over). It stops once the
+file fits, or after 30 traces. Then it says what it chose and what it cost, and
+nothing changes until you press *Use these settings*.
+
+Size is the optimised SVG, exactly as exported. Accuracy is the average
+difference per colour channel (0–255) between the trace, drawn back, and your
+image. The search runs in a worker of its own, so the preview keeps tracing
+while it works; *Stop* ends it.
+
+On the sample badge (4.3 KB), asking for 3.9 KB raised smoothing from 1.5 to 2:
+3.9 KB, average error 2.5 → 2.6. On a 600 px photo with Poster (145 KB), asking
+for 60 KB took 16 traces and 10 s: 52 KB with 15 colours, specks 24 px and
+smoothing 3, error 10.7 → 13.7. When nothing fits, it offers the smallest trace
+it found.
+
 ## Small and large images
 
 Images under 512 px are upscaled to 1024 px before tracing, and images over
