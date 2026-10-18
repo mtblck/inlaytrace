@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Tool } from './Canvas'
+import type { Arrange } from '../lib/doc'
 import { MAX_ORDER, MIN_ORDER, sameAxis, type Axis, type MirrorAxis, type TurnAxis } from '../lib/mirror'
 import type { Box } from '../lib/transform'
 import { Section } from './Controls'
@@ -16,6 +17,11 @@ type Props = {
   /** `nodes` counts the edited shape's nodes; `selectedNodes` those picked with the Nodes tool. */
   selection: { key: string; shapes: number; nodes: number; selectedNodes: number; box: Box | null } | null
   onDeleteSelection: () => void
+  /** Group the selection, ungroup it, or change its paint order. `grouped`: the selection includes a group. */
+  onGroup: () => void
+  onUngroup: () => void
+  onArrange: (how: Arrange) => void
+  grouped: boolean
   /** One typed field of the bounds; `lock` keeps W and H in proportion. Changes in one field undo together. */
   onBox: (field: keyof Box, value: number, lock: boolean) => void
   onBoxDone: () => void
@@ -99,6 +105,7 @@ export function EditPanel(p: Props) {
               {/* Keyed to the selection, so a half-typed value never carries over to other shapes. */}
               {p.selection.box && <BoxFields key={p.selection.key} box={p.selection.box} onBox={p.onBox} onDone={p.onBoxDone} />}
               <RotateFields onRotate={p.onRotate} />
+              <ArrangeFields shapes={p.selection.shapes} grouped={p.grouped} onGroup={p.onGroup} onUngroup={p.onUngroup} onArrange={p.onArrange} />
               <SimplifyFields key={p.selection.key} now={p.selectionNodes} preview={p.simplifyPreview} onSimplify={p.onSimplify} />
               <button className="btn w-full" onClick={p.onDeleteSelection}>
                 {p.selection.shapes === 1 ? 'Delete shape' : `Delete ${p.selection.shapes} shapes`}
@@ -456,5 +463,38 @@ function TurnFields({ axis, width, height, onAxis }: { axis: TurnAxis; width: nu
         <p className="field-hint mt-1">Drag the dot on the canvas to move the centre. Inside the circle, the slice pointing up is kept and the faded rest is replaced by copies of it. Outside the circle stays as it is.</p>
       </div>
     </>
+  )
+}
+
+/** Group and paint order. A group selects as one and exports as a <g>. */
+function ArrangeFields(p: { shapes: number; grouped: boolean; onGroup: () => void; onUngroup: () => void; onArrange: (how: Arrange) => void }) {
+  const k = mod === '⌘' ? '⌘' : 'Ctrl+'
+  const sk = mod === '⌘' ? '⇧⌘' : 'Ctrl+Shift+'
+  return (
+    <div className="space-y-1.5">
+      <span className="field-label">Arrange</span>
+      <div className="grid grid-cols-2 gap-1">
+        <button className="btn h-7 text-[12.5px]" disabled={p.shapes < 2} onClick={p.onGroup} title={`Group (${k}G)`}>
+          Group
+        </button>
+        <button className="btn h-7 text-[12.5px]" disabled={!p.grouped} onClick={p.onUngroup} title={`Ungroup (${sk}G)`}>
+          Ungroup
+        </button>
+      </div>
+      <div className="grid grid-cols-4 gap-1" role="group" aria-label="Paint order">
+        {(
+          [
+            ['back', 'To back', `${sk}[`],
+            ['backward', 'Back', `${k}[`],
+            ['forward', 'Forward', `${k}]`],
+            ['front', 'To front', `${sk}]`],
+          ] as const
+        ).map(([how, label, key]) => (
+          <button key={how} className="btn h-7 px-1 text-[12px]" onClick={() => p.onArrange(how)} title={`${label} (${key})`}>
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }

@@ -41,6 +41,24 @@ Selecting a shape from the canvas opens the Edit tab.
 The box is the exact bounds of the drawn outline, not of the curve handles
 (which usually reach past the curve), so it sits tight on the shape.
 
+## Groups and paint order
+
+With shapes selected, *Arrange* in the Edit panel:
+
+- **Group** (⌘G) makes the selection one group: clicking any of its shapes
+  selects them all, and a marquee that catches one catches the group. The
+  members move together to where the topmost of them was painted, so the
+  picture only changes where one sat between two others. **Ungroup** (⇧⌘G)
+  undoes it. A group exports as a `<g>` round its paths.
+- **Forward** and **Back** (⌘] and ⌘[) move the selection one step up or down
+  the paint order, past one shape or one whole group; **To front** and **To
+  back** (⇧⌘] and ⇧⌘[) move it to the top or bottom. In cut-out traces shapes
+  don't overlap, so order only shows once shapes are moved onto each other;
+  in stacked ones (Poster, Illustration) it decides what's on top.
+
+Both are shape edits: one undo step each, and they detach the drawing from
+the trace like any other.
+
 ## Nodes: move nodes and bend curves
 
 Click a shape to show its nodes and handles.
