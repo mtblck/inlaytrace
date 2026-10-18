@@ -63,9 +63,12 @@ The package versions with [Changesets](.changeset/README.md):
    breaking change, plus a line for the changelog.
 2. To release, a PR runs `npm run version-packages`, which bumps the version,
    writes `packages/inlay/CHANGELOG.md` and updates the lockfile.
-3. Merging it publishes: `.github/workflows/release.yml` builds, tests and
-   checks the package, then publishes any version npm doesn't have yet, through
-   npm trusted publishing with provenance, and tags it `inlaytrace@x.y.z`.
+3. Merging it stages the release: `.github/workflows/release.yml` builds,
+   tests and checks the package, then stages any version npm doesn't have yet,
+   through npm trusted publishing with provenance. Nothing is public until a
+   maintainer approves it with two-factor authentication (`npx npm@latest stage
+   list inlaytrace`, then `npx npm@latest stage approve <id>`). Re-running the
+   workflow afterwards tags it `inlaytrace@x.y.z`.
 
 `npm run build -w packages/inlay` builds the package locally; `npm run check -w
 packages/inlay` lints it for publishing; `node packages/inlay/test/smoke.mjs`

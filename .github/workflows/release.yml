@@ -1,15 +1,17 @@
 name: Release
 
-# Publishes the inlaytrace package when main has a version npm doesn't have yet.
-# Versions come from Changesets (see .changeset/README.md): merge the PR that ran
-# `npx changeset version`, and this publishes it. Runs when the package's
+# Stages a new version of the inlaytrace package for Matt to approve. Versions
+# come from Changesets (see .changeset/README.md): merge the PR that ran
+# `npm run version-packages`, and this stages it. Runs when the package's
 # package.json changes on main, or by hand from the Actions tab.
 #
 # Auth is npm trusted publishing: GitHub proves to npm which workflow is
-# running, so no npm token is stored here, and npm adds a provenance statement
-# linking the release to this repo and commit. For a first publish made before
-# trusted publishing is set up, an NPM_TOKEN secret is used if there is one;
-# delete it once trusted publishing works.
+# running, so no npm token is stored anywhere, and the release carries a
+# provenance statement linking it to this repo and commit. The trusted
+# publisher may only *stage*: nothing is public until a maintainer approves it
+# with two-factor authentication (`npx npm@latest stage list inlaytrace`, then
+# `npx npm@latest stage approve <id>`). After approving, run this workflow from
+# the Actions tab: it finds the version on npm, publishes nothing, and tags it.
 on:
   push:
     branches: [main]
@@ -32,14 +34,15 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write # pushes the version tag
-      id-token: write # trusted publishing and provenance
+      id-token: write # trusted publishing (stage only) and provenance
     steps:
       - uses: actions/checkout@v7
-      # Node 24 ships npm 11, which trusted publishing needs (11.5.1 or newer).
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
+      # `npm stage` and trusted publishing need a recent npm; pin a known one.
+      - run: npm install -g npm@11.21.1 && npm --version
       - name: Is this version on npm yet?
         id: version
         run: |
@@ -61,19 +64,13 @@ jobs:
           npm run build -w packages/inlay
           npm run check -w packages/inlay
           node packages/inlay/test/smoke.mjs
+      # `npm stage` doesn't understand workspaces, so it runs in the package's folder.
       - if: steps.version.outputs.publish == 'true'
-        name: Publish inlaytrace@${{ steps.version.outputs.version }}
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        name: Stage inlaytrace@${{ steps.version.outputs.version }}
+        working-directory: packages/inlay
         run: |
-          # Trusted publishing needs npm 11.5.1 or newer; early Node 24 releases shipped older.
-          npm --version
-          node -e 'const [a, b, c] = process.argv[1].split(".").map(Number); process.exit(a > 11 || (a === 11 && (b > 5 || (b === 5 && c >= 1))) ? 0 : 1)' "$(npm --version)" || npm install -g npm@11
-          if [ -n "$NPM_TOKEN" ]; then
-            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-            echo "::warning::Published with the NPM_TOKEN secret. Once trusted publishing is set up on npmjs.com, delete the secret."
-          fi
-          npm publish -w packages/inlay --access public --provenance
+          npm stage publish --access public --provenance
+          echo "::notice::inlaytrace@${{ steps.version.outputs.version }} is staged. Approve it with 'npx npm@latest stage list inlaytrace' and 'npx npm@latest stage approve <id>', then re-run this workflow to tag it."
       # Every run, not only publishing ones: if a publish succeeded but its tag
       # push failed, a re-run (which publishes nothing) still makes the tag.
       - name: Tag the release

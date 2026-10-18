@@ -18,4 +18,5 @@ else. Changes to the app, the site or the docs don't need one.
 To release: `npm run version-packages` on a branch (it runs `changeset
 version`, which bumps `packages/inlay/package.json` and writes
 `packages/inlay/CHANGELOG.md`, then updates the lockfile to match), and merge
-that PR. The release workflow publishes any version that isn't on npm yet.
+that PR. The release workflow stages any version that isn't on npm yet; it
+goes public when a maintainer approves it (see CONTRIBUTING).

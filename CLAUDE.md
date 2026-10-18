@@ -31,8 +31,8 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
   of DOM and app imports. The app and the site import it by name, aliased to its `src/` (app Vite config +
   tsconfig paths, site astro.config), so no build in the dev loop; npm gets `dist/` from tsdown
   (`npm run build -w packages/inlay`, `check` runs publint + attw, `test/smoke.mjs` loads it in plain Node).
-  Releases: a changeset per user-visible change; `npm run version-packages` PR; merging publishes (release.yml,
-  trusted publishing). Root devDeps pin `@emnapi/core`/`@emnapi/runtime` (optional peers of tsdown's
+  Releases: a changeset per user-visible change; `npm run version-packages` PR; merging *stages* it (release.yml,
+  trusted publishing, stage-only); Matt approves with 2FA (`npm stage approve`), then a re-run tags it. Root devDeps pin `@emnapi/core`/`@emnapi/runtime` (optional peers of tsdown's
   compiler): without them npm versions disagree about the lockfile and `npm ci` fails on some (10, 11.4, 11.7).
 - **VTracer 1.0 (Poster only) via `scripts/vendor-vtracer.mjs`**, which rewrites the official Node
   package's glue to browser ESM. Output in `apps/app/src/engine/vtracer/` is generated and
