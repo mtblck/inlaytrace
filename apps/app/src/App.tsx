@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { zipSync, strToU8 } from 'fflate'
 import { TraceClient } from './engine/client'
+import { BatchDialog } from './components/Batch'
 import { SVGO } from './engine/svgo'
 import { PrepClient } from './engine/prepClient'
 import type { PrepStage } from './engine/prep'
@@ -67,6 +68,8 @@ export default function App() {
   const sizeClient = useMemo(() => new TraceClient(), [])
   useEffect(() => () => sizeClient.dispose(), [sizeClient])
   const [sizeRun, setSizeRun] = useState<SizeRun | null>(null)
+  /** Several images dropped or chosen at once, waiting to be batch traced. */
+  const [batch, setBatch] = useState<File[] | null>(null)
 
   const [source, setSource] = useState<Source | null>(null)
   const [settings, setSettings] = useState<Settings>(() => settingsFor('logo'))
@@ -1004,8 +1007,9 @@ export default function App() {
       onDrop={(e) => {
         e.preventDefault()
         setDragOver(false)
-        const file = e.dataTransfer.files[0]
-        if (file) open(file)
+        const files = [...e.dataTransfer.files]
+        if (files.length > 1) setBatch(files)
+        else if (files[0]) open(files[0])
       }}
     >
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-rule px-5">
@@ -1029,16 +1033,19 @@ export default function App() {
       </header>
 
       <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      {batch && <BatchDialog files={batch} settings={settings} onClose={() => setBatch(null)} onSave={(zip) => save(zip, `inlay-${settings.preset}-${batch.length}.zip`)} />}
 
       <input
         ref={fileInput}
         type="file"
         accept={ACCEPTED.join(',')}
+        multiple
         className="sr-only"
         tabIndex={-1}
         onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) open(f)
+          const files = [...(e.target.files ?? [])]
+          if (files.length > 1) setBatch(files)
+          else if (files[0]) open(files[0])
           e.target.value = ''
         }}
       />
@@ -1392,7 +1399,7 @@ function Empty(props: { loading: boolean; error: string | null; onChoose: () => 
           <>
             <h2 className="font-display text-[34px] leading-tight">Drop an image here</h2>
             <p className="mt-2 text-[14px] leading-relaxed text-balance text-ink-muted">
-              Or paste one, or choose a file. PNG, JPG, WebP, GIF or BMP to trace, or an SVG to edit. It never leaves this device: everything runs in your browser.
+              Or paste one, or choose a file. PNG, JPG, WebP, GIF or BMP to trace, or an SVG to edit; several at once to trace them all. It never leaves this device: everything runs in your browser.
             </p>
             <div className="mt-5 flex justify-center gap-2">
               <button className="btn btn-primary" onClick={props.onChoose}>

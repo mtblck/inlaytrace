@@ -15,6 +15,7 @@ Everything the tool does, how to use it, and how it works underneath.
 | Select, move and scale shapes; edit nodes and curves; delete | Edit tab → Select, Nodes | [Editing shapes](features/editing-shapes.md) |
 | Mirror one half onto the other, or repeat a slice round a centre (detected for you) | Edit tab → Mirror | [Mirror](features/mirror.md) |
 | Undo, redo, and what happens to edits when you re-trace | Edit tab, keyboard | [Undo and the edit model](features/undo-and-edits.md) |
+| Trace many images with one preset, download a zip | Drop or choose several | [Batch](features/batch.md) |
 | Download, copy, layers zip; size, PNG, PDF, EPS | Bottom of the panel | [Export](features/export.md) |
 | Keyboard shortcuts | Anywhere | [Keyboard shortcuts](features/keyboard-shortcuts.md) |
 | Nothing leaves your device; the session is kept in your browser | Everywhere | [Privacy and security](features/privacy-and-security.md) |
