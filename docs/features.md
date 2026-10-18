@@ -11,6 +11,7 @@ Everything the tool does, how to use it, and how it works underneath.
 | Presets and settings, including Centerline single strokes for plotters and a target file size | Trace tab | [Presets and settings](features/presets-and-settings.md) |
 | Split, Difference and Vector views, overlays, zoom | Bar under the image | [Comparing and zooming](features/comparing-and-zoom.md) |
 | Replace, pick, merge and remove colours, background | Edit tab → Colours | [Colours and background](features/colours-and-background.md) |
+| Open an existing SVG to edit, rather than trace | Drop or choose an .svg | [Open an SVG](features/open-an-svg.md) |
 | Select, move and scale shapes; edit nodes and curves; delete | Edit tab → Select, Nodes | [Editing shapes](features/editing-shapes.md) |
 | Mirror one half onto the other, or repeat a slice round a centre (detected for you) | Edit tab → Mirror | [Mirror](features/mirror.md) |
 | Undo, redo, and what happens to edits when you re-trace | Edit tab, keyboard | [Undo and the edit model](features/undo-and-edits.md) |

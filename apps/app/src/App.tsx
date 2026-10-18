@@ -52,7 +52,7 @@ import { Controls } from './components/Controls'
 import { Inks } from './components/Inks'
 import { useTheme } from './lib/theme'
 
-type Status = { kind: 'idle' } | { kind: 'tracing' } | { kind: 'done'; ms: number } | { kind: 'error'; message: string }
+type Status = { kind: 'idle' } | { kind: 'tracing' } | { kind: 'done'; ms: number } | { kind: 'opened' } | { kind: 'error'; message: string }
 
 export default function App() {
   const client = useMemo(() => new TraceClient(), [])
@@ -194,7 +194,7 @@ export default function App() {
       setSizeRun(null)
       axisTouched.current = false
       setTool('select')
-      setPanel(restore?.edits.doc ? 'edit' : 'trace')
+      setPanel(restore?.edits.doc || next.svg ? 'edit' : 'trace')
       setMode(restore ? 'vector' : 'split')
       viewChosen.current = !!restore
       setZoom(null)
@@ -352,6 +352,13 @@ export default function App() {
   useEffect(() => {
     if (!traceSource) return
     const source = traceSource
+    // An SVG opened to edit isn't traced: its own shapes are the drawing.
+    if (source.svg) {
+      setTrace(source.svg.trace)
+      setTraceCount((n) => n + 1)
+      setStatus({ kind: 'opened' })
+      return
+    }
     const timer = setTimeout(async () => {
       const maxEdge = maxTraceEdge(settings.preset)
       const upscale = settings.preset !== 'pixel'
@@ -921,6 +928,16 @@ export default function App() {
    * (asking first if shapes are edited), and the shared edge disappears; Unmerge
    * in the colour list takes it back.
    */
+  /** An opened SVG, traced as an image instead (the drawing of it), after asking if shapes are edited. */
+  const traceInstead = () =>
+    guard('Tracing the SVG as an image replaces its shapes and your edits to them.', 'Trace it as an image', () => {
+      if (detached) commit((e) => ({ ...e, doc: null }))
+      setSelectedIds([])
+      setSelectedNodes([])
+      setSource((s) => (s ? { ...s, svg: undefined } : s))
+      setPanel('trace')
+    })
+
   const mergeInk = (from: string, into: string) => changeSettings({ ...settings, merge: { ...settings.merge, [from]: into } })
   const unmergeInk = (from: string) => {
     const merge = { ...settings.merge }
@@ -1284,6 +1301,9 @@ export default function App() {
             )}
             </div>
             <div role="tabpanel" id="panel-trace" aria-labelledby="tab-trace" hidden={!!doc && panel !== 'trace'}>
+              {source?.svg ? (
+                <SvgOpened svg={source.svg} onTrace={() => traceInstead()} />
+              ) : (
               <Controls
                 settings={settings}
                 onChange={changeSettings}
@@ -1296,6 +1316,7 @@ export default function App() {
                 onApplySize={applySize}
                 onCancelSize={cancelSize}
               />
+              )}
             </div>
           </div>
 
@@ -1309,6 +1330,7 @@ export default function App() {
             <p className="num mb-3 min-h-[1.25em]" aria-live="polite">
               {status.kind === 'tracing' && 'Tracing…'}
               {status.kind === 'done' && `Traced in ${status.ms.toLocaleString()} ms${fresh ? '' : ', optimising…'}`}
+              {status.kind === 'opened' && `Opened the SVG${fresh ? '' : ', optimising…'}`}
               {status.kind === 'error' && <span className="text-accent">{status.message}</span>}
             </p>
             <div className="grid grid-cols-2 gap-2">
@@ -1370,7 +1392,7 @@ function Empty(props: { loading: boolean; error: string | null; onChoose: () => 
           <>
             <h2 className="font-display text-[34px] leading-tight">Drop an image here</h2>
             <p className="mt-2 text-[14px] leading-relaxed text-balance text-ink-muted">
-              Or paste one, or choose a file. PNG, JPG, WebP, GIF or BMP. It never leaves this device: tracing runs in your browser.
+              Or paste one, or choose a file. PNG, JPG, WebP, GIF or BMP to trace, or an SVG to edit. It never leaves this device: everything runs in your browser.
             </p>
             <div className="mt-5 flex justify-center gap-2">
               <button className="btn btn-primary" onClick={props.onChoose}>
@@ -1479,3 +1501,33 @@ function save(blob: Blob, name: string) {
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+
+/** The Trace tab for an opened SVG: what came in, what didn't, and the way to trace it instead. */
+function SvgOpened({ svg, onTrace }: { svg: NonNullable<Source['svg']>; onTrace: () => void }) {
+  const fills = svg.trace.paths.filter((p) => !p.stroke).length
+  const strokes = svg.trace.paths.length - fills
+  return (
+    <section className="space-y-3 border-b border-rule px-5 py-5" data-svg-opened="">
+      <h2 className="text-[13.5px] font-medium">An SVG to edit</h2>
+      <p className="text-[13px]">
+        Opened {fills ? `${fills} ${fills === 1 ? 'shape' : 'shapes'}` : ''}
+        {fills && strokes ? ' and ' : ''}
+        {strokes ? `${strokes} ${strokes === 1 ? 'stroke' : 'strokes'}` : ''}, ready in the Edit tab. Nothing is traced: the SVG’s own paths are the drawing.
+      </p>
+      {svg.notes.length > 0 && (
+        <div className="text-[12.5px]" role="status">
+          <p className="font-medium">Not kept as it was:</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            {svg.notes.map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <button className="btn w-full" onClick={onTrace}>
+        Trace it as an image instead
+      </button>
+    </section>
+  )
+}
+

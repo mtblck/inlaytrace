@@ -116,7 +116,7 @@ async function fixturePng(page, file) {
 }
 
 async function exportSvg(page) {
-  await page.getByText(/Traced in [\d,]+ ms$/).waitFor()
+  await page.getByText(/^(Traced in [\d,]+ ms|Opened the SVG)$/).waitFor()
   const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download SVG' }).click()])
   return readFileSync(await dl.path(), 'utf8')
 }
@@ -923,6 +923,32 @@ if (process.env.FIXTURE) {
   await gp.keyboard.press(`${MOD}+z`)
   check((await gp.locator(`${VECTOR}`).evaluateAll((els) => els.map((e) => e.getAttribute('d')))).join() === before.join(), 'one Undo puts the order back')
   await gp.close()
+}
+
+// ---- Opening an SVG to edit ---------------------------------------------------
+{
+  const sv = await newPage({ width: 1440, height: 900 })
+  await sv.goto(url)
+  const file = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">
+  <defs><linearGradient id="sky"><stop offset="0" stop-color="#3366cc"/><stop offset="1" stop-color="#ffffff"/></linearGradient></defs>
+  <rect width="200" height="100" fill="url(#sky)"/>
+  <g transform="translate(100 50)"><circle r="30" fill="#e0a030"/><path d="M-10 -10a10 10 0 0 1 20 0z" fill="#202020"/></g>
+  <text x="10" y="90">Hello</text>
+  <script>window.__ran = true</script>
+</svg>`
+  await sv.locator('input[type=file]').setInputFiles({ name: 'drawing.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(file) })
+  await sv.locator('[data-svg-opened]').waitFor({ state: 'attached', timeout: 15_000 })
+  check((await sv.getByRole('tab', { name: /Edit/ }).getAttribute('aria-selected')) === 'true', 'an SVG opens straight into the Edit tab')
+  check((await sv.locator(VECTOR).count()) === 3, `its three shapes are the drawing (${await sv.locator(VECTOR).count()})`)
+  await sv.getByRole('tab', { name: /Trace/ }).click()
+  const notes = await sv.locator('[data-svg-opened]').innerText()
+  check(/gradient \(drawn in its first colour\)/.test(notes) && /text/.test(notes), 'what it couldn’t keep is listed (a gradient, text)')
+  check((await sv.evaluate(() => window.__ran)) !== true, 'the SVG’s own script never runs')
+  const exported = await exportSvg(sv)
+  check((exported.match(/<path/g) ?? []).length === 3 && /#36c|#3366cc/i.test(exported), 'the export has its shapes, the gradient in its first colour')
+  await retrace(sv, () => sv.getByRole('button', { name: 'Trace it as an image instead' }).click())
+  check((await sv.locator('[data-svg-opened]').count()) === 0, 'and it can be traced as an image instead')
+  await sv.close()
 }
 
 // ---- Target size: search the settings for a file that fits -------------------
