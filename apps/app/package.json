@@ -6,7 +6,7 @@
   "license": "MIT",
   "description": "Inlay: image to SVG, in your browser. The app at inlaytrace.com/app.",
   "dependencies": {
-    "inlaytrace": "0.1.0",
+    "inlaytrace": "0.1.1",
     "fflate": "0.8.3",
     "paper": "0.12.18",
     "react": "19.3.1",
