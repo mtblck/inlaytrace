@@ -28,7 +28,7 @@ export class SupabaseError extends Error {
 export function supabase(env: Env, fetchImpl: typeof fetch = fetch) {
   const base = env.SUPABASE_URL?.replace(/\/+$/, '')
   const key = env.SUPABASE_SERVICE_ROLE_KEY
-  if (!base || !key) return null
+  if (!base || !key || !isSecretKey(key)) return null
   // A legacy key is a JWT and goes in Authorization too; a newer secret key only
   // goes in apikey, and the gateway turns it into the service role.
   const service: Record<string, string> = key.startsWith('eyJ') ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key }
@@ -91,6 +91,22 @@ export function supabase(env: Env, fetchImpl: typeof fetch = fetch) {
       const q = `select=id,delta,reason,details,created_at&user_id=eq.${encodeURIComponent(userId)}&order=created_at.desc&limit=${limit}`
       return (await call(`/rest/v1/credit_ledger?${q}`)) as LedgerEntry[]
     },
+  }
+}
+
+/**
+ * A secret key, not a publishable one: `sb_secret_…`, or a legacy JWT whose role
+ * is service_role. The anon/publishable key signs people in fine but can't
+ * touch the ledger, which fails later and less clearly ("permission denied").
+ */
+export function isSecretKey(key: string) {
+  if (key.startsWith('sb_secret_')) return true
+  if (!key.startsWith('eyJ')) return false
+  try {
+    const payload = JSON.parse(Buffer.from(key.split('.')[1], 'base64url').toString('utf8'))
+    return payload.role === 'service_role'
+  } catch {
+    return false
   }
 }
 

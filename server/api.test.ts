@@ -180,10 +180,22 @@ describe('guards', () => {
     expect(sb.calls.map((c) => c.path)).toEqual(['/rest/v1/rpc/credit_balance'])
   })
 
-  it('sends a legacy JWT key as a bearer token too', async () => {
+  const jwt = (role: string) => `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ role })).toString('base64url')}.sig`
+
+  it('sends a legacy service_role JWT as a bearer token too', async () => {
     const sb = fakeSupabase()
-    await handle(get('account', 'inlay_at=at-1'), 'account', { ...env, SUPABASE_SERVICE_ROLE_KEY: 'eyJlegacy' }, sb.fetchImpl)
+    const key = jwt('service_role')
+    await handle(get('account', 'inlay_at=at-1'), 'account', { ...env, SUPABASE_SERVICE_ROLE_KEY: key }, sb.fetchImpl)
     const rpc = sb.calls.find((c) => c.path === '/rest/v1/rpc/credit_balance')!
-    expect(rpc.headers.authorization).toBe('Bearer eyJlegacy')
+    expect(rpc.headers.authorization).toBe(`Bearer ${key}`)
+  })
+
+  it('refuses a publishable or anon key instead of failing later on the ledger', async () => {
+    for (const key of ['sb_publishable_abc', jwt('anon')]) {
+      const sb = fakeSupabase()
+      const r = await handle(get('account', 'inlay_at=at-1'), 'account', { ...env, SUPABASE_SERVICE_ROLE_KEY: key }, sb.fetchImpl)
+      expect(r.status).toBe(503)
+      expect(sb.calls).toHaveLength(0)
+    }
   })
 })

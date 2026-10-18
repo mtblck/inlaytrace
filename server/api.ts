@@ -18,7 +18,7 @@
  * already keeps the cookies off cross-site posts, and a cross-site form can't
  * send JSON without a preflight this API never answers.
  */
-import { supabase, SupabaseError, type Env, type Session, type Supabase, type User } from './supabase.js'
+import { isSecretKey, supabase, SupabaseError, type Env, type Session, type Supabase, type User } from './supabase.js'
 
 const AT = 'inlay_at'
 const RT = 'inlay_rt'
@@ -31,7 +31,10 @@ export async function handle(req: Request, route: string, env: Env, fetchImpl: t
   try {
     if (route === 'keepalive' && req.method === 'GET') return await keepalive(req, env, fetchImpl)
     const db = supabase(env, fetchImpl)
-    if (!db) return json({ error: "Accounts aren't set up on this server." }, 503)
+    if (!db) {
+      if (env.SUPABASE_SERVICE_ROLE_KEY && !isSecretKey(env.SUPABASE_SERVICE_ROLE_KEY)) console.error('SUPABASE_SERVICE_ROLE_KEY is a publishable (anon) key; it needs the secret (service_role) key.')
+      return json({ error: "Accounts aren't set up on this server." }, 503)
+    }
     if (req.method === 'POST') {
       const bad = checkPost(req)
       if (bad) return bad
