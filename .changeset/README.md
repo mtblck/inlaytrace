@@ -15,6 +15,7 @@ Corners at junctions of three colours no longer drift by half a pixel.
 While the package is 0.x, `minor` means a breaking change and `patch` anything
 else. Changes to the app, the site or the docs don't need one.
 
-To release: `npx changeset version` on a branch (it bumps
-`packages/inlay/package.json` and writes `packages/inlay/CHANGELOG.md`), then
-merge that PR. The release workflow publishes any version that isn't on npm yet.
+To release: `npm run version-packages` on a branch (it runs `changeset
+version`, which bumps `packages/inlay/package.json` and writes
+`packages/inlay/CHANGELOG.md`, then updates the lockfile to match), and merge
+that PR. The release workflow publishes any version that isn't on npm yet.

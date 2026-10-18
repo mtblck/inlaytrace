@@ -61,8 +61,8 @@ The package versions with [Changesets](.changeset/README.md):
 1. A PR that changes what `inlaytrace` users get adds a changeset
    (`npx changeset`): `patch` or, while the package is 0.x, `minor` for a
    breaking change, plus a line for the changelog.
-2. To release, a PR runs `npx changeset version`, which bumps the version and
-   writes `packages/inlay/CHANGELOG.md`.
+2. To release, a PR runs `npm run version-packages`, which bumps the version,
+   writes `packages/inlay/CHANGELOG.md` and updates the lockfile.
 3. Merging it publishes: `.github/workflows/release.yml` builds, tests and
    checks the package, then publishes any version npm doesn't have yet, through
    npm trusted publishing with provenance, and tags it `inlaytrace@x.y.z`.

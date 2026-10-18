@@ -31,7 +31,8 @@
   },
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "sideEffects": false,
   "engines": {
@@ -41,7 +42,8 @@
     "build": "tsdown",
     "check": "publint --strict && attw --pack --profile esm-only",
     "test": "vitest run --root ../..  packages/inlay",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "prepublishOnly": "npm run build"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",

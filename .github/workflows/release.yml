@@ -26,6 +26,8 @@ permissions:
 jobs:
   publish:
     name: Publish to npm
+    # A manual run could pick any branch; only main publishes.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -64,15 +66,23 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          # Trusted publishing needs npm 11.5.1 or newer; early Node 24 releases shipped older.
           npm --version
+          node -e 'const [a, b, c] = process.argv[1].split(".").map(Number); process.exit(a > 11 || (a === 11 && (b > 5 || (b === 5 && c >= 1))) ? 0 : 1)' "$(npm --version)" || npm install -g npm@11
           if [ -n "$NPM_TOKEN" ]; then
             echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
             echo "::warning::Published with the NPM_TOKEN secret. Once trusted publishing is set up on npmjs.com, delete the secret."
           fi
           npm publish -w packages/inlay --access public --provenance
-      - if: steps.version.outputs.publish == 'true'
-        name: Tag the release
+      # Every run, not only publishing ones: if a publish succeeded but its tag
+      # push failed, a re-run (which publishes nothing) still makes the tag.
+      - name: Tag the release
         run: |
           tag="inlaytrace@${{ steps.version.outputs.version }}"
-          git tag "$tag"
-          git push origin "$tag"
+          if ! npm view "$tag" version > /dev/null 2>&1; then exit 0; fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+            echo "$tag is already tagged."
+          else
+            git tag "$tag"
+            git push origin "$tag"
+          fi

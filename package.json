@@ -18,7 +18,8 @@
     "site:sync": "node scripts/sync-docs.mjs",
     "site:build": "npm run site:sync && astro build --root apps/site",
     "site:dev": "npm run site:sync && astro dev --root apps/site",
-    "site:assets": "node scripts/site-assets.mjs"
+    "site:assets": "node scripts/site-assets.mjs",
+    "version-packages": "changeset version && npm install --package-lock-only"
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",
