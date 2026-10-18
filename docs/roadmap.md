@@ -42,6 +42,7 @@ See [Editing shapes](features/editing-shapes.md), [Colours and background](featu
 
 | Item | What shipped | Ticket |
 | --- | --- | --- |
+| **Offline install** | A manifest and a service worker: installable, and offline after one visit; the AI models cached on first use. See [Install and offline](features/install-and-offline.md). | [#45](https://github.com/mtblck/inlaytrace/issues/45) |
 | **Batch** | Drop or choose several images: each is traced with the current settings on a worker of its own, and one zip comes back. See [Batch](features/batch.md). | [#44](https://github.com/mtblck/inlaytrace/issues/44) |
 | **SVG import** | Drop an .svg and its shapes open in the editor (groups, transforms, arcs and even-odd fills handled); gradients, text and the like are listed, not dropped silently. See [Open an SVG](features/open-an-svg.md). | [#43](https://github.com/mtblck/inlaytrace/issues/43) |
 | **Groups and layer order** | Group and ungroup (a group selects as one and exports as a `<g>`), and forward, backward, to front and to back, with shortcuts. See [Editing shapes](features/editing-shapes.md#groups-and-paint-order). | [#41](https://github.com/mtblck/inlaytrace/issues/41) |
@@ -56,7 +57,6 @@ See [Editing shapes](features/editing-shapes.md), [Colours and background](featu
 
 | Item | Why | Ticket |
 | --- | --- | --- |
-| **Offline install** | A service worker and manifest so it installs as an app and works offline (SVGcode does this). | [#45](https://github.com/mtblck/inlaytrace/issues/45) |
 | **HD mode** | A paid, server-side trace for very large images: a Vercel Function with spend caps, opt-in, clearly marked as leaving the device. No database. | [#46](https://github.com/mtblck/inlaytrace/issues/46) |
 
 ## Not planned

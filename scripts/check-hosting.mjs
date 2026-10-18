@@ -68,6 +68,10 @@ if (process.argv.includes('--dist')) {
   // The AI worker's CSP is matched by file name: if the chunk is renamed, it would load under the app's and fail.
   const assets = existsSync(join(dist, APP.slice(1), 'assets')) ? readdirSync(join(dist, APP.slice(1), 'assets')) : []
   if (!assets.some((f) => /^prep-.*\.js$/.test(f))) problems.push(`No dist${APP}/assets/prep-*.js: the AI worker chunk was renamed, so ${PREP_SOURCE}'s CSP no longer reaches it.`)
+  // The service worker caches the app shell; it must exist and leave the AI models to first use.
+  const sw = join(dist, APP.slice(1), 'sw.js')
+  if (!existsSync(sw)) problems.push(`dist${APP}/sw.js is missing: the app won't work offline.`)
+  else if (/\.(onnx|wasm)"/.test(readFileSync(sw, 'utf8'))) problems.push(`dist${APP}/sw.js precaches AI models or WebAssembly; those are cached on first use.`)
   const walk = (d) => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : f.endsWith('.html') ? [join(d, f)] : []))
   const missing = new Map()
   for (const f of walk(dist)) {

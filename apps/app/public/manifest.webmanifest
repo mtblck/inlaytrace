@@ -1,0 +1,17 @@
+{
+  "name": "Inlay: image to SVG",
+  "short_name": "Inlay",
+  "description": "Turn images into clean, editable SVGs, in your browser. Works offline once installed.",
+  "id": "/app/",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#f7f4ee",
+  "theme_color": "#f7f4ee",
+  "icons": [
+    { "src": "/app/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/app/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/app/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/app/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
