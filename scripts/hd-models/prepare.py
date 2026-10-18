@@ -39,15 +39,31 @@ def log(msg: str):
     notes.append(msg)
 
 
+# The sha256 of every file fetched from a release, by file name, so a replaced
+# upstream asset fails the run instead of being uploaded under a new hash. To try
+# another BiRefNet asset, run once: the failure prints its hash to pin here.
+PINNED = {
+    "RealESRGAN_x4plus.pth": "4fa0d38905f75ac06eb49a7951b426670021be3018265fd191d2125df9d682f1",
+    "BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx": "5600024376f572a557870a5eb0afb1e5961636bef4e1e22132025467d0f03333",
+}
+
+
 def download(url: str, dest: Path, headers=None) -> Path:
-    if dest.exists():
-        return dest
-    log(f"Downloading {url}")
-    with requests.get(url, headers=headers or {}, stream=True, timeout=600, allow_redirects=True) as r:
-        r.raise_for_status()
-        with open(dest, "wb") as f:
-            for chunk in r.iter_content(1 << 20):
-                f.write(chunk)
+    """Fetch a pinned release file (see PINNED) and check its hash."""
+    name = url.rsplit("/", 1)[-1]
+    if name not in PINNED:
+        sys.exit(f"{name} has no pinned sha256 in PINNED")
+    if not dest.exists():
+        log(f"Downloading {url}")
+        with requests.get(url, headers=headers or {}, stream=True, timeout=600, allow_redirects=True) as r:
+            r.raise_for_status()
+            with open(dest, "wb") as f:
+                for chunk in r.iter_content(1 << 20):
+                    f.write(chunk)
+    got = sha256(dest)
+    if got != PINNED[name]:
+        dest.unlink()
+        sys.exit(f"{name} has sha256 {got}, not the pinned {PINNED[name]}")
     return dest
 
 
