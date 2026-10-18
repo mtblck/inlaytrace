@@ -91,9 +91,13 @@ export function supabase(env: Env, fetchImpl: typeof fetch = fetch) {
     async grantPurchase(userId: string, transactionId: string, credits: number, details: Record<string, unknown>) {
       return Number(await call('/rest/v1/rpc/grant_purchase', { method: 'POST', body: JSON.stringify({ p_user: userId, p_transaction: transactionId, p_credits: credits, p_details: details }) }))
     },
-    /** Take back up to `credits` of a refunded purchase, once per transaction. Null if there's no such purchase. */
-    async reversePurchase(transactionId: string, credits: number, details: Record<string, unknown>) {
-      const b = await call('/rest/v1/rpc/reverse_purchase', { method: 'POST', body: JSON.stringify({ p_transaction: transactionId, p_credits: credits, p_details: details }) })
+    /**
+     * Take back up to `credits` of a purchase for one Paddle adjustment (refund or
+     * chargeback): once per adjustment, never more in total than the purchase gave.
+     * Null if there's no such purchase.
+     */
+    async reversePurchase(transactionId: string, adjustmentId: string, credits: number, details: Record<string, unknown>) {
+      const b = await call('/rest/v1/rpc/reverse_purchase', { method: 'POST', body: JSON.stringify({ p_transaction: transactionId, p_adjustment: adjustmentId, p_credits: credits, p_details: details }) })
       return b === null ? null : Number(b)
     },
     /** The purchase row for a Paddle transaction, if any. */

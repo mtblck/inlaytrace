@@ -88,7 +88,8 @@ change in the same PR as HD itself.
 Paddle's notification destination: `https://inlaytrace.com/api/paddle/webhook`,
 events `transaction.completed`, `adjustment.created` and `adjustment.updated`.
 A full refund or chargeback takes the pack's credits back; a partial refund
-takes its share (rounded up). Only one reversal per transaction is recorded.
+takes its share (rounded up). Each Paddle adjustment counts once, and a
+purchase's reversals together never exceed what it granted.
 The balance can go below zero if the credits were already spent.
 
 Never in the repo, never in chat.

@@ -204,14 +204,24 @@ async function webhook(req: Request, db: Supabase, env: Env) {
   }
   if (event.event_type === 'adjustment.created' || event.event_type === 'adjustment.updated') {
     // A refund or chargeback takes the credits back once it's approved.
-    if (!['refund', 'chargeback'].includes(d.action) || d.status !== 'approved' || !d.transaction_id) return json({ ok: true, reversed: 0 })
+    if (!['refund', 'chargeback'].includes(d.action) || d.status !== 'approved' || !d.transaction_id || !d.id) return json({ ok: true, reversed: 0 })
     const purchase = await db.purchase(d.transaction_id)
     if (!purchase) return json({ ok: true, reversed: 0 })
     // A full refund takes everything back; a partial one, its share of the credits.
-    const paid = Number(purchase.details.total)
-    const refunded = Number(d.totals?.total)
-    const credits = d.type === 'partial' && paid > 0 && refunded > 0 ? Math.ceil((purchase.delta * refunded) / paid) : purchase.delta
-    await db.reversePurchase(d.transaction_id, credits, { adjustment_id: d.id, action: d.action, type: d.type })
+    // A full refund takes everything back (less anything already reversed; the
+    // database caps it); a partial one, its share. Several adjustments on one
+    // purchase each count once.
+    let credits = purchase.delta
+    if (d.type === 'partial') {
+      const paid = Number(purchase.details.total)
+      const refunded = Number(d.totals?.total)
+      if (!(paid > 0 && refunded > 0)) {
+        console.error(`Paddle ${d.id}: partial ${d.action} on ${d.transaction_id}, but the amounts (paid ${purchase.details.total}, refunded ${d.totals?.total}) don't allow a share; nothing reversed, adjust by hand.`)
+        return json({ ok: true, reversed: 0 })
+      }
+      credits = Math.ceil((purchase.delta * refunded) / paid)
+    }
+    await db.reversePurchase(d.transaction_id, d.id, credits, { action: d.action, type: d.type })
     return json({ ok: true, reversed: credits })
   }
   return json({ ok: true })
