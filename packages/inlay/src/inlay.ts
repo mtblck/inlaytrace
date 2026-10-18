@@ -639,7 +639,7 @@ function assemble(chains: Oriented[]): Loop[] {
     while (c && !used.has(c)) {
       used.add(c)
       loop.push(...c.cubics)
-      pts.push(...c.pts)
+      pts.push(...(c.reversed ? [...c.pts].reverse() : c.pts))
       if (across(c) === VOID) touchesVoid = true
       if (end(c) === start(first)) break
       const into = lastDir(c)

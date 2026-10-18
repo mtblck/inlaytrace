@@ -132,6 +132,26 @@ describe('stacked shapes around nested transparency', () => {
     expect(stacked[20 * w + 20]).toBe('')
     expect(stacked).toEqual(cut)
   })
+
+  it('also when the hole is bordered by more than one colour', () => {
+    // The square is blue, green and gold, so the panel's hole is walked along
+    // chains in both directions; the window sits off the square's centre.
+    const n = 48
+    const many = new Uint8ClampedArray(n * n * 4)
+    for (let y = 0; y < n; y++)
+      for (let x = 0; x < n; x++) {
+        let c = [245, 240, 230, 255]
+        if (x >= 4 && x < 44 && y >= 4 && y < 44) c = [210, 50, 40, 255]
+        if (x >= 12 && x < 36 && y >= 12 && y < 36) c = y >= 24 ? [235, 170, 40, 255] : x >= 24 ? [40, 140, 70, 255] : [30, 60, 140, 255]
+        if (x >= 22 && x < 26 && y >= 18 && y < 22) c = [0, 0, 0, 0]
+        many.set(c, (y * n + x) * 4)
+      }
+    const o = { ...opts, palette: [...opts.palette, '#288c46', '#ebaa28'] }
+    const cut = trace(many, n, n, o)
+    const stacked = trace(many, n, n, { ...o, stacked: true })
+    expect(render(stacked)[20 * n + 23]).toBe('')
+    expect(render(stacked)).toEqual(render(cut))
+  })
 })
 
 describe('quantizePalette', () => {
