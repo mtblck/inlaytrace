@@ -11,7 +11,7 @@ on:
       birefnet_assets:
         description: BiRefNet release assets to try, comma-separated
         required: false
-        default: BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx,BiRefNet-general-epoch_244.onnx
+        default: BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx
   push:
     branches: [hd-models]
     paths: ['scripts/hd-models/**', '.github/workflows/hd-models.yml']
@@ -36,8 +36,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REMOVE_BG_KEY: ${{ secrets.REMOVE_BG_KEY }}
-          # The tiny general model and the full one, unless a manual run names others.
-          BIREFNET_ASSETS: ${{ inputs.birefnet_assets || 'BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx,BiRefNet-general-epoch_244.onnx' }}
+          # The tiny general model, unless a manual run names others. The full one (973 MB)
+          # was killed for memory on the runner (16 GB), so it can't run in a 3 GB function either.
+          BIREFNET_ASSETS: ${{ inputs.birefnet_assets || 'BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx' }}
         run: python scripts/hd-models/prepare.py
       - uses: actions/setup-node@v4
         with:
