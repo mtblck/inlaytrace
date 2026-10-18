@@ -9,6 +9,18 @@ import { loadSource, pixelsOf } from '../lib/image'
 import type { TraceClient } from './client'
 import { maxTraceEdge, toTraceOptions, type Settings } from './presets'
 
+/** The name an image's SVG gets in the zip: its own, with -2, -3… for repeats. */
+export function zipName(file: string, index: number, used: Set<string>) {
+  const base = file.replace(/\.[^.]+$/, '') || `image-${index + 1}`
+  let name = `${base}.svg`
+  for (let k = 2; used.has(name); k++) name = `${base}-${k}.svg`
+  used.add(name)
+  return name
+}
+
+/** SVGs are already vectors: a batch skips them. */
+export const isSvgFile = (file: { name: string; type: string }) => file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)
+
 export type BatchItem = { name: string; state: 'waiting' | 'tracing' | 'done' | 'skipped' | 'failed'; bytes?: number; message?: string }
 
 /**
@@ -21,17 +33,21 @@ export async function runBatch(files: File[], settings: Settings, client: TraceC
   const used = new Set<string>()
   for (const [i, file] of files.entries()) {
     if (cancelled()) return null
-    const base = file.name.replace(/\.[^.]+$/, '') || `image-${i + 1}`
-    if (file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)) {
+    if (isSvgFile(file)) {
       update(i, { name: file.name, state: 'skipped', message: 'already an SVG' })
       continue
     }
     update(i, { name: file.name, state: 'tracing' })
     try {
       const source = await loadSource(file, file.name)
-      const { rgba, width, height } = pixelsOf(source, maxTraceEdge(settings.preset), settings.preset !== 'pixel')
-      source.bitmap.close()
-      URL.revokeObjectURL(source.url)
+      let pixels
+      try {
+        pixels = pixelsOf(source, maxTraceEdge(settings.preset), settings.preset !== 'pixel')
+      } finally {
+        source.bitmap.close()
+        URL.revokeObjectURL(source.url)
+      }
+      const { rgba, width, height } = pixels
       const traced = await client.trace(rgba, width, height, toTraceOptions(settings))
       if (!traced) return null
       if (traced.type !== 'traced') throw new Error(traced.type === 'error' ? traced.message : 'The trace stopped.')
@@ -39,9 +55,7 @@ export async function runBatch(files: File[], settings: Settings, client: TraceC
       if (!optimised) return null
       const svg = optimised.type === 'optimized' ? optimised.svg : traced.svg
       // Two files with the same name keep both: "logo.svg", "logo-2.svg".
-      let name = `${base}.svg`
-      for (let k = 2; used.has(name); k++) name = `${base}-${k}.svg`
-      used.add(name)
+      const name = zipName(file.name, i, used)
       out[name] = strToU8(svg)
       update(i, { name: file.name, state: 'done', bytes: out[name].length })
     } catch (error) {

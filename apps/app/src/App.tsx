@@ -289,6 +289,8 @@ export default function App() {
 
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
+      // Not behind an open batch dialog.
+      if (document.querySelector('dialog[open][data-batch]')) return
       const file = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith('image/'))
       if (file) {
         e.preventDefault()
@@ -1007,6 +1009,8 @@ export default function App() {
       onDrop={(e) => {
         e.preventDefault()
         setDragOver(false)
+        // A batch is open (and modal): drops onto it are ignored, not traced behind it.
+        if (batch) return
         const files = [...e.dataTransfer.files]
         if (files.length > 1) setBatch(files)
         else if (files[0]) open(files[0])
@@ -1033,7 +1037,7 @@ export default function App() {
       </header>
 
       <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-      {batch && <BatchDialog files={batch} settings={settings} onClose={() => setBatch(null)} onSave={(zip) => save(zip, `inlay-${settings.preset}-${batch.length}.zip`)} />}
+      {batch && <BatchDialog key={batch.map((f) => f.name).join('|')} files={batch} settings={settings} onClose={() => setBatch(null)} onSave={(zip) => save(zip, `inlay-${settings.preset}-${batch.length}.zip`)} />}
 
       <input
         ref={fileInput}

@@ -13,9 +13,9 @@ Drop several images at once, or choose several, and *Trace N images* opens:
    `logo.svg`; two files with the same name become `logo.svg` and
    `logo-2.svg`).
 
-The image on screen isn't touched, and you can keep working while it runs:
-the batch has a tracing worker of its own, and only one image's pixels are
-held at a time. **Stop** ends it. SVG files in the batch are skipped (they're
+The image on screen isn't touched: the batch has a tracing worker of its own,
+and holds only one image's pixels at a time. The dialog stays open while it
+runs (closing it stops the batch), and **Stop** ends it early. SVG files in the batch are skipped (they're
 already vectors; open one on its own to edit it), and an image that fails is
 marked with the reason, without stopping the rest.
 
