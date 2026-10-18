@@ -1,6 +1,7 @@
 ---
 /**
- * The shell shared by the site's own pages (the landing page and Privacy):
+ * The shell shared by the site's own pages (the landing page, Pricing, Privacy,
+ * Terms and Refunds):
  * head, header and footer. The docs are Starlight's and have their own.
  */
 import '../styles/fonts.css'
@@ -13,6 +14,41 @@ interface Props {
 const { title, description } = Astro.props
 /** The app (apps/app), served beside this site. */
 const APP = '/app/'
+/** The footer's columns. Every page Paddle's review looks for (pricing, terms, refunds, privacy) must stay in here. */
+const FOOTER = [
+  {
+    title: 'Inlay',
+    links: [
+      { label: 'Open the app', href: APP },
+      { label: 'Pricing', href: '/pricing/' },
+      { label: 'Support Inlay', href: 'https://ko-fi.com/inlay' },
+    ],
+  },
+  {
+    title: 'Learn',
+    links: [
+      { label: 'Docs', href: '/docs/overview/' },
+      { label: 'Use the package', href: '/docs/package/getting-started/' },
+      { label: 'Compared with other tools', href: '/docs/how-it-differs/' },
+    ],
+  },
+  {
+    title: 'Open source',
+    links: [
+      { label: 'Source on GitHub', href: 'https://github.com/mtblck/inlaytrace' },
+      { label: 'inlaytrace on npm', href: 'https://www.npmjs.com/package/inlaytrace' },
+      { label: 'Report a problem', href: 'https://github.com/mtblck/inlaytrace/issues' },
+    ],
+  },
+  {
+    title: 'Legal',
+    links: [
+      { label: 'Privacy', href: '/privacy/' },
+      { label: 'Terms', href: '/terms/' },
+      { label: 'Refunds', href: '/refunds/' },
+    ],
+  },
+]
 ---
 
 <!doctype html>
@@ -46,9 +82,27 @@ const APP = '/app/'
     </main>
 
     <footer class="foot">
-      <p>Inlay is MIT licensed. Made by <a href="https://mattblack.space">Matt Black</a>.</p>
-      <!-- One line: Astro drops the whitespace at a line break, which would run the links together. -->
-      <p><a href="/docs/package/getting-started/">Docs</a> <a href="/docs/how-it-differs/">Compared with other tools</a> <a href="/privacy/">Privacy</a> <a href="https://github.com/mtblck/inlaytrace">Source</a> <a href="https://ko-fi.com/inlay">Support Inlay</a> <a href={APP}>App</a></p>
+      <div class="foot-about">
+        <a class="wordmark" href="/">Inlay</a>
+        <p>Image to SVG in your browser, with shapes that fit together exactly. Free and open source.</p>
+        <p class="foot-fine">MIT licensed. Made by <a href="https://mattblack.space">Matt Black</a>.</p>
+      </div>
+      <nav class="foot-cols" aria-label="Footer">
+        {
+          FOOTER.map((col) => (
+            <div>
+              <h2>{col.title}</h2>
+              <ul>
+                {col.links.map((l) => (
+                  <li>
+                    <a href={l.href}>{l.label}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))
+        }
+      </nav>
     </footer>
 
   </body>

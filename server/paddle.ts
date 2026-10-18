@@ -3,6 +3,8 @@
  * few API calls the server makes, and webhook signature checks.
  */
 
+import { PACKS as PRICES, usd } from './pricing.js'
+
 export type PaddleEnv = {
   PADDLE_API_KEY?: string
   PADDLE_CLIENT_TOKEN?: string
@@ -14,22 +16,27 @@ export type PaddleEnv = {
 export type Pack = { priceId: string; credits: number; price: string }
 
 /**
- * One product, "Inlay HD credits", three one-time prices. Credits come from
- * this table, never from anything the browser or Paddle's payload says about
- * amounts, so a price id we don't know grants nothing.
+ * One product, "Inlay HD credits", three one-time prices: Paddle's id for each
+ * pack in pricing.ts. Credits come from these tables, never from anything the
+ * browser or Paddle's payload says about amounts, so a price id we don't know
+ * grants nothing.
  */
-const PACKS: Record<'sandbox' | 'production', Pack[]> = {
-  sandbox: [
-    { priceId: 'pri_01m57wybp0tek7qeg1ge41smc3', credits: 20, price: '$5' },
-    { priceId: 'pri_01m57wz8aj07enh29xt4wfptm6', credits: 60, price: '$12' },
-    { priceId: 'pri_01m57x08gaqsn896bvgsp0j0mr', credits: 200, price: '$30' },
-  ],
+const PRICE_IDS: Record<'sandbox' | 'production', Record<number, string>> = {
+  sandbox: {
+    20: 'pri_01m57wybp0tek7qeg1ge41smc3',
+    60: 'pri_01m57wz8aj07enh29xt4wfptm6',
+    200: 'pri_01m57x08gaqsn896bvgsp0j0mr',
+  },
   // Filled in when the live Paddle account is approved.
-  production: [],
+  production: {},
 }
 
+/** The packs on sale in this environment: pricing.ts's packs that have a Paddle price. */
+const PACKS = (environment: 'sandbox' | 'production'): Pack[] =>
+  PRICES.flatMap((p) => (PRICE_IDS[environment][p.credits] ? [{ priceId: PRICE_IDS[environment][p.credits], credits: p.credits, price: usd(p.usd) }] : []))
+
 export const paddleEnvironment = (env: PaddleEnv): 'sandbox' | 'production' => (env.PADDLE_ENV === 'production' ? 'production' : 'sandbox')
-export const packs = (env: PaddleEnv) => PACKS[paddleEnvironment(env)]
+export const packs = (env: PaddleEnv) => PACKS(paddleEnvironment(env))
 export const creditsFor = (env: PaddleEnv, priceId: string) => packs(env).find((p) => p.priceId === priceId)?.credits ?? 0
 
 export class PaddleError extends Error {

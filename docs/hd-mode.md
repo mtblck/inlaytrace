@@ -42,8 +42,9 @@ sandbox ids; live ids come when the live account is approved.
 For comparison: Vectorizer.ai's API charges $0.05 to $0.20 a credit, and
 remove.bg charges about $0.23 to $1.00 an image.
 
-**Proposed cost by size** (to settle with the HD trace itself): 1 credit up to
-4 megapixels (about 2000 × 2000), 2 credits up to 16 MP, and 4 credits above that.
+**Cost by size** (provisional until HD ships, in `server/pricing.ts`, which both the
+server and the pricing page read): 1 credit up to 4 megapixels (about 2000 × 2000),
+2 credits up to 16 MP, and 4 credits above that.
 
 ## How it fits together
 
