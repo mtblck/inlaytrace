@@ -61,7 +61,7 @@ at 4× (`npm run score`), and the numbers are written down.
 
 Each of these is on the [roadmap](roadmap.md):
 
-- **More formats**: DXF (Vectorizer.ai); offline install (SVGcode).
+- **Offline install** (SVGcode).
 
 Not planned: a full drawing program (Illustrator, Inkscape: pen tool, booleans,
 text). Inlay fixes a trace; for more, export the SVG to one of those.

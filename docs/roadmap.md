@@ -48,12 +48,12 @@ See [Editing shapes](features/editing-shapes.md), [Colours and background](featu
 | **Centerline tracing** | A *Centerline* preset: single strokes down the middle of the ink (a skeleton, pruned and joined through crossings, fitted like outlines), with the width measured or set. On a pen drawing, 6 strokes for the 6 drawn, width within 1%. Our own code; AutoTrace is GPL. See [Presets and settings](features/presets-and-settings.md). | [#38](https://github.com/mtblck/inlaytrace/issues/38) |
 | **Shape fitting** | *Exact shapes* (on for Logo, Illustration and Line art) draws an outline that is a circle, ellipse, (rounded) rectangle or regular polygon as that shape exactly; on the sample badge, 0.70% → 0.54% wrong pixels. See [Presets and settings](features/presets-and-settings.md). | [#37](https://github.com/mtblck/inlaytrace/issues/37) |
 | **Symmetry detection** | The Mirror tool opens set up for the mirror axis or turn the image has (95%+ match), and gains *Turn*: keep one slice and repeat it round a centre. See [Mirror](features/mirror.md). | [#36](https://github.com/mtblck/inlaytrace/issues/36) |
+| **DXF export** | *DXF* in Size and other formats: R12, one layer per colour, outlines as closed polylines and strokes as open ones, curves within 0.05 px, at the export size and unit. See [Export](features/export.md#size-and-other-formats). | [#42](https://github.com/mtblck/inlaytrace/issues/42) |
 
 ## Next: bigger bets
 
 | Item | Why | Ticket |
 | --- | --- | --- |
-| **DXF export** | For CNC and laser cutting. | [#42](https://github.com/mtblck/inlaytrace/issues/42) |
 | **SVG import** | Open an SVG to edit its paths, so the editor is useful on its own. | [#43](https://github.com/mtblck/inlaytrace/issues/43) |
 | **Batch** | Trace a folder of images with one preset, download a zip. | [#44](https://github.com/mtblck/inlaytrace/issues/44) |
 | **Offline install** | A service worker and manifest so it installs as an app and works offline (SVGcode does this). | [#45](https://github.com/mtblck/inlaytrace/issues/45) |
