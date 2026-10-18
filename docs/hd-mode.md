@@ -89,7 +89,11 @@ Paddle's notification destination: `https://inlaytrace.com/api/paddle/webhook`,
 events `transaction.completed`, `adjustment.created` and `adjustment.updated`.
 A full refund or chargeback takes the pack's credits back; a partial refund
 takes its share (rounded up). Each Paddle adjustment counts once, and a
-purchase's reversals together never exceed what it granted.
+purchase's reversals together never exceed what it granted. A refund holds the
+credits as soon as it's requested (Paddle reviews refunds before approving
+them), so they can't be spent meanwhile; if Paddle rejects it, they come back.
+Notifications can arrive out of order, so the webhook asks Paddle for the
+adjustment's current status rather than trusting the notification's.
 The balance can go below zero if the credits were already spent.
 
 Never in the repo, never in chat.

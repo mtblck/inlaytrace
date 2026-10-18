@@ -70,6 +70,11 @@ export function paddle(env: PaddleEnv, fetchImpl: typeof fetch = fetch) {
       })) as { id: string }
       return t.id
     },
+    /** An adjustment (refund, chargeback) as Paddle has it now. */
+    async adjustment(id: string): Promise<{ status: string; type?: string; totals?: { total?: string } } | null> {
+      const list = (await call(`/adjustments?id=${encodeURIComponent(id)}`)) as { status: string; type?: string; totals?: { total?: string } }[]
+      return list[0] ?? null
+    },
     /** A link to Paddle's customer portal: receipts, invoices, billing details. */
     async portalUrl(customerId: string): Promise<string> {
       const s = (await call(`/customers/${encodeURIComponent(customerId)}/portal-sessions`, { method: 'POST', body: '{}' })) as { urls: { general: { overview: string } } }

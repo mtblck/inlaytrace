@@ -15,7 +15,8 @@
  *   POST checkout       { priceId } a Paddle transaction for one pack, tagged
  *                                  with the signed-in user
  *   POST paddle/webhook            Paddle notifications (signed): completed
- *                                  purchases add credits, refunds take them back
+ *                                  purchases add credits; refunds hold them while
+ *                                  pending, take them back, or release them
  *   GET  keepalive                 Vercel cron: one query a day so the free
  *                                  Supabase project never pauses
  *
@@ -67,7 +68,7 @@ export async function handle(req: Request, route: string, env: Env, fetchImpl: t
       case 'POST checkout':
         return await checkout(req, db, env, fetchImpl)
       case 'POST paddle/webhook':
-        return await webhook(req, db, env)
+        return await webhook(req, db, env, fetchImpl)
     }
     return json({ error: 'Not found.' }, 404)
   } catch (e) {
@@ -171,7 +172,7 @@ type PaddleEvent = { event_type?: string; data?: Record<string, any> }
  * in the ledger), so retries and replays change nothing. Answers 200 to events
  * it can't act on, so Paddle stops retrying them; problems are logged.
  */
-async function webhook(req: Request, db: Supabase, env: Env) {
+async function webhook(req: Request, db: Supabase, env: Env, fetchImpl: typeof fetch) {
   const raw = await req.text()
   if (!env.PADDLE_WEBHOOK_SECRET) return json(PADDLE_MISSING, 503)
   if (!(await verifySignature(req.headers.get('paddle-signature'), raw, env.PADDLE_WEBHOOK_SECRET))) return json({ error: 'Bad signature.' }, 401)
@@ -203,25 +204,36 @@ async function webhook(req: Request, db: Supabase, env: Env) {
     return json({ ok: true, granted: credits })
   }
   if (event.event_type === 'adjustment.created' || event.event_type === 'adjustment.updated') {
-    // A refund or chargeback takes the credits back once it's approved.
-    if (!['refund', 'chargeback'].includes(d.action) || d.status !== 'approved' || !d.transaction_id || !d.id) return json({ ok: true, reversed: 0 })
+    // Refunds and chargebacks. Credits are held (taken back) as soon as a refund
+    // is requested, so they can't be spent while Paddle reviews it; approval
+    // keeps them taken back, rejection gives them back.
+    if (!['refund', 'chargeback'].includes(d.action) || !d.transaction_id || !d.id) return json({ ok: true, reversed: 0 })
+    // Notifications can arrive out of order, so ask Paddle for the adjustment as it is now.
+    const pd = paddle(env, fetchImpl)
+    if (!pd) return json(PADDLE_MISSING, 503)
+    const adjustment = (await pd.adjustment(d.id)) ?? d
+    const status: string = adjustment.status
+    if (status === 'rejected') {
+      const balance = await db.releaseReversal(d.id, { action: d.action })
+      return json({ ok: true, released: balance !== null })
+    }
+    if (status !== 'pending_approval' && status !== 'approved') return json({ ok: true, reversed: 0 })
     const purchase = await db.purchase(d.transaction_id)
     if (!purchase) return json({ ok: true, reversed: 0 })
-    // A full refund takes everything back; a partial one, its share of the credits.
     // A full refund takes everything back (less anything already reversed; the
     // database caps it); a partial one, its share. Several adjustments on one
     // purchase each count once.
     let credits = purchase.delta
-    if (d.type === 'partial') {
+    if (adjustment.type === 'partial') {
       const paid = Number(purchase.details.total)
-      const refunded = Number(d.totals?.total)
+      const refunded = Number(adjustment.totals?.total)
       if (!(paid > 0 && refunded > 0)) {
-        console.error(`Paddle ${d.id}: partial ${d.action} on ${d.transaction_id}, but the amounts (paid ${purchase.details.total}, refunded ${d.totals?.total}) don't allow a share; nothing reversed, adjust by hand.`)
+        console.error(`Paddle ${d.id}: partial ${d.action} on ${d.transaction_id}, but the amounts (paid ${purchase.details.total}, refunded ${adjustment.totals?.total}) don't allow a share; nothing reversed, adjust by hand.`)
         return json({ ok: true, reversed: 0 })
       }
       credits = Math.ceil((purchase.delta * refunded) / paid)
     }
-    await db.reversePurchase(d.transaction_id, d.id, credits, { action: d.action, type: d.type })
+    await db.reversePurchase(d.transaction_id, d.id, credits, { action: d.action, type: adjustment.type })
     return json({ ok: true, reversed: credits })
   }
   return json({ ok: true })

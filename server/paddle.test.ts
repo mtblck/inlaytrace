@@ -18,7 +18,7 @@ const PACK_60 = 'pri_01m57wz8aj07enh29xt4wfptm6'
 const sign = (body: string, ts = Math.floor(Date.now() / 1000), secret = SECRET) => `ts=${ts};h1=${createHmac('sha256', secret).update(`${ts}:${body}`).digest('hex')}`
 
 /** Fake Supabase and Paddle behind one fetch. */
-function fake(opts: { customer?: string | null; purchase?: { user_id: string; delta: number; details: Record<string, unknown> } | null; grantError?: { status: number; msg: string } } = {}) {
+function fake(opts: { customer?: string | null; purchase?: { user_id: string; delta: number; details: Record<string, unknown> } | null; grantError?: { status: number; msg: string }; adjustment?: Record<string, unknown> } = {}) {
   const calls: { method: string; host: string; path: string; headers: Record<string, string>; body: any }[] = []
   const fetchImpl = (async (input: string, init: RequestInit = {}) => {
     const url = new URL(input)
@@ -29,11 +29,14 @@ function fake(opts: { customer?: string | null; purchase?: { user_id: string; de
     if (url.pathname === '/auth/v1/user') return headers.authorization === 'Bearer at-1' ? ok(USER) : ok({ msg: 'bad' }, 401)
     if (url.pathname === '/rest/v1/rpc/grant_purchase') return opts.grantError ? ok({ message: opts.grantError.msg }, opts.grantError.status) : ok(60)
     if (url.pathname === '/rest/v1/rpc/reverse_purchase') return ok(0)
+    if (url.pathname === '/rest/v1/rpc/release_reversal') return ok(20)
     if (url.pathname === '/rest/v1/credit_ledger') return ok(opts.purchase ? [opts.purchase] : [])
     if (url.host === 'sandbox-api.paddle.com') {
       if (url.pathname === '/customers' && init.method !== 'POST') return ok({ data: opts.customer ? [{ id: opts.customer }] : [] })
       if (url.pathname === '/customers') return ok({ data: { id: 'ctm_new' } }, 201)
       if (url.pathname === '/transactions') return ok({ data: { id: 'txn_new' } }, 201)
+      // Paddle's view of the adjustment now; without one, the webhook trusts the payload.
+      if (url.pathname === '/adjustments') return ok({ data: opts.adjustment ? [opts.adjustment] : [] })
       if (url.pathname.endsWith('/portal-sessions')) return ok({ data: { urls: { general: { overview: 'https://sandbox-customer-portal.paddle.com/x' } } } }, 201)
     }
     return ok({ msg: 'unexpected' }, 500)
@@ -158,9 +161,31 @@ describe('webhook', () => {
     const unknown = fake({ purchase: { ...purchase, details: {} } })
     expect(await (await handle(hook(adj({ type: 'partial', totals: { total: '300' } })), 'paddle/webhook', env, unknown.fetchImpl)).json()).toEqual({ ok: true, reversed: 0 })
     expect(unknown.calls.some((c) => c.path.includes('reverse_purchase'))).toBe(false)
-    const pending = fake({ purchase })
-    expect(await (await handle(hook(adj({ status: 'pending_approval' })), 'paddle/webhook', env, pending.fetchImpl)).json()).toEqual({ ok: true, reversed: 0 })
-    expect(pending.calls.some((c) => c.path.includes('reverse_purchase'))).toBe(false)
+  })
+
+  it('holds the credits as soon as a refund is requested, so they cannot be spent while Paddle reviews it', async () => {
+    const purchase = { user_id: USER.id, delta: 60, details: { total: '1200' } }
+    const pending = { event_type: 'adjustment.created', data: { id: 'adj_1', action: 'refund', status: 'pending_approval', type: 'full', transaction_id: 'txn_1', totals: { total: '1200' } } }
+    const f = fake({ purchase })
+    expect(await (await handle(hook(pending), 'paddle/webhook', env, f.fetchImpl)).json()).toEqual({ ok: true, reversed: 60 })
+    expect(f.calls.find((c) => c.path === '/rest/v1/rpc/reverse_purchase')!.body).toMatchObject({ p_adjustment: 'adj_1', p_credits: 60 })
+  })
+
+  it('gives held credits back when Paddle rejects the refund', async () => {
+    const rejected = { event_type: 'adjustment.updated', data: { id: 'adj_1', action: 'refund', status: 'rejected', type: 'full', transaction_id: 'txn_1' } }
+    const f = fake({ purchase: { user_id: USER.id, delta: 60, details: {} } })
+    expect(await (await handle(hook(rejected), 'paddle/webhook', env, f.fetchImpl)).json()).toEqual({ ok: true, released: true })
+    expect(f.calls.find((c) => c.path === '/rest/v1/rpc/release_reversal')!.body).toMatchObject({ p_adjustment: 'adj_1' })
+    expect(f.calls.some((c) => c.path.includes('reverse_purchase'))).toBe(false)
+  })
+
+  it("goes by Paddle's current status, not the notification's, when they arrive out of order", async () => {
+    // The 'requested' notification arrives after the refund was already rejected: nothing is held.
+    const late = { event_type: 'adjustment.created', data: { id: 'adj_1', action: 'refund', status: 'pending_approval', type: 'full', transaction_id: 'txn_1' } }
+    const f = fake({ purchase: { user_id: USER.id, delta: 60, details: {} }, adjustment: { id: 'adj_1', status: 'rejected', type: 'full' } })
+    expect(await (await handle(hook(late), 'paddle/webhook', env, f.fetchImpl)).json()).toEqual({ ok: true, released: true })
+    expect(f.calls.some((c) => c.path.includes('reverse_purchase'))).toBe(false)
+    expect(f.calls.find((c) => c.host === 'sandbox-api.paddle.com')!.path).toBe('/adjustments?id=adj_1')
   })
 
   it('ignores other events', async () => {
