@@ -127,9 +127,9 @@ plan forbids taking payments.
   and the daily cron sweeps anything older than an hour.
 - **Upscaling** (beta): Real-ESRGAN x4plus (BSD-3) on the server with
   onnxruntime-node, 2 credits for inputs up to 0.5 MP (`server/pricing.ts`), tiled
-  as in the browser (192 px tiles). About 14 s per 256 × 256 tile on a runner CPU,
-  so the cap keeps a run inside the function's 300 s; a run past 270 s gives up and
-  refunds. The model comes from the private Vercel Blob store (`server/models.ts`).
+  as in the browser (192 px tiles). Through the server's code with onnxruntime-node
+  on a runner CPU: 88 s per megapixel of input, so the 0.5 MP cap is about 45 s,
+  well inside the function's 300 s; a run past 270 s gives up and refunds. The model comes from the private Vercel Blob store (`server/models.ts`).
 - **Background removal: skipped for the beta.** Only BiRefNet's tiny model fits a
   3 GB function (the full one ran out of memory on a 16 GB runner). Against
   remove.bg it matched on a product photo and logos (under 0.5% of the mask) and

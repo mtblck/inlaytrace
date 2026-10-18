@@ -25,8 +25,9 @@ export const COST = [
 
 /**
  * HD upscaling (Real-ESRGAN x4plus, 4×): one price, for inputs up to half a
- * megapixel. The model takes about 14 s per 256 × 256 tile on a server CPU,
- * so that's what fits in the function's five minutes.
+ * megapixel. Through server/upscale.ts on a GitHub runner's CPU it took 88 s per
+ * megapixel of input (320 × 240 in 6.8 s), so half a megapixel is about 45 s:
+ * room to spare in the function's 300 s on slower CPUs. Raise it with care.
  */
 export const UPSCALE = { credits: 2, maxPixels: 500_000, factor: 4, label: 'Upscaling 4×, images up to 0.5 megapixels (about 700 × 700)' } as const
 
