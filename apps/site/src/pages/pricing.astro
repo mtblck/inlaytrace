@@ -2,11 +2,11 @@
 /**
  * Pricing: what's free, what HD credits buy, and what an HD run costs. Paddle's
  * review needs prices and what a purchase includes, reachable from the site.
- * Numbers come from data/legal.ts (and must match server/paddle.ts).
+ * Packs and run costs come from server/pricing.ts, which the server charges by.
  */
 import Page from '../layouts/Page.astro'
-import { COST, PACKS, REFUND_DAYS } from '../data/legal'
-const usd = (n: number) => `$${n.toFixed(n % 1 ? 2 : 0)}`
+import { REFUND_DAYS } from '../data/legal'
+import { COST, PACKS, usd } from '../../../../server/pricing'
 ---
 
 <Page title="Pricing · Inlay" description="Inlay is free. Optional HD mode is paid for with credit packs that never expire.">
@@ -46,8 +46,8 @@ const usd = (n: number) => `$${n.toFixed(n % 1 ? 2 : 0)}`
           PACKS.map((p) => (
             <tr>
               <td>{p.credits} credits</td>
-              <td class="num">{usd(p.price)}</td>
-              <td class="num">{usd(p.price / p.credits)}</td>
+              <td class="num">{usd(p.usd)}</td>
+              <td class="num">{usd(p.usd / p.credits)}</td>
             </tr>
           ))
         }
@@ -59,7 +59,10 @@ const usd = (n: number) => `$${n.toFixed(n % 1 ? 2 : 0)}`
     </p>
 
     <h2>What an HD run costs</h2>
-    <p>One credit isn't one image: the cost depends on the image's size, and the app shows it before anything is uploaded.</p>
+    <p>
+      One credit isn't one image: the cost depends on the image's size, and the app will show it before anything is uploaded. These are the
+      costs planned for launch and may change before HD mode is available; we'll update this page first.
+    </p>
     <table>
       <thead>
         <tr><th>Image size</th><th class="num">Credits</th></tr>
@@ -68,7 +71,7 @@ const usd = (n: number) => `$${n.toFixed(n % 1 ? 2 : 0)}`
         {
           COST.map((c) => (
             <tr>
-              <td>{c.size}</td>
+              <td>{c.label}</td>
               <td class="num">{c.credits}</td>
             </tr>
           ))

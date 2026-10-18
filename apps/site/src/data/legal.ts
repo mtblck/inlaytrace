@@ -12,15 +12,3 @@ export const CONTACT = 'hello@inlaytrace.com'
 export const REFUND_DAYS = 30
 export const UPDATED = '18 October 2026'
 
-/** The packs, as sold (server/paddle.ts has the price ids). */
-export const PACKS = [
-  { credits: 20, price: 5 },
-  { credits: 60, price: 12 },
-  { credits: 200, price: 30 },
-]
-/** What an HD run costs, by the image's size. */
-export const COST = [
-  { size: 'Up to 4 megapixels (about 2000 × 2000)', credits: 1 },
-  { size: 'Up to 16 megapixels (about 4000 × 4000)', credits: 2 },
-  { size: 'Larger', credits: 4 },
-]
