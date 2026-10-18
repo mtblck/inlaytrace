@@ -1,0 +1,21 @@
+[
+  {
+    "file": "birefnet-BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx",
+    "asset": "BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx",
+    "source": "https://github.com/ZhengPeng7/BiRefNet/releases/download/v1/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx",
+    "licence": "MIT (BiRefNet)",
+    "bytes": 224005088,
+    "sha256": "5600024376f572a557870a5eb0afb1e5961636bef4e1e22132025467d0f03333",
+    "access": "private",
+    "url": "https://y2lf9ylxpcsjvjxa.private.blob.vercel-storage.com/hd-models/5600024376f5/birefnet-BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx"
+  },
+  {
+    "file": "realesrgan-x4plus.onnx",
+    "source": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth (converted to ONNX, opset 17)",
+    "licence": "BSD-3-Clause (Real-ESRGAN)",
+    "bytes": 67051617,
+    "sha256": "8028747b4d8d97a7d590e6f04762bb2e8fde87f734a70e1f7febf8201aeb30be",
+    "access": "private",
+    "url": "https://y2lf9ylxpcsjvjxa.private.blob.vercel-storage.com/hd-models/8028747b4d8d/realesrgan-x4plus.onnx"
+  }
+]

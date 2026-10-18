@@ -1,0 +1,1 @@
+server upscale4 (onnxruntime-node, 320 × 240 → 1280 × 960): 12.1 s, 158 s per megapixel of input, PNG 2.1 MB
