@@ -378,7 +378,7 @@ async function selectChecks(page, label, id, n) {
   await page.keyboard.press(`${MOD}+z`)
   const x0 = Number(await page.getByLabel('X position').inputValue())
   await page.mouse.move(at.x, at.y) // focus back on the canvas, out of the field
-  await page.locator('h1').click()
+  await page.locator('header').click({ position: { x: 700, y: 28 } }) // empty header space: blurs the field without following a link
   await page.keyboard.press('Shift+ArrowRight')
   const x1 = Number(await page.getByLabel('X position').inputValue())
   check(near(x1 - x0, 10, 0.02), `${label}: Shift+→ nudges 10 px (${x0} → ${x1})`)
@@ -550,6 +550,7 @@ check(response?.ok(), `page loads (${response?.status()})`)
 const csp = response?.headers()['content-security-policy'] ?? ''
 check(csp.includes("'wasm-unsafe-eval'"), 'CSP allows WebAssembly')
 check(/worker-src[^;]*'self'/.test(csp) && !csp.includes("'sha256-"), "the app gets its own CSP (workers allowed), not the site's")
+check((await page.getByRole('link', { name: 'Inlay', exact: true }).getAttribute('href')) === '/', 'the Inlay wordmark leads to the landing page')
 await shot(page, '01-empty')
 
 await page.getByRole('button', { name: 'Try a sample' }).click()
