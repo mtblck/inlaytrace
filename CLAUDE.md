@@ -1,9 +1,9 @@
 # Inlay
 
-Image → SVG in the browser (`apps/app`, live at https://mattblack.space/tools/img-to-svg/)
-and the tracer behind it, `inlaytrace` (`packages/inlay`). Repo `mtblck/inlaytrace` (renamed from
-img-to-svg); going public, then inlaytrace.com: see `docs/launch-plan.md` and tickets #58–#61, #55.
-Until then follow the `portfolio-tool` skill for hosting. `docs/design-notes.md` has the design notes and measurements; README is the public front door.
+Image → SVG in the browser (`apps/app`, live at https://inlaytrace.com/app/)
+and the tracer behind it, `inlaytrace` (`packages/inlay`, on npm). Public repo `mtblck/inlaytrace`
+(renamed from img-to-svg); site and docs at https://inlaytrace.com. History: `docs/launch-plan.md`.
+`docs/design-notes.md` has the design notes and measurements; README is the public front door.
 One npm workspace: run every command from the repo root.
 
 ## Commands
@@ -42,9 +42,10 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
   Re-score any preset change against clean art before shipping; see the table in `docs/design-notes.md`.
 - **No GPL/AGPL in the bundle** (no Potrace, no `@imgly/*`); AI weights must be
   MIT/BSD/Apache. Repo is MIT.
-- **Paths:** Vite `base` is `/tools/img-to-svg/` and the build goes to the root's `dist/tools/img-to-svg`,
-  so it serves identically on its own Vercel URL and through mb-portfolio's rewrite. At the
-  inlaytrace.com cutover (#61) `BASE` in `apps/app/vite.config.ts` becomes `/app/`.
+- **Paths:** one Vercel project (`img-to-svg`) at inlaytrace.com: site at `/`, docs at `/docs/`, app at
+  `/app/` (Vite `base`, built to the root's `dist/app`). The old `/tools/img-to-svg/(.*)` must keep
+  redirecting (308, absolute) to `https://inlaytrace.com/app/$1`; `hosting:check` guards it, and
+  mb-portfolio redirects mattblack.space's copy of that path the same way.
 - **Two CSPs** in `vercel.json`, scoped not to overlap: the app's needs `'wasm-unsafe-eval'` + `worker-src 'self'`;
   the site's lists a sha256 per Starlight inline script. `hosting:check` guards both, and the build's
   `--dist` pass names any new hash to add. `npm run preview` is `scripts/serve.mjs`, which mimics Vercel.

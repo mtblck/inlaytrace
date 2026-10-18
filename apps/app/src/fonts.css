@@ -1,7 +1,7 @@
 /*
  * The portfolio's faces, latin subset only, self-hosted so the CSP keeps
  * font-src 'self'. Paths are relative so Vite fingerprints them under the
- * /tools/img-to-svg/ base. `optional` rather than `swap`: a tool UI that
+ * /app/ base. `optional` rather than `swap`: a tool UI that
  * reflows mid-drag is worse than one that keeps the fallback for a visit.
  */
 @font-face {

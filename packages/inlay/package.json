@@ -5,7 +5,7 @@
   "type": "module",
   "license": "MIT",
   "author": "Matt Black (https://mattblack.space)",
-  "homepage": "https://github.com/mtblck/inlaytrace/tree/main/packages/inlay#readme",
+  "homepage": "https://inlaytrace.com/docs/package/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mtblck/inlaytrace.git",

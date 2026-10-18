@@ -67,7 +67,7 @@ jobs:
         run: |
           npm run preview -- --port 4173 > preview.log 2>&1 &
           for i in $(seq 1 30); do
-            curl -sf http://localhost:4173/tools/img-to-svg/ > /dev/null && exit 0
+            curl -sf http://localhost:4173/app/ > /dev/null && exit 0
             sleep 1
           done
           cat preview.log

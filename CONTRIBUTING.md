@@ -17,7 +17,7 @@ Node 20 or newer (CI uses 24) and npm. One install covers everything (npm worksp
 
 ```bash
 npm install
-npm run dev          # the app: http://localhost:5173/tools/img-to-svg/
+npm run dev          # the app: http://localhost:5173/app/
 npm run site:dev     # the landing page and docs: http://localhost:4321/
 npm test             # the app's and the package's tests, plus every preset through the real tracer
 npm run build        # vendors VTracer, checks hosting config, type-checks, builds the site and the app
@@ -30,7 +30,7 @@ npm run site:assets  # re-measure the landing page's evidence
 Run every command from the repo root.
 
 `verify` takes an optional URL, so the same checks run against a deployment:
-`npm run verify -- https://mattblack.space/tools/img-to-svg/`. Set
+`npm run verify -- https://inlaytrace.com/app/`. Set
 `CHROME_PATH` to use an installed Chromium, `SHOTS=dir` to save screenshots,
 and `FIXTURE=path` to also trace and edit an image of your own. It covers the
 editor (overlays, node drag, marquees, move, scale, nudges, undo, mirror

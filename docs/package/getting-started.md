@@ -98,5 +98,5 @@ run that through [SVGO](https://svgo.dev/).
 
 - [Options](options.md) for each kind of image.
 - [How Inlay works](../how-it-works/inlay.md).
-- [Try it in the app](https://mattblack.space/tools/img-to-svg/), which uses
+- [Try it in the app](https://inlaytrace.com/app/), which uses
   the same tracer.

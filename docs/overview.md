@@ -9,7 +9,7 @@ the tracer behind it, published as the `inlaytrace` package. It runs entirely
 on your device: the image is never uploaded, and tracing happens in a Web
 Worker so the page stays responsive.
 
-**Live:** https://mattblack.space/tools/img-to-svg/ (moving to inlaytrace.com)
+**Live:** [inlaytrace.com](https://inlaytrace.com) (the app is at [inlaytrace.com/app](https://inlaytrace.com/app/))
 <!-- site:hide -->
 · **Code:** `mtblck/inlaytrace` · **Plan:**
 [Going public](launch-plan.md)
