@@ -50,5 +50,8 @@
     "fast-png": "8.0.0",
     "jpeg-js": "0.4.4",
     "onnxruntime-node": "1.30.0"
+  },
+  "overrides": {
+    "postcss-nested": "^7.0.2"
   }
 }
