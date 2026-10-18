@@ -41,8 +41,9 @@ with a pen wants. *Auto* uses the width measured from the ink (shown beside
 it); set it to your pen or bit and the strokes keep their path. Widths are in
 the traced image's pixels, like every other setting. Where lines cross or
 branch, strokes that carry straight on stay one stroke, so the pen lifts less.
-Strokes can be recoloured, moved, scaled and node-edited like shapes; *Mirror*
-works on filled shapes only, so it's off for them.
+Strokes can be recoloured, moved, scaled (their width scales with them) and
+node-edited like shapes; *Mirror* works on filled shapes only, so it's off for
+them. A 2048 px drawing with thick ink traces in about 1.5 s.
 
 **Ignore specks** (0–32 px): regions smaller than this many pixels squared merge
 into their surroundings. Raise it for noisy scans or JPEG speckle.

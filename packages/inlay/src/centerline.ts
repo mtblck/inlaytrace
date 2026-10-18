@@ -146,44 +146,79 @@ function pieces(p: number[]) {
   return groups
 }
 
+/** A neighbourhood as a byte: bit k set when neighbour P(k+2) (clockwise from north) is ink. */
+const unbits = (m: number) => [0, 1, 2, 3, 4, 5, 6, 7].map((k) => (m >> k) & 1)
+/** For every neighbourhood: removable on Zhang–Suen's first and second sub-pass, and redundant afterwards. */
+const ZS1 = new Uint8Array(256)
+const ZS2 = new Uint8Array(256)
+const SPARE = new Uint8Array(256)
+for (let m = 0; m < 256; m++) {
+  const p = unbits(m)
+  const b = p.reduce((s, v) => s + v, 0)
+  const ok = b >= 2 && b <= 6 && crossings(p) === 1
+  // P2 P4 P6 and P4 P6 P8 on the first pass; P2 P4 P8 and P2 P6 P8 on the second.
+  ZS1[m] = ok && !(p[0] * p[2] * p[4]) && !(p[2] * p[4] * p[6]) ? 1 : 0
+  ZS2[m] = ok && !(p[0] * p[2] * p[6]) && !(p[0] * p[4] * p[6]) ? 1 : 0
+  SPARE[m] = b >= 2 && pieces(p) === 1 ? 1 : 0
+}
+
 function thin(ink: Uint8Array, w: number, h: number): Uint8Array {
-  const img = ink.slice()
+  // Work on a copy with a blank one-pixel border, so no neighbour is off the edge.
+  const W = w + 2
+  const img = new Uint8Array(W * (h + 2))
+  const live: number[] = []
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++)
+      if (ink[y * w + x]) {
+        img[(y + 1) * W + x + 1] = 1
+        live.push((y + 1) * W + x + 1)
+      }
+  const off = DX.map((dx, k) => DY[k] * W + dx)
+  const mask = (i: number) => {
+    let m = 0
+    for (let k = 0; k < 8; k++) if (img[i + off[k]]) m |= 1 << k
+    return m
+  }
+  // Only pixels on the edge of the ink can go, and only a neighbour of one that
+  // just went can become an edge: keep that frontier rather than rescanning
+  // all the ink each pass (thick strokes take dozens of passes).
+  const stamp = new Int32Array(img.length)
   const gone: number[] = []
-  for (let changed = true; changed; ) {
-    changed = false
-    for (const step of [0, 1]) {
-      gone.length = 0
-      for (let y = 0; y < h; y++)
-        for (let x = 0; x < w; x++) {
-          if (!img[y * w + x]) continue
-          const p = neighbours(img, w, h, x, y)
-          const b = p.reduce((s, v) => s + v, 0)
-          if (b < 2 || b > 6 || crossings(p) !== 1) continue
-          // P2 P4 P6 and P4 P6 P8 on the first pass; P2 P4 P8 and P2 P6 P8 on the second.
-          if (step === 0 ? p[0] * p[2] * p[4] || p[2] * p[4] * p[6] : p[0] * p[2] * p[6] || p[0] * p[4] * p[6]) continue
-          gone.push(y * w + x)
-        }
-      for (const i of gone) img[i] = 0
-      if (gone.length) changed = true
+  let edge = live.filter((i) => mask(i) !== 255)
+  // Done when both sub-passes in a row remove nothing.
+  for (let round = 0, quiet = 0; quiet < 2 && edge.length; round++) {
+    const table = round % 2 ? ZS2 : ZS1
+    gone.length = 0
+    for (const i of edge) if (img[i] && table[mask(i)]) gone.push(i)
+    for (const i of gone) img[i] = 0
+    quiet = gone.length ? 0 : quiet + 1
+    const next: number[] = []
+    const add = (i: number) => {
+      if (img[i] && stamp[i] !== round + 1) {
+        stamp[i] = round + 1
+        next.push(i)
+      }
     }
+    for (const i of edge) add(i)
+    for (const i of gone) for (let k = 0; k < 8; k++) add(i + off[k])
+    edge = next
   }
   // Zhang–Suen leaves the line two pixels thick in places (staircases, the
   // corners of turns). Remove any pixel whose neighbours stay 8-connected to
   // each other without it, except a line's ends, until none is left: every
   // line pixel then has exactly two neighbours.
+  edge.sort((a, b) => a - b) // in raster order, so the result doesn't depend on how thinning went
   for (let changed = true; changed; ) {
     changed = false
-    for (let y = 0; y < h; y++)
-      for (let x = 0; x < w; x++) {
-        if (!img[y * w + x]) continue
-        const p = neighbours(img, w, h, x, y)
-        if (p.reduce((s, v) => s + v, 0) >= 2 && pieces(p) === 1) {
-          img[y * w + x] = 0
-          changed = true
-        }
+    for (const i of edge)
+      if (img[i] && SPARE[mask(i)]) {
+        img[i] = 0
+        changed = true
       }
   }
-  return img
+  const out = new Uint8Array(w * h)
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) out[y * w + x] = img[(y + 1) * W + x + 1]
+  return out
 }
 
 // ---- Spurs ---------------------------------------------------------------------

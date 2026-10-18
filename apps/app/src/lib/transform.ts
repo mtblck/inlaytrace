@@ -34,6 +34,16 @@ export function transformPath(d: string, m: Affine): string {
   return serializePath(mapPoints(parsePath(d), (p) => apply(m, p)))
 }
 
+/**
+ * A path's geometry under a transform, and a stroke's width with it (by the
+ * square root of the area scale), so a scaled centerline drawing keeps its
+ * look: half the size, half the width.
+ */
+export function transformShape(p: { d: string; stroke?: number }, m: Affine): { d: string; stroke?: number } {
+  const d = transformPath(p.d, m)
+  return p.stroke ? { d, stroke: Math.round(p.stroke * Math.sqrt(Math.abs(m.a * m.d - m.b * m.c)) * 100) / 100 } : { d }
+}
+
 // ---- Bounds ------------------------------------------------------------------
 
 /**
