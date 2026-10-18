@@ -6,6 +6,8 @@
  * scaled down before tracing. The SVG is then emitted at the traced size; it is
  * a vector, so its display size is free to change afterwards.
  */
+import { importSvg, type SvgImport } from './svgImport'
+
 export type Source = {
   name: string
   /** Object URL of the original file, for the "before" side of the comparison. */
@@ -13,6 +15,8 @@ export type Source = {
   originalWidth: number
   originalHeight: number
   bitmap: ImageBitmap
+  /** An SVG opened to edit: its shapes, and what it couldn't keep. The bitmap is it drawn, for comparing. */
+  svg?: SvgImport
 }
 
 /** `upscale` is the factor applied before tracing (1 = none). */
@@ -31,11 +35,14 @@ export const UPSCALE_BELOW = 512
 const UPSCALE_TO = 1024
 const MAX_UPSCALE = 8
 
-export const ACCEPTED = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/bmp']
+export const ACCEPTED = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/bmp', 'image/svg+xml']
+
+const isSvg = (file: Blob, name: string) => file.type === 'image/svg+xml' || (!file.type && /\.svg$/i.test(name))
 
 export async function loadSource(file: Blob, name = 'image'): Promise<Source> {
+  if (isSvg(file, name)) return loadSvg(file, name)
   if (!ACCEPTED.includes(file.type)) {
-    throw new Error(`That file is ${file.type || 'an unknown type'}. Use a PNG, JPG, WebP, GIF or BMP.`)
+    throw new Error(`That file is ${file.type || 'an unknown type'}. Use a PNG, JPG, WebP, GIF, BMP or SVG.`)
   }
   let bitmap: ImageBitmap
   try {
@@ -50,6 +57,33 @@ export async function loadSource(file: Blob, name = 'image'): Promise<Source> {
     originalHeight: bitmap.height,
     bitmap,
   }
+}
+
+/**
+ * An SVG to edit. Its shapes are read as data (svgImport.ts); the file itself
+ * is only ever drawn as an image, where browsers run no scripts and load
+ * nothing else, for the "before" side and the eyedropper.
+ */
+async function loadSvg(file: Blob, name: string): Promise<Source> {
+  const text = await file.text()
+  const svg = importSvg(text)
+  if (!svg.trace.paths.length) throw new Error(`That SVG has no shapes this can edit${svg.notes.length ? ` (it has ${svg.notes.join(', ')})` : ''}.`)
+  const url = URL.createObjectURL(new Blob([text], { type: 'image/svg+xml' }))
+  const { width, height } = svg.trace
+  // Drawn at least 1024 px on its long edge, so the eyedropper has real pixels.
+  const scale = Math.max(1, 1024 / Math.max(width, height))
+  const w = Math.max(1, Math.round(width * scale))
+  const h = Math.max(1, Math.round(height * scale))
+  const canvas = new OffscreenCanvas(w, h)
+  try {
+    const img = new Image()
+    img.src = url
+    await img.decode()
+    canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+  } catch {
+    // Some SVGs won't draw as an image (no size, or an error); the shapes still open.
+  }
+  return { name: baseName(name), url, originalWidth: width, originalHeight: height, bitmap: await createImageBitmap(canvas), svg }
 }
 
 export function pixelsOf(source: Source, maxEdge: number, allowUpscale = true): Pixels {

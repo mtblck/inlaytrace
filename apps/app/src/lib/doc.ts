@@ -202,7 +202,7 @@ export const deletePath = (doc: Doc, id: string): Doc => ({ ...doc, paths: doc.p
 
 // ---- Transforms -------------------------------------------------------------
 
-type Matrix = [number, number, number, number, number, number]
+export type Matrix = [number, number, number, number, number, number]
 
 /**
  * VTracer 1.0 does not emit transforms, but older builds wrote
@@ -217,7 +217,7 @@ export function bakeTransform(d: string, transform: string): string {
   return serializePath(mapPoints(parsePath(d), apply))
 }
 
-function parseTransform(t: string): Matrix | null {
+export function parseTransform(t: string): Matrix | null {
   let m: Matrix = [1, 0, 0, 1, 0, 0]
   const re = /(\w+)\s*\(([^)]*)\)/g
   let hit = false
@@ -228,6 +228,8 @@ function parseTransform(t: string): Matrix | null {
     if (fn === 'translate') n = [1, 0, 0, 1, v[0] ?? 0, v[1] ?? 0]
     else if (fn === 'scale') n = [v[0] ?? 1, 0, 0, v[1] ?? v[0] ?? 1, 0, 0]
     else if (fn === 'matrix' && v.length === 6) n = v as Matrix
+    else if (fn === 'skewX') n = [1, 0, Math.tan(((v[0] ?? 0) * Math.PI) / 180), 1, 0, 0]
+    else if (fn === 'skewY') n = [1, Math.tan(((v[0] ?? 0) * Math.PI) / 180), 0, 1, 0, 0]
     else if (fn === 'rotate') {
       const r = ((v[0] ?? 0) * Math.PI) / 180
       const [cx, cy] = [v[1] ?? 0, v[2] ?? 0]
@@ -241,7 +243,7 @@ function parseTransform(t: string): Matrix | null {
   return hit ? m : null
 }
 
-const multiply = ([a, b, c, d, e, f]: Matrix, [A, B, C, D, E, F]: Matrix): Matrix => [
+export const multiply = ([a, b, c, d, e, f]: Matrix, [A, B, C, D, E, F]: Matrix): Matrix => [
   a * A + c * B,
   b * A + d * B,
   a * C + c * D,

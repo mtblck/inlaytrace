@@ -42,6 +42,7 @@ See [Editing shapes](features/editing-shapes.md), [Colours and background](featu
 
 | Item | What shipped | Ticket |
 | --- | --- | --- |
+| **SVG import** | Drop an .svg and its shapes open in the editor (groups, transforms, arcs and even-odd fills handled); gradients, text and the like are listed, not dropped silently. See [Open an SVG](features/open-an-svg.md). | [#43](https://github.com/mtblck/inlaytrace/issues/43) |
 | **Groups and layer order** | Group and ungroup (a group selects as one and exports as a `<g>`), and forward, backward, to front and to back, with shortcuts. See [Editing shapes](features/editing-shapes.md#groups-and-paint-order). | [#41](https://github.com/mtblck/inlaytrace/issues/41) |
 | **Background removal and upscaling** | *Prepare*: U²-Net (Apache 2.0) removes the background, Real-ESRGAN (BSD 3-Clause) upscales small images 4×, both in the browser with ONNX Runtime (MIT), the models from this site on first use. Only that worker may run WebAssembly. See [Presets and settings](features/presets-and-settings.md#prepare). | [#39](https://github.com/mtblck/inlaytrace/issues/39) |
 | **Target file size** | *Target size* under the settings: type a size and the app searches the settings (smoothing, specks, colours), taking the cheapest step in accuracy each time, then shows what it chose before applying it. See [Presets and settings](features/presets-and-settings.md#target-size). | [#40](https://github.com/mtblck/inlaytrace/issues/40) |
@@ -54,7 +55,6 @@ See [Editing shapes](features/editing-shapes.md), [Colours and background](featu
 | Item | Why | Ticket |
 | --- | --- | --- |
 | **DXF export** | For CNC and laser cutting. | [#42](https://github.com/mtblck/inlaytrace/issues/42) |
-| **SVG import** | Open an SVG to edit its paths, so the editor is useful on its own. | [#43](https://github.com/mtblck/inlaytrace/issues/43) |
 | **Batch** | Trace a folder of images with one preset, download a zip. | [#44](https://github.com/mtblck/inlaytrace/issues/44) |
 | **Offline install** | A service worker and manifest so it installs as an app and works offline (SVGcode does this). | [#45](https://github.com/mtblck/inlaytrace/issues/45) |
 | **HD mode** | A paid, server-side trace for very large images: a Vercel Function with spend caps, opt-in, clearly marked as leaving the device. No database. | [#46](https://github.com/mtblck/inlaytrace/issues/46) |
