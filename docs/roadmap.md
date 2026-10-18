@@ -20,7 +20,7 @@ together; see [Editing shapes](features/editing-shapes.md) and
 | **Drag to select** | A marquee for shapes (wholly inside) and, with the Nodes tool, nodes. ⇧ adds, ⌥ removes; ⇧-click toggles; several nodes drag together. | [#22](https://github.com/mtblck/inlaytrace/issues/22) |
 | **Smooth nodes** | Dragging one handle of a smooth node swings its partner round to stay in line. ⌥ breaks the pair; corners stay independent. | [#23](https://github.com/mtblck/inlaytrace/issues/23) |
 | **Shortcuts and a shortcuts panel** | V, A, M for tools, arrows to nudge, ⌘A, and a panel on `?`. | [#24](https://github.com/mtblck/inlaytrace/issues/24) |
-| **Fix the Smoothing "Off" label** | Flat-art presets show the tolerance (±0.25 px at the bottom); Poster keeps "Off", which is true there. | [#26](https://github.com/mtblck/inlaytrace/issues/26) |
+| **Fix the Smoothing "Off" label** | Flat-art presets show the tolerance (±0.25 px at the bottom). Since Poster moved to Inlay (#53) it shows one too. | [#26](https://github.com/mtblck/inlaytrace/issues/26) |
 
 ## Done: close the gaps with the paid tools
 
@@ -38,11 +38,16 @@ See [Editing shapes](features/editing-shapes.md), [Colours and background](featu
 | **PDF and EPS export** | Built in the browser as real vector paths, one page at the export size. | [#34](https://github.com/mtblck/inlaytrace/issues/34) |
 | **Session save** | Image, settings and edits kept in this browser's IndexedDB; *Start over* clears them. | [#35](https://github.com/mtblck/inlaytrace/issues/35) |
 
+## Done: bigger bets
+
+| Item | What shipped | Ticket |
+| --- | --- | --- |
+| **Symmetry detection** | The Mirror tool opens set up for the mirror axis or turn the image has (95%+ match), and gains *Turn*: keep one slice and repeat it round a centre. See [Mirror](features/mirror.md). | [#36](https://github.com/mtblck/inlaytrace/issues/36) |
+
 ## Next: bigger bets
 
 | Item | Why | Ticket |
 | --- | --- | --- |
-| **Symmetry detection** | Find mirror and rotational symmetry in the trace and enforce it, as Vectorizer.ai does. The manual mirror covers the common case. | [#36](https://github.com/mtblck/inlaytrace/issues/36) |
 | **Shape fitting** | Recognise circles, ellipses, rounded rectangles and regular polygons and write them as exact shapes. | [#37](https://github.com/mtblck/inlaytrace/issues/37) |
 | **Centerline tracing** | Single strokes for plotters, engraving and handwriting, rather than outlines. | [#38](https://github.com/mtblck/inlaytrace/issues/38) |
 | **Background removal and upscaling** | In-browser models for photos and low-res logos, held to the licence rule (MIT/BSD/Apache weights only). | [#39](https://github.com/mtblck/inlaytrace/issues/39) |

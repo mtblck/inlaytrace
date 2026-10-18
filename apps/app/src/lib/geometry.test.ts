@@ -7,7 +7,8 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import type PaperNS from 'paper/dist/paper-core'
 import { deleteNode, moveNode, parsePath, serializePath } from './pathdata'
-import { mirrorDoc, centreAxis } from './mirror'
+import { mirrorDoc, centreAxis, centreTurn, likelyAxis } from './mirror'
+import type { Symmetry } from 'inlaytrace'
 import type { Doc } from './doc'
 
 // paper.js asks for a 2D context at import time for feature detection only;
@@ -103,5 +104,49 @@ describe('mirror', () => {
   it('preserves paint order and fills', () => {
     const out = mirrorDoc(paper, doc, centreAxis(doc, 'vertical', 'end'))
     expect(out.paths.map((p) => p.fill)).toEqual(['#000000', '#ff0000'])
+  })
+})
+
+describe('turn', () => {
+  // A blob above the centre, crossing into the next slice, and a square low
+  // down, outside the kept (top) slice.
+  const doc: Doc = {
+    width: 100,
+    height: 100,
+    paths: [
+      { id: 'blob', fill: '#000000', d: 'M45 15C55 10 70 20 66 35C62 48 50 52 44 40C38 30 38 18 45 15Z' },
+      { id: 'low', fill: '#ff0000', d: 'M45 85L55 85L55 95L45 95Z' },
+    ],
+  }
+  const nodes = (d: string) => parsePath(d).flatMap((s) => s.nodes.map((n) => ({ x: n.x, y: n.y })))
+
+  for (const order of [2, 3, 5]) {
+    it(`repeats the top slice ${order} times, as one shape per path`, () => {
+      const out = mirrorDoc(paper, doc, centreTurn(doc, order))
+      expect(out.paths.map((p) => p.id)).toEqual(['blob'])
+      // Every node, turned by one step about the centre, lands on another node.
+      const ns = nodes(out.paths[0].d)
+      const t = (2 * Math.PI) / order
+      for (const n of ns) {
+        const x = 50 + (n.x - 50) * Math.cos(t) - (n.y - 50) * Math.sin(t)
+        const y = 50 + (n.x - 50) * Math.sin(t) + (n.y - 50) * Math.cos(t)
+        expect(Math.min(...ns.map((m) => Math.hypot(m.x - x, m.y - y)))).toBeLessThan(0.05)
+      }
+    })
+  }
+
+  it('leaves what lies outside the circle alone, so a background keeps its corners', () => {
+    const bg: Doc = { width: 100, height: 100, paths: [{ id: 'bg', fill: '#ffffff', d: 'M0 0L100 0L100 100L0 100Z' }, ...doc.paths] }
+    const out = mirrorDoc(paper, bg, centreTurn(bg, 5))
+    const ns = nodes(out.paths[0].d)
+    for (const corner of [[0, 0], [100, 0], [100, 100], [0, 100]]) expect(ns.some((n) => Math.hypot(n.x - corner[0], n.y - corner[1]) < 0.01)).toBe(true)
+  })
+
+  it('picks the likeliest symmetry, preferring the highest order that fits', () => {
+    const mirror = (score: number): Symmetry => ({ kind: 'mirror', orientation: 'vertical', position: 50, score })
+    const turn = (order: number, score: number): Symmetry => ({ kind: 'rotation', order, cx: 50.2, cy: 49.9, score })
+    expect(likelyAxis([mirror(0.99), turn(2, 0.6)])).toMatchObject({ orientation: 'vertical', position: 50, keep: 'start' })
+    expect(likelyAxis([turn(2, 0.99), turn(4, 0.985), mirror(0.97), turn(8, 0.9)])).toMatchObject({ orientation: 'rotation', order: 4, cx: 50, cy: 50 })
+    expect(likelyAxis([mirror(0.9), turn(3, 0.8)])).toBeNull()
   })
 })

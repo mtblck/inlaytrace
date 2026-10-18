@@ -1,19 +1,22 @@
 /// <reference lib="webworker" />
 /**
- * Tracing and optimisation run here so a multi-second trace never blocks the
+ * Tracing, symmetry detection and optimisation run here so a multi-second trace never blocks the
  * page. Both are synchronous inside the worker; the client is responsible for
  * making sure only the latest request is ever waiting (see client.ts).
  */
+import { detectSymmetry, type Symmetry } from 'inlaytrace'
 import { runTrace } from './run'
 import type { TraceOptions } from './presets'
 
 export type WorkerRequest =
   | { type: 'trace'; id: number; rgba: ArrayBuffer; width: number; height: number; options: TraceOptions }
   | { type: 'optimize'; id: number; svg: string }
+  | { type: 'symmetry'; id: number; rgba: ArrayBuffer; width: number; height: number }
 
 export type WorkerResponse =
   | { type: 'traced'; id: number; svg: string; ms: number }
   | { type: 'optimized'; id: number; svg: string }
+  | { type: 'symmetry'; id: number; found: Symmetry[] }
   | { type: 'error'; id: number; message: string }
 
 declare const self: DedicatedWorkerGlobalScope
@@ -29,6 +32,8 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
       const start = performance.now()
       const svg = runTrace(new Uint8Array(req.rgba), req.width, req.height, req.options)
       post({ type: 'traced', id: req.id, svg, ms: Math.round(performance.now() - start) })
+    } else if (req.type === 'symmetry') {
+      post({ type: 'symmetry', id: req.id, found: detectSymmetry(new Uint8Array(req.rgba), req.width, req.height) })
     } else {
       svgo ??= import('svgo/browser')
       const { optimize } = await svgo

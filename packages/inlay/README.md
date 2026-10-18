@@ -9,8 +9,8 @@ curves. Pixel art keeps its exact staircase.
 Pure TypeScript with no DOM and no WebAssembly: it runs in browsers, Web
 Workers and Node. MIT licensed.
 
-It is the tracer behind the [Inlay app](https://inlaytrace.com/app/)
-for logos, illustrations, line art and pixel art.
+It is the tracer behind every preset of the [Inlay app](https://inlaytrace.com/app/),
+from logos and pixel art to photos.
 
 ## Install
 
@@ -63,6 +63,9 @@ toSvg(result) // '<svg …>…</svg>'
   Béziers between them).
 - `parsePath(d)` / `serializePath(subpaths)`: path data as editable nodes with
   absolute handles, and back. Round trips are idempotent after the first pass.
+- `detectSymmetry(rgba, width, height)`: the likeliest mirror axes and
+  rotational orders in an image, each scored by how much of the drawing
+  matches (the app offers to enforce one at 95% or more).
 - `oklab(rgb)`: the perceptual colour space the palette and labelling use.
 
 ## How it works

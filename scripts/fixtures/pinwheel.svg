@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- A test mark with five-fold turning symmetry and no mirror axis, for npm run score (made for this repo, MIT). -->
+  <rect width="200" height="200" fill="#ffffff"/>
+  <g transform="translate(100 100)" fill="#2a6f4e">
+    <path d="M0 -84 C26 -66 30 -34 6 -22 C-4 -42 -12 -62 0 -84 Z"/>
+    <path transform="rotate(72)" d="M0 -84 C26 -66 30 -34 6 -22 C-4 -42 -12 -62 0 -84 Z"/>
+    <path transform="rotate(144)" d="M0 -84 C26 -66 30 -34 6 -22 C-4 -42 -12 -62 0 -84 Z"/>
+    <path transform="rotate(216)" d="M0 -84 C26 -66 30 -34 6 -22 C-4 -42 -12 -62 0 -84 Z"/>
+    <path transform="rotate(288)" d="M0 -84 C26 -66 30 -34 6 -22 C-4 -42 -12 -62 0 -84 Z"/>
+  </g>
+  <circle cx="100" cy="100" r="14" fill="#d9482b"/>
+</svg>

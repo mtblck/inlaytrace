@@ -7,6 +7,7 @@
  */
 export { trace, traceInlay, toSvg, type InlayOptions, type InlayPath, type InlayResult } from './inlay'
 export { peakPalette, exactPalette, quantizePalette, oklab, type Rgb } from './palette'
+export { detectSymmetry, type Symmetry, type MirrorSymmetry, type RotationalSymmetry, type SymmetryOptions } from './symmetry'
 export { fitChain, isFlat, pointAt, type Cubic, type FitOptions } from './fit'
 export { parsePath, serializePath, mapPoints, type Pt, type PathNode, type Subpath } from './path'
 // Internals the app's tests reach for; not part of the stable API.

@@ -94,6 +94,35 @@ function oklab(rgb: [number, number, number]): [number, number, number]
 sRGB (0–255) to OKLab, the perceptual colour space the palettes and labelling
 use.
 
+## Symmetry
+
+### `detectSymmetry(rgba, width, height, options?)`
+
+```ts
+function detectSymmetry(rgba: ArrayLike<number>, width: number, height: number, options?: SymmetryOptions): Symmetry[]
+
+type Symmetry =
+  | { kind: 'mirror'; orientation: 'vertical' | 'horizontal'; position: number; score: number }
+  | { kind: 'rotation'; order: number; cx: number; cy: number; score: number }
+
+type SymmetryOptions = {
+  tolerance?: number // RGB distance counted as the same colour; default 60
+  orders?: number[] // rotational orders to try; default 2–8
+}
+```
+
+Scores the best vertical and horizontal mirror axis and the best centre for
+each rotational order, highest score first. `score` is the share of the drawing
+(every pixel that isn't background, on either side) whose reflection or turn
+has the same colour, 0–1. A clean symmetric drawing scores close to 1; about
+0.95 is a sensible bar for "likely". Positions are in pixels: a vertical axis at
+`position` 50 lies between pixels 49 and 50. A round drawing scores well for
+every order. Returns `[]` when there's almost nothing but background.
+
+The background is the most common colour round the border (or transparency).
+Only candidates near the foreground's centroid are scored, since that's where
+any axis or centre of a symmetric drawing lies.
+
 ## Curves
 
 ### `fitChain(points, closed, options)`

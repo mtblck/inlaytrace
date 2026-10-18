@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Tool } from './Canvas'
-import type { Axis } from '../lib/mirror'
+import { MAX_ORDER, MIN_ORDER, sameAxis, type Axis, type MirrorAxis, type TurnAxis } from '../lib/mirror'
 import type { Box } from '../lib/transform'
 import { Section } from './Controls'
 import { MOD } from './Shortcuts'
@@ -31,6 +31,8 @@ type Props = {
   width: number
   height: number
   onAxis: (axis: Axis) => void
+  /** The symmetry found in the image, if any is likely, with the share of the drawing that matches it. */
+  detected: (Axis & { score: number }) | null
   mirroring: boolean
   mirrorError: string | null
   onMirror: () => void
@@ -40,14 +42,13 @@ const mod = MOD === '⌘' ? '⌘' : 'Ctrl+'
 
 /**
  * Editing on top of the trace. Select moves and scales whole shapes; Nodes
- * reshapes one shape node by node; Mirror keeps one half and reflects it. The first shape edit detaches the drawing
+ * reshapes one shape node by node; Mirror keeps one half and reflects it, or
+ * one slice of a turn and repeats it. The first shape edit detaches the drawing
  * from the trace, which the note at the bottom says plainly, because it changes
  * what a trace setting does next.
  */
 export function EditPanel(p: Props) {
-  const v = p.axis.orientation === 'vertical'
-  const max = v ? p.width : p.height
-  const setAxis = (patch: Partial<Axis>) => p.onAxis({ ...p.axis, ...patch })
+  const axis = p.axis
 
   return (
     <Section
@@ -127,63 +128,37 @@ export function EditPanel(p: Props) {
 
       {p.tool === 'mirror' && (
         <div className="space-y-3">
+          {p.detected && <Detected detected={p.detected} current={axis} onUse={() => p.onAxis(withoutScore(p.detected!))} />}
           <Choice
             label="Axis"
-            value={p.axis.orientation}
+            value={axis.orientation}
             options={[
               ['vertical', 'Vertical'],
               ['horizontal', 'Horizontal'],
+              ['rotation', 'Turn'],
             ]}
-            onChange={(o) => setAxis({ orientation: o, position: (o === 'vertical' ? p.width : p.height) / 2 })}
-          />
-          <Choice
-            label="Keep"
-            value={p.axis.keep}
-            options={
-              v
-                ? [
-                    ['start', 'Left'],
-                    ['end', 'Right'],
-                  ]
-                : [
-                    ['start', 'Top'],
-                    ['end', 'Bottom'],
-                  ]
+            onChange={(o) =>
+              p.onAxis(
+                o === 'rotation'
+                  ? { orientation: 'rotation', cx: p.width / 2, cy: p.height / 2, order: 4 }
+                  : { orientation: o, position: (o === 'vertical' ? p.width : p.height) / 2, keep: axis.orientation === 'rotation' ? 'start' : axis.keep },
+              )
             }
-            onChange={(k) => setAxis({ keep: k })}
           />
-          <div>
-            <div className="flex items-baseline justify-between">
-              <label htmlFor="axis-pos" className="field-label">
-                Position
-              </label>
-              <button className="text-[12.5px] text-ink-muted hover:text-ink" onClick={() => setAxis({ position: max / 2 })}>
-                Centre
-              </button>
-            </div>
-            <input
-              id="axis-pos"
-              type="number"
-              className="mt-1 w-full rounded-md border border-rule bg-paper px-2 py-1.5 font-mono text-[13px]"
-              min={0}
-              max={max}
-              step={0.5}
-              value={p.axis.position}
-              onChange={(e) => {
-                const n = Number(e.target.value)
-                if (Number.isFinite(n)) setAxis({ position: Math.min(max, Math.max(0, n)) })
-              }}
-            />
-            <p className="field-hint mt-1">Drag the dashed line on the canvas, or type a position. The faded side gets replaced.</p>
-          </div>
+          {axis.orientation === 'rotation' ? (
+            <TurnFields axis={axis} width={p.width} height={p.height} onAxis={p.onAxis} />
+          ) : (
+            <MirrorFields axis={axis} width={p.width} height={p.height} onAxis={p.onAxis} />
+          )}
           <button className="btn btn-primary w-full" onClick={p.onMirror} disabled={p.mirroring}>
-            {p.mirroring ? 'Mirroring…' : `Mirror ${v ? (p.axis.keep === 'start' ? 'left onto right' : 'right onto left') : p.axis.keep === 'start' ? 'top onto bottom' : 'bottom onto top'}`}
+            {p.mirroring ? 'Mirroring…' : actionLabel(axis)}
           </button>
           {p.mirrorError && (
             <p role="alert" className="text-[12.5px] text-accent">
               {p.mirrorError}
             </p>
           )}
+          <p className="field-hint">Check the result against the original in the Difference view; Undo puts it back.</p>
         </div>
       )}
 
@@ -200,7 +175,7 @@ function Choice<T extends string>(props: { label: string; value: T; options: [T,
   return (
     <div className="space-y-1.5">
       <span className="field-label">{props.label}</span>
-      <div role="radiogroup" aria-label={props.label} className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-rule bg-rule">
+      <div role="radiogroup" aria-label={props.label} className={`grid ${props.options.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-px overflow-hidden rounded-md border border-rule bg-rule`}>
         {props.options.map(([v, l]) => (
           <button
             key={v}
@@ -372,5 +347,111 @@ function SimplifyFields({ now, preview, onSimplify }: { now: number | null; prev
       </button>
       <p className="field-hint">Neighbouring shapes no longer share the simplified edges exactly.</p>
     </div>
+  )
+}
+
+const withoutScore = ({ score: _, ...axis }: Axis & { score: number }): Axis => axis as Axis
+
+function actionLabel(axis: Axis) {
+  if (axis.orientation === 'rotation') return `Repeat the top slice ${axis.order} times`
+  const v = axis.orientation === 'vertical'
+  return `Mirror ${v ? (axis.keep === 'start' ? 'left onto right' : 'right onto left') : axis.keep === 'start' ? 'top onto bottom' : 'bottom onto top'}`
+}
+
+function describe(axis: Axis) {
+  if (axis.orientation === 'rotation') return `repeats ${axis.order} times round (${axis.cx}, ${axis.cy})`
+  return `mirrors across a ${axis.orientation} axis at ${axis.orientation === 'vertical' ? 'x' : 'y'} = ${axis.position}`
+}
+
+/** What the image looks like it has, and a way back to it after changing the axis. */
+function Detected({ detected, current, onUse }: { detected: Axis & { score: number }; current: Axis; onUse: () => void }) {
+  const using = sameAxis(detected, current)
+  return (
+    <div className="rounded-md border border-rule-soft bg-paper-sunk px-3 py-2 text-[12.5px]" data-detected="">
+      <p>
+        The image {describe(detected)}: {Math.floor(detected.score * 100)}% of it matches.
+      </p>
+      {!using && (
+        <button className="mt-1 text-ink-muted underline hover:text-ink" onClick={onUse}>
+          Use this axis
+        </button>
+      )}
+    </div>
+  )
+}
+
+function AxisNumber(props: { id: string; label: string; value: number; min: number; max: number; step: number; onChange: (n: number) => void; action?: [string, () => void] }) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between">
+        <label htmlFor={props.id} className="field-label">
+          {props.label}
+        </label>
+        {props.action && (
+          <button className="text-[12.5px] text-ink-muted hover:text-ink" onClick={props.action[1]}>
+            {props.action[0]}
+          </button>
+        )}
+      </div>
+      <input
+        id={props.id}
+        type="number"
+        className="mt-1 w-full rounded-md border border-rule bg-paper px-2 py-1.5 font-mono text-[13px]"
+        min={props.min}
+        max={props.max}
+        step={props.step}
+        value={props.value}
+        onChange={(e) => {
+          const n = Number(e.target.value)
+          if (e.target.value !== '' && Number.isFinite(n)) props.onChange(Math.min(props.max, Math.max(props.min, n)))
+        }}
+      />
+    </div>
+  )
+}
+
+function MirrorFields({ axis, width, height, onAxis }: { axis: MirrorAxis; width: number; height: number; onAxis: (a: Axis) => void }) {
+  const v = axis.orientation === 'vertical'
+  const max = v ? width : height
+  const set = (patch: Partial<MirrorAxis>) => onAxis({ ...axis, ...patch })
+  return (
+    <>
+      <Choice
+        label="Keep"
+        value={axis.keep}
+        options={
+          v
+            ? [
+                ['start', 'Left'],
+                ['end', 'Right'],
+              ]
+            : [
+                ['start', 'Top'],
+                ['end', 'Bottom'],
+              ]
+        }
+        onChange={(k) => set({ keep: k })}
+      />
+      <div>
+        <AxisNumber id="axis-pos" label="Position" value={axis.position} min={0} max={max} step={0.5} onChange={(n) => set({ position: n })} action={['Centre', () => set({ position: max / 2 })]} />
+        <p className="field-hint mt-1">Drag the dashed line on the canvas, or type a position. The faded side gets replaced.</p>
+      </div>
+    </>
+  )
+}
+
+function TurnFields({ axis, width, height, onAxis }: { axis: TurnAxis; width: number; height: number; onAxis: (a: Axis) => void }) {
+  const set = (patch: Partial<TurnAxis>) => onAxis({ ...axis, ...patch })
+  return (
+    <>
+      <AxisNumber id="turn-order" label="Repeats" value={axis.order} min={MIN_ORDER} max={MAX_ORDER} step={1} onChange={(n) => set({ order: Math.round(n) })} />
+      <div>
+        <div className="grid grid-cols-2 gap-2">
+          <AxisNumber id="turn-x" label="Centre x" value={axis.cx} min={0} max={width} step={0.5} onChange={(n) => set({ cx: n })} />
+          <AxisNumber id="turn-y" label="Centre y" value={axis.cy} min={0} max={height} step={0.5} onChange={(n) => set({ cy: n })} />
+        </div>
+        <p className="field-hint mt-1">Drag the dot on the canvas to move the centre. Inside the circle, the slice pointing up is kept and the faded rest is replaced by copies of it. Outside the circle stays as it is.</p>
+      </div>
+    </>
   )
 }

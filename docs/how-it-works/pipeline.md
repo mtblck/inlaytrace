@@ -48,7 +48,7 @@ The SVG is parsed and every `d`, `fill` and `transform` is validated against
 what the tracers emit before it becomes markup (see
 [Privacy and security](../features/privacy-and-security.md)). The canvas then
 draws three layers: the original, the vector exactly as it will export, and an
-overlay for selection, nodes and the mirror axis.
+overlay for selection, nodes and the mirror axis or turn.
 
 ## 5. Optimise in the background
 

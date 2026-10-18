@@ -1,5 +1,5 @@
 /**
- * Reading VTracer's output, and measuring what gets exported.
+ * Reading the tracer's output, and measuring what gets exported.
  *
  * The raw trace is parsed once into a flat list of paths, which src/lib/doc.ts
  * turns into the editable document. Paths keep their original order: in
@@ -7,7 +7,7 @@
  * example by grouping per colour) would visibly change the picture.
  *
  * Nothing from the trace is trusted into markup unchecked. `d` and `fill` are
- * validated against what VTracer actually emits, so the inline preview cannot
+ * validated against what the tracer actually emits, so the inline preview cannot
  * become an injection point even if the engine misbehaves.
  */
 
