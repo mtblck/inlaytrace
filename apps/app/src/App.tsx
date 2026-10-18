@@ -795,13 +795,11 @@ export default function App() {
       }
       setSettings(next)
       setPicking(null)
+      // A size search (or its result) was for the settings before this change.
+      sizeClient.dispose()
+      setSizeRun(null)
     })
 
-  /**
-   * Fold one traced colour into another. It's a trace setting, so it re-traces
-   * (asking first if shapes are edited), and the shared edge disappears; Unmerge
-   * in the colour list takes it back.
-   */
   /** Search for settings that fit the SVG under `kb`. */
   const findSize = async (kb: number) => {
     if (!source) return
@@ -824,11 +822,16 @@ export default function App() {
   }
   const applySize = () => {
     if (!sizeRun?.result) return
-    // Merges are about this image's colours, not something the search changes.
-    changeSettings({ ...sizeRun.result.best.settings, merge: settings.merge })
-    setSizeRun(null)
+    // Only what the search changes, on top of the settings as they are now.
+    const { colors, speckle, smoothing } = sizeRun.result.best.settings
+    changeSettings({ ...settings, colors, speckle, smoothing })
   }
 
+  /**
+   * Fold one traced colour into another. It's a trace setting, so it re-traces
+   * (asking first if shapes are edited), and the shared edge disappears; Unmerge
+   * in the colour list takes it back.
+   */
   const mergeInk = (from: string, into: string) => changeSettings({ ...settings, merge: { ...settings.merge, [from]: into } })
   const unmergeInk = (from: string) => {
     const merge = { ...settings.merge }
