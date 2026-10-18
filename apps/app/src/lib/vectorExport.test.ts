@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { unzlibSync, strFromU8 } from 'fflate'
-import { buildDxf, buildEps, buildPdf, convert, pngPixels, withSize, type Drawable } from './vectorExport'
+import { buildDxf, DXF_TOLERANCE, flattenCubic, buildEps, buildPdf, convert, pngPixels, withSize, type Drawable } from './vectorExport'
 
 const drawing: Drawable = {
   width: 100,
@@ -107,9 +107,31 @@ describe('DXF', () => {
     expect(dxf).toMatch(/VERTEX\n8\nINK_FF0000\n10\n20\n20\n80\n/)
   })
   it('flattens curves to within the stated tolerance', () => {
-    // The circle-ish shape: every vertex between its first and last stays on the curve, and there are enough of them.
-    const blue = dxf.slice(dxf.indexOf('8\nINK_0000FF\n66'))
-    const count = (blue.match(/VERTEX/g) ?? []).length
-    expect(count).toBeGreaterThan(12)
+    // A quarter circle, radius 100: every point on the curve is within the tolerance of the polyline.
+    const k = 0.5522847498 * 100
+    const [a, b, c, d] = [{ x: 100, y: 0 }, { x: 100, y: k }, { x: k, y: 100 }, { x: 0, y: 100 }]
+    const pts = [a]
+    flattenCubic(a, b, c, d, DXF_TOLERANCE, pts)
+    const toLine = (p: { x: number; y: number }) =>
+      Math.min(
+        ...pts.slice(1).map((q, i) => {
+          const s = pts[i]
+          const dx = q.x - s.x
+          const dy = q.y - s.y
+          const t = Math.max(0, Math.min(1, ((p.x - s.x) * dx + (p.y - s.y) * dy) / (dx * dx + dy * dy)))
+          return Math.hypot(p.x - s.x - t * dx, p.y - s.y - t * dy)
+        }),
+      )
+    let worst = 0
+    for (let i = 0; i <= 400; i++) {
+      const t = i / 400
+      const u = 1 - t
+      const p = { x: u * u * u * a.x + 3 * u * u * t * b.x + 3 * u * t * t * c.x + t * t * t * d.x, y: u * u * u * a.y + 3 * u * u * t * b.y + 3 * u * t * t * c.y + t * t * t * d.y }
+      worst = Math.max(worst, toLine(p))
+    }
+    expect(worst).toBeLessThanOrEqual(DXF_TOLERANCE)
+    expect(pts.length).toBeLessThan(64) // and not wastefully many
+    // The DXF's own curve got split too.
+    expect((dxf.slice(dxf.indexOf('8\nINK_0000FF\n66')).match(/VERTEX/g) ?? []).length).toBeGreaterThan(12)
   })
 })

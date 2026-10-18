@@ -205,12 +205,16 @@ const nearestAci = (hex: string) => {
 }
 
 /** A cubic as points, split until each piece is within `tol` of a straight line. */
-function flattenCubic(a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }, d: { x: number; y: number }, tol: number, out: { x: number; y: number }[], depth = 0) {
+export function flattenCubic(a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }, d: { x: number; y: number }, tol: number, out: { x: number; y: number }[], depth = 0) {
   // Control points' distance from the chord bounds the curve's.
   const dx = d.x - a.x
   const dy = d.y - a.y
-  const len = Math.hypot(dx, dy) || 1
-  const off = Math.max(Math.abs((b.x - a.x) * dy - (b.y - a.y) * dx), Math.abs((c.x - a.x) * dy - (c.y - a.y) * dx)) / len
+  const len = Math.hypot(dx, dy)
+  // With the ends together (a one-node loop), the handles' distance from the end is the bound.
+  const off =
+    len < 1e-9
+      ? Math.max(Math.hypot(b.x - a.x, b.y - a.y), Math.hypot(c.x - a.x, c.y - a.y))
+      : Math.max(Math.abs((b.x - a.x) * dy - (b.y - a.y) * dx), Math.abs((c.x - a.x) * dy - (c.y - a.y) * dx)) / len
   if (off <= tol || depth > 16) {
     out.push(d)
     return
