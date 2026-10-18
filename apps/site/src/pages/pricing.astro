@@ -1,0 +1,87 @@
+---
+/**
+ * Pricing: what's free, what HD credits buy, and what an HD run costs. Paddle's
+ * review needs prices and what a purchase includes, reachable from the site.
+ * Numbers come from data/legal.ts (and must match server/paddle.ts).
+ */
+import Page from '../layouts/Page.astro'
+import { COST, PACKS, REFUND_DAYS } from '../data/legal'
+const usd = (n: number) => `$${n.toFixed(n % 1 ? 2 : 0)}`
+---
+
+<Page title="Pricing · Inlay" description="Inlay is free. Optional HD mode is paid for with credit packs that never expire.">
+  <article class="prose" aria-labelledby="pricing-title">
+    <h1 id="pricing-title">Pricing</h1>
+    <p class="lede">Inlay is free. HD mode, for the hardest images, is optional and paid for with credits.</p>
+
+    <h2>Free, with no account</h2>
+    <p>Everything the <a href="/app/">app</a> does in your browser is free, has no limits and needs no account. That won't change.</p>
+    <ul>
+      <li>Tracing with every preset: logo, illustration, line art, pixel art, poster and centerline.</li>
+      <li>The editor: recolour, merge, move, reshape and mirror shapes.</li>
+      <li>Background removal and upscaling in your browser.</li>
+      <li>Batch tracing, and export to SVG, PNG, PDF, EPS and DXF.</li>
+      <li>The <a href="/docs/package/getting-started/">npm package</a>, MIT licensed.</li>
+    </ul>
+
+    <h2>HD mode</h2>
+    <p>
+      HD mode runs on our servers, for images that are too large or too difficult to do well in a browser. Your image is uploaded, processed
+      and deleted as soon as the result is back. You choose it image by image, and it shows a free low-resolution preview first.
+    </p>
+    <ul>
+      <li>Background removal with a larger model.</li>
+      <li>Upscaling with a larger model.</li>
+      <li>Tracing very large images.</li>
+    </ul>
+    <p>HD mode is launching soon.</p>
+
+    <h2>Credit packs</h2>
+    <table>
+      <thead>
+        <tr><th>Pack</th><th class="num">Price</th><th class="num">Per credit</th></tr>
+      </thead>
+      <tbody>
+        {
+          PACKS.map((p) => (
+            <tr>
+              <td>{p.credits} credits</td>
+              <td class="num">{usd(p.price)}</td>
+              <td class="num">{usd(p.price / p.credits)}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+    <p>
+      Prices are in US dollars. Sales tax or VAT is added where it applies; you'll see the total before you pay. Credits never expire. Buying
+      credits needs an account (an email address; no password).
+    </p>
+
+    <h2>What an HD run costs</h2>
+    <p>One credit isn't one image: the cost depends on the image's size, and the app shows it before anything is uploaded.</p>
+    <table>
+      <thead>
+        <tr><th>Image size</th><th class="num">Credits</th></tr>
+      </thead>
+      <tbody>
+        {
+          COST.map((c) => (
+            <tr>
+              <td>{c.size}</td>
+              <td class="num">{c.credits}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+    <p>If an HD run fails, its credits go straight back to your account.</p>
+
+    <h2>Payments and refunds</h2>
+    <p>
+      Payments are handled by Paddle, our reseller and the Merchant of Record for all orders: it takes the payment, charges any tax and emails
+      your receipt. You can ask for a full refund within {REFUND_DAYS} days of buying; see the <a href="/refunds/">refund policy</a>. Buying
+      credits means agreeing to the <a href="/terms/">terms</a>.
+    </p>
+  </article>
+</Page>

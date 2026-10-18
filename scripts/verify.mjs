@@ -1225,7 +1225,14 @@ if (siteOrigin) {
   const old = await landing.request.get(new URL('tools/img-to-svg/some/deep/link', siteOrigin).href, { maxRedirects: 0 })
   check(old.status() === 308 && old.headers().location === 'https://inlaytrace.com/app/some/deep/link', `the old app address redirects to inlaytrace.com/app/ (${old.status()} → ${old.headers().location})`)
   const privacy = await landing.request.get(new URL('privacy/', siteOrigin).href)
-  check(privacy.ok() && (await privacy.text()).includes('Your images never leave your device'), 'the privacy page loads')
+  check(privacy.ok() && (await privacy.text()).includes('your images never leave your device'), 'the privacy page loads')
+  // Paddle's review: pricing, terms (seller and Merchant of Record), refunds (14–90 days) and privacy, all linked from every page.
+  for (const [path, must] of [['pricing/', 'Credit packs'], ['terms/', 'Paddle.com is the Merchant of Record for all our orders'], ['refunds/', 'within 30 days'], ['privacy/', 'Paddle']]) {
+    const r = await landing.request.get(new URL(path, siteOrigin).href)
+    check(r.ok() && (await r.text()).includes(must), `/${path} loads and says “${must}”`)
+  }
+  const footer = await landing.locator('footer a').evaluateAll((as) => as.map((a) => a.getAttribute('href')))
+  check(['/pricing/', '/terms/', '/refunds/', '/privacy/'].every((h) => footer.includes(h)), 'the footer links to pricing, terms, refunds and privacy')
   const guessed = await landing.request.get(new URL('docs/', siteOrigin).href)
   check(guessed.ok() && guessed.url().endsWith('/docs/overview/'), `/docs/ leads to the docs (${guessed.url()})`)
   const docs = await newPage({ width: 1440, height: 900 })

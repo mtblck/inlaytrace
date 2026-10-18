@@ -434,3 +434,30 @@ pre {
 .prose .fine {
   margin-top: 40px;
 }
+
+/* ---- Pricing tables ----------------------------------------------------------- */
+.prose table {
+  width: 100%;
+  margin-top: 16px;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.prose th,
+.prose td {
+  padding: 10px 12px 10px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.prose th {
+  font-weight: 650;
+}
+.prose td.num,
+.prose th.num {
+  text-align: right;
+  padding-right: 0;
+}
+.prose .gap {
+  background: var(--sunk);
+  padding: 0 4px;
+}

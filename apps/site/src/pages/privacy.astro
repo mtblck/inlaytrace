@@ -1,56 +1,105 @@
 ---
 /**
- * Privacy, in plain words, for the app, the site and the package. Every
- * claim here is checkable in the code: the app makes no network requests of
- * its own (its CSP allows connect-src 'self' only), stores the session in
+ * Privacy, in plain words, for the app, the site, the package and HD mode.
+ * Every claim here is checkable in the code: the app makes no network requests
+ * of its own (its CSP allows connect-src 'self' only), stores the session in
  * IndexedDB (apps/app/src/lib/session.ts) and preferences in localStorage.
- * Update the date when anything here changes.
+ * Accounts and credits: server/ and supabase/migrations/. Paddle's review needs
+ * the seller's legal name and address here, and Paddle named as a recipient.
+ * Update the date (data/legal.ts) when anything here changes.
  */
 import Page from '../layouts/Page.astro'
+import { ADDRESS, CONTACT, SELLER, SELLER_KIND, UPDATED } from '../data/legal'
 ---
 
 <Page
   title="Privacy · Inlay"
-  description="Inlay never receives your images: they're traced in your browser and never leave your device. No accounts, no cookies, no analytics."
+  description="Inlay's free app never receives your images: they're traced in your browser. Accounts are only for buying HD credits."
 >
   <article class="prose" aria-labelledby="privacy-title">
     <h1 id="privacy-title">Privacy</h1>
-    <p class="lede">Your images never leave your device. Inlay has no server to send them to.</p>
+    <p class="lede">In the free app, your images never leave your device. We only learn anything about you if you buy HD credits.</p>
 
-    <h2>Your images</h2>
+    <h2>Who's responsible</h2>
+    <p>
+      Inlay is operated by {SELLER}, {SELLER_KIND}, who is responsible for the personal data described here.
+      {ADDRESS ? <>Postal address: {ADDRESS}.</> : <span class="gap">Postal address to come.</span>}
+      Questions or requests about your data: <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
+    </p>
+
+    <h2>The free app: your images stay with you</h2>
     <p>
       When you open an image in the <a href="/app/">app</a>, your browser decodes it, traces it, lets you edit it and exports the result,
       all on your device. Nothing is uploaded, and we never receive, see or store your files. The app makes no network requests apart from
       loading its own code from this site, and its security policy stops its code from sending data anywhere else.
     </p>
     <p>
-      The optional AI steps (removing the background, upscaling small images) work the same way: the models are downloaded from this site the first time you use them and run in your browser, on your image, on your device.
+      The optional in-browser AI steps (removing the background, upscaling small images) work the same way: the models are downloaded from
+      this site the first time you use them and run in your browser, on your image, on your device.
     </p>
-
-    <h2>What stays in your browser</h2>
     <p>
       So a reload or a closed tab doesn't lose your work, the app keeps your current image, its settings and your edits in your browser's own
-      storage. That copy is on your device only: we can't see it, and other sites can't read it. <strong>Start over</strong> in the app
-      deletes it, and so does clearing this site's data in your browser. A private window keeps nothing once it's closed.
+      storage, along with your theme and overlay colours. That copy is on your device only: we can't see it. <strong>Start over</strong> in
+      the app deletes it, and so does clearing this site's data in your browser.
     </p>
+
+    <h2>Accounts and HD credits</h2>
+    <p>You only need an account to buy and use HD credits. If you make one, we keep:</p>
+    <ul>
+      <li>Your email address, to sign you in (by emailed link; there's no password) and to match your purchases.</li>
+      <li>Your credit balance and its history: purchases, refunds and HD runs, each with the credits, the image's size and the date. Never the image.</li>
+      <li>Sign-in records (when you signed in, and the IP address and browser used), to keep accounts secure.</li>
+    </ul>
     <p>
-      The app and the docs also remember your light or dark theme, and the app remembers the overlay colours you pick, in the same browser
-      storage.
+      Signing in sets two cookies that only this site's server can read, to keep you signed in; they aren't used for anything else. We need
+      this data to provide the service you've asked for. You can delete your account, with its history, at any time from the account page.
+    </p>
+
+    <h2>HD mode</h2>
+    <p>
+      HD mode (launching soon) is the one part of Inlay where an image leaves your device, and only when you choose it for that image. The
+      image is uploaded to our server, processed, and deleted as soon as the result is sent back to you. We don't keep it, look at it or use
+      it for anything else, including training.
+    </p>
+
+    <h2>Payments</h2>
+    <p>
+      Credits are sold by Paddle, our reseller and the Merchant of Record. When you buy, you give your payment details, email and billing
+      country (and sometimes address or tax number) to Paddle, not to us; Paddle handles them under its <a
+        href="https://www.paddle.com/legal/privacy">privacy policy</a> and keeps records of the sale as tax law requires. We receive the
+      order's details from Paddle (your email, the pack, the amount and its id), never your card.
+    </p>
+
+    <h2>Who else handles data</h2>
+    <ul>
+      <li><strong>Paddle</strong>: payments, receipts, refunds and invoices.</li>
+      <li><strong>Vercel</strong>: hosts the site and runs its server code. Like any host, it records basic details of each request (such as IP address, browser and page) to deliver the site and keep it secure. See <a href="https://vercel.com/legal/privacy-policy">Vercel's privacy policy</a>.</li>
+      <li><strong>Supabase</strong>: stores accounts and credit balances.</li>
+      <li><strong>Resend</strong>: sends the sign-in emails.</li>
+    </ul>
+    <p>
+      These providers process the data on our behalf, in the United States, and only to run Inlay. We'd also share data if the law required
+      it. We never sell it.
     </p>
 
     <h2>What we don't do</h2>
     <ul>
-      <li>No accounts and no sign-in.</li>
-      <li>No cookies.</li>
       <li>No analytics, tracking or advertising.</li>
-      <li>No third-party scripts or fonts: everything is served from inlaytrace.com.</li>
+      <li>No third-party scripts or fonts, except Paddle's checkout on the buy page.</li>
+      <li>No cookies unless you sign in.</li>
     </ul>
 
-    <h2>Hosting</h2>
+    <h2>How long we keep it</h2>
     <p>
-      The site is hosted by Vercel. Like any web host, Vercel's servers record basic details of each request (such as your IP address, browser
-      and the page requested) to deliver the site and keep it secure. We don't use those records to identify or follow you. See <a
-        href="https://vercel.com/legal/privacy-policy">Vercel's privacy policy</a>.
+      Account data stays until you delete your account. Sign-in links expire after an hour. HD images are deleted as soon as the result is
+      back. Paddle keeps its records of a sale for as long as tax law requires.
+    </p>
+
+    <h2>Your rights</h2>
+    <p>
+      You can ask to see, correct, export or delete the personal data we hold about you, or object to how it's used, by emailing <a
+        href={`mailto:${CONTACT}`}>{CONTACT}</a>. Deleting your account from the account page removes it straight away. Depending on where you
+      live, you can also complain to your data protection authority.
     </p>
 
     <h2>The npm package</h2>
@@ -61,10 +110,10 @@ import Page from '../layouts/Page.astro'
 
     <h2>Questions</h2>
     <p>
-      Email <a href="mailto:hello@inlaytrace.com">hello@inlaytrace.com</a>. Inlay is open source, so you can also <a
-        href="https://github.com/mtblck/inlaytrace">read the code</a> to check any of this.
+      Email <a href={`mailto:${CONTACT}`}>{CONTACT}</a>. Inlay is open source, so you can also <a href="https://github.com/mtblck/inlaytrace"
+        >read the code</a> to check any of this.
     </p>
 
-    <p class="fine">Last updated 17 October 2026.</p>
+    <p class="fine">Last updated {UPDATED}.</p>
   </article>
 </Page>

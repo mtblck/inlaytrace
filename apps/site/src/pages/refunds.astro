@@ -1,0 +1,42 @@
+---
+/**
+ * Refund policy for HD credit packs. Paddle (the Merchant of Record) requires a
+ * window of 14 to 90 days and refunds through paddle.net; never "no refunds".
+ * The ledger takes refunded credits back (server/api.ts, supabase/migrations).
+ */
+import Page from '../layouts/Page.astro'
+import { CONTACT, REFUND_DAYS, SELLER, UPDATED } from '../data/legal'
+---
+
+<Page title="Refund policy · Inlay" description={`A full refund on any Inlay credit pack within ${REFUND_DAYS} days.`}>
+  <article class="prose" aria-labelledby="refunds-title">
+    <h1 id="refunds-title">Refund policy</h1>
+    <p class="lede">If HD mode isn't right for you, you can have your money back within {REFUND_DAYS} days of buying.</p>
+
+    <h2>What you can get back</h2>
+    <p>
+      A full refund of any credit pack, for any reason, if you ask within {REFUND_DAYS} days of buying it. The pack's credits are taken off
+      your account when you ask; if Paddle declines the refund, they come back.
+    </p>
+    <p>
+      An HD run that fails gives its credits back automatically, so you never pay for a result you didn't get. If a result is poor rather than
+      missing, tell us: we'll look at it and return the credits where it's fair.
+    </p>
+
+    <h2>How to ask</h2>
+    <p>
+      Purchases are made through Paddle, our reseller and the Merchant of Record, so refunds go through Paddle too. Find your order at <a
+        href="https://paddle.net">paddle.net</a> using the email address on your receipt, or reply to the receipt email. You can also email
+      us at <a href={`mailto:${CONTACT}`}>{CONTACT}</a> and we'll arrange it.
+    </p>
+    <p>Refunds go back to the card or account you paid with. Paddle usually processes them within a few days; your bank may take longer to show them.</p>
+
+    <h2>After {REFUND_DAYS} days</h2>
+    <p>
+      Credits never expire, so there's no deadline to use them. After {REFUND_DAYS} days we can still refund where the law requires it, or
+      where something on our side went wrong.
+    </p>
+
+    <p class="fine">Inlay is operated by {SELLER}. Last updated {UPDATED}.</p>
+  </article>
+</Page>

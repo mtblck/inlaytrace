@@ -122,7 +122,15 @@ export default function Buy() {
               ))}
             </ul>
             <p className="field-hint mt-6">
-              Payments are handled by Paddle, which is the seller of record: it charges any sales tax or VAT and emails your receipt. You're buying as {view.email}.
+              Payments are handled by Paddle, our reseller and Merchant of Record: it charges any sales tax or VAT and emails your receipt. You're buying as {view.email}. Buying means agreeing to the{' '}
+              <a href="/terms/" className="underline">
+                terms
+              </a>
+              ; you can have a full refund within 30 days (
+              <a href="/refunds/" className="underline">
+                refund policy
+              </a>
+              ).
             </p>
             {error && (
               <p className="mt-4 text-[14px]" role="alert">
