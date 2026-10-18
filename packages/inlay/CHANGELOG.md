@@ -1,5 +1,12 @@
 # inlaytrace
 
+## 0.1.3
+
+### Patch Changes
+
+- f71beed: New `shapes` option: a closed outline that is a circle, an ellipse, a rectangle, a rounded rectangle or a regular polygon is drawn as that exact shape instead of fitted curves (on the sample badge, 0.70% → 0.54% wrong pixels). Off by default.
+- 074cc75: `detectSymmetry(rgba, width, height, options?)` finds the likeliest mirror axes (vertical and horizontal) and rotational orders (2–8 by default) in an image, each scored by the share of the drawing that matches its reflection or turn.
+
 ## 0.1.2
 
 ### Patch Changes
