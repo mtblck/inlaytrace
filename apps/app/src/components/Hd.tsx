@@ -1,18 +1,21 @@
 import { useState } from 'react'
-import { costFor } from '../../../../server/pricing'
+import { costFor, UPSCALE } from '../../../../server/pricing'
 import { api } from '../account/api'
 import type { Settings } from '../engine/presets'
-import { hdTrace, type HdProgress } from '../lib/hd'
+import { hdRun, type HdKind, type HdProgress } from '../lib/hd'
 import { formatBytes } from '../lib/svg'
 
 type Props = {
+  kind: HdKind
   /** The image exactly as the app traces it (after any AI steps), at its full size. */
   bitmap: ImageBitmap
   settings: Settings
   /** The long edge the app traces at, for saying what HD adds. */
   traceEdge: number
-  onSave: (svg: string) => void
-  onOpen: (svg: string) => void
+  /** Save the result (an SVG for a trace, a PNG for an upscale). */
+  onSave: (result: Blob) => void
+  /** Open the result in the app: to edit (a trace) or to trace (an upscale). */
+  onOpen: (result: Blob) => void
 }
 
 type Phase =
@@ -21,26 +24,33 @@ type Phase =
   | { kind: 'signedOut' }
   | { kind: 'confirm'; balance: number }
   | { kind: 'working'; progress: HdProgress }
-  | { kind: 'done'; svg: string }
+  | { kind: 'done'; result: Blob }
   | { kind: 'error'; message: string }
 
 const STAGES: Record<HdProgress['stage'], string> = {
   encoding: 'Preparing the image…',
   uploading: 'Uploading',
-  running: 'Tracing on the server…',
+  running: 'Working on the server…',
   downloading: 'Downloading the result',
 }
 
+const n = (x: number) => x.toLocaleString()
+const plural = (c: number) => `${c} credit${c === 1 ? '' : 's'}`
+
 /**
- * HD trace (beta): the same trace at the image's full size, on the server, paid
- * for with credits. Shown only for images bigger than the app traces. Nothing
- * is sent anywhere until the person confirms the cost.
+ * HD (beta), paid with credits, on the server: a full-size trace for images
+ * bigger than the app traces, or a 4× upscale with a larger model for small
+ * ones. Nothing is sent anywhere until the person confirms the cost.
  */
 export function Hd(p: Props) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
   const { width, height } = p.bitmap
-  const credits = costFor(width, height)
-  const plural = (n: number) => `${n} credit${n === 1 ? '' : 's'}`
+  const credits = costFor(width, height, p.kind)
+  const trace = p.kind === 'trace'
+  const title = trace ? 'HD trace' : 'HD upscale'
+  const what = trace
+    ? `Traces this image at its full size, ${n(width)} × ${n(height)}, on Inlay’s server, for finer detail than the ${n(p.traceEdge)} px trace here.`
+    : `Upscales this image 4×, to ${n(width * UPSCALE.factor)} × ${n(height * UPSCALE.factor)}, with a larger model than the in-browser upscaler, on Inlay’s server. Then you can trace the result. It can take a couple of minutes.`
 
   async function check() {
     setPhase({ kind: 'checking' })
@@ -55,25 +65,25 @@ export function Hd(p: Props) {
   async function run() {
     setPhase({ kind: 'working', progress: { stage: 'encoding', done: 0, total: 1 } })
     try {
-      const svg = await hdTrace(p.bitmap, p.settings, (progress) => setPhase({ kind: 'working', progress }))
-      setPhase({ kind: 'done', svg })
+      const result = await hdRun(p.kind, p.bitmap, trace ? p.settings : null, (progress) => setPhase({ kind: 'working', progress }))
+      setPhase({ kind: 'done', result })
     } catch (e) {
       setPhase({ kind: 'error', message: e instanceof Error ? e.message : String(e) })
     }
   }
 
   return (
-    <details className="group mt-2" data-hd="">
+    <details className="group mt-2" data-hd={p.kind}>
       <summary className="cursor-pointer list-none text-[12.5px] text-ink-muted select-none hover:text-ink">
-        <span className="inline-block transition-transform group-open:rotate-90">›</span> HD trace{' '}
+        <span className="inline-block transition-transform group-open:rotate-90">›</span> {title}{' '}
         <span className="rounded-sm border border-rule px-1 text-[10.5px] text-ink-muted">Beta</span>
         <span className="num ml-1.5">
-          {width.toLocaleString()} × {height.toLocaleString()}, {plural(credits)}
+          {trace ? `${n(width)} × ${n(height)}` : `${n(width)} × ${n(height)} → 4×`}, {plural(credits)}
         </span>
       </summary>
       <div className="mt-2 space-y-2.5 text-[13px]">
         <p className="field-hint">
-          Traces this image at its full size, {width.toLocaleString()} × {height.toLocaleString()}, on Inlay’s server, for finer detail than the {p.traceEdge.toLocaleString()} px trace here. Your image is uploaded, traced, and deleted as soon as the result is back.{' '}
+          {what} Your image is uploaded, processed, and deleted as soon as the result is back.{' '}
           <a href="/pricing/" className="underline underline-offset-2 hover:text-ink">
             HD is in beta
           </a>
@@ -82,7 +92,7 @@ export function Hd(p: Props) {
 
         {(phase.kind === 'idle' || phase.kind === 'checking') && (
           <button className="btn w-full" disabled={phase.kind === 'checking'} onClick={check}>
-            {phase.kind === 'checking' ? 'Checking your account…' : `Trace in HD for ${plural(credits)}`}
+            {phase.kind === 'checking' ? 'Checking your account…' : `${trace ? 'Trace in HD' : 'Upscale in HD'} for ${plural(credits)}`}
           </button>
         )}
 
@@ -100,11 +110,11 @@ export function Hd(p: Props) {
           (phase.balance >= credits ? (
             <div className="space-y-2">
               <p>
-                You have {plural(phase.balance)}; this uses {credits}. If the trace fails, they come straight back.
+                You have {plural(phase.balance)}; this uses {credits}. If it fails, they come straight back.
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <button className="btn btn-primary" onClick={run}>
-                  Start HD trace
+                  {trace ? 'Start HD trace' : 'Start HD upscale'}
                 </button>
                 <button className="btn" onClick={() => setPhase({ kind: 'idle' })}>
                   Cancel
@@ -131,13 +141,15 @@ export function Hd(p: Props) {
 
         {phase.kind === 'done' && (
           <div className="space-y-2" role="status">
-            <p>HD trace done: {formatBytes(new Blob([phase.svg]).size)}.</p>
+            <p>
+              {title} done: {formatBytes(phase.result.size)}.
+            </p>
             <div className="grid grid-cols-2 gap-2">
-              <button className="btn btn-primary" onClick={() => p.onSave(phase.svg)}>
-                Download HD
+              <button className="btn btn-primary" onClick={() => p.onSave(phase.result)}>
+                {trace ? 'Download HD' : 'Download PNG'}
               </button>
-              <button className="btn" onClick={() => p.onOpen(phase.svg)}>
-                Open to edit
+              <button className="btn" onClick={() => p.onOpen(phase.result)}>
+                {trace ? 'Open to edit' : 'Trace it'}
               </button>
             </div>
           </div>

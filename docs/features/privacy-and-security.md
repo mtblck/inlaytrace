@@ -10,7 +10,7 @@ The image is decoded, traced, edited and exported in your browser. There is no
 upload, no server step, no analytics and no third-party script. Tracing runs in
 a Web Worker; SVGO and paper.js are loaded from the same site, on first use.
 
-The one exception is [HD trace](hd-trace.md), which is paid, in beta, and
+The one exception is [HD](hd.md), which is paid, in beta, and
 happens only when you confirm it for an image: that image is uploaded, traced
 at full size on Inlay's server, and deleted as soon as the result is back. The
 app sends nothing to the server before you confirm, and talks only to its own

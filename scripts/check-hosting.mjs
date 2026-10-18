@@ -63,6 +63,10 @@ if (!config.functions?.['api/server.ts']) problems.push('vercel.json functions m
 const hdAt = rewrites.findIndex((r) => r.source === '/api/hd/(.*)' && r.destination === '/api/hd?__route=hd/$1')
 if (hdAt < 0 || hdAt > apiAt) problems.push('Missing the HD rewrite /api/hd/(.*) → /api/hd?__route=hd/$1, before the general /api/(.*) one.')
 if (!(config.functions?.['api/hd.ts']?.maxDuration >= 120)) problems.push('vercel.json functions must give api/hd.ts (HD jobs) a maxDuration of at least 120 s.')
+// ONNX Runtime for Node ships binaries for every platform (about 290 MB); Vercel's limit is 250 MB per function.
+if (!/darwin/.test(config.functions?.['api/hd.ts']?.excludeFiles ?? '') || !/win32/.test(config.functions?.['api/hd.ts']?.excludeFiles ?? ''))
+  problems.push("api/hd.ts must exclude onnxruntime-node's macOS and Windows binaries (excludeFiles), or it passes Vercel's 250 MB function limit.")
+if (!/onnxruntime-node/.test(config.functions?.['api/server.ts']?.excludeFiles ?? '')) problems.push('api/server.ts must exclude onnxruntime-node (excludeFiles): only HD jobs (api/hd.ts) run models.')
 if (!(config.crons ?? []).some((c) => c.path === '/api/keepalive')) problems.push('Missing the daily cron to /api/keepalive; without it the free Supabase project pauses after a week.')
 
 const cspOf = (source) => (config.headers ?? []).find((b) => b.source === source)?.headers.find((h) => h.key === 'Content-Security-Policy')?.value

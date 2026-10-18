@@ -2,7 +2,7 @@
 order: 8
 ---
 
-# HD trace (beta)
+# HD (beta)
 
 The app traces at most 2048 px on the long edge (4096 for pixel art), so a big
 image loses some fine detail. **HD trace** traces the same image at its full
@@ -30,6 +30,16 @@ saw. Smoothing isn't, so finer detail survives.
 | Up to 4 megapixels | 1 |
 | Up to 16 megapixels | 2 |
 | Larger (up to 50 megapixels) | 4 |
+
+## HD upscale
+
+For small images (up to 0.5 megapixels, about 700 × 700), HD offers a 4×
+upscale with Real-ESRGAN x4plus, a larger model than the in-browser upscaler,
+for 2 credits. It takes a minute or two. **Trace it** opens the result
+in the app to trace; **Download PNG** saves it.
+
+Background removal stays in the browser for now: the server-sized model was
+no better than remove.bg on busy photos (see `docs/hd-mode.md`).
 
 HD is the only part of Inlay where an image leaves your device, and only when
 you confirm it for that image. See [Privacy and security](privacy-and-security.md).

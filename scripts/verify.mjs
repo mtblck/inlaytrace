@@ -1294,7 +1294,7 @@ if (siteOrigin) {
   await hd.goto(url)
   await hd.locator('input[type=file]').setInputFiles({ name: 'big.png', mimeType: 'image/png', buffer: big })
   await traced(hd)
-  const summary = hd.locator('[data-hd] summary')
+  const summary = hd.locator('[data-hd="trace"] summary')
   check((await summary.innerText()).includes('2,600 × 1,800, 2 credits'), `a big image offers HD with its size and cost (${(await summary.innerText()).replace(/\s+/g, ' ')})`)
   check(apiCalls.length === 0, 'nothing is sent to the server just for opening a big image')
   await summary.click()
@@ -1307,7 +1307,10 @@ if (siteOrigin) {
   await small.goto(url)
   await small.getByRole('button', { name: 'Try a sample' }).click()
   await traced(small)
-  check((await small.locator('[data-hd]').count()) === 0, 'a small image offers no HD (nothing to gain)')
+  const offers = await small.locator('[data-hd]').evaluateAll((els) => els.map((e) => e.getAttribute('data-hd')))
+  const dims = await small.evaluate(() => document.querySelector('aside')?.innerText.match(/(\d+) × (\d+)/)?.slice(1).map(Number))
+  const smallEnough = dims && dims[0] * dims[1] <= 500_000
+  check(!offers.includes('trace') && (smallEnough ? offers.includes('upscale') : offers.length === 0), `a small image offers no HD trace${smallEnough ? ', and offers HD upscale (2 credits)' : ''} (${offers.join(', ') || 'none'})`)
 }
 
 // ---- The account page (sign-in and credits for HD) ----------------------------

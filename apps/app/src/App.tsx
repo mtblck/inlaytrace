@@ -46,6 +46,7 @@ import { Canvas, type Overlays, type SelectMode, type Tool, type ViewMode } from
 import { ShortcutsDialog } from './components/Shortcuts'
 import { ExportOptions } from './components/ExportOptions'
 import { Hd } from './components/Hd'
+import { UPSCALE } from '../../../server/pricing'
 import { clearSession, loadSession, newSessionId, saveImage, saveState } from './lib/session'
 import { buildDxf, buildEps, buildPdf, pngPixels, withSize, type ExportSize } from './lib/vectorExport'
 import { IconButton, KeyboardIcon, MoonIcon, SunIcon } from './components/IconButton'
@@ -1372,15 +1373,16 @@ export default function App() {
                 onDxf={downloadDxf}
               />
             )}
-            {/* HD (beta): only for images bigger than the app traces, and never for an opened SVG. */}
-            {traceSource && !traceSource.svg && Math.max(traceSource.bitmap.width, traceSource.bitmap.height) > maxTraceEdge(settings.preset) && (
+            {/* HD (beta), never for an opened SVG: a full-size trace for images bigger than the app traces, or a 4× upscale for small ones. */}
+            {traceSource && !traceSource.svg && (Math.max(traceSource.bitmap.width, traceSource.bitmap.height) > maxTraceEdge(settings.preset) || traceSource.bitmap.width * traceSource.bitmap.height <= UPSCALE.maxPixels) && (
               <Hd
                 key={traceSource.url}
+                kind={Math.max(traceSource.bitmap.width, traceSource.bitmap.height) > maxTraceEdge(settings.preset) ? 'trace' : 'upscale'}
                 bitmap={traceSource.bitmap}
                 settings={settings}
                 traceEdge={maxTraceEdge(settings.preset)}
-                onSave={(svg) => save(new Blob([svg], { type: 'image/svg+xml' }), `${source!.name}-hd.svg`)}
-                onOpen={(svg) => void openNow(new Blob([svg], { type: 'image/svg+xml' }), `${source!.name}-hd.svg`)}
+                onSave={(blob) => save(blob, `${source!.name}-hd.${blob.type === 'image/png' ? 'png' : 'svg'}`)}
+                onOpen={(blob) => void openNow(blob, `${source!.name}-hd.${blob.type === 'image/png' ? 'png' : 'svg'}`)}
               />
             )}
           </div>

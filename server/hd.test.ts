@@ -1,5 +1,28 @@
-import { encode } from 'fast-png'
-import { describe, expect, it } from 'vitest'
+import { decode, encode } from 'fast-png'
+import { describe, expect, it, vi } from 'vitest'
+
+// A stand-in for Real-ESRGAN: nearest-neighbour 4×, in the model's planar 0–1 format.
+vi.mock('./models', () => {
+  class Tensor {
+    constructor(
+      readonly type: string,
+      readonly data: Float32Array,
+      readonly dims: number[],
+    ) {}
+  }
+  const session = {
+    inputNames: ['input'],
+    outputNames: ['output'],
+    async run(feeds: Record<string, Tensor>) {
+      const { data, dims } = feeds.input
+      const [, , h, w] = dims
+      const out = new Float32Array(3 * h * 4 * w * 4)
+      for (let c = 0; c < 3; c++) for (let y = 0; y < h * 4; y++) for (let x = 0; x < w * 4; x++) out[c * h * w * 16 + y * w * 4 + x] = data[c * h * w + Math.floor(y / 4) * w + Math.floor(x / 4)]
+      return { output: { data: out } }
+    },
+  }
+  return { loadModel: vi.fn(async () => ({ session, runtime: { Tensor } })) }
+})
 import { cleanSettings, cleanup, PART_BYTES, resultPart, runJob, scaleSettings, startRun, uploadPart } from './hd'
 import type { HdRun, Supabase, User } from './supabase'
 
@@ -167,6 +190,27 @@ describe('running it', () => {
     expect((await runJob(f.db, BOB, run)).status).toBe(404)
     expect((await uploadPart(f.db, ADA, run, '3', png())).status).toBe(400)
     expect((await uploadPart(f.db, ADA, run, '0', new Uint8Array(PART_BYTES + 1))).status).toBe(413)
+  })
+})
+
+describe('upscaling', () => {
+  it('costs 2 credits, takes images up to half a megapixel, and returns a 4× PNG', async () => {
+    const f = fakeDb()
+    expect((await startRun(f.db, ADA, { kind: 'upscale', width: 800, height: 700, parts: 1, contentType: 'image/png' }, {})).status).toBe(400) // 0.56 MP
+    const r = await startRun(f.db, ADA, { kind: 'upscale', width: 64, height: 48, parts: 1, contentType: 'image/png' }, {})
+    expect(r.body).toMatchObject({ credits: 2 })
+    const run = (r.body as { run: string }).run
+    await uploadPart(f.db, ADA, run, '0', png())
+    const done = await runJob(f.db, ADA, run)
+    expect(done.status).toBe(200)
+    expect(done.body).toMatchObject({ contentType: 'image/png', credits: 2 })
+    expect(f.bal(ADA.id)).toBe(8)
+    const out = decode((await resultPart(f.db, ADA, run, '0')).bytes!)
+    expect([out.width, out.height]).toEqual([256, 192])
+    // The square's colour, 4× further in; the background stays; alpha stays opaque.
+    const at = (x: number, y: number) => Array.from(out.data.slice((y * 256 + x) * 4, (y * 256 + x) * 4 + 4))
+    expect(at(128, 96)).toEqual([30, 60, 140, 255])
+    expect(at(8, 8)).toEqual([250, 250, 250, 255])
   })
 })
 

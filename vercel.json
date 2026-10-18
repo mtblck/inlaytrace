@@ -5,11 +5,13 @@
   "outputDirectory": "dist",
   "functions": {
     "api/server.ts": {
-      "maxDuration": 15
+      "maxDuration": 15,
+      "excludeFiles": "node_modules/onnxruntime-node/**"
     },
     "api/hd.ts": {
       "maxDuration": 300,
-      "memory": 3009
+      "memory": 3009,
+      "excludeFiles": "node_modules/onnxruntime-node/bin/napi-v6/{darwin,win32,linux/arm64}/**"
     }
   },
   "crons": [

@@ -272,7 +272,7 @@ async function hdRoute(req: Request, route: string, db: Supabase, env: Env): Pro
     case 'POST hd/run': {
       if (!isJson) return json({ error: 'Send JSON.' }, 415)
       const body = await readJson(req)
-      return send(await runJob(db, auth.user, String(body.run ?? '')))
+      return send(await runJob(db, auth.user, String(body.run ?? ''), env))
     }
     case 'GET hd/result':
       return send(await resultPart(db, auth.user, url.searchParams.get('run') ?? '', url.searchParams.get('part')))

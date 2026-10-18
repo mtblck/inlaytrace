@@ -125,8 +125,18 @@ plan forbids taking payments.
   about 600 MB. Images and results travel in 4 MB parts through `/api` (Vercel's
   body limit), are kept in the private `hd` storage bucket only for the run,
   and the daily cron sweeps anything older than an hour.
-- **Background removal and upscaling**: models next (weights fetched by a GitHub
-  Actions job, kept in Vercel Blob), with the remove.bg comparison.
+- **Upscaling** (beta): Real-ESRGAN x4plus (BSD-3) on the server with
+  onnxruntime-node, 2 credits for inputs up to 0.5 MP (`server/pricing.ts`), tiled
+  as in the browser (192 px tiles). About 14 s per 256 × 256 tile on a runner CPU,
+  so the cap keeps a run inside the function's 300 s; a run past 270 s gives up and
+  refunds. The model comes from the private Vercel Blob store (`server/models.ts`).
+- **Background removal: skipped for the beta.** Only BiRefNet's tiny model fits a
+  3 GB function (the full one ran out of memory on a 16 GB runner). Against
+  remove.bg it matched on a product photo and logos (under 0.5% of the mask) and
+  beat the free U²-Net on the cat and the rocket, but cut the astronaut's helmet off
+  (12%) and lost a tower behind the rocket. Not good enough to charge for. A GPU
+  service with the full model is the way back, at a privacy cost. Report:
+  `hd-models-report` branch.
 
 ## Open
 

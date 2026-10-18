@@ -40,23 +40,28 @@ export async function encodeFullSize(bitmap: ImageBitmap): Promise<Blob> {
   return canvas.convertToBlob({ type: 'image/png' })
 }
 
-/** Trace `bitmap` at full size on the server. Resolves to the SVG. */
-export async function hdTrace(bitmap: ImageBitmap, settings: Settings, progress: (p: HdProgress) => void): Promise<string> {
+export type HdKind = 'trace' | 'upscale'
+
+/**
+ * Run an HD job on `bitmap` (as the app traces it): `trace` at full size with
+ * `settings` (resolves to the SVG), or `upscale` 4× (resolves to a PNG).
+ */
+export async function hdRun(kind: HdKind, bitmap: ImageBitmap, settings: Settings | null, progress: (p: HdProgress) => void): Promise<Blob> {
   progress({ stage: 'encoding', done: 0, total: 1 })
   const png = await encodeFullSize(bitmap)
   const PART = 4 * 1024 * 1024
   const parts = Math.max(1, Math.ceil(png.size / PART))
-  const { run } = await post<{ run: string; credits: number }>('start', { kind: 'trace', width: bitmap.width, height: bitmap.height, parts, contentType: 'image/png', settings })
+  const { run } = await post<{ run: string; credits: number }>('start', { kind, width: bitmap.width, height: bitmap.height, parts, contentType: 'image/png', ...(settings ? { settings } : {}) })
   for (let i = 0; i < parts; i++) {
     progress({ stage: 'uploading', done: i, total: parts })
     await call(`upload?run=${run}&part=${i}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: png.slice(i * PART, (i + 1) * PART) })
   }
   progress({ stage: 'running', done: 0, total: 1 })
-  const result = await post<{ parts: number }>('run', { run })
+  const result = await post<{ parts: number; contentType: string }>('run', { run })
   const chunks: Uint8Array[] = []
   for (let i = 0; i < result.parts; i++) {
     progress({ stage: 'downloading', done: i, total: result.parts })
     chunks.push(await call<Uint8Array>(`result?run=${run}&part=${i}`))
   }
-  return new TextDecoder().decode(await new Blob(chunks as BlobPart[]).arrayBuffer())
+  return new Blob(chunks as BlobPart[], { type: result.contentType })
 }

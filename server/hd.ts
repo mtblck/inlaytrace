@@ -1,7 +1,8 @@
 /**
  * HD mode: paid jobs run on the server for images the browser can't do as well.
- * The first kind is `trace`: the app traces at most 2048 px on the long edge
- * (4096 for pixel art), and HD traces the same image at its full size.
+ * Two kinds: `trace` (the app traces at most 2048 px on the long edge, 4096 for
+ * pixel art; HD traces the same image at its full size) and `upscale`
+ * (Real-ESRGAN x4plus, 4×, for images up to half a megapixel; server/upscale.ts).
  *
  * A run, in four requests (all under /api/hd/, each body and response under
  * Vercel's 4.5 MB limit, so the image and the result travel in parts):
@@ -21,7 +22,9 @@
 import { maxTraceEdge, PRESETS, toTraceOptions, type PresetId, type Settings } from '../apps/app/src/engine/presets.js'
 import { runTrace } from '../apps/app/src/engine/run.js'
 import { decodeImage, MAX_PIXELS } from './image.js'
-import { costFor } from './pricing.js'
+import { loadModel, type ModelEnv } from './models.js'
+import { costFor, UPSCALE } from './pricing.js'
+import { toPng, upscale4 } from './upscale.js'
 import type { HdRun, Supabase, User } from './supabase.js'
 
 /** Bytes per part, both ways: under Vercel's 4.5 MB body limit with room for headers. */
@@ -31,10 +34,12 @@ const MAX_PARTS = 32
 const DAILY_RUNS = 500
 /** How long a run's files may stay in storage at most. */
 const KEEP_MS = 60 * 60 * 1000
-const KINDS = ['trace'] as const
+const KINDS = ['trace', 'upscale'] as const
 type Kind = (typeof KINDS)[number]
 
-export type HdEnv = { HD_DAILY_RUNS?: string }
+export type HdEnv = { HD_DAILY_RUNS?: string } & ModelEnv
+/** A run gives up (and refunds) this long after it starts, inside the function's 300 s. */
+const RUN_MS = 270_000
 type Reply = { status: number; body?: unknown; bytes?: Uint8Array; contentType?: string }
 const err = (status: number, error: string, code?: string): Reply => ({ status, body: { error, ...(code ? { code } : {}) } })
 
@@ -46,13 +51,14 @@ export async function startRun(db: Supabase, user: User, body: Record<string, un
   const width = Math.floor(Number(body.width))
   const height = Math.floor(Number(body.height))
   if (!(width > 0 && height > 0) || width * height > MAX_PIXELS) return err(400, `HD takes images up to ${MAX_PIXELS / 1e6} megapixels.`)
+  if (kind === 'upscale' && width * height > UPSCALE.maxPixels) return err(400, `HD upscaling takes images up to ${UPSCALE.maxPixels / 1e6} megapixels (about 700 × 700).`)
   const parts = Math.floor(Number(body.parts))
   if (!(parts >= 1 && parts <= MAX_PARTS)) return err(400, `The image must arrive in 1 to ${MAX_PARTS} parts of 4 MB.`)
   const contentType = body.contentType === 'image/jpeg' ? 'image/jpeg' : body.contentType === 'image/png' ? 'image/png' : null
   if (!contentType) return err(400, 'Send the image as PNG or JPEG.')
   const settings = kind === 'trace' ? cleanSettings(body.settings) : null
   if (kind === 'trace' && !settings) return err(400, 'Those trace settings aren’t valid.')
-  const credits = costFor(width, height)
+  const credits = costFor(width, height, kind)
 
   // Caps: one run at a time per person, and a daily ceiling across everyone.
   const since = new Date(Date.now() - KEEP_MS).toISOString()
@@ -108,7 +114,8 @@ export async function uploadPart(db: Supabase, user: User, runId: string, partRa
 
 // ---- run ----------------------------------------------------------------------------
 
-export async function runJob(db: Supabase, user: User, runId: string): Promise<Reply> {
+export async function runJob(db: Supabase, user: User, runId: string, env: HdEnv = {}): Promise<Reply> {
+  const deadline = Date.now() + RUN_MS
   const run = await mine(db, user, runId)
   if (!run) return err(404, 'No such HD run.')
   if (run.status !== 'uploading') return err(409, 'This run has already started.')
@@ -132,8 +139,8 @@ export async function runJob(db: Supabase, user: User, runId: string): Promise<R
   try {
     const image = decodeImage(concat(parts), run.content_type)
     if (image.width !== run.width || image.height !== run.height) throw new UserError(`The image is ${image.width} × ${image.height}, not the ${run.width} × ${run.height} that was priced.`)
-    const result = process(run, image)
-    const out = new TextEncoder().encode(result.text)
+    const result = await process(run, image, env, deadline)
+    const out = result.bytes
     const count = Math.max(1, Math.ceil(out.length / PART_BYTES))
     for (let i = 0; i < count; i++) await db.putFile(`${run.id}/out-${i}`, out.subarray(i * PART_BYTES, (i + 1) * PART_BYTES), 'application/octet-stream')
     await finish(db, run, { status: 'done', parts_out: count, result_type: result.type })
@@ -150,10 +157,15 @@ export async function runJob(db: Supabase, user: User, runId: string): Promise<R
 
 class UserError extends Error {}
 
-function process(run: HdRun, image: { data: Uint8Array; width: number; height: number }): { text: string; type: string } {
+async function process(run: HdRun, image: { data: Uint8Array; width: number; height: number }, env: HdEnv, deadline: number): Promise<{ bytes: Uint8Array; type: string }> {
   if (run.kind === 'trace') {
     const settings = run.options.settings as Settings
-    return { text: runTrace(image.data, image.width, image.height, toTraceOptions(scaleSettings(settings, image.width, image.height))), type: 'image/svg+xml' }
+    const svg = runTrace(image.data, image.width, image.height, toTraceOptions(scaleSettings(settings, image.width, image.height)))
+    return { bytes: new TextEncoder().encode(svg), type: 'image/svg+xml' }
+  }
+  if (run.kind === 'upscale') {
+    const model = await loadModel('upscale', env)
+    return { bytes: toPng(await upscale4(image, model, deadline)), type: 'image/png' }
   }
   throw new Error(`No processor for ${run.kind}.`)
 }
@@ -169,7 +181,7 @@ export function scaleSettings(s: Settings, width: number, height: number): Setti
   return { ...s, speckle: Math.round(s.speckle * k * k), strokeWidth: s.strokeWidth * k }
 }
 
-const describeKind = (kind: HdRun['kind']) => ({ trace: 'full-size trace', background: 'background removal', upscale: 'upscaling' })[kind]
+const describeKind = (kind: HdRun['kind']) => ({ trace: 'full-size trace', background: 'background removal', upscale: 'upscaling 4×' })[kind]
 
 /** End a run: record the outcome and delete the image (never kept past its run). */
 async function finish(db: Supabase, run: HdRun, patch: Partial<HdRun>) {
