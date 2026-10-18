@@ -17,8 +17,12 @@
 import { normalizeHex, type Trace } from './svg'
 import { mapPoints, parsePath, serializePath, type Pt } from './pathdata'
 
-/** `fill` is the path's colour; with `stroke` (a width in px) the path is stroked in it, not filled. */
-export type DocPath = { id: string; d: string; fill: string; stroke?: number }
+/**
+ * `fill` is the path's colour; with `stroke` (a width in px) the path is
+ * stroked in it, not filled. Paths with the same `group` are one group: they
+ * select together, sit next to each other in paint order, and export as a <g>.
+ */
+export type DocPath = { id: string; d: string; fill: string; stroke?: number; group?: string }
 export type Doc = { width: number; height: number; paths: DocPath[] }
 export type InkEdits = { recolor: Record<string, string>; removed: string[] }
 /**
@@ -90,13 +94,13 @@ export function shownFill(inks: InkEdits, fill: string): string | null {
 
 /** Paths as drawn: removed inks dropped, recolours applied, anything malformed skipped. */
 export function visiblePaths(doc: Doc, inks: InkEdits, only?: string) {
-  const out: { id: string; d: string; fill: string; stroke?: number }[] = []
+  const out: { id: string; d: string; fill: string; stroke?: number; group?: string }[] = []
   for (const p of doc.paths) {
     if (only && p.fill !== only) continue
     const fill = shownFill(inks, p.fill)
     // Edited `d` is ours, but it is still checked: this string becomes markup.
     if (!fill || !isSafe(p)) continue
-    out.push({ id: p.id, d: p.d, fill, ...(validStroke(p.stroke) ? { stroke: p.stroke } : {}) })
+    out.push({ id: p.id, d: p.d, fill, ...(validStroke(p.stroke) ? { stroke: p.stroke } : {}), ...(p.group && GROUP.test(p.group) ? { group: p.group } : {}) })
   }
   return out
 }
@@ -112,11 +116,27 @@ export function buildSvg(doc: Doc, inks: InkEdits = NO_INKS, only?: string, back
   const body = [
     // First, so it sits behind every shape.
     ...(bg ? [`<rect width="${w}" height="${h}" fill="${bg}"/>`] : []),
-    ...visiblePaths(doc, inks, only).map((p) => pathMarkup(p)),
+    ...grouped(visiblePaths(doc, inks, only)),
   ].join('\n')
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n${body}\n</svg>\n`
 }
 
+/** Paths as markup, each run of one group's paths wrapped in a <g>. */
+function grouped(paths: { d: string; fill: string; stroke?: number; group?: string }[]) {
+  const out: string[] = []
+  for (let i = 0; i < paths.length; ) {
+    const g = paths[i].group
+    let j = i + 1
+    if (g) while (j < paths.length && paths[j].group === g) j++
+    const run = paths.slice(i, j).map(pathMarkup)
+    // A group left with one member (the rest deleted) is just that path.
+    out.push(...(run.length > 1 ? [`<g id="${g}">`, ...run.map((m) => `  ${m}`), '</g>'] : run))
+    i = j
+  }
+  return out
+}
+
+const GROUP = /^g\d+$/
 const validStroke = (s: unknown): s is number => typeof s === 'number' && Number.isFinite(s) && s > 0
 
 /** One path as markup: filled, or a round-capped stroke in its colour. */
@@ -229,3 +249,83 @@ const multiply = ([a, b, c, d, e, f]: Matrix, [A, B, C, D, E, F]: Matrix): Matri
   a * E + c * F + e,
   b * E + d * F + f,
 ]
+
+// ---- Groups and paint order -------------------------------------------------
+
+let nextGroup = 1
+/** After restoring a document, new group ids must not reuse its ones. */
+export function reserveGroups(doc: Doc | null) {
+  for (const p of doc?.paths ?? []) {
+    const n = Number(p.group?.slice(1))
+    if (p.group && Number.isFinite(n) && n >= nextGroup) nextGroup = n + 1
+  }
+}
+
+/** The ids, plus every other member of any group one of them is in. */
+export function withGroups(doc: Doc, ids: string[]): string[] {
+  const groups = new Set(doc.paths.filter((p) => p.group && ids.includes(p.id)).map((p) => p.group))
+  if (!groups.size) return ids
+  const out = [...ids]
+  for (const p of doc.paths) if (p.group && groups.has(p.group) && !out.includes(p.id)) out.push(p.id)
+  return out
+}
+
+/**
+ * Group the paths (and the groups they're in) as one group. Members move
+ * together to where the topmost of them was painted, in their own order, so
+ * grouping only changes the picture where a member was between two others.
+ */
+export function groupPaths(doc: Doc, ids: string[]): Doc {
+  const all = new Set(withGroups(doc, ids))
+  if (all.size < 2) return doc
+  const group = `g${nextGroup++}`
+  const members = doc.paths.filter((p) => all.has(p.id)).map((p) => ({ ...p, group }))
+  const top = doc.paths.reduce((last, p, i) => (all.has(p.id) ? i : last), -1)
+  const before = doc.paths.slice(0, top + 1).filter((p) => !all.has(p.id))
+  const after = doc.paths.slice(top + 1)
+  return { ...doc, paths: [...before, ...members, ...after] }
+}
+
+/** Ungroup every group the paths are in. */
+export function ungroupPaths(doc: Doc, ids: string[]): Doc {
+  const groups = new Set(doc.paths.filter((p) => p.group && ids.includes(p.id)).map((p) => p.group))
+  if (!groups.size) return doc
+  return { ...doc, paths: doc.paths.map((p) => (p.group && groups.has(p.group) ? { id: p.id, d: p.d, fill: p.fill, ...(p.stroke ? { stroke: p.stroke } : {}) } : p)) }
+}
+
+export type Arrange = 'forward' | 'backward' | 'front' | 'back'
+
+/**
+ * Change the paint order of the paths (whole groups, since a group's members
+ * stay together). Forward and backward move each past one neighbour (a path,
+ * or a whole group); front and back move them to the top or bottom, keeping
+ * their order among themselves.
+ */
+export function arrange(doc: Doc, ids: string[], how: Arrange): Doc {
+  const picked = new Set(withGroups(doc, ids))
+  if (!picked.size) return doc
+  // Units: a group's run of paths, or a single path.
+  const units: DocPath[][] = []
+  for (const p of doc.paths) {
+    const last = units[units.length - 1]
+    if (p.group && last && last[0].group === p.group) last.push(p)
+    else units.push([p])
+  }
+  const sel = (u: DocPath[]) => picked.has(u[0].id)
+  let out: DocPath[][]
+  if (how === 'front' || how === 'back') {
+    const mine = units.filter(sel)
+    const rest = units.filter((u) => !sel(u))
+    out = how === 'front' ? [...rest, ...mine] : [...mine, ...rest]
+  } else {
+    out = [...units]
+    // Walk against the direction of travel so a run of selected units moves as one.
+    const order = how === 'forward' ? [...out.keys()].reverse() : [...out.keys()]
+    for (const i of order) {
+      const j = how === 'forward' ? i + 1 : i - 1
+      if (j < 0 || j >= out.length || !sel(out[i]) || sel(out[j])) continue
+      ;[out[i], out[j]] = [out[j], out[i]]
+    }
+  }
+  return { ...doc, paths: out.flat() }
+}

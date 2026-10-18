@@ -891,6 +891,37 @@ if (process.env.FIXTURE) {
   await ex.close()
 }
 
+// ---- Groups and paint order ------------------------------------------------
+{
+  const gp = await newPage({ width: 1440, height: 900 })
+  await gp.goto(url)
+  await gp.getByRole('button', { name: 'Try a sample' }).click()
+  await traced(gp)
+  await gp.getByRole('tab', { name: /Edit/ }).click()
+  const ids = await gp.locator('path[data-path-id]').evaluateAll((els) => els.map((e) => e.getAttribute('data-path-id')))
+  // Select two shapes with shift-click, via their hit targets.
+  for (const [i, id] of [ids[1], ids[2]].entries()) {
+    const at = await pointOn(gp, id)
+    if (i) await gp.keyboard.down('Shift')
+    await gp.mouse.click(at.x, at.y)
+    if (i) await gp.keyboard.up('Shift')
+  }
+  check((await gp.locator('[data-selection-box]').getAttribute('data-selection-box')) === '2', 'two shapes selected')
+  await gp.keyboard.press(`${MOD}+g`)
+  await gp.keyboard.press('Escape')
+  const one = await pointOn(gp, ids[1])
+  await gp.mouse.click(one.x, one.y)
+  check((await gp.locator('[data-selection-box]').getAttribute('data-selection-box')) === '2', 'after grouping, clicking one shape selects the group')
+  check(/<g id="g\d+">/.test(await exportSvg(gp)), 'the group exports as a <g>')
+  const before = await gp.locator(`${VECTOR}`).evaluateAll((els) => els.map((e) => e.getAttribute('d')))
+  await gp.getByRole('button', { name: 'To front' }).click()
+  const after = await gp.locator(`${VECTOR}`).evaluateAll((els) => els.map((e) => e.getAttribute('d')))
+  check(after.slice(-2).join() === [before[1], before[2]].join() || after.slice(-2).sort().join() === [before[1], before[2]].sort().join(), 'To front paints the group last')
+  await gp.keyboard.press(`${MOD}+z`)
+  check((await gp.locator(`${VECTOR}`).evaluateAll((els) => els.map((e) => e.getAttribute('d')))).join() === before.join(), 'one Undo puts the order back')
+  await gp.close()
+}
+
 // ---- Target size: search the settings for a file that fits -------------------
 {
   const ts = await newPage({ width: 1440, height: 900 })

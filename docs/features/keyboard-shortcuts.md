@@ -36,6 +36,9 @@ Ctrl elsewhere; ⌥ is Alt. Shortcuts don't fire while you're typing in a field.
 | ⇧ while dragging | Move along one axis; scale in proportion; rotate in 15° steps |
 | ⌥ while dragging | Scale from the centre; bend one handle on its own |
 | Delete, Backspace | Delete the selected nodes or shapes |
+| ⌘G, ⇧⌘G | Group / ungroup the selected shapes |
+| ⌘], ⌘[ | Bring forward / send backward |
+| ⇧⌘], ⇧⌘[ | Bring to front / send to back |
 | ⌘Z | Undo |
 | ⇧⌘Z, Ctrl + Y | Redo |
 

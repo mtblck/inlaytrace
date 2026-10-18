@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { zipSync, strToU8 } from 'fflate'
 import { TraceClient } from './engine/client'
+import { SVGO } from './engine/svgo'
 import { PrepClient } from './engine/prepClient'
 import type { PrepStage } from './engine/prep'
 import type { SizeRun } from './components/Controls'
@@ -11,8 +12,14 @@ import {
   buildSvg,
   deletePath,
   docFromTrace,
+  arrange,
   docOf,
+  groupPaths,
   hasStrokes,
+  reserveGroups,
+  ungroupPaths,
+  withGroups,
+  type Arrange,
   inksOf,
   layerFiles,
   NO_EDITS,
@@ -170,6 +177,7 @@ export default function App() {
       setTrace(null)
       if (restore) {
         reserveIds(restore.edits.doc)
+        reserveGroups(restore.edits.doc)
         setSettings({ ...restore.settings, merge: restore.settings.merge ?? {} })
       } else {
         // Merges name this image's colours; another image starts without them.
@@ -429,10 +437,12 @@ export default function App() {
     (id: string | null, how: SelectMode = 'set') => {
       setSelectedIds((cur) => {
         if (id === null) return how === 'set' ? [] : cur
-        if (how === 'set') return [id]
-        if (how === 'subtract') return cur.filter((x) => x !== id)
-        if (how === 'add') return cur.includes(id) ? cur : [...cur, id]
-        return cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
+        // A shape in a group stands for its whole group.
+        const ids = docRef.current ? withGroups(docRef.current, [id]) : [id]
+        if (how === 'set') return ids
+        if (how === 'subtract') return cur.filter((x) => !ids.includes(x))
+        if (how === 'add') return [...cur, ...ids.filter((x) => !cur.includes(x))]
+        return cur.includes(id) ? cur.filter((x) => !ids.includes(x)) : [...cur, ...ids.filter((x) => !cur.includes(x))]
       })
       setSelectedNodes([])
       // The selection's tools live in the Edit tab.
@@ -454,6 +464,9 @@ export default function App() {
     })
   }, [])
 
+  // The latest document, for callbacks that shouldn't re-create on every edit.
+  const docRef = useRef(doc)
+  docRef.current = doc
   const selectedPaths = useMemo(() => {
     if (!doc) return []
     const ids = new Set(selectedIds)
@@ -566,7 +579,7 @@ export default function App() {
       if (editingSubs) selectNodes(nodesInRect(editingSubs, rect), how)
       return
     }
-    const hits = pathsInRect(shown, rect)
+    const hits = doc ? withGroups(doc, pathsInRect(shown, rect)) : pathsInRect(shown, rect)
     setSelectedIds((cur) => {
       if (how === 'set') return hits
       if (how === 'subtract') return cur.filter((id) => !hits.includes(id))
@@ -642,6 +655,11 @@ export default function App() {
     (tolerance: number) => (nodesOfSelection !== null ? selectedPaths.reduce((n, p) => n + nodeCount(simplifySubpaths(parsePath(p.d), tolerance)), 0) : null),
     [selectedPaths, nodesOfSelection],
   )
+
+  /** Group, ungroup and paint order: shape edits on the selection, each one undo step. */
+  const groupSelection = () => selectedIds.length > 1 && editDoc((d) => groupPaths(d, selectedIds))
+  const ungroupSelection = () => selectedIds.length && editDoc((d) => ungroupPaths(d, selectedIds))
+  const arrangeSelection = (how: Arrange) => selectedIds.length && editDoc((d) => arrange(d, selectedIds, how))
 
   const deleteSelection = useCallback(() => {
     if (!selectedPaths.length) return
@@ -739,6 +757,14 @@ export default function App() {
       } else if (mod && key === 'y') {
         e.preventDefault()
         historyStep('redo')
+      } else if (mod && key === 'g' && hasDoc && selectedIds.length) {
+        e.preventDefault()
+        if (e.shiftKey) ungroupSelection()
+        else groupSelection()
+      } else if (mod && (e.code === 'BracketRight' || e.code === 'BracketLeft') && hasDoc && selectedIds.length) {
+        e.preventDefault()
+        const up = e.code === 'BracketRight'
+        arrangeSelection(e.shiftKey ? (up ? 'front' : 'back') : up ? 'forward' : 'backward')
       } else if (mod && key === 'a' && hasDoc) {
         e.preventDefault()
         if (tool === 'nodes' && editingSubs) setSelectedNodes(allRefs(editingSubs))
@@ -1204,6 +1230,10 @@ export default function App() {
                     : null
                 }
                 onDeleteSelection={deleteSelection}
+                onGroup={groupSelection}
+                onUngroup={ungroupSelection}
+                onArrange={arrangeSelection}
+                grouped={!!doc && doc.paths.some((p) => p.group && selectedIds.includes(p.id))}
                 onBox={setBox}
                 onBoxDone={boxDone}
                 onNodeOp={nodeOp}
@@ -1438,7 +1468,7 @@ let svgoHere: Promise<typeof import('svgo/browser')> | undefined
 async function optimizeHere(svg: string) {
   svgoHere ??= import('svgo/browser')
   const { optimize } = await svgoHere
-  return optimize(svg, { multipass: true, floatPrecision: 2, plugins: ['preset-default'] }).data
+  return optimize(svg, SVGO).data
 }
 
 function save(blob: Blob, name: string) {
