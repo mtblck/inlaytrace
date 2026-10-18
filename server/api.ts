@@ -207,11 +207,14 @@ async function webhook(req: Request, db: Supabase, env: Env, fetchImpl: typeof f
     // Refunds and chargebacks. Credits are held (taken back) as soon as a refund
     // is requested, so they can't be spent while Paddle reviews it; approval
     // keeps them taken back, rejection gives them back.
+    if (d.action === 'chargeback_reverse') console.error(`Paddle ${d.id}: chargeback on ${d.transaction_id} reversed in the merchant's favour; restore the credits by hand if they were taken back.`)
     if (!['refund', 'chargeback'].includes(d.action) || !d.transaction_id || !d.id) return json({ ok: true, reversed: 0 })
     // Notifications can arrive out of order, so ask Paddle for the adjustment as it is now.
     const pd = paddle(env, fetchImpl)
     if (!pd) return json(PADDLE_MISSING, 503)
-    const adjustment = (await pd.adjustment(d.id)) ?? d
+    const adjustment = await pd.adjustment(d.id)
+    // Not visible through the API yet: have Paddle send it again later.
+    if (!adjustment) return json({ error: 'Adjustment not found yet; retry.' }, 503)
     const status: string = adjustment.status
     if (status === 'rejected') {
       const balance = await db.releaseReversal(d.id, { action: d.action })
