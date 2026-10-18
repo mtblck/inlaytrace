@@ -8,6 +8,7 @@ import { runTrace } from './run'
 import { PRESETS, settingsFor, toTraceOptions, type TraceOptions } from './presets'
 import { parseTrace } from '../lib/svg'
 import { inksOf } from '../lib/doc'
+import { checkSettings } from '../lib/session'
 import { peakPalette } from 'inlaytrace'
 
 /** A 96×64 test card: background, a red disc, a blue bar, a dark outline, and noise. */
@@ -68,7 +69,10 @@ describe('presets against the real engine', () => {
     }
     // And the control: dark ink on the same card does trace from the corner.
     const dark = trace(card, w, h, toTraceOptions(settingsFor('lineart')))
-    const edge = (d: string) => d.match(/^M\s*([\d.]+)[ ,]([\d.]+)/)!.slice(1).map(Number).some((v) => v === 0 || v === w)
+    const edge = (d: string) => {
+      const [x, y] = d.match(/^M\s*([\d.]+)[ ,]([\d.]+)/)!.slice(1).map(Number)
+      return x === 0 || x === w || y === 0 || y === h
+    }
     expect(dark.paths.some((p) => edge(p.d))).toBe(true) // starts on the card's edge
     expect(toTraceOptions(settingsFor('lineart')).invert).toBeUndefined()
   })
@@ -94,5 +98,24 @@ describe('peak palette', () => {
   it('respects the cap, most common first', () => {
     expect(peakPalette(px, 2)).toHaveLength(2)
     expect(peakPalette(px, 2)[0].startsWith('#f')).toBe(true)
+  })
+})
+
+describe('exact shapes setting', () => {
+  it('is on for the flat-art presets and only reaches the tracer there', () => {
+    for (const p of PRESETS) {
+      const on = p.id === 'logo' || p.id === 'illustration' || p.id === 'lineart'
+      expect(settingsFor(p.id).exact).toBe(on)
+      expect(!!toTraceOptions(settingsFor(p.id)).shapes).toBe(on)
+      // Turned on by hand, Poster and Pixel art still don't use it.
+      expect(!!toTraceOptions({ ...settingsFor(p.id), exact: true }).shapes).toBe(on)
+      expect(toTraceOptions({ ...settingsFor(p.id), exact: false }).shapes).toBeUndefined()
+    }
+  })
+
+  it('survives a saved session, and a session from before it gets the default', () => {
+    expect(checkSettings({ ...settingsFor('logo'), exact: false }).exact).toBe(false)
+    const { exact: _, ...old } = settingsFor('illustration')
+    expect(checkSettings(old).exact).toBe(true)
   })
 })
