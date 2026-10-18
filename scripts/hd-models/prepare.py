@@ -146,6 +146,15 @@ def birefnet_mask(sess: ort.InferenceSession, img: Image.Image) -> Image.Image:
     return Image.fromarray((m * 255).clip(0, 255).astype(np.uint8)).resize(img.size, Image.BILINEAR)
 
 
+def u2net_mask(sess: ort.InferenceSession, img: Image.Image) -> Image.Image:
+    """The free in-browser model (U²-Net small), preprocessed as apps/app/src/engine/prepCore.ts does."""
+    small = np.asarray(img.resize((320, 320), Image.BILINEAR), dtype=np.float32)
+    x = (small / max(1.0, small.max()) - [0.485, 0.456, 0.406]) / [0.229, 0.224, 0.225]
+    pred = sess.run(None, {sess.get_inputs()[0].name: x.transpose(2, 0, 1)[None].astype(np.float32)})[0].reshape(320, 320)
+    pred = (pred - pred.min()) / max(1e-9, pred.max() - pred.min())
+    return Image.fromarray((pred * 255).round().astype(np.uint8)).resize(img.size, Image.BILINEAR)
+
+
 def remove_bg(img: Image.Image) -> Image.Image | None:
     key = os.environ.get("REMOVE_BG_KEY")
     if not key:
@@ -210,6 +219,9 @@ def main():
         sess = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
         log(f"BiRefNet {name}: {path.stat().st_size / 1e6:.0f} MB, input {sess.get_inputs()[0].shape}, outputs {[o.shape for o in sess.get_outputs()]}")
         sessions.append((short, sess))
+    # The free in-browser model, for what HD adds over it.
+    u2 = ort.InferenceSession(str(ROOT / "apps/app/public/models/u2netp.onnx"), providers=["CPUExecutionProvider"])
+    sessions.insert(0, ("free U2-Netp", u2))
     md += ["## Background removal: BiRefNet against remove.bg", "",
            "Mask difference: the mean absolute difference between the two alpha masks, and the share of pixels on opposite sides of 50%.", "",
            "| Image | Size | " + " | ".join(f"{s} time | {s} vs remove.bg" for s, _ in sessions) + " |",
@@ -221,7 +233,7 @@ def main():
         cells = []
         for short, sess in sessions:
             t = time.perf_counter()
-            mask = birefnet_mask(sess, img)
+            mask = u2net_mask(sess, img) if short.startswith("free") else birefnet_mask(sess, img)
             secs = time.perf_counter() - t
             ours = img.convert("RGBA")
             ours.putalpha(mask)
