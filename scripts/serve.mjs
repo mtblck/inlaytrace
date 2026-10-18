@@ -3,7 +3,9 @@
  * Serve dist/ the way Vercel will, from vercel.json: redirects, then files
  * (with directory index.html), then rewrites, then 404.html; and every header
  * block whose source matches, in order, later ones winning. So `npm run verify`
- * sees the landing page, the docs and the app under their real CSPs.
+ * sees the landing page, the docs and the app under their real CSPs. /api/* goes
+ * to the same handler as the Vercel Function (server/api.ts, loaded through Vite
+ * so its TypeScript runs as is), with settings from the environment.
  *
  *   npm run preview [-- --port 4173]
  */
@@ -34,8 +36,28 @@ const file = (path) => {
   return null
 }
 
+/** server/node.ts, loaded on the first /api request. */
+let api
+const loadApi = async () => {
+  if (!api) {
+    const { createServer: vite } = await import('vite')
+    const server = await vite({ root, configFile: false, logLevel: 'error', server: { middlewareMode: true, hmr: false }, appType: 'custom' })
+    api = await server.ssrLoadModule('/server/node.ts')
+  }
+  return api
+}
+
 createServer((req, res) => {
   const path = (req.url ?? '/').split('?')[0]
+  if (path.startsWith('/api/')) {
+    loadApi()
+      .then((m) => m.serveApi(req, res))
+      .catch((e) => {
+        console.error(e)
+        res.writeHead(500).end()
+      })
+    return
+  }
   for (const r of config.redirects ?? []) {
     const m = matches(r.source, path)
     if (m) {

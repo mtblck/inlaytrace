@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto'
 import { join, relative } from 'node:path'
 import type { Plugin } from 'vite'
 import { fileURLToPath } from 'node:url'
+import { serveApi } from '../../server/node'
 
 // `vite preview` serves the production headers from vercel.json, so a CSP that
 // would block the WebAssembly tracer fails locally instead of only on Vercel.
@@ -67,11 +68,21 @@ function serviceWorker(): Plugin {
   }
 }
 
+/** /api/* (accounts for HD credits) in `vite dev`, as the Vercel Function serves it. */
+function api(): Plugin {
+  return {
+    name: 'inlay-api',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => void serveApi(req, res).then((done) => done || next(), next))
+    },
+  }
+}
+
 export default defineConfig({
   // Run from the repo root (npm scripts, vitest projects), so root is set explicitly.
   root: here,
   base: BASE,
-  plugins: [react(), tailwindcss(), serviceWorker()],
+  plugins: [react(), tailwindcss(), serviceWorker(), api()],
   // In this repo the app uses the tracer's TypeScript source, so there's no
   // package build in the dev loop; npm users get the built dist/.
   resolve: { alias: [{ find: /^inlaytrace$/, replacement: `${here}../../packages/inlay/src/index.ts` }] },
@@ -83,6 +94,8 @@ export default defineConfig({
     // The two large chunks are SVGO (lazy, only fetched for export/stats) and
     // nothing else; the app shell is ~80 KB gzipped.
     chunkSizeWarningLimit: 600,
+    // The app, and the account page (sign-in and credits for HD) as a page of its own.
+    rolldownOptions: { input: { main: `${here}index.html`, account: `${here}account/index.html` } },
   },
   preview: { headers: productionHeaders },
   worker: { format: 'es' },

@@ -82,6 +82,7 @@ change in the same PR as HD itself.
 ## Settings (Vercel environment variables, set by Matt)
 
 - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- `CRON_SECRET` (any long random string: Vercel sends it to the daily keep-alive)
 - `PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_ENV` (`sandbox` or `production`)
 
 Never in the repo, never in chat.

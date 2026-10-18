@@ -10,7 +10,7 @@
     "build": "npm run hosting:check && npm run lint && npm run site:build && vite build -c apps/app/vite.config.ts && node scripts/check-hosting.mjs --dist",
     "preview": "node scripts/serve.mjs",
     "test": "vitest run",
-    "lint": "tsc -p apps/app && tsc -p packages/inlay",
+    "lint": "tsc -p apps/app && tsc -p packages/inlay && tsc -p server",
     "hosting:check": "node scripts/check-hosting.mjs",
     "verify": "node scripts/verify.mjs",
     "score": "node scripts/score.mjs",
