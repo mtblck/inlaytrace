@@ -27,9 +27,12 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
 - **Inlay, our shared-edge tracer, does Logo/Illustration/Line art/Pixel art** (`packages/inlay/src/inlay.ts`,
   fitting in `packages/inlay/src/fit.ts`): each colour boundary traced and fitted once, so shapes tile
   exactly. Run `npm run score` before shipping any tracer, fitter or preset change.
-- **Inlay is a workspace package** (`packages/inlay`, `inlaytrace`, `"private": true` until
-  it's published; see #55). Keep it free of DOM and app imports; the app imports it by name.
-  Its tests run with the app's (`npm test`); `npm run lint` type-checks it on its own.
+- **Inlay is a workspace package** (`packages/inlay`, published to npm as `inlaytrace`; #55). Keep it free
+  of DOM and app imports. The app and the site import it by name, aliased to its `src/` (app Vite config +
+  tsconfig paths, site astro.config), so no build in the dev loop; npm gets `dist/` from tsdown
+  (`npm run build -w packages/inlay`, `check` runs publint + attw, `test/smoke.mjs` loads it in plain Node).
+  Releases: a changeset per user-visible change; `npx changeset version` PR; merging publishes (release.yml,
+  trusted publishing). npm 11 only: npm 10 can't install from this lockfile.
 - **VTracer 1.0 (Poster only) via `scripts/vendor-vtracer.mjs`**, which rewrites the official Node
   package's glue to browser ESM. Output in `apps/app/src/engine/vtracer/` is generated and
   gitignored. Bumping the package means re-checking that script's substitutions.

@@ -1,0 +1,78 @@
+name: Release
+
+# Publishes the inlaytrace package when main has a version npm doesn't have yet.
+# Versions come from Changesets (see .changeset/README.md): merge the PR that ran
+# `npx changeset version`, and this publishes it. Runs when the package's
+# package.json changes on main, or by hand from the Actions tab.
+#
+# Auth is npm trusted publishing: GitHub proves to npm which workflow is
+# running, so no npm token is stored here, and npm adds a provenance statement
+# linking the release to this repo and commit. For a first publish made before
+# trusted publishing is set up, an NPM_TOKEN secret is used if there is one;
+# delete it once trusted publishing works.
+on:
+  push:
+    branches: [main]
+    paths: [packages/inlay/package.json]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # pushes the version tag
+      id-token: write # trusted publishing and provenance
+    steps:
+      - uses: actions/checkout@v7
+      # Node 24 ships npm 11, which trusted publishing needs (11.5.1 or newer).
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Is this version on npm yet?
+        id: version
+        run: |
+          v=$(node -p "require('./packages/inlay/package.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if npm view "inlaytrace@$v" version > /dev/null 2>&1; then
+            echo "::notice::inlaytrace@$v is already on npm; nothing to publish."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.version.outputs.publish == 'true'
+        run: npm ci
+      - if: steps.version.outputs.publish == 'true'
+        run: npm test
+      - if: steps.version.outputs.publish == 'true'
+        name: Build and check the package
+        run: |
+          npm run build -w packages/inlay
+          npm run check -w packages/inlay
+          node packages/inlay/test/smoke.mjs
+      - if: steps.version.outputs.publish == 'true'
+        name: Publish inlaytrace@${{ steps.version.outputs.version }}
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm --version
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+            echo "::warning::Published with the NPM_TOKEN secret. Once trusted publishing is set up on npmjs.com, delete the secret."
+          fi
+          npm publish -w packages/inlay --access public --provenance
+      - if: steps.version.outputs.publish == 'true'
+        name: Tag the release
+        run: |
+          tag="inlaytrace@${{ steps.version.outputs.version }}"
+          git tag "$tag"
+          git push origin "$tag"

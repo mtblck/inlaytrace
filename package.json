@@ -21,6 +21,7 @@
     "site:assets": "node scripts/site-assets.mjs"
   },
   "devDependencies": {
+    "@changesets/cli": "3.0.3",
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "26.6.5",
     "@types/react": "19.3.0",
@@ -35,7 +36,8 @@
     "vitest": "5.0.5"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20",
+    "npm": ">=11"
   },
   "workspaces": [
     "apps/*",

@@ -13,7 +13,9 @@ image attached to an issue is public.
 
 ## Setting up
 
-Node 20 or newer (CI uses 22) and npm. One install covers everything (npm workspaces):
+Node 24, or any Node 20+ with npm 11 (`npm install -g npm@11`): npm 10 can't
+install from the lockfile npm 11 writes. One install covers everything (npm
+workspaces):
 
 ```bash
 npm install
@@ -53,6 +55,25 @@ Anything in `packages/inlay` that changes output, or a preset in
    landing page's numbers stay true.
 
 Keep `packages/inlay` free of DOM and app imports; it runs in Node and workers.
+
+## Releasing the package
+
+The package versions with [Changesets](.changeset/README.md):
+
+1. A PR that changes what `inlaytrace` users get adds a changeset
+   (`npx changeset`): `patch` or, while the package is 0.x, `minor` for a
+   breaking change, plus a line for the changelog.
+2. To release, a PR runs `npx changeset version`, which bumps the version and
+   writes `packages/inlay/CHANGELOG.md`.
+3. Merging it publishes: `.github/workflows/release.yml` builds, tests and
+   checks the package, then publishes any version npm doesn't have yet, through
+   npm trusted publishing with provenance, and tags it `inlaytrace@x.y.z`.
+
+`npm run build -w packages/inlay` builds the package locally; `npm run check -w
+packages/inlay` lints it for publishing; `node packages/inlay/test/smoke.mjs`
+loads the build in plain Node. In this repo the app and the site use the
+package's TypeScript source through an alias, so day-to-day work needs no
+build.
 
 ## Docs
 
