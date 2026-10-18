@@ -15,6 +15,7 @@ re-traces within about 120 ms of the last change.
 | **Logo** | Few flat colours, crisp corners | Inlay | 8 colours, specks 8 px, smoothing 1.5, corners 45° |
 | **Illustration** | More colours, smooth curves | Inlay | 16 colours, specks 4 px, smoothing 1, corners 60° |
 | **Line art** | Ink drawings and scans, one colour | Inlay | Threshold 128, specks 6 px, smoothing 1.5, corners 45° |
+| **Centerline** | Single strokes for plotters and engraving | Inlay (skeleton) | Threshold 128, specks 4 px, smoothing 1.5, corners 45°, stroke width measured |
 | **Poster** | Photos flattened into colour bands | Inlay (quantized palette) | 24 colours, specks 8 px, smoothing 1, corners 90°, stacked |
 | **Pixel art** | Hard edges, nothing smoothed | Inlay (pixel staircase) | Its exact colours (up to 32), no speck filter, up to 4096 px |
 
@@ -24,14 +25,25 @@ re-traces within about 120 ms of the last change.
 it a little *above* the number of colours you see: anti-aliased edge shades
 compete for slots, and with too low a cap two real colours merge into one.
 
-**Ink is** (Line art): *Dark on light* or *Light on dark*. Line art keeps one
+**Ink is** (Line art, Centerline): *Dark on light* or *Light on dark*. Line art keeps one
 side and makes the rest transparent; *Light on dark* inverts first. It's chosen
 automatically when the image's border is dark, which turns a white logo on black
 into black shapes on transparent in one step.
 
-**Ink threshold** (Line art, 1–254): which grey counts as ink. *Adapt to uneven
+**Ink threshold** (Line art, Centerline, 1–254): which grey counts as ink. *Adapt to uneven
 lighting* compares each pixel with its surroundings instead, for photos of
 paper.
+
+**Stroke width** (Centerline, Auto or 0.5–24 px): Centerline draws each line
+of ink as one stroke down its middle, rather than the outline round it, which
+is what a pen plotter, a laser engraving a single line, or a cutting plotter
+with a pen wants. *Auto* uses the width measured from the ink (shown beside
+it); set it to your pen or bit and the strokes keep their path. Widths are in
+the traced image's pixels, like every other setting. Where lines cross or
+branch, strokes that carry straight on stay one stroke, so the pen lifts less.
+Strokes can be recoloured, moved, scaled (their width scales with them) and
+node-edited like shapes; *Mirror* works on filled shapes only, so it's off for
+them. A 2048 px drawing with thick ink traces in about 1.5 s.
 
 **Ignore specks** (0–32 px): regions smaller than this many pixels squared merge
 into their surroundings. Raise it for noisy scans or JPEG speckle.

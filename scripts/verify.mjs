@@ -99,6 +99,22 @@ async function asymmetry(page, svg) {
   }, svg)
 }
 
+/** A fixture SVG (scripts/fixtures) rasterised to a 480 px PNG, as a user would drop it. */
+async function fixturePng(page, file) {
+  const b64 = await page.evaluate(async (svg) => {
+    const img = new Image()
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+    await img.decode()
+    const c = new OffscreenCanvas(480, 480)
+    c.getContext('2d').drawImage(img, 0, 0, 480, 480)
+    const bytes = new Uint8Array(await (await c.convertToBlob({ type: 'image/png' })).arrayBuffer())
+    let s = ''
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+    return btoa(s)
+  }, readFileSync(new URL(`./fixtures/${file}`, import.meta.url), 'utf8'))
+  return b64
+}
+
 async function exportSvg(page) {
   await page.getByText(/Traced in [\d,]+ ms$/).waitFor()
   const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download SVG' }).click()])
@@ -879,19 +895,7 @@ if (process.env.FIXTURE) {
 {
   const sym = await newPage({ width: 1440, height: 900 })
   await sym.goto(url)
-  /** A fixture SVG rasterised to a PNG, as a user would drop it. */
-  const png = (file) =>
-    sym.evaluate(async (svg) => {
-      const img = new Image()
-      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
-      await img.decode()
-      const c = new OffscreenCanvas(480, 480)
-      c.getContext('2d').drawImage(img, 0, 0, 480, 480)
-      const bytes = new Uint8Array(await (await c.convertToBlob({ type: 'image/png' })).arrayBuffer())
-      let s = ''
-      for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
-      return btoa(s)
-    }, readFileSync(new URL(`./fixtures/${file}`, import.meta.url), 'utf8'))
+  const png = (file) => fixturePng(sym, file)
 
   await sym.locator('input[type=file]').setInputFiles({ name: 'pinwheel.png', mimeType: 'image/png', buffer: Buffer.from(await png('pinwheel.svg'), 'base64') })
   await traced(sym)
@@ -927,6 +931,32 @@ if (process.env.FIXTURE) {
   await sym.getByRole('button', { name: 'Use this axis' }).click()
   check(Number(await sym.locator('#axis-pos').inputValue()) === at, `Use this axis puts the detected axis back (${await sym.locator('#axis-pos').inputValue()})`)
   await sym.close()
+}
+
+// ---- Centerline: single strokes ----------------------------------------------
+{
+  const cl = await newPage({ width: 1440, height: 900 })
+  await cl.goto(url)
+  await cl.locator('input[type=file]').setInputFiles({ name: 'drawing.png', mimeType: 'image/png', buffer: Buffer.from(await fixturePng(cl, 'strokes.svg'), 'base64') })
+  await traced(cl)
+  await retrace(cl, () => cl.getByRole('radio', { name: /Centerline/ }).click())
+  const strokes = cl.locator(`${VECTOR}[fill="none"][stroke]`)
+  const n = await strokes.count()
+  const subpaths = n ? ((await strokes.first().getAttribute('d')).match(/M/g) ?? []).length : 0
+  check(n > 0 && subpaths >= 5 && subpaths <= 8, `Centerline draws the pen drawing as single strokes (${subpaths} strokes for 6 drawn)`)
+  const auto = await cl.getByText(/^Auto \([\d.]+ px\)$/).innerText()
+  const measured = Number(/([\d.]+)/.exec(auto)[1])
+  // Drawn 3 units wide on a 200-unit drawing; small images are upscaled to trace, so in trace pixels:
+  const drawn = (3 / 200) * Number(/width="([\d.]+)"/.exec(await exportSvg(cl))[1])
+  check(Math.abs(measured - drawn) < 0.15 * drawn, `the stroke width is measured from the ink (${auto}; drawn ${drawn.toFixed(1)} px)`)
+  await retrace(cl, () => cl.getByLabel('Stroke width').fill('2'))
+  check((await strokes.first().getAttribute('stroke-width')) === '2', 'a set stroke width is what gets drawn')
+  const svg = await exportSvg(cl)
+  check(/fill="none"/.test(svg) && /stroke-width="2"/.test(svg) && /stroke-linecap="round"/.test(svg), 'the exported SVG keeps the strokes, round-capped')
+  await cl.getByRole('tab', { name: /Edit/ }).click()
+  check(await cl.getByRole('radio', { name: 'Mirror' }).isDisabled(), 'Mirror is off for strokes (its booleans work on filled shapes)')
+  await shot(cl, '07c-centerline')
+  await cl.close()
 }
 
 // ---- Dark theme and mobile ------------------------------------------------

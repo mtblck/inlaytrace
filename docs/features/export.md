@@ -25,7 +25,8 @@ and offers PNG, PDF and EPS.
   (px sizes) or at 72–600 dpi (physical sizes). The button shows the pixel
   size you'll get. Transparent unless you've added a background.
 - **PDF**: one page exactly the export size, every shape a filled vector path
-  in its shown colour, with the background behind them if set. Built in the
+  in its shown colour (Centerline strokes stay round-capped strokes, their
+  width scaled with the page), with the background behind them if set. Built in the
   browser (`apps/app/src/lib/vectorExport.ts`): five objects and a compressed content
   stream, checked with `qpdf --check` and by rendering it back.
 - **EPS**: the same paths as PostScript, with a bounding box of the export

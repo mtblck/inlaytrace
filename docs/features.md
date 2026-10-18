@@ -8,7 +8,7 @@ Everything the tool does, how to use it, and how it works underneath.
 
 | Feature | Where | Page |
 | --- | --- | --- |
-| Presets and settings | Trace tab | [Presets and settings](features/presets-and-settings.md) |
+| Presets and settings, including Centerline single strokes for plotters | Trace tab | [Presets and settings](features/presets-and-settings.md) |
 | Split, Difference and Vector views, overlays, zoom | Bar under the image | [Comparing and zooming](features/comparing-and-zoom.md) |
 | Replace, pick, merge and remove colours, background | Edit tab → Colours | [Colours and background](features/colours-and-background.md) |
 | Select, move and scale shapes; edit nodes and curves; delete | Edit tab → Select, Nodes | [Editing shapes](features/editing-shapes.md) |

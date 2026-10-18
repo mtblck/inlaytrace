@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { zipSync, strToU8 } from 'fflate'
 import { TraceClient } from './engine/client'
-import { canMerge, maxTraceEdge, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
+import { canMerge, isInk, maxTraceEdge, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
 import { ACCEPTED, colourAt, hasDarkBackground, loadSource, pixelsOf, type Pixels, type Source } from './lib/image'
 import { formatBytes, normalizeHex, parseTrace, statsOf, type Trace } from './lib/svg'
 import {
@@ -9,6 +9,7 @@ import {
   deletePath,
   docFromTrace,
   docOf,
+  hasStrokes,
   inksOf,
   layerFiles,
   NO_EDITS,
@@ -26,7 +27,7 @@ import { centreAxis, likelyAxis, mirrorDoc, type Axis } from './lib/mirror'
 import { loadPaper } from './lib/paper'
 import { deleteNodes, moveHandle, moveNode, moveNodes, parsePath, serializePath, nodeCount, type NodePart, type NodeRef, type Pt } from './lib/pathdata'
 import { addNode, nearestOnPath, roundNode, sharpenNode, simplifySubpaths, smoothNode } from './lib/nodeops'
-import { allRefs, boxToBox, rotateAbout, hasRef, nodesInRect, pathBounds, pathsInRect, transformPath, translate, union, type Affine, type Box } from './lib/transform'
+import { allRefs, boxToBox, rotateAbout, hasRef, nodesInRect, pathBounds, pathsInRect, transformShape, translate, union, type Affine, type Box } from './lib/transform'
 import { usePersisted } from './lib/persisted'
 import { bounds, effective, fromSlider, snap, step, toSlider, type Zoom } from './lib/zoom'
 import { sampleImage } from './lib/sample'
@@ -328,6 +329,11 @@ export default function App() {
   const svg = useMemo(() => (doc ? buildSvg(doc, edits.inks, undefined, edits.background) : ''), [doc, edits.inks, edits.background])
   const shown = useMemo(() => (doc ? visiblePaths(doc, edits.inks) : []), [doc, edits.inks])
   const inks = useMemo(() => (doc ? inksOf(doc) : []), [doc])
+  const strokes = useMemo(() => !!doc && hasStrokes(doc), [doc])
+  // Strokes can't be mirrored: leave the Mirror tool if a trace turns into them.
+  useEffect(() => {
+    if (strokes && tool === 'mirror') setTool('select')
+  }, [strokes, tool])
 
   // Shapes that no longer exist (re-trace, undo past their creation) drop out
   // of the selection, and so do nodes that no longer exist in the edited shape.
@@ -430,7 +436,7 @@ export default function App() {
    * drag's start, so it is applied to the paths as they were then, not
    * compounded onto the previous update; the whole drag is one undo step.
    */
-  const transformBase = useRef<Map<string, string> | null>(null)
+  const transformBase = useRef<Map<string, { d: string; stroke?: number }> | null>(null)
   const onTransform = (m: Affine, phase: 'move' | 'end') => {
     if (!traced || !doc || !selectedIds.length) {
       transformBase.current = null
@@ -439,11 +445,11 @@ export default function App() {
     const ids = new Set(selectedIds)
     // Captured here, not in the updater: React may run the updater after this
     // handler has already cleared the ref at the end of the drag.
-    transformBase.current ??= new Map(doc.paths.filter((p) => ids.has(p.id)).map((p) => [p.id, p.d]))
+    transformBase.current ??= new Map(doc.paths.filter((p) => ids.has(p.id)).map((p) => [p.id, { d: p.d, stroke: p.stroke }]))
     const base = transformBase.current
     commit((e) => {
       const d = docOf(e, traced)
-      return { ...e, doc: { ...d, paths: d.paths.map((p) => (base.has(p.id) ? { ...p, d: transformPath(base.get(p.id)!, m) } : p)) } }
+      return { ...e, doc: { ...d, paths: d.paths.map((p) => (base.has(p.id) ? { ...p, ...transformShape(base.get(p.id)!, m) } : p)) } }
     }, `transform-${dragSeq.current}`)
     if (phase === 'end') {
       transformBase.current = null
@@ -455,7 +461,7 @@ export default function App() {
     (m: Affine, key: string | null = null) => {
       if (!selectedIds.length) return
       const ids = new Set(selectedIds)
-      editDoc((d) => ({ ...d, paths: d.paths.map((p) => (ids.has(p.id) ? { ...p, d: transformPath(p.d, m) } : p)) }), key)
+      editDoc((d) => ({ ...d, paths: d.paths.map((p) => (ids.has(p.id) ? { ...p, ...transformShape(p, m) } : p)) }), key)
     },
     [editDoc, selectedIds],
   )
@@ -465,11 +471,11 @@ export default function App() {
    * W = 1 and 12, and compounding those would round the shape away.
    */
   const boxSeq = useRef(0)
-  const boxBase = useRef<{ box: Box; paths: Map<string, string> } | null>(null)
+  const boxBase = useRef<{ box: Box; paths: Map<string, { d: string; stroke?: number }> } | null>(null)
   const setBox = (field: keyof Box, value: number, lock: boolean) => {
     if (!traced || !doc || !selectionBox) return
     const ids = new Set(selectedIds)
-    boxBase.current ??= { box: selectionBox, paths: new Map(doc.paths.filter((p) => ids.has(p.id)).map((p) => [p.id, p.d])) }
+    boxBase.current ??= { box: selectionBox, paths: new Map(doc.paths.filter((p) => ids.has(p.id)).map((p) => [p.id, { d: p.d, stroke: p.stroke }])) }
     const { box, paths } = boxBase.current
     // Everything but the typed field comes from the captured box too, never
     // from the current one, which the previous keystroke has rounded.
@@ -479,7 +485,7 @@ export default function App() {
     const m = boxToBox(box, next)
     commit((e) => {
       const d = docOf(e, traced)
-      return { ...e, doc: { ...d, paths: d.paths.map((p) => (paths.has(p.id) ? { ...p, d: transformPath(paths.get(p.id)!, m) } : p)) } }
+      return { ...e, doc: { ...d, paths: d.paths.map((p) => (paths.has(p.id) ? { ...p, ...transformShape(paths.get(p.id)!, m) } : p)) } }
     }, `box-${boxSeq.current}`)
   }
   const boxDone = () => {
@@ -692,7 +698,7 @@ export default function App() {
         e.preventDefault()
         setShortcutsOpen(true)
       } else if (hasDoc && !e.shiftKey && (key === 'v' || key === 'a' || key === 'm')) {
-        chooseTool(key === 'v' ? 'select' : key === 'a' ? 'nodes' : 'mirror')
+        if (key !== 'm' || !strokes) chooseTool(key === 'v' ? 'select' : key === 'a' ? 'nodes' : 'mirror')
         setPanel('edit')
         startEditing()
       }
@@ -834,7 +840,7 @@ export default function App() {
     // Reset (the same preset again) puts the sliders back but keeps merges:
     // they're decisions about this image's colours, not settings to tune.
     if (id === settings.preset) next.merge = settings.merge
-    if (id === 'lineart' && source && hasDarkBackground(source)) next.lightInk = true
+    if (isInk(id) && source && hasDarkBackground(source)) next.lightInk = true
     changeSettings(next)
   }
 
@@ -1108,6 +1114,7 @@ export default function App() {
                 width={doc.width}
                 height={doc.height}
                 onAxis={moveAxis}
+                strokes={strokes}
                 detected={detected?.axis ?? null}
                 mirroring={mirroring}
                 mirrorError={mirrorError}
@@ -1145,7 +1152,7 @@ export default function App() {
             )}
             </div>
             <div role="tabpanel" id="panel-trace" aria-labelledby="tab-trace" hidden={!!doc && panel !== 'trace'}>
-              <Controls settings={settings} onChange={changeSettings} onPreset={choosePreset} />
+              <Controls settings={settings} onChange={changeSettings} onPreset={choosePreset} measuredStroke={settings.preset === 'centerline' && settings.strokeWidth === 0 ? (trace?.paths[0]?.stroke ?? null) : null} />
             </div>
           </div>
 

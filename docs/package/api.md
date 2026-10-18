@@ -94,6 +94,42 @@ function oklab(rgb: [number, number, number]): [number, number, number]
 sRGB (0–255) to OKLab, the perceptual colour space the palettes and labelling
 use.
 
+## Centerline
+
+### `centerline(rgba, width, height, options)`
+
+```ts
+function centerline(rgba: ArrayLike<number>, width: number, height: number, options: CenterlineOptions): CenterlineResult
+
+type CenterlineOptions = {
+  threshold: number | null // ink is darker than this (0–255); null adapts to the neighbourhood
+  speckle: number // ink and paper specks smaller than speckle × speckle px are folded away
+  tolerance: number // px between the skeleton and the fitted stroke
+  cornerAngle: number // degrees
+  strokeWidth?: number // px; measured from the ink when left out
+  color?: string // default '#000000'
+}
+type CenterlineResult = {
+  width: number
+  height: number
+  paths: { d: string; stroke: string; strokeWidth: number }[]
+  measuredWidth: number // the ink's width, px
+}
+```
+
+Single strokes down the middle of the ink, for pen plotters and engraving,
+instead of outlines round it. The ink is thinned to a one-pixel skeleton
+(Zhang–Suen, then any pixel its neighbours don't need), spurs shorter than the
+stroke is wide are pruned, and the skeleton is walked into strokes between ends
+and junctions. Strokes that carry straight on through a crossing (within 30°)
+are joined, so a pen lifts less. Each stroke is fitted with the same curve
+fitter as outlines. The width is the ink's area over the skeleton's length.
+
+### `traceCenterline(rgba, width, height, options)`, `centerlineToSvg(result)`
+
+The same as an SVG string: one `<path>` with `fill="none"`, the stroke colour
+and width, and round caps and joins.
+
 ## Symmetry
 
 ### `detectSymmetry(rgba, width, height, options?)`

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { allRefs, apply, boxToBox, handlePoint, nodesInRect, normRect, pathBounds, pathsInRect, scaleFromHandle, transformPath, union, type Box } from './transform'
+import { allRefs, apply, boxToBox, handlePoint, nodesInRect, normRect, pathBounds, pathsInRect, scaleFromHandle, transformPath, transformShape, union, type Box } from './transform'
 import { deleteNodes, isSmooth, moveHandle, moveNodes, parsePath, serializePath } from './pathdata'
 
 const close = (a: Box | null, b: Box) => {
@@ -107,5 +107,14 @@ describe('node edits', () => {
     const subs = parsePath('M0 0L10 0L10 10L0 10ZM20 20L30 20Z')
     const out = deleteNodes(subs, [{ sub: 0, index: 1 }, { sub: 0, index: 3 }, { sub: 1, index: 0 }])
     expect(serializePath(out)).toBe('M0 0L10 10Z')
+  })
+})
+
+describe('stroked paths', () => {
+  it('scale their width with the geometry, and keep it when moved or turned', () => {
+    expect(transformShape({ d: 'M0 0L10 0', stroke: 4 }, { a: 0.5, b: 0, c: 0, d: 0.5, e: 0, f: 0 })).toEqual({ d: 'M0 0L5 0', stroke: 2 })
+    expect(transformShape({ d: 'M0 0L10 0', stroke: 4 }, { a: 1, b: 0, c: 0, d: 1, e: 3, f: 2 }).stroke).toBe(4)
+    expect(transformShape({ d: 'M0 0L10 0', stroke: 4 }, { a: 0, b: 1, c: -1, d: 0, e: 0, f: 0 }).stroke).toBe(4)
+    expect(transformShape({ d: 'M0 0L10 0' }, { a: 2, b: 0, c: 0, d: 2, e: 0, f: 0 })).toEqual({ d: 'M0 0L20 0' })
   })
 })

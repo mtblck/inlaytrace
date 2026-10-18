@@ -87,6 +87,7 @@ export function checkSettings(x: unknown): Settings {
   if (x.threshold === null || typeof x.threshold === 'number') out.threshold = x.threshold as number | null
   if (typeof x.lightInk === 'boolean') out.lightInk = x.lightInk
   if (typeof x.exact === 'boolean') out.exact = x.exact
+  if (typeof x.strokeWidth === 'number' && Number.isFinite(x.strokeWidth) && x.strokeWidth >= 0) out.strokeWidth = x.strokeWidth
   if (x.shapes === 'stacked' || x.shapes === 'cutout') out.shapes = x.shapes
   if (isObj(x.merge)) out.merge = Object.fromEntries(Object.entries(x.merge).filter(([a, b]) => normalizeHex(a) && typeof b === 'string' && normalizeHex(b)) as [string, string][])
   return out
@@ -103,7 +104,9 @@ export function checkEdits(x: unknown): Edits {
   let doc: Doc | null = null
   const d = x.doc
   if (isObj(d) && typeof d.width === 'number' && typeof d.height === 'number' && Array.isArray(d.paths)) {
-    const paths = d.paths.filter((p): p is Doc['paths'][number] => isObj(p) && typeof p.id === 'string' && typeof p.d === 'string' && typeof p.fill === 'string')
+    const paths = d.paths
+      .filter((p): p is Doc['paths'][number] => isObj(p) && typeof p.id === 'string' && typeof p.d === 'string' && typeof p.fill === 'string')
+      .map(({ id, d, fill, stroke }) => ({ id, d, fill, ...(typeof stroke === 'number' && Number.isFinite(stroke) && stroke > 0 ? { stroke } : {}) }))
     doc = { width: d.width, height: d.height, paths }
   }
   return { inks: { recolor, removed }, doc, background }

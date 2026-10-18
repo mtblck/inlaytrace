@@ -1,5 +1,7 @@
 /**
- * Reading the tracer's output, and measuring what gets exported.
+ * Reading the tracer's output, and measuring what gets exported. Paths are
+ * filled shapes, or (centerline) strokes: the colour is `fill` either way, so
+ * colour edits work the same on both.
  *
  * The raw trace is parsed once into a flat list of paths, which src/lib/doc.ts
  * turns into the editable document. Paths keep their original order: in
@@ -11,7 +13,8 @@
  * become an injection point even if the engine misbehaves.
  */
 
-export type TracedPath = { d: string; fill: string; transform?: string }
+/** A traced path: filled with `fill`, or, when `stroke` (a width in px) is set, stroked in that colour and not filled. */
+export type TracedPath = { d: string; fill: string; stroke?: number; transform?: string }
 export type Trace = { width: number; height: number; paths: TracedPath[] }
 
 const HEX = /^#[0-9a-f]{6}$/
@@ -27,11 +30,14 @@ export function parseTrace(raw: string): Trace {
   const paths: TracedPath[] = []
   for (const el of Array.from(root.getElementsByTagName('path'))) {
     const d = el.getAttribute('d') ?? ''
-    const fill = normalizeHex(el.getAttribute('fill') ?? '')
+    // A centerline stroke: fill="none", the colour in stroke, and a width.
+    const width = Number(el.getAttribute('stroke-width'))
+    const stroked = el.getAttribute('fill') === 'none' && Number.isFinite(width) && width > 0
+    const fill = normalizeHex(el.getAttribute(stroked ? 'stroke' : 'fill') ?? '')
     const transform = el.getAttribute('transform') ?? undefined
     if (!d || !PATH_DATA.test(d) || !fill) continue
     if (transform && !TRANSFORM.test(transform)) continue
-    paths.push(transform ? { d, fill, transform } : { d, fill })
+    paths.push({ d, fill, ...(stroked ? { stroke: Math.min(width, 1000) } : {}), ...(transform ? { transform } : {}) })
   }
   return { width, height, paths }
 }

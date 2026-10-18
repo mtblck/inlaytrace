@@ -1,13 +1,15 @@
 import { useId, type ReactNode } from 'react'
-import { PRESETS, hasExactShapes, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
+import { PRESETS, hasExactShapes, isInk, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
 
 type Props = {
   settings: Settings
   onChange: (next: Settings) => void
   onPreset: (id: PresetId) => void
+  /** Centerline: the stroke width the last trace measured from the ink, for the Auto label. */
+  measuredStroke?: number | null
 }
 
-export function Controls({ settings, onChange, onPreset }: Props) {
+export function Controls({ settings, onChange, onPreset, measuredStroke }: Props) {
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) => onChange({ ...settings, [key]: value })
   const p = settings.preset
   const defaults = presetById(p).defaults
@@ -48,11 +50,11 @@ export function Controls({ settings, onChange, onPreset }: Props) {
         }
       >
         <div className="space-y-4">
-          {p !== 'lineart' && (
+          {!isInk(p) && (
             <Slider label="Colours" value={settings.colors} min={2} max={64} step={1} onChange={(v) => set('colors', v)} format={(v) => `${v}`} hint="Fewer means a smaller file. If two colours merge into one, raise this." />
           )}
 
-          {p === 'lineart' && (
+          {isInk(p) && (
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <span className="field-label">Ink is</span>
@@ -84,6 +86,19 @@ export function Controls({ settings, onChange, onPreset }: Props) {
                 Adapt to uneven lighting (photos of paper)
               </label>
             </div>
+          )}
+
+          {p === 'centerline' && (
+            <Slider
+              label="Stroke width"
+              value={settings.strokeWidth}
+              min={0}
+              max={24}
+              step={0.5}
+              onChange={(v) => set('strokeWidth', v)}
+              format={(v) => (v === 0 ? `Auto${measuredStroke ? ` (${measuredStroke} px)` : ''}` : `${v} px`)}
+              hint="Auto matches the ink. Set it to your pen or bit: the strokes keep their path, only the width changes."
+            />
           )}
 
           <Slider label="Ignore specks" value={settings.speckle} min={0} max={32} step={1} onChange={(v) => set('speckle', v)} format={(v) => (v === 0 ? 'Off' : `${v} px`)} hint="Drops shapes smaller than this. Raise it for noisy scans." />
