@@ -66,9 +66,11 @@ The package versions with [Changesets](.changeset/README.md):
 3. Merging it stages the release: `.github/workflows/release.yml` builds,
    tests and checks the package, then stages any version npm doesn't have yet,
    through npm trusted publishing with provenance. Nothing is public until a
-   maintainer approves it with two-factor authentication (`npx npm@latest stage
-   list inlaytrace`, then `npx npm@latest stage approve <id>`). Re-running the
+   maintainer approves it with two-factor authentication (`npx npm@11.21.1 stage
+   list inlaytrace`, then `npx npm@11.21.1 stage approve <id>`). Re-running the
    workflow afterwards tags it `inlaytrace@x.y.z`.
+   (npm 11 on purpose: npm 12 needs Node 22.22.2+ or 24.15+ and, on older
+   Node, an approval can quietly not happen.)
 
 `npm run build -w packages/inlay` builds the package locally; `npm run check -w
 packages/inlay` lints it for publishing; `node packages/inlay/test/smoke.mjs`
