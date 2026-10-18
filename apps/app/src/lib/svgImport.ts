@@ -59,11 +59,20 @@ export function importSvg(text: string): SvgImport {
     if (paint.display === 'none') return
     const t = el.getAttribute('transform')
     const here = t ? (parseTransform(t) ?? IDENTITY) : IDENTITY
-    const mat = name === 'svg' && el !== root ? m : multiply(m, here)
+    // A nested <svg> is placed at its x and y; its own viewBox isn't applied (noted).
+    let mat = multiply(m, here)
+    if (name === 'svg' && el !== root) {
+      mat = multiply(m, [1, 0, 0, 1, num(el, 'x'), num(el, 'y')])
+      if (el.hasAttribute('viewBox')) note('nested <svg> viewBox (not applied)')
+    }
     if (el.getAttribute('clip-path') || el.getAttribute('mask')) note('clip path or mask (drawn unclipped)')
     if (el.getAttribute('filter')) note('filter (left out)')
-    const opacity = Number(styleOf(el).opacity ?? el.getAttribute('opacity') ?? 1)
-    if (opacity < 1) note('transparency (drawn opaque)')
+    const st = styleOf(el)
+    for (const prop of ['opacity', 'fill-opacity', 'stroke-opacity'])
+      if (Number(st[prop] ?? el.getAttribute(prop) ?? 1) < 1) {
+        note('transparency (drawn opaque)')
+        break
+      }
     if (CONTAINERS.has(name)) {
       for (const child of Array.from(el.children)) walk(child, mat, paint)
       return
@@ -235,11 +244,15 @@ export function arcsToCubics(d: string): string {
   let cy = 0
   let sx = 0
   let sy = 0
+  /** After an arc, S and T have no control point to reflect (the arc is written as C here, which would). */
+  let afterArc = false
   const take = () => Number(tokens[i++])
-  // Arc flags are single digits that may touch the next number: "011" is 0, 1, 1.
+  // Arc flags are single characters that may touch the next number: "011" is
+  // 0, 1, 1, and "01.5" is 0, 1, .5. A flag is only ever 0 or 1, so its first
+  // character is the flag, whatever follows.
   const flag = () => {
     const t = tokens[i]
-    if (t.length > 1 && (t[0] === '0' || t[0] === '1') && t[1] !== '.') {
+    if (t.length > 1 && (t[0] === '0' || t[0] === '1')) {
       tokens[i] = t.slice(1)
       return Number(t[0])
     }
@@ -252,6 +265,7 @@ export function arcsToCubics(d: string): string {
     const up = cmd.toUpperCase()
     const rel = cmd !== up
     if (up === 'Z') {
+      afterArc = false
       out.push('Z')
       cx = sx
       cy = sy
@@ -277,10 +291,13 @@ export function arcsToCubics(d: string): string {
       for (const c of arcToCubics(cx, cy, rx, ry, rot, large, sweep, x, y)) out.push(`C${c.join(' ')}`)
       cx = x
       cy = y
+      afterArc = true
       continue
     }
     const v = tokens.slice(i, i + n).map(Number)
     i += n
+    const wasArc = afterArc
+    afterArc = false
     // Track the current point; pass the command on in absolute form.
     const abs = (k: number, ox: number, oy: number) => (rel ? v[k] + (k % 2 === 0 ? ox : oy) : v[k])
     if (up === 'H') {
@@ -291,7 +308,9 @@ export function arcsToCubics(d: string): string {
       out.push(`L${cx} ${cy}`)
     } else {
       const pts = v.map((_, k) => abs(k, cx, cy))
-      out.push(`${up}${pts.join(' ')}`)
+      if (wasArc && up === 'S') out.push(`C${cx} ${cy} ${pts.join(' ')}`)
+      else if (wasArc && up === 'T') out.push(`Q${cx} ${cy} ${pts.join(' ')}`)
+      else out.push(`${up}${pts.join(' ')}`)
       cx = pts[n - 2]
       cy = pts[n - 1]
       if (up === 'M') {

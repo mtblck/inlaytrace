@@ -61,3 +61,13 @@ describe('importing an SVG', () => {
     expect(() => importSvg('<html><body>nope</body></html>')).toThrow(/isn’t an SVG/)
   })
 })
+
+describe('arc details', () => {
+  it('reads minified flags that run into a decimal ("01.5.5")', () => {
+    expect(nodes(arcsToCubics('M0 0a5 5 0 01.5.5')).pop()).toMatchObject({ x: 0.5, y: 0.5 })
+  })
+  it('gives S after an arc no reflected control point', () => {
+    const d = arcsToCubics('M0 0A5 5 0 0 1 10 0S20 10 30 0')
+    expect(d).toMatch(/C10 0 20 10 30 0$/)
+  })
+})
