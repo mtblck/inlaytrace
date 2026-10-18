@@ -33,7 +33,13 @@ export const api = {
   exchange: (code: string) => call<{ email: string }>('auth/exchange', { code }),
   signOut: () => call<void>('auth/signout', {}),
   deleteAccount: () => call<void>('account/delete', { confirm: true }),
+  portal: () => call<{ url: string }>('account/portal', {}),
+  checkoutConfig: () => call<CheckoutConfig>('checkout/config'),
+  checkout: (priceId: string) => call<{ transactionId: string }>('checkout', { priceId }),
 }
+
+export type Pack = { priceId: string; credits: number; price: string }
+export type CheckoutConfig = { environment: 'sandbox' | 'production'; token: string; packs: Pack[] }
 
 /** A ledger row in words. */
 export function describe(e: LedgerEntry): string {

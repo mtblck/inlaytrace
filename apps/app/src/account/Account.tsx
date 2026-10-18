@@ -171,7 +171,10 @@ function SignedIn(props: { data: AccountData; onSignedOut: () => void; onDeleted
         <p className="mt-2 font-display text-[48px] leading-none tabular-nums" data-balance>
           {balance}
         </p>
-        <p className="field-hint mt-3">Credits pay for HD mode and never expire. Buying credits opens soon.</p>
+        <p className="field-hint mt-3">Credits pay for HD mode and never expire.</p>
+        <a href="/app/buy/" className="btn btn-primary mt-4">
+          Buy credits
+        </a>
       </section>
 
       <section className="mt-8" aria-labelledby="history">
@@ -194,6 +197,11 @@ function SignedIn(props: { data: AccountData; onSignedOut: () => void; onDeleted
           </table>
         )}
         <p className="field-hint mt-3">Receipts for purchases are emailed by Paddle, which handles payments for Inlay.</p>
+        {ledger.some((e) => e.reason === 'purchase') && (
+          <button className="btn mt-3" disabled={busy} onClick={() => act(async () => void location.assign((await api.portal()).url), () => {})}>
+            Receipts and invoices
+          </button>
+        )}
       </section>
 
       <div className="mt-10 flex flex-wrap gap-2">

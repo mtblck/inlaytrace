@@ -85,6 +85,13 @@ change in the same PR as HD itself.
 - `CRON_SECRET` (any long random string: Vercel sends it to the daily keep-alive)
 - `PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_ENV` (`sandbox` or `production`)
 
+Paddle's notification destination: `https://inlaytrace.com/api/paddle/webhook`,
+events `transaction.completed`, `adjustment.created` and `adjustment.updated`.
+A full refund or chargeback takes the pack's credits back; a partial refund
+takes its share (rounded up). Each Paddle adjustment counts once, and a
+purchase's reversals together never exceed what it granted.
+The balance can go below zero if the credits were already spent.
+
 Never in the repo, never in chat.
 
 ## What HD does

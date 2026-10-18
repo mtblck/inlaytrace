@@ -15,7 +15,7 @@ const vercel = JSON.parse(readFileSync(new URL('../../vercel.json', import.meta.
 type HeaderBlock = { source: string; headers: { key: string; value: string }[] }
 const productionHeaders: Record<string, string> = Object.fromEntries(
   (vercel.headers as HeaderBlock[])
-    .filter((b) => b.source === '/(.*)' || b.source === '/app/((?!assets/prep-).*)')
+    .filter((b) => b.source === '/(.*)' || b.source === '/app/((?!assets/prep-|buy/).*)')
     .flatMap((b) => b.headers.map((h) => [h.key, h.value])),
 )
 
@@ -94,8 +94,9 @@ export default defineConfig({
     // The two large chunks are SVGO (lazy, only fetched for export/stats) and
     // nothing else; the app shell is ~80 KB gzipped.
     chunkSizeWarningLimit: 600,
-    // The app, and the account page (sign-in and credits for HD) as a page of its own.
-    rolldownOptions: { input: { main: `${here}index.html`, account: `${here}account/index.html` } },
+    // The app, plus two pages of their own for HD credits: the account page and
+    // the buy page (the only one whose CSP allows Paddle's checkout).
+    rolldownOptions: { input: { main: `${here}index.html`, account: `${here}account/index.html`, buy: `${here}buy/index.html` } },
   },
   preview: { headers: productionHeaders },
   worker: { format: 'es' },

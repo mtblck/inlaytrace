@@ -1336,6 +1336,75 @@ if (siteOrigin) {
   await shot(phone, '16-account-phone-dark')
 }
 
+// ---- The buy page (Paddle checkout) -------------------------------------------
+// Paddle.js is replaced by a stand-in that records what the page asks of it, so
+// this runs offline; the stand-in is served from cdn.paddle.com, so the buy
+// page's CSP is what lets it in.
+{
+  const buyUrl = new URL('buy/', url).href
+  console.log(`\n  buy ${buyUrl}\n`)
+  const packs = [
+    { priceId: 'pri_20', credits: 20, price: '$5' },
+    { priceId: 'pri_60', credits: 60, price: '$12' },
+    { priceId: 'pri_200', credits: 200, price: '$30' },
+  ]
+  const page = await newPage({ width: 1280, height: 800 })
+  let balance = 60
+  const seen = []
+  await page.route('**/api/**', async (route) => {
+    const req = route.request()
+    const path = new URL(req.url()).pathname.replace('/api/', '')
+    seen.push({ path, body: req.postDataJSON?.() ?? null })
+    const json = (body) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+    if (path === 'account') return json({ signedIn: true, email: 'ada@example.com', balance, ledger: [] })
+    if (path === 'checkout/config') return json({ environment: 'sandbox', token: 'test_token', packs })
+    if (path === 'checkout') return json({ transactionId: 'txn_test' })
+    return route.fulfill({ status: 404 })
+  })
+  await page.route('https://cdn.paddle.com/paddle/v2/paddle.js', (route) =>
+    route.fulfill({
+      contentType: 'text/javascript',
+      body: `window.__paddle = { env: null, init: null, opened: [], closed: 0 };
+        window.Paddle = {
+          Environment: { set: (e) => { window.__paddle.env = e } },
+          Initialize: (o) => { window.__paddle.init = { token: o.token }; window.__paddle.cb = o.eventCallback },
+          Checkout: { open: (o) => window.__paddle.opened.push(o), close: () => { window.__paddle.closed++ } },
+        }`,
+    }),
+  )
+  const res = await page.goto(buyUrl)
+  const csp = res?.headers()['content-security-policy'] ?? ''
+  check(res?.ok() && csp.includes('https://cdn.paddle.com') && csp.includes('frame-src https://buy.paddle.com https://sandbox-buy.paddle.com'), 'the buy page has its own CSP, allowing Paddle')
+  const appCsp = (await page.request.get(url)).headers()['content-security-policy'] ?? ''
+  check(!appCsp.includes('paddle'), "the app's CSP doesn't mention Paddle")
+  await page.getByRole('button', { name: 'Buy 60' }).waitFor()
+  check(await page.getByText('Test mode: no real payment is taken.').isVisible(), 'sandbox: the page says no real payment is taken')
+  check((await page.getByRole('listitem').allInnerTexts()).some((t) => t.includes('$0.20 a credit')), 'each pack shows its price per credit')
+  check((await page.evaluate(() => !!window.Paddle)) === false, "Paddle.js isn't loaded until someone buys")
+  await shot(page, '17-buy')
+  await page.getByRole('button', { name: 'Buy 60' }).click()
+  await page.waitForFunction(() => window.__paddle?.opened.length === 1)
+  const p = await page.evaluate(() => ({ env: window.__paddle.env, init: window.__paddle.init, opened: window.__paddle.opened[0] }))
+  check(p.env === 'sandbox' && p.init.token === 'test_token', 'Paddle.js starts in sandbox with the client token')
+  check(p.opened.transactionId === 'txn_test' && seen.some((s) => s.path === 'checkout' && s.body?.priceId === 'pri_60'), "the checkout opens on the server's transaction for the chosen pack")
+  balance = 120
+  await page.evaluate(() => window.__paddle.cb({ name: 'checkout.completed', data: {} }))
+  await page.getByText('Added 60 credits.').waitFor({ timeout: 10_000 })
+  check((await page.getByRole('status').innerText()).includes('120'), 'after paying, the page waits for the credits and shows the new balance')
+  await page.waitForFunction(() => window.__paddle.closed > 0, null, { timeout: 5000 }).catch(() => {})
+  check((await page.evaluate(() => window.__paddle.closed)) > 0, "Paddle's overlay is closed after payment, so the page underneath shows")
+  check((await page.getByRole('link', { name: 'Back to the app' }).last().getAttribute('href')) === '/app/', 'after paying, there is a way back to the app')
+  await shot(page, '18-buy-added')
+
+  const out = await newPage({ width: 390, height: 844 })
+  await out.route('**/api/account', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"signedIn":false}' }))
+  await out.goto(buyUrl)
+  await out.getByRole('link', { name: 'Sign in' }).waitFor()
+  check((await out.getByRole('link', { name: 'Sign in' }).getAttribute('href')) === '/app/account/', 'signed out, the buy page sends you to sign in')
+  const slash = await out.request.get(new URL('/app/buy', url).href, { maxRedirects: 0 })
+  check(slash.status() === 308 && slash.headers().location === '/app/buy/', `/app/buy redirects to /app/buy/ (${slash.status()})`)
+}
+
 await browser.close()
 
 const unexpected = failures.filter((f) => f.startsWith('console') || f.startsWith('pageerror'))

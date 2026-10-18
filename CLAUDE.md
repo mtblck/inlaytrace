@@ -45,9 +45,10 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
   `/app/` (Vite `base`, built to the root's `dist/app`). The old `/tools/img-to-svg/(.*)` must keep
   redirecting (308, absolute) to `https://inlaytrace.com/app/$1`; `hosting:check` guards it, and
   mb-portfolio redirects mattblack.space's copy of that path the same way.
-- **Three CSPs** in `vercel.json`, scoped not to overlap: the app's needs `worker-src 'self'` and must *not* allow
+- **Four CSPs** in `vercel.json`, scoped not to overlap: the app's needs `worker-src 'self'` and must *not* allow
   `'wasm-unsafe-eval'`; the AI worker (`/app/assets/prep-*.js`, ONNX Runtime) gets the app's plus `'wasm-unsafe-eval'`;
-  the site's allows it for Pagefind and lists a sha256 per Starlight inline script. `hosting:check` guards all three, and the build's
+  the buy page (`/app/buy/`) is the only one allowing Paddle's checkout (`cdn.paddle.com`, its frames);
+  the site's allows it for Pagefind and lists a sha256 per Starlight inline script. `hosting:check` guards all four, and the build's
   `--dist` pass names any new hash to add. `npm run preview` is `scripts/serve.mjs`, which mimics Vercel.
 - **Edits = `{ inks, doc }`** (`apps/app/src/lib/doc.ts`): ink edits keyed by traced hex; `doc` null
   until a geometric edit detaches it, then settings changes must confirm. paper.js is
@@ -56,6 +57,6 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
   credit ledger (`supabase/migrations/`), reached only from `/api` with the service-role key; Paddle sells credit packs.
   The free app stays account-free and local, and its CSP stays `connect-src 'self'`. `server/api.ts` is web-standard
   Request → Response: `api/server.ts` (Vercel, behind the `/api/(.*)` rewrite) and `server/node.ts` (vite dev, `serve.mjs`)
-  both call it; keep logic out of the wrappers. The account page is its own Vite page (`apps/app/account/`).
+  both call it; keep logic out of the wrappers. The account and buy pages are Vite pages of their own (`apps/app/account/`, `apps/app/buy/`).
 - **Claude commits for Matt as `mtblck <105079242+mtblck@users.noreply.github.com>`.** Vercel blocks
   deploys whose author email isn't linked to Matt's account (seen on mb-portfolio).
