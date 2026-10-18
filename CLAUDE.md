@@ -54,6 +54,8 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
   lazy-loaded for mirror only; keep it out of the main chunk.
 - **HD mode (paid, in progress, `docs/hd-mode.md`):** Supabase project `hjmhsrxagrquqgtfzyfx` holds accounts and the
   credit ledger (`supabase/migrations/`), reached only from `/api` with the service-role key; Paddle sells credit packs.
-  The free app stays account-free and local, and its CSP stays `connect-src 'self'`.
+  The free app stays account-free and local, and its CSP stays `connect-src 'self'`. `server/api.ts` is web-standard
+  Request → Response: `api/server.ts` (Vercel, behind the `/api/(.*)` rewrite) and `server/node.ts` (vite dev, `serve.mjs`)
+  both call it; keep logic out of the wrappers. The account page is its own Vite page (`apps/app/account/`).
 - **Claude commits for Matt as `mtblck <105079242+mtblck@users.noreply.github.com>`.** Vercel blocks
   deploys whose author email isn't linked to Matt's account (seen on mb-portfolio).

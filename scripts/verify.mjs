@@ -1256,6 +1256,86 @@ if (siteOrigin) {
   }
 }
 
+// ---- The account page (sign-in and credits for HD) ----------------------------
+// The page's own behaviour, against a stand-in /api (server/api.ts has its own
+// tests against a fake Supabase), plus one real request to the API.
+{
+  const accountUrl = new URL('account/', url).href
+  console.log(`\n  account ${accountUrl}\n`)
+  const real = await (await newPage({ width: 1280, height: 800 })).request.get(new URL('/api/account', url).href)
+  const realBody = await real.json().catch(() => null)
+  check(
+    (real.status() === 200 && realBody?.signedIn === false) || (real.status() === 503 && /set up/.test(realBody?.error ?? '')),
+    `the API answers /api/account without a session (${real.status()}${real.status() === 503 ? ', no Supabase settings here' : ''})`,
+  )
+
+  const ledger = [
+    { id: 3, delta: -2, reason: 'use', details: { what: 'background removal' }, created_at: '2026-10-18T15:00:00Z' },
+    { id: 2, delta: 2, reason: 'refund_use', details: {}, created_at: '2026-10-18T14:00:00Z' },
+    { id: 1, delta: 60, reason: 'purchase', details: {}, created_at: '2026-10-17T12:00:00Z' },
+  ]
+  /** A stand-in /api: signed out until a code is exchanged. */
+  async function fakeApi(page) {
+    const seen = []
+    let signedIn = false
+    await page.route('**/api/**', async (route) => {
+      const req = route.request()
+      const path = new URL(req.url()).pathname.replace('/api/', '')
+      seen.push({ path, method: req.method(), type: req.headers()['content-type'], body: req.postDataJSON?.() ?? null })
+      const json = (status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
+      if (path === 'account') return json(200, signedIn ? { signedIn: true, email: 'ada@example.com', balance: 60, ledger } : { signedIn: false })
+      if (path === 'auth/start') return route.fulfill({ status: 204 })
+      if (path === 'auth/exchange') return req.postDataJSON().code === 'good' ? ((signedIn = true), json(200, { email: 'ada@example.com' })) : json(400, { error: 'That sign-in link has expired or was already used. Ask for a new one.', code: 'expired' })
+      if (path === 'auth/signout' || path === 'account/delete') return (signedIn = false), route.fulfill({ status: 204 })
+      return json(404, { error: 'Not found.' })
+    })
+    return seen
+  }
+
+  const acct = await newPage({ width: 1280, height: 800 })
+  const seen = await fakeApi(acct)
+  const res = await acct.goto(accountUrl)
+  const acctCsp = res?.headers()['content-security-policy'] ?? ''
+  check(res?.ok() && /connect-src 'self'/.test(acctCsp) && /worker-src/.test(acctCsp), "the account page loads under the app's CSP (connect-src 'self')")
+  await acct.getByLabel('Email').waitFor()
+  check(await acct.getByText('You only need an account to buy credits for HD mode').isVisible(), 'signed out: it says an account is only for buying HD credits')
+  await acct.getByLabel('Email').fill('ada@example.com')
+  await acct.getByRole('button', { name: 'Email me a sign-in link' }).click()
+  await acct.getByText('Check your email.').waitFor()
+  const start = seen.find((s) => s.path === 'auth/start')
+  check(start?.method === 'POST' && start.type === 'application/json' && start.body.email === 'ada@example.com', 'asking for a link posts the email as JSON to /api/auth/start')
+  await shot(acct, '14-account-sent')
+
+  await acct.goto(`${accountUrl}?code=good`)
+  await acct.getByText('Signed in as').waitFor()
+  check(!acct.url().includes('code='), 'the sign-in code is taken out of the address bar')
+  check((await acct.locator('[data-balance]').innerText()) === '60', 'signed in: the balance shows')
+  const rows = await acct.locator('tbody tr').allInnerTexts()
+  check(rows.length === 3 && rows[0].includes('HD: background removal') && rows[0].includes('−2') && rows[2].includes('Bought 60 credits') && rows[2].includes('+60'), 'the history lists uses, refunds and purchases with signed amounts')
+  await shot(acct, '15-account-signed-in')
+  await acct.getByRole('button', { name: 'Delete account…' }).click()
+  await acct.getByRole('button', { name: 'Delete my account' }).click()
+  await acct.getByText('Your account is deleted.').waitFor()
+  check(seen.some((s) => s.path === 'account/delete' && s.body?.confirm === true), 'deleting asks again, then posts a confirmation')
+
+  const expired = await newPage({ width: 1280, height: 800 })
+  await fakeApi(expired)
+  // A stand-in 400 is a resource error in the console; that one is expected here.
+  const before = failures.length
+  await expired.goto(`${accountUrl}?code=used`)
+  await expired.getByRole('alert').waitFor()
+  check((await expired.getByRole('alert').innerText()).includes('expired'), 'an expired link says so and offers the form again')
+  failures.splice(before, failures.length - before, ...failures.slice(before).filter((f) => !/status of 400/.test(f)))
+
+  const phone = await newPage({ width: 390, height: 844 }, 'dark')
+  await fakeApi(phone)
+  await phone.goto(`${accountUrl}?code=good`)
+  await phone.getByText('Signed in as').waitFor()
+  const over = await phone.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+  check(over <= 0 && (await phone.evaluate(() => document.documentElement.dataset.theme)) === 'dark', `the account page fits a phone and follows dark mode (${over}px)`)
+  await shot(phone, '16-account-phone-dark')
+}
+
 await browser.close()
 
 const unexpected = failures.filter((f) => f.startsWith('console') || f.startsWith('pageerror'))

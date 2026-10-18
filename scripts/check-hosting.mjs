@@ -16,6 +16,11 @@
  *    Starlight update that changes one fails the build instead of the docs.
  *  - The two CSPs overlapping: Vercel applies every matching header block, so
  *    the site's must exclude the app's path.
+ *  - The API (accounts for HD credits) not reaching its function: /api/* must
+ *    rewrite to api/server.ts before the app's fallback, and the daily cron that
+ *    keeps the free Supabase project awake must point at it.
+ *  - The app reaching another origin: it talks only to its own /api, so its CSP
+ *    keeps connect-src 'self' and no Supabase or Paddle script loads in it.
  *  - cleanUrls / trailingSlash / routes. In mb-portfolio, those keys made
  *    Vercel silently stop applying the rewrite while headers still worked.
  */
@@ -42,6 +47,14 @@ const redirectTo = (source) => (config.redirects ?? []).find((r) => r.source ===
 if (redirectTo(`${OLD}/(.*)`) !== `https://inlaytrace.com${APP}/$1` || redirectTo(OLD) !== `https://inlaytrace.com${APP}/`)
   problems.push(`The old app address must redirect permanently to the new one, with an absolute URL (the portfolio proxies it): ${OLD}(/…) → https://inlaytrace.com${APP}/(…).`)
 
+// The API: one function behind /api/*, rewritten before the app's fallback, and a daily keep-alive.
+const rewrites = config.rewrites ?? []
+const apiAt = rewrites.findIndex((r) => r.source === '/api/(.*)' && r.destination === '/api/server?__route=$1')
+if (apiAt < 0) problems.push('Missing the API rewrite /api/(.*) → /api/server?__route=$1.')
+else if (apiAt > rewrites.findIndex((r) => r.source === `${APP}/(.*)`)) problems.push("The API rewrite must come before the app's fallback.")
+if (!config.functions?.['api/server.ts']) problems.push('vercel.json functions must configure api/server.ts (the API).')
+if (!(config.crons ?? []).some((c) => c.path === '/api/keepalive')) problems.push('Missing the daily cron to /api/keepalive; without it the free Supabase project pauses after a week.')
+
 const cspOf = (source) => (config.headers ?? []).find((b) => b.source === source)?.headers.find((h) => h.key === 'Content-Security-Policy')?.value
 const directive = (csp, name) => (csp ?? '').split(';').map((d) => d.trim()).find((d) => d.startsWith(`${name} `)) ?? ''
 const blocksWithCsp = (config.headers ?? []).filter((b) => b.headers.some((h) => h.key === 'Content-Security-Policy')).map((b) => b.source)
@@ -52,6 +65,8 @@ const appCsp = cspOf(APP_SOURCE)
 // Tracing is plain JavaScript; only the AI worker compiles WebAssembly, under its own CSP.
 if (directive(appCsp, 'script-src').includes("'wasm-unsafe-eval'")) problems.push("The app's CSP allows 'wasm-unsafe-eval'; only the AI worker (its own block) should.")
 if (!/worker-src[^;]*'self'/.test(appCsp ?? '')) problems.push("The app's CSP worker-src must allow 'self' for the tracing worker.")
+// The app only talks to itself; Supabase and Paddle are reached through /api or a page of their own.
+if (directive(appCsp, 'connect-src') !== "connect-src 'self'") problems.push("The app's CSP connect-src must stay 'self': it talks only to its own /api.")
 const prepCsp = cspOf(PREP_SOURCE)
 // The worker's CSP is the app's plus WebAssembly, nothing else.
 if (prepCsp !== appCsp?.replace("script-src 'self';", "script-src 'self' 'wasm-unsafe-eval';"))
@@ -65,6 +80,7 @@ if (process.argv.includes('--dist')) {
   const dist = new URL('../dist/', import.meta.url).pathname
   if (!existsSync(join(dist, 'index.html'))) problems.push('dist/index.html is missing: the landing page did not build.')
   if (!existsSync(join(dist, APP.slice(1), 'index.html'))) problems.push(`dist${APP}/index.html is missing: the app did not build.`)
+  if (!existsSync(join(dist, APP.slice(1), 'account', 'index.html'))) problems.push(`dist${APP}/account/index.html is missing: the account page did not build (sign-in links land there).`)
   // The AI worker's CSP is matched by file name: if the chunk is renamed, it would load under the app's and fail.
   const assets = existsSync(join(dist, APP.slice(1), 'assets')) ? readdirSync(join(dist, APP.slice(1), 'assets')) : []
   if (!assets.some((f) => /^prep-.*\.js$/.test(f))) problems.push(`No dist${APP}/assets/prep-*.js: the AI worker chunk was renamed, so ${PREP_SOURCE}'s CSP no longer reaches it.`)
