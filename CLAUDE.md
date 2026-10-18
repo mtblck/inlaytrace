@@ -24,7 +24,7 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
   `packages/inlay`, root `vitest.config.ts` running app and package as projects.
 - **Docs live in `docs/`** (Boards reads them); `scripts/sync-docs.mjs` copies them into the site
   at build time. Never edit `apps/site/src/content/docs/docs/` (generated, gitignored).
-- **Inlay, our shared-edge tracer, does Logo/Illustration/Line art/Pixel art** (`packages/inlay/src/inlay.ts`,
+- **Inlay, our shared-edge tracer, does every preset** (`packages/inlay/src/inlay.ts`,
   fitting in `packages/inlay/src/fit.ts`): each colour boundary traced and fitted once, so shapes tile
   exactly. Run `npm run score` before shipping any tracer, fitter or preset change.
 - **Inlay is a workspace package** (`packages/inlay`, published to npm as `inlaytrace`; #55). Keep it free
@@ -34,20 +34,19 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
   Releases: a changeset per user-visible change; `npm run version-packages` PR; merging *stages* it (release.yml,
   trusted publishing, stage-only); Matt approves with 2FA (`npm stage approve`), then a re-run tags it. Root devDeps pin `@emnapi/core`/`@emnapi/runtime` (optional peers of tsdown's
   compiler): without them npm versions disagree about the lockfile and `npm ci` fails on some (10, 11.4, 11.7).
-- **VTracer 1.0 (Poster only) via `scripts/vendor-vtracer.mjs`**, which rewrites the official Node
-  package's glue to browser ESM. Output in `apps/app/src/engine/vtracer/` is generated and
-  gitignored. Bumping the package means re-checking that script's substitutions.
+- **VTracer is a benchmark only** (devDependency `@visioncortex/vtracer`, loaded in Node by `scripts/vtracer.mjs`):
+  `score`, `score:photos`, `site:assets` and two tests compare against it. The app ships no WebAssembly.
 - **Logo/Illustration palettes come from histogram peaks** (`packages/inlay/src/palette.ts`),
-  not VTracer's quantizer, which drifts flat colours. Poster keeps the quantizer.
-  Re-score any preset change against clean art before shipping; see the table in `docs/design-notes.md`.
+  (VTracer's quantizer drifted flat colours). Poster quantizes (`quantizePalette`, k-means in OKLab) and stacks
+  shapes (`stacked`). Re-score any preset change (`score`, and `score:photos` for Poster) before shipping.
 - **No GPL/AGPL in the bundle** (no Potrace, no `@imgly/*`); AI weights must be
   MIT/BSD/Apache. Repo is MIT.
 - **Paths:** one Vercel project (`img-to-svg`) at inlaytrace.com: site at `/`, docs at `/docs/`, app at
   `/app/` (Vite `base`, built to the root's `dist/app`). The old `/tools/img-to-svg/(.*)` must keep
   redirecting (308, absolute) to `https://inlaytrace.com/app/$1`; `hosting:check` guards it, and
   mb-portfolio redirects mattblack.space's copy of that path the same way.
-- **Two CSPs** in `vercel.json`, scoped not to overlap: the app's needs `'wasm-unsafe-eval'` + `worker-src 'self'`;
-  the site's lists a sha256 per Starlight inline script. `hosting:check` guards both, and the build's
+- **Two CSPs** in `vercel.json`, scoped not to overlap: the app's needs `worker-src 'self'` and must *not* allow
+  `'wasm-unsafe-eval'` (it runs none); the site's allows it for Pagefind and lists a sha256 per Starlight inline script. `hosting:check` guards both, and the build's
   `--dist` pass names any new hash to add. `npm run preview` is `scripts/serve.mjs`, which mimics Vercel.
 - **Edits = `{ inks, doc }`** (`apps/app/src/lib/doc.ts`): ink edits keyed by traced hex; `doc` null
   until a geometric edit detaches it, then settings changes must confirm. paper.js is

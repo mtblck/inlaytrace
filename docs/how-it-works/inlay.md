@@ -4,10 +4,11 @@ order: 3
 
 # Inlay
 
-Inlay is our shared-edge tracer, behind Logo, Illustration, Line art and Pixel
-art (`packages/inlay/src/inlay.ts`). Like inlaid wood, every piece is cut to fit its
-neighbours exactly. It replaced VTracer for flat art in October 2026, and for
-pixel art soon after.
+Inlay is our shared-edge tracer, behind every preset
+(`packages/inlay/src/inlay.ts`). Like inlaid wood, every piece is cut to fit its
+neighbours exactly. It replaced VTracer for flat art in October 2026, for
+pixel art soon after, and for photos (Poster) last, once it had a quantized
+palette and stacked shapes ([VTracer](vtracer.md) has the numbers).
 
 ## Why we wrote our own
 

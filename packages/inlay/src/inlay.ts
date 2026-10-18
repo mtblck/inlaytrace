@@ -1,5 +1,5 @@
 /**
- * Inlay, our shared-edge tracer: Logo, Illustration, Line art and Pixel art.
+ * Inlay, our shared-edge tracer: every preset, from logos to photos.
  * Like inlaid wood, every piece is cut to fit its neighbours exactly.
  *
  * VTracer traces every colour region on its own, so an edge between two
@@ -23,7 +23,9 @@
  *
  * Regions are 4-connected, so two pixels touching only at a corner are
  * separate shapes, and each region is one <path> (its outline plus its holes,
- * wound oppositely so the default nonzero fill rule cuts the holes).
+ * wound oppositely so the default nonzero fill rule cuts the holes). With
+ * `stacked`, a region keeps only its outline (and any holes onto
+ * transparency), and paint order does the rest.
  */
 import { fitChain, isFlat, type Cubic, type FitOptions } from './fit'
 import { oklab, type Rgb } from './palette'
@@ -38,6 +40,16 @@ export type InlayOptions = FitOptions & {
    * joined into single lines.
    */
   pixels?: boolean
+  /**
+   * Stacked shapes, for photos: each region is drawn whole, without the holes
+   * other regions sit in, and larger shapes come first so smaller ones paint
+   * over them. Every hole's outline is exactly the outline of what fills it,
+   * so the picture is the same as cut-out shapes, with less path data (each
+   * hole isn't drawn a second time) and no hairline seams where anti-aliased
+   * edges meet. Holes onto transparency are kept. Default: cut out, which is
+   * what a vinyl cutter or a screen printer wants.
+   */
+  stacked?: boolean
 } & (
     /**
      * `merge` folds colours together before any region is built, so the edge
@@ -90,14 +102,22 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
     if (c.right !== VOID) addOriented(byComp, c.right, { ...c, cubics: reverse(cubics), reversed: true })
   }
 
-  const order = [...byComp.keys()].sort((a, b) => compArea[b] - compArea[a])
-  const paths: InlayPath[] = []
-  for (const id of order) {
-    const subs = assemble(byComp.get(id)!)
-    if (!subs.length) continue
-    paths.push({ d: serializePath(subs), fill: colors[compLabel[id]] })
+  const shapes: { subs: Subpath[]; fill: string; area: number }[] = []
+  for (const [id, chains] of byComp) {
+    let loops = assemble(chains)
+    if (!loops.length) continue
+    let area = compArea[id]
+    if (o.stacked) {
+      // The outline is the loop enclosing the most; a hole stays only if it opens onto nothing.
+      const outer = loops.reduce((a, b) => (Math.abs(b.area) > Math.abs(a.area) ? b : a))
+      loops = loops.filter((l) => l === outer || l.touchesVoid)
+      area = Math.abs(outer.area)
+    }
+    shapes.push({ subs: loops.map((l) => l.sub), fill: colors[compLabel[id]], area })
   }
-  return { width: w, height: h, paths }
+  // Largest first: for stacked shapes that is containers before what they contain.
+  shapes.sort((a, b) => b.area - a.area)
+  return { width: w, height: h, paths: shapes.map((x) => ({ d: serializePath(x.subs), fill: x.fill })) }
 }
 
 /**
@@ -422,12 +442,26 @@ function components(labels: Int32Array, w: number, h: number, keep: (label: numb
   return { comp, compLabel, compArea }
 }
 
-/** Relabel every region smaller than `minArea` with the label it shares the most edge with. Smallest first. */
+/**
+ * Relabel every region smaller than `minArea` with the label it shares the
+ * most edge with, smallest first, until none is left (at most eight passes).
+ *
+ * One pass isn't enough: when a speck has joined a slightly larger small
+ * region, and that region then joins a third, the speck's pixels keep the
+ * label they took and are stranded as a new speck. On photos that left
+ * thousands of fragments, and a larger `speckle` left more, not fewer.
+ */
 function mergeSpecks(labels: Int32Array, w: number, h: number, minArea: number) {
   if (minArea <= 1) return
+  for (let pass = 0; pass < 8; pass++) if (!mergeSpecksOnce(labels, w, h, minArea)) return
+}
+
+/** One pass of mergeSpecks; false when there was nothing left to merge. */
+function mergeSpecksOnce(labels: Int32Array, w: number, h: number, minArea: number) {
   const { comp, compArea } = components(labels, w, h, () => true)
   const small = compArea.map((a, id) => ({ a, id })).filter((c) => c.a < minArea)
-  if (!small.length) return
+  if (!small.length) return false
+  let changed = false
   // Pixels grouped by component (counting sort).
   const start = new Int32Array(compArea.length + 1)
   for (let i = 0; i < compArea.length; i++) start[i + 1] = start[i] + compArea[i]
@@ -454,8 +488,12 @@ function mergeSpecks(labels: Int32Array, w: number, h: number, minArea: number) 
     let best = own
     let most = 0
     for (const [l, v] of votes) if (v > most) (most = v), (best = l)
-    if (best !== own) for (let k = start[id]; k < start[id + 1]; k++) labels[pixels[k]] = best
+    if (best !== own) {
+      for (let k = start[id]; k < start[id + 1]; k++) labels[pixels[k]] = best
+      changed = true
+    }
   }
+  return changed
 }
 
 // ---- 3. Chains -------------------------------------------------------------------------
@@ -560,12 +598,19 @@ function addOriented(map: Map<number, Oriented[]>, id: number, c: Oriented) {
 
 const reverse = (cubics: Cubic[]): Cubic[] => cubics.map(([a, b, c, d]) => [d, c, b, a] as Cubic).reverse()
 
-/** Join a region's chains into closed loops, each walked with the region on its left. */
-function assemble(chains: Oriented[]): Subpath[] {
-  const subs: Subpath[] = []
+type Loop = { sub: Subpath; area: number; touchesVoid: boolean }
+/** The region on the far side of a chain, as this region walks it. */
+const across = (c: Oriented) => (c.reversed ? c.left : c.right)
+
+/**
+ * Join a region's chains into closed loops, each walked with the region on its
+ * left, with each loop's signed area and whether anything across it is VOID.
+ */
+function assemble(chains: Oriented[]): Loop[] {
+  const subs: Loop[] = []
   const open: Oriented[] = []
   for (const c of chains) {
-    if (c.closed) subs.push(toSubpath(c.cubics))
+    if (c.closed) subs.push(loopOf(c.cubics, across(c) === VOID))
     else open.push(c)
   }
   const start = (c: Oriented) => (c.reversed ? c.to : c.from)
@@ -583,10 +628,12 @@ function assemble(chains: Oriented[]): Subpath[] {
   for (const first of open) {
     if (used.has(first)) continue
     const loop: Cubic[] = []
+    let touchesVoid = false
     let c: Oriented | undefined = first
     while (c && !used.has(c)) {
       used.add(c)
       loop.push(...c.cubics)
+      if (across(c) === VOID) touchesVoid = true
       if (end(c) === start(first)) break
       const into = lastDir(c)
       // Where the region touches itself at a corner, turn left: regions are
@@ -595,9 +642,16 @@ function assemble(chains: Oriented[]): Subpath[] {
         .filter((n) => !used.has(n))
         .sort((a, b) => cross(into, firstDir(a)) - cross(into, firstDir(b)))[0]
     }
-    if (loop.length) subs.push(toSubpath(loop))
+    if (loop.length) subs.push(loopOf(loop, touchesVoid))
   }
   return subs
+}
+
+/** A loop and its signed area (shoelace over its cubics' end points: enough to rank and orient). */
+function loopOf(cubics: Cubic[], touchesVoid: boolean): Loop {
+  let area = 0
+  for (const [a, , , d] of cubics) area += a.x * d.y - d.x * a.y
+  return { sub: toSubpath(cubics), area: area / 2, touchesVoid }
 }
 
 const neg = (p: Pt): Pt => ({ x: -p.x, y: -p.y })

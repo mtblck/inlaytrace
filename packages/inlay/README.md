@@ -53,6 +53,7 @@ toSvg(result) // '<svg …>…</svg>'
 | `mode: 'palette', palette` | Flat colour art. `palette` is the colours to label pixels with: `peakPalette(rgba, n)` takes the sharp peaks of the histogram (flat art's real colours); `exactPalette(rgba, n)` takes the image's exact colours, most-used first. |
 | `mode: 'palette', palette, merge` | Fold colours together before regions are built, so the edge between them disappears: `{ '#from': '#into' }`. |
 | `mode: 'palette', palette: exactPalette(…), pixels: true` | Pixel art: no clean-up of lone pixels, no curve fitting; every boundary is its pixel staircase with straight runs joined. |
+| `mode: 'palette', palette: quantizePalette(…), stacked: true` | Photos as flat colour bands. `quantizePalette(rgba, n)` clusters the image's colours (k-means in OKLab, deterministic); `stacked` draws each shape whole, larger first, instead of cutting holes. |
 | `mode: 'binary', threshold` | Line art: ink darker than `threshold` (0–255), or adaptive per neighbourhood when `null`. Only the ink is drawn. |
 
 ### Also exported
@@ -95,6 +96,10 @@ clean source art: 0.70% wrong pixels with 177 nodes, against 0.85% with 271
 nodes for VTracer tracing each colour on its own. At 2048 px it traces in about
 1.3 s (VTracer: 17.5 s, timed by hand). On pixel art both draw every pixel exactly; Inlay uses
 about 14% fewer nodes and is about 4× faster on a 1024 px sprite.
+
+On three photos (quantized palette, stacked), rendered back and compared with
+each photo: a mean error of 11.8 against VTracer's 14.3, with 57% fewer shapes
+and a 30% smaller file.
 
 ## License
 

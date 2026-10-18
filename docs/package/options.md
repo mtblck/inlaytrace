@@ -15,6 +15,7 @@ Every trace takes the same fitting options and one of two modes.
 | `speckle` | number, px | Regions smaller than `speckle` × `speckle` pixels merge into whatever surrounds them. 0 keeps everything. |
 | `smoothing` | number, px (optional) | Half-window of the smoothing over the pixel staircase. Default 12; it narrows by itself on tight curves. |
 | `pixels` | boolean (optional) | Pixel art: no clean-up and no curve fitting; every boundary is its exact pixel staircase. |
+| `stacked` | boolean (optional) | Stacked shapes, for photos: each shape is drawn whole, without the holes other shapes sit in, and larger shapes come first. The picture is the same as cut-out shapes, with less path data and no hairline seams between shapes. Holes onto transparency are kept. Default: cut out, which is what vinyl cutters and screen printers want. |
 
 ## Modes
 
@@ -29,7 +30,7 @@ Each pixel takes the nearest `palette` colour (`#rrggbb`), judged in OKLab so
 takes the nearest colour among its neighbours, so an edge never grows a sliver
 of an in-between colour.
 
-Two helpers pick a palette from the pixels:
+Three helpers pick a palette from the pixels:
 
 - `peakPalette(rgba, maxColors)`: the sharp peaks of the colour histogram,
   which are flat art's real colours. Close colours (under 0.07 apart in OKLab)
@@ -38,6 +39,9 @@ Two helpers pick a palette from the pixels:
 - `exactPalette(rgba, maxColors)`: the exact colours, most-used first. For
   pixel art, where a one-pixel eye matters and two close shades are on
   purpose.
+- `quantizePalette(rgba, maxColors)`: the colours that best summarise the
+  image, by k-means in OKLab. For photos, which have no histogram peaks.
+  Deterministic: the same image gives the same palette every time.
 
 `merge` folds colours together before any shape is built, so the edge between
 them disappears: `{ '#e9a13b': '#d9542b' }` traces the yellow as red.
@@ -63,8 +67,7 @@ These are the Inlay app's presets.
 | Illustration: more colours, smooth curves | `palette: peakPalette(px, 16)`, `speckle: 4`, `tolerance: 0.75`, `cornerAngle: 60` |
 | Line art: one ink | `mode: 'binary'`, `threshold: 128`, `speckle: 6`, `tolerance: 1`, `cornerAngle: 45` |
 | Pixel art | `palette: exactPalette(px, 32)`, `pixels: true`, `speckle: 0`, `tolerance: 0.25`, `cornerAngle: 0` |
+| Poster: a photo in flat colour bands | `palette: quantizePalette(px, 24)`, `stacked: true`, `speckle: 8`, `tolerance: 0.75`, `cornerAngle: 90` |
 
 Small images trace better upscaled first: the app scales anything under 512 px
 up to about 1024 px, with smoothing, before tracing (except pixel art).
-Photos have no flat colours to share edges between; Inlay will trace them,
-but a tracer built for photos may suit them better.

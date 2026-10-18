@@ -1,0 +1,144 @@
+import { describe, expect, it } from 'vitest'
+import { trace, type InlayResult } from './inlay'
+import { quantizePalette } from './palette'
+import { parsePath, type Pt } from './path'
+
+/** Flatten a path's subpaths to polygons (each cubic as 16 segments). */
+function polygons(d: string): Pt[][] {
+  return parsePath(d).map((sp) => {
+    const pts: Pt[] = []
+    const n = sp.nodes
+    for (let i = 0; i < n.length; i++) {
+      const a = n[i]
+      const b = n[(i + 1) % n.length]
+      const c1 = a.out ?? a
+      const c2 = b.in ?? b
+      for (let j = 0; j < 16; j++) {
+        const t = j / 16
+        const u = 1 - t
+        pts.push({
+          x: u * u * u * a.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * b.x,
+          y: u * u * u * a.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * b.y,
+        })
+      }
+    }
+    return pts
+  })
+}
+
+/** Nonzero winding number of a point against polygons, as SVG's default fill rule. */
+function inside(polys: Pt[][], x: number, y: number) {
+  let wind = 0
+  for (const poly of polys)
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i]
+      const b = poly[(i + 1) % poly.length]
+      if (a.y <= y && b.y > y && (b.x - a.x) * (y - a.y) - (x - a.x) * (b.y - a.y) > 0) wind++
+      else if (a.y > y && b.y <= y && (b.x - a.x) * (y - a.y) - (x - a.x) * (b.y - a.y) < 0) wind--
+    }
+  return wind !== 0
+}
+
+/** Paint the trace at every pixel centre, in path order: the colour on top, or '' where nothing is. */
+function render(r: InlayResult): string[] {
+  const shapes = r.paths.map((p) => ({ polys: polygons(p.d), fill: p.fill }))
+  const out: string[] = []
+  for (let y = 0; y < r.height; y++)
+    for (let x = 0; x < r.width; x++) {
+      let top = ''
+      for (const s of shapes) if (inside(s.polys, x + 0.5, y + 0.5)) top = s.fill
+      out.push(top)
+    }
+  return out
+}
+
+const W = 96
+const H = 80
+/**
+ * Nested shapes: a blue panel holding a red ring, the ring holding a gold disc
+ * (three deep), a green bar crossing the panel's edge, and a transparent
+ * window cut into the panel.
+ */
+function picture() {
+  const px = new Uint8ClampedArray(W * H * 4)
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      const r = Math.hypot(x - 40, y - 40)
+      let c = [245, 240, 230, 255] // paper
+      if (x >= 10 && x < 75 && y >= 8 && y < 72) c = [30, 60, 140, 255] // panel
+      if (r < 26) c = [210, 50, 40, 255] // ring
+      if (r < 13) c = [235, 170, 40, 255] // disc
+      if (y >= 34 && y < 44 && x >= 60) c = [40, 140, 70, 255] // bar
+      if (x >= 66 && x < 72 && y >= 12 && y < 24) c = [0, 0, 0, 0] // window
+      px.set(c, (y * W + x) * 4)
+    }
+  return px
+}
+const palette = ['#f5f0e6', '#1e3c8c', '#d23228', '#ebaa28', '#288c46']
+const options = { mode: 'palette' as const, palette, speckle: 2, tolerance: 0.5, cornerAngle: 45 }
+
+describe('stacked shapes', () => {
+  const cut = trace(picture(), W, H, options)
+  const stacked = trace(picture(), W, H, { ...options, stacked: true })
+
+  it('paint the same picture as cut-out shapes', () => {
+    const a = render(cut)
+    const b = render(stacked)
+    const differ = a.filter((c, i) => c !== b[i]).length
+    expect(differ / a.length).toBeLessThan(0.002)
+  })
+
+  it('drop the holes other shapes fill, so each shape is one outline', () => {
+    const subpaths = (r: InlayResult) => r.paths.reduce((n, p) => n + parsePath(p.d).length, 0)
+    expect(subpaths(stacked)).toBeLessThan(subpaths(cut))
+    const ring = stacked.paths.find((p) => p.fill === '#d23228')!
+    expect(parsePath(ring.d)).toHaveLength(1)
+  })
+
+  it('keep a hole that opens onto transparency', () => {
+    const panel = stacked.paths.find((p) => p.fill === '#1e3c8c')!
+    expect(parsePath(panel.d).length).toBeGreaterThan(1)
+    // The window's centre stays empty.
+    const shapes = stacked.paths.map((p) => polygons(p.d))
+    expect(shapes.some((polys) => inside(polys, 69, 18))).toBe(false)
+  })
+
+  it('paint containers before what they contain', () => {
+    const order = stacked.paths.map((p) => p.fill)
+    expect(order.indexOf('#1e3c8c')).toBeLessThan(order.indexOf('#d23228'))
+    expect(order.indexOf('#d23228')).toBeLessThan(order.indexOf('#ebaa28'))
+  })
+})
+
+describe('quantizePalette', () => {
+  /** A smooth gradient with two flat patches: no histogram peaks to speak of. */
+  function photoLike() {
+    const px = new Uint8ClampedArray(64 * 64 * 4)
+    for (let y = 0; y < 64; y++)
+      for (let x = 0; x < 64; x++) px.set([x * 4, y * 4, 128 + ((x + y) % 7), 255], (y * 64 + x) * 4)
+    return px
+  }
+
+  it('returns the colours asked for, distinct, as hex', () => {
+    const p = quantizePalette(photoLike(), 8)
+    expect(p).toHaveLength(8)
+    expect(new Set(p).size).toBe(8)
+    for (const c of p) expect(c).toMatch(/^#[0-9a-f]{6}$/)
+  })
+
+  it('is deterministic', () => {
+    expect(quantizePalette(photoLike(), 12)).toEqual(quantizePalette(photoLike(), 12))
+  })
+
+  it('returns fewer colours when the image has fewer', () => {
+    const two = new Uint8ClampedArray(16 * 4 * 4)
+    for (let i = 0; i < 16 * 4; i++) two.set(i % 2 ? [255, 0, 0, 255] : [0, 0, 255, 255], i * 4)
+    expect(quantizePalette(two, 8).sort()).toEqual(['#0000ff', '#ff0000'])
+  })
+
+  it('ignores transparent pixels', () => {
+    const px = new Uint8ClampedArray(8 * 4)
+    for (let i = 0; i < 8; i++) px.set(i < 4 ? [10, 200, 30, 255] : [250, 0, 250, 0], i * 4)
+    expect(quantizePalette(px, 4)).toEqual(['#0ac81e'])
+  })
+})

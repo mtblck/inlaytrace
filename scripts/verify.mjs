@@ -548,7 +548,7 @@ const page = await newPage({ width: 1440, height: 900 })
 const response = await page.goto(url)
 check(response?.ok(), `page loads (${response?.status()})`)
 const csp = response?.headers()['content-security-policy'] ?? ''
-check(csp.includes("'wasm-unsafe-eval'"), 'CSP allows WebAssembly')
+check(!csp.includes("'wasm-unsafe-eval'"), 'the app\'s CSP allows no WebAssembly (it runs none)')
 check(/worker-src[^;]*'self'/.test(csp) && !csp.includes("'sha256-"), "the app gets its own CSP (workers allowed), not the site's")
 check((await page.getByRole('link', { name: 'Inlay', exact: true }).getAttribute('href')) === '/', 'the Inlay wordmark leads to the landing page')
 check((await page.getByRole('navigation', { name: 'About Inlay' }).getByRole('link', { name: 'Privacy' }).getAttribute('href')) === '/privacy/', 'the app links to the privacy page')
@@ -590,6 +590,17 @@ await retrace(page, () => page.getByRole('radio', { name: /Pixel art/ }).click()
   const ds = await page.locator(VECTOR).evaluateAll((els) => els.map((e) => e.getAttribute('d')))
   const fractional = ds.join(' ').match(/\d+\.\d+/g) ?? []
   check(ds.length > 3 && fractional.length === 0 && !ds.some((d) => /[CQSA]/i.test(d)), `pixel art is drawn on whole pixels with straight lines (${ds.length} paths)`)
+}
+await retrace(page, () => page.getByRole('radio', { name: /^Poster/ }).click())
+{
+  // Poster is Inlay too (#53): a quantized palette, stacked by default; Cut out re-traces with holes cut.
+  const stacked = await page.locator(VECTOR).count()
+  check(stacked > 3, `Poster traces with Inlay, no WebAssembly (${stacked} paths)`)
+  const shapes = page.getByRole('radiogroup', { name: 'Shapes' })
+  check((await shapes.getByRole('radio', { name: 'Stacked' }).getAttribute('aria-checked')) === 'true', 'Poster stacks shapes by default')
+  await retrace(page, () => shapes.getByRole('radio', { name: 'Cut out' }).click())
+  const subpaths = await page.locator(VECTOR).evaluateAll((els) => els.reduce((n, e) => n + (e.getAttribute('d').match(/M/g) ?? []).length, 0))
+  check(subpaths > stacked, `Cut out gives shapes with holes (${subpaths} subpaths in ${await page.locator(VECTOR).count()} paths)`)
 }
 await retrace(page, () => page.getByRole('radio', { name: /^Logo/ }).click())
 

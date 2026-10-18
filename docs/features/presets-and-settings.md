@@ -15,7 +15,7 @@ re-traces within about 120 ms of the last change.
 | **Logo** | Few flat colours, crisp corners | Inlay | 8 colours, specks 8 px, smoothing 1.5, corners 45° |
 | **Illustration** | More colours, smooth curves | Inlay | 16 colours, specks 4 px, smoothing 1, corners 60° |
 | **Line art** | Ink drawings and scans, one colour | Inlay | Threshold 128, specks 6 px, smoothing 1.5, corners 45° |
-| **Poster** | Photos flattened into colour bands | VTracer | 24 colours, specks 8 px, smoothing 1, corners 90°, stacked |
+| **Poster** | Photos flattened into colour bands | Inlay (quantized palette) | 24 colours, specks 8 px, smoothing 1, corners 90°, stacked |
 | **Pixel art** | Hard edges, nothing smoothed | Inlay (pixel staircase) | Its exact colours (up to 32), no speck filter, up to 4096 px |
 
 ## Settings
@@ -36,20 +36,20 @@ paper.
 **Ignore specks** (0–32 px): regions smaller than this many pixels squared merge
 into their surroundings. Raise it for noisy scans or JPEG speckle.
 
-**Smoothing** (0–3): how loosely the outline is followed. For the shared-edge
-tracer it sets the fitting tolerance: 0.25 + 0.5 × smoothing px, so the Logo
-default of 1.5 is 1 px, and the slider shows that tolerance (±1.00 px). Higher
-means fewer nodes and a smaller file. For Poster it is VTracer's
-simplification, and 0 turns it off.
+**Smoothing** (0–3): how loosely the outline is followed. It sets the fitting
+tolerance: 0.25 + 0.5 × smoothing px, so the Logo default of 1.5 is 1 px, and
+the slider shows that tolerance (±1.00 px). Higher means fewer nodes and a
+smaller file.
 
 **Corners** (0–180°): bends sharper than this stay corners; gentler ones become
 curves. See [Curve fitting](../how-it-works/curve-fitting.md) for how a corner
 is told apart from a tight curve.
 
-**Shapes** (Poster only): *Stacked* shapes sit on top of each
-other (smaller files); *Cut out* shapes never overlap (for vinyl and screen
-print layers). The other presets use Inlay and always share edges exactly, so they don't need
-the choice.
+**Shapes** (Poster only): *Stacked* draws each shape whole, larger shapes
+first, so smaller ones sit on top: a little less path data, and no hairline
+seams where shapes meet. *Cut out* gives every shape holes where others sit,
+so none overlaps (for vinyl and screen print layers). Both look the same, and
+both share every edge exactly. The flat-art presets are always cut out.
 
 ## Small and large images
 

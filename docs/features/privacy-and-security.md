@@ -29,14 +29,17 @@ restore.
 
 ## A strict content security policy
 
-The page allows scripts only from itself, plus `'wasm-unsafe-eval'` for
-VTracer's WebAssembly and `worker-src 'self' blob:` for the worker. No inline
-scripts, and no `eval`: paper.js is the core build, which has none.
+The app allows scripts only from itself, plus `worker-src 'self' blob:` for
+the worker. No inline scripts, no `eval` (paper.js is the core build, which
+has none), and no WebAssembly: the app has run none since Poster moved to
+Inlay, so its policy doesn't allow compiling any. (The docs site allows
+WebAssembly for its search, on its own policy.)
 
-The policy is **tested, not trusted**. Without the two allowances the page
+The policy is **tested, not trusted**. Without the worker allowance the page
 loads, accepts a drop and never traces. So:
 
-- `npm run hosting:check` fails the build if either goes missing.
+- `npm run hosting:check` fails the build if the worker allowance goes
+  missing, or if WebAssembly is allowed again.
 - `npm run preview` serves the real headers from `vercel.json`, so local testing
   runs under the production policy.
 - `npm run verify` fails on any CSP violation in the console.

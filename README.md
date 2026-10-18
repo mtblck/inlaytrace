@@ -59,8 +59,9 @@ for the Logo preset ([design notes](docs/design-notes.md)); the other rows are
 re-measured by `npm run site:assets`.
 
 [VTracer](https://github.com/visioncortex/vtracer) is an excellent general
-tracer, and the app still uses it for photos (the Poster preset). Inlay is
-built for flat colour: straight edges stay single lines and corners stay sharp.
+tracer, and the app used it until Inlay overtook it, for photos last (on three
+photos: 17% closer to the photo, 57% fewer shapes, a 30% smaller file).
+Straight edges stay single lines and corners stay sharp.
 [Compared with other tools](docs/how-it-differs.md) covers Vectorizer.ai,
 Vector Magic, Illustrator, Inkscape and SVGcode.
 
@@ -95,5 +96,6 @@ checked, and what to include in a bug report.
 
 ## Licence
 
-MIT. VTracer is MIT OR Apache-2.0; SVGO, fflate and paper.js are MIT. Potrace
+MIT. SVGO, fflate and paper.js are MIT. VTracer (MIT OR Apache-2.0) is only a
+benchmark in the scoring scripts, not part of the app or the package. Potrace
 (GPL) and the `@imgly` packages (AGPL) are deliberately not used.

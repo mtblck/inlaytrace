@@ -1,26 +1,14 @@
 /**
- * Runs every preset through the real vendored VTracer build, so a change to
- * the option mapping or a package bump that breaks the engine fails here
- * rather than in the browser.
+ * Runs every preset through the real engine (Inlay, via the worker's own
+ * runTrace), so a change to the option mapping that breaks a preset fails
+ * here rather than in the browser.
  */
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
-import { beforeAll, describe, expect, it } from 'vitest'
-import { init } from './vtracer/vtracer.js'
+import { describe, expect, it } from 'vitest'
 import { runTrace } from './run'
-import { PRESETS, settingsFor, toVtracerOptions } from './presets'
+import { PRESETS, settingsFor, toTraceOptions, type TraceOptions } from './presets'
 import { parseTrace } from '../lib/svg'
 import { inksOf } from '../lib/doc'
 import { peakPalette } from 'inlaytrace'
-
-beforeAll(async () => {
-  // import.meta.url is not a file: URL under jsdom, so resolve from the module path.
-  const wasm = join(dirname(fileURLToPath(new URL(import.meta.url, 'file:///'))), 'vtracer/vtracer.wasm')
-  globalThis.fetch = (async () =>
-    new Response(readFileSync(wasm), { headers: { 'content-type': 'application/wasm' } })) as typeof fetch
-  await init('vtracer.wasm')
-})
 
 /** A 96×64 test card: background, a red disc, a blue bar, a dark outline, and noise. */
 function testCard() {
@@ -42,14 +30,14 @@ function testCard() {
 }
 
 /** The worker's own entry point; it may flip pixels in place, so it gets a copy. */
-const trace = (px: Uint8Array, w: number, h: number, options: Record<string, unknown>) => parseTrace(runTrace(px.slice(), w, h, options))
+const trace = (px: Uint8Array, w: number, h: number, options: TraceOptions) => parseTrace(runTrace(px.slice(), w, h, options))
 
 describe('presets against the real engine', () => {
   const { px, w, h } = testCard()
 
   for (const preset of PRESETS) {
     it(`${preset.label} produces a usable trace`, () => {
-      const t = trace(px, w, h, toVtracerOptions(settingsFor(preset.id)))
+      const t = trace(px, w, h, toTraceOptions(settingsFor(preset.id)))
       expect(t.width).toBe(w)
       expect(t.paths.length).toBeGreaterThan(0)
       const inks = inksOf(t).length
@@ -70,7 +58,7 @@ describe('presets against the real engine', () => {
         card.set([v, v, v, 255], (y * w + x) * 4)
       }
     const light = { ...settingsFor('lineart'), lightInk: true }
-    const opts = toVtracerOptions(light)
+    const opts = toTraceOptions(light)
     expect(opts.invert).toBe(true)
     const t = trace(card, w, h, opts)
     // Every traced shape starts on the disc (x, y ≥ 18), not at the card's corner.
@@ -79,14 +67,14 @@ describe('presets against the real engine', () => {
       expect(Math.min(x, y)).toBeGreaterThan(10)
     }
     // And the control: dark ink on the same card does trace from the corner.
-    const dark = trace(card, w, h, toVtracerOptions(settingsFor('lineart')))
+    const dark = trace(card, w, h, toTraceOptions(settingsFor('lineart')))
     expect(dark.paths.some((p) => /^M\s*0[ ,]/.test(p.d))).toBe(true) // starts on the card edge
-    expect(toVtracerOptions(settingsFor('lineart')).invert).toBeUndefined()
+    expect(toTraceOptions(settingsFor('lineart')).invert).toBeUndefined()
   })
 
   it('the colour cap is honoured', () => {
     const s = { ...settingsFor('illustration'), colors: 3 }
-    expect(inksOf(trace(px, w, h, toVtracerOptions(s))).length).toBeLessThanOrEqual(3)
+    expect(inksOf(trace(px, w, h, toTraceOptions(s))).length).toBeLessThanOrEqual(3)
   })
 })
 

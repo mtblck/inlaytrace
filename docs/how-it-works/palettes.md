@@ -37,8 +37,13 @@ cut mean error on a real illustration from 11.1 to 4.3.
 ## Where it doesn't apply
 
 Photos have no peaks. On a photo the same change made things worse (9.9 →
-15.3), so the Poster preset keeps VTracer's own quantizer. The rule is
-per-preset because the measurements said so.
+15.3), so Poster quantizes instead: `quantizePalette` runs k-means in OKLab
+over a colour histogram, each bin weighted by its pixel count. It's seeded
+deterministically (the most common colour, then the colour farthest from
+those chosen, weighted by how common it is), so a photo traces the same way
+every time, and each colour reported is the mean of its cluster's pixels: a
+colour the photo really has. The rule is per-preset because the measurements
+said so.
 
 ## How the tracer uses it
 

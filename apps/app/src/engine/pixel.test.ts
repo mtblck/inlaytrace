@@ -4,21 +4,12 @@
  * only at a corner. Both are drawn back at pixel centres (nonzero fill, paint
  * order) and compared with the sprite, pixel for pixel.
  */
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
-import { beforeAll, describe, expect, it } from 'vitest'
-import { init } from './vtracer/vtracer.js'
+import { describe, expect, it } from 'vitest'
 import { runTrace } from './run'
+import { vtracer } from '../../../../scripts/vtracer.mjs'
 import { parseTrace } from '../lib/svg'
 import { docFromTrace } from '../lib/doc'
 import { parsePath } from '../lib/pathdata'
-
-beforeAll(async () => {
-  const wasm = join(dirname(fileURLToPath(new URL(import.meta.url, 'file:///'))), 'vtracer/vtracer.wasm')
-  globalThis.fetch = (async () => new Response(readFileSync(wasm), { headers: { 'content-type': 'application/wasm' } })) as typeof fetch
-  await init('vtracer.wasm')
-})
 
 const PAL: Record<string, [number, number, number]> = {
   '.': [92, 148, 252], // sky
@@ -99,13 +90,14 @@ const stats = (svg: string) => {
 
 describe('pixel art', () => {
   it('Inlay draws every pixel exactly, on pixel corners, with fewer nodes than VTracer', () => {
-    const inlay = stats(runTrace(sprite(), W, H, { engine: 'inlay', mode: 'palette', peakColors: 32, pixels: true, speckle: 0, tolerance: 0.25, cornerAngle: 0 }))
-    const vtracer = stats(runTrace(sprite(), W, H, { mode: 'pixel', maxColors: 32, filterSpeckle: 0, hierarchical: 'stacked' }))
-    console.log(`  pixel sprite 16×16, ${Object.keys(PAL).length} colours: Inlay ${inlay.wrong} wrong px, ${inlay.paths} paths, ${inlay.nodes} nodes, ${inlay.bytes} B; VTracer ${vtracer.wrong} wrong px, ${vtracer.paths} paths, ${vtracer.nodes} nodes, ${vtracer.bytes} B`)
+    const inlay = stats(runTrace(sprite(), W, H, { mode: 'palette', colors: 32, palette: 'exact', pixels: true, speckle: 0, tolerance: 0.25, cornerAngle: 0 }))
+    // VTracer's pixel mode, as the app used before pixel art moved to Inlay (a benchmark only now).
+    const vt = stats(vtracer(sprite(), W, H, { mode: 'pixel', maxColors: 32, filterSpeckle: 0, hierarchical: 'stacked' }))
+    console.log(`  pixel sprite 16×16, ${Object.keys(PAL).length} colours: Inlay ${inlay.wrong} wrong px, ${inlay.paths} paths, ${inlay.nodes} nodes, ${inlay.bytes} B; VTracer ${vt.wrong} wrong px, ${vt.paths} paths, ${vt.nodes} nodes, ${vt.bytes} B`)
     expect(inlay.wrong).toBe(0)
     for (const p of inlay.doc.paths) for (const s of parsePath(p.d)) for (const n of s.nodes) expect([n.x % 1, n.y % 1, n.in, n.out]).toEqual([0, 0, null, null])
     // The two skin shades stay two colours.
     expect(new Set(inlay.doc.paths.map((p) => p.fill))).toEqual(new Set(Object.values(PAL).map(hex)))
-    expect(inlay.nodes).toBeLessThanOrEqual(vtracer.nodes)
+    expect(inlay.nodes).toBeLessThanOrEqual(vt.nodes)
   })
 })

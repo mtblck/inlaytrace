@@ -25,9 +25,33 @@ Current results:
 | --- | --- | --- | --- | --- |
 | Logo | shared edges | 0.70% | 177 | 5.4 KB |
 | Illustration | shared edges | 0.59% | 201 | 6.5 KB |
-| Poster | VTracer | 1.13% | 948 | 24.4 KB |
+| Poster | shared edges, quantized, stacked | 3.25% | 1258 | 43.6 KB |
+
+Poster scored 1.13% / 948 nodes / 24.4 KB here when VTracer traced it. It's
+worse on this badge now because it's the wrong preset for one: a quantized
+palette spends colours on the anti-aliased edges that Logo's histogram peaks
+ignore. Poster is judged on photos, below.
 
 Run it before shipping any change to the tracer, the fitter or a preset.
+
+## `npm run score:photos`: Poster on photos
+
+Photos have no clean source art, so the reference is the photo itself. Three
+photos in `scripts/fixtures/photos/` (CC0 and public domain, from
+scikit-image's sample data) are traced by Poster as the app runs it, and by
+VTracer as Poster ran it before; each SVG is rendered back at 1× and compared
+with the photo, as the mean per-channel difference (0–255).
+
+| Average of 3 photos | Mean error | Paths | Nodes | Size | Time |
+| --- | --- | --- | --- | --- | --- |
+| VTracer (Poster before) | 14.27 | 511 | 9,164 | 212.6 KB | 510 ms |
+| Inlay (Poster now) | 11.83 | 222 | 4,474 | 148.7 KB | 607 ms |
+
+Inlay is closer on every photo (14.04 → 12.89 on the cat, 13.79 → 13.63 on the
+coffee cup, 14.98 → 8.96 on the rocket), with fewer paths and a smaller file on
+each; it's about 20% slower. `VARIANTS=more,noise` adds the configurations tried
+along the way (more colours, smaller specks, a looser tolerance, a slight blur
+before tracing).
 
 **The landing page's figures** come from `npm run site:assets`, which runs the
 same measurement on the same badge, for Inlay (the Logo preset) and for VTracer

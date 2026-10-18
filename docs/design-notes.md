@@ -273,3 +273,18 @@ past 20,000 nodes; each shape is a memoised element; path data is validated
 once per path, not per render; and the stats panel measures only the optimised
 file. On that trace a node drag went from 117 ms to 25 ms a move, and toggling
 the overlay from 2.4 s to 0.3 s.
+
+**Poster moved to Inlay last, and a bug was the gap.** Photos stayed on VTracer
+because they have no histogram peaks and cut-out shapes cost size on them. Inlay
+gained a quantized palette (k-means in OKLab, seeded deterministically) and a
+stacked mode, but the first photo scores were poor: ten times VTracer's shapes
+and 2.5 times its size. A larger speck setting made it *worse*, which pointed
+at the cause: merging specks ran once, so a speck that joined a small region
+which then joined a third was stranded as a new speck. Clean art never
+cascades; photos did thousands of times. Repeating the merge until nothing is
+left took the photos from 5,150 shapes to 222, and Inlay then beat VTracer on
+all three photos (mean error 14.3 → 11.8, 57% fewer shapes, 30% smaller), so
+the app dropped VTracer, its WebAssembly and the `'wasm-unsafe-eval'` allowance.
+Stacking itself saves less than expected on photos (about 3%): most photo
+regions are small and have few holes. A radius-2 blur before tracing cut error
+a further 10%, but softens real edges; it's left for a future setting.

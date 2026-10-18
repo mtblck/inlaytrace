@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { zipSync, strToU8 } from 'fflate'
 import { TraceClient } from './engine/client'
-import { canMerge, maxTraceEdge, settingsFor, toVtracerOptions, type PresetId, type Settings } from './engine/presets'
+import { canMerge, maxTraceEdge, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
 import { ACCEPTED, colourAt, hasDarkBackground, loadSource, pixelsOf, type Pixels, type Source } from './lib/image'
 import { formatBytes, normalizeHex, parseTrace, statsOf, type Trace } from './lib/svg'
 import {
@@ -278,7 +278,7 @@ export default function App() {
       }
       const { rgba, width, height } = cached.pixels
       setStatus({ kind: 'tracing' })
-      const res = await client.trace(rgba, width, height, toVtracerOptions(settings))
+      const res = await client.trace(rgba, width, height, toTraceOptions(settings))
       if (!res) return // superseded by a newer request
       if (res.type === 'error') setStatus({ kind: 'error', message: res.message })
       else if (res.type === 'traced') {

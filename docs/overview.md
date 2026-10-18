@@ -57,10 +57,10 @@ Worker so the page stays responsive.
 
 | Path | What |
 | --- | --- |
-| `apps/app/src/engine/` | The worker, Inlay (`shapes.ts`), VTracer glue, presets |
+| `apps/app/src/engine/` | The worker, `runTrace` and the presets |
 | `packages/inlay/src/fit.ts` | Curve fitting: corners, smoothing, lines and Béziers |
 | `packages/inlay/src/palette.ts` | Palettes from histogram peaks |
 | `apps/app/src/lib/doc.ts`, `history.ts`, `pathdata.ts` | The editable document, undo, path data |
 | `apps/app/src/lib/mirror.ts` | Mirroring with paper.js booleans |
 | `apps/app/src/components/` | Canvas, controls, edit panel, colours |
-| `scripts/` | `verify` (browser E2E), `score` (quality), VTracer vendoring, hosting checks |
+| `scripts/` | `verify` (browser E2E), `score` and `score:photos` (quality, against VTracer as a benchmark), hosting checks |

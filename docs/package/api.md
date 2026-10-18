@@ -43,6 +43,7 @@ type InlayPath = { d: string; fill: string } // absolute M/L/C/Z, nonzero fill; 
 type InlayOptions = FitOptions & {
   speckle: number
   pixels?: boolean
+  stacked?: boolean
 } & (
     | { mode: 'palette'; palette: string[]; merge?: Record<string, string> }
     | { mode: 'binary'; threshold: number | null }
@@ -71,6 +72,18 @@ function exactPalette(rgba: ArrayLike<number>, maxColors: number): string[]
 ```
 
 The image's exact colours, most-used first, up to `maxColors`.
+
+### `quantizePalette(rgba, maxColors, options?)`
+
+```ts
+function quantizePalette(rgba: ArrayLike<number>, maxColors: number, options?: { iterations?: number }): string[]
+```
+
+Up to `maxColors` colours that best summarise the image, for photos: k-means
+in OKLab over a colour histogram, seeded deterministically (the most common
+colour, then the farthest from those chosen), at most `iterations` rounds
+(default 16). Each colour is the mean of its cluster's pixels, most common
+first. Fewer colours come back when the image has fewer.
 
 ### `oklab(rgb)`
 
