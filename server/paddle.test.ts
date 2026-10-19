@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handle } from './api'
-import { verifySignature } from './paddle'
+import { inCidr, resetPaddleIps, verifySignature } from './paddle'
 
 const ORIGIN = 'https://inlaytrace.com'
 const SECRET = 'pdl_ntfset_test'
@@ -18,7 +18,7 @@ const PACK_60 = 'pri_01m57wz8aj07enh29xt4wfptm6'
 const sign = (body: string, ts = Math.floor(Date.now() / 1000), secret = SECRET) => `ts=${ts};h1=${createHmac('sha256', secret).update(`${ts}:${body}`).digest('hex')}`
 
 /** Fake Supabase and Paddle behind one fetch. */
-function fake(opts: { customer?: string | null; purchase?: { user_id: string; delta: number; details: Record<string, unknown> } | null; grantError?: { status: number; msg: string }; adjustment?: Record<string, unknown> } = {}) {
+function fake(opts: { customer?: string | null; purchase?: { user_id: string; delta: number; details: Record<string, unknown> } | null; grantError?: { status: number; msg: string }; adjustment?: Record<string, unknown>; ips?: string[] | null } = {}) {
   const calls: { method: string; host: string; path: string; headers: Record<string, string>; body: any }[] = []
   const fetchImpl = (async (input: string, init: RequestInit = {}) => {
     const url = new URL(input)
@@ -31,6 +31,7 @@ function fake(opts: { customer?: string | null; purchase?: { user_id: string; de
     if (url.pathname === '/rest/v1/rpc/reverse_purchase') return ok(0)
     if (url.pathname === '/rest/v1/rpc/release_reversal') return ok(20)
     if (url.pathname === '/rest/v1/credit_ledger') return ok(opts.purchase ? [opts.purchase] : [])
+    if (url.host === 'sandbox-api.paddle.com' && url.pathname === '/ips') return opts.ips === null ? ok({}, 500) : ok({ data: { ipv4_cidrs: opts.ips ?? PADDLE_IPS } })
     if (url.host === 'sandbox-api.paddle.com') {
       if (url.pathname === '/customers' && init.method !== 'POST') return ok({ data: opts.customer ? [{ id: opts.customer }] : [] })
       if (url.pathname === '/customers') return ok({ data: { id: 'ctm_new' } }, 201)
@@ -46,9 +47,11 @@ function fake(opts: { customer?: string | null; purchase?: { user_id: string; de
 
 const post = (route: string, body: unknown, cookie = '') =>
   new Request(`${ORIGIN}/api/${route}`, { method: 'POST', headers: { 'content-type': 'application/json', origin: ORIGIN, cookie }, body: JSON.stringify(body) })
-const hook = (event: unknown, signature?: string) => {
+/** Paddle's addresses as /ips lists them (examples): each delivery comes from one. */
+const PADDLE_IPS = ['34.194.127.46/32', '54.234.237.108/32', '3.208.120.145/32']
+const hook = (event: unknown, signature?: string, ip = '54.234.237.108') => {
   const body = JSON.stringify(event)
-  return new Request(`${ORIGIN}/api/paddle/webhook`, { method: 'POST', headers: { 'content-type': 'application/json', 'paddle-signature': signature ?? sign(body) }, body })
+  return new Request(`${ORIGIN}/api/paddle/webhook`, { method: 'POST', headers: { 'content-type': 'application/json', 'paddle-signature': signature ?? sign(body), 'x-real-ip': ip }, body })
 }
 const completed = (over: Record<string, unknown> = {}) => ({
   event_type: 'transaction.completed',
@@ -114,6 +117,77 @@ describe('checkout', () => {
   })
 })
 
+beforeEach(() => resetPaddleIps())
+
+describe("the webhook's sender", () => {
+  it("accepts Paddle's addresses, as its /ips lists them now", async () => {
+    const f = fake()
+    expect((await handle(hook(completed()), 'paddle/webhook', env, f.fetchImpl)).status).toBe(200)
+    expect(f.calls.some((c) => c.host === 'sandbox-api.paddle.com' && c.path === '/ips')).toBe(true)
+  })
+
+  it('turns away any other address, even with a good signature', async () => {
+    const f = fake()
+    expect((await handle(hook(completed(), undefined, '203.0.113.9'), 'paddle/webhook', env, f.fetchImpl)).status).toBe(403)
+    expect(f.calls.some((c) => c.path.startsWith('/rest/v1/rpc/grant_purchase'))).toBe(false)
+    const none = new Request(`${ORIGIN}/api/paddle/webhook`, { method: 'POST', headers: { 'content-type': 'application/json', 'paddle-signature': sign('{}') }, body: '{}' })
+    expect((await handle(none, 'paddle/webhook', env, f.fetchImpl)).status).toBe(403)
+  })
+
+  it('asks /ips at most once an hour', async () => {
+    const f = fake()
+    await handle(hook(completed()), 'paddle/webhook', env, f.fetchImpl)
+    await handle(hook(completed()), 'paddle/webhook', env, f.fetchImpl)
+    expect(f.calls.filter((c) => c.path === '/ips')).toHaveLength(1)
+  })
+
+  describe('after an hour', () => {
+    beforeEach(() => vi.useFakeTimers({ now: new Date('2026-10-19T00:00:00Z'), toFake: ['Date'] }))
+    afterEach(() => vi.useRealTimers())
+
+    it('asks /ips again', async () => {
+      const f = fake()
+      await handle(hook(completed()), 'paddle/webhook', env, f.fetchImpl)
+      vi.advanceTimersByTime(61 * 60 * 1000)
+      await handle(hook(completed()), 'paddle/webhook', env, f.fetchImpl)
+      expect(f.calls.filter((c) => c.path === '/ips')).toHaveLength(2)
+    })
+
+    it('keeps the last good list when the refresh fails, and waits a while before asking again', async () => {
+      await handle(hook(completed()), 'paddle/webhook', env, fake().fetchImpl)
+      vi.advanceTimersByTime(61 * 60 * 1000)
+      const down = fake({ ips: null })
+      expect((await handle(hook(completed()), 'paddle/webhook', env, down.fetchImpl)).status).toBe(200)
+      expect((await handle(hook(completed(), undefined, '203.0.113.9'), 'paddle/webhook', env, down.fetchImpl)).status).toBe(403)
+      // Backing off: the outage isn't asked about on every delivery.
+      vi.advanceTimersByTime(60 * 1000)
+      await handle(hook(completed()), 'paddle/webhook', env, down.fetchImpl)
+      expect(down.calls.filter((c) => c.path === '/ips')).toHaveLength(1)
+      vi.advanceTimersByTime(5 * 60 * 1000)
+      await handle(hook(completed()), 'paddle/webhook', env, down.fetchImpl)
+      expect(down.calls.filter((c) => c.path === '/ips')).toHaveLength(2)
+    })
+  })
+
+  it('answers 503 (so Paddle retries) when there has never been a list', async () => {
+    expect((await handle(hook(completed()), 'paddle/webhook', env, fake({ ips: null }).fetchImpl)).status).toBe(503)
+  })
+
+  it('reads the live list in production', async () => {
+    const f = fake()
+    await handle(hook(completed()), 'paddle/webhook', { ...env, PADDLE_ENV: 'production' }, f.fetchImpl)
+    expect(f.calls.some((c) => c.host === 'api.paddle.com' && c.path === '/ips')).toBe(true)
+  })
+
+  it('matches CIDR ranges, not just single addresses', () => {
+    expect(inCidr('34.194.127.46', '34.194.127.46/32')).toBe(true)
+    expect(inCidr('34.194.127.47', '34.194.127.46/32')).toBe(false)
+    expect(inCidr('10.1.2.3', '10.0.0.0/8')).toBe(true)
+    expect(inCidr('11.1.2.3', '10.0.0.0/8')).toBe(false)
+    expect(inCidr('not-an-ip', '10.0.0.0/8')).toBe(false)
+  })
+})
+
 describe('webhook', () => {
   it('grants the pack credits to the user on the transaction, once per transaction', async () => {
     const f = fake()
@@ -127,9 +201,10 @@ describe('webhook', () => {
   it('rejects a bad or missing signature without touching the ledger', async () => {
     const f = fake()
     expect((await handle(hook(completed(), 'ts=1;h1=00'), 'paddle/webhook', env, f.fetchImpl)).status).toBe(401)
-    const unsigned = new Request(`${ORIGIN}/api/paddle/webhook`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(completed()) })
+    const unsigned = new Request(`${ORIGIN}/api/paddle/webhook`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-real-ip': '54.234.237.108' }, body: JSON.stringify(completed()) })
     expect((await handle(unsigned, 'paddle/webhook', env, f.fetchImpl)).status).toBe(401)
-    expect(f.calls).toHaveLength(0)
+    // Only the sender check (Paddle's /ips); nothing reached the ledger.
+    expect(f.calls.map((c) => c.path)).toEqual(['/ips'])
   })
 
   it('grants nothing for unknown prices or a missing user, and says so (200, so Paddle stops retrying)', async () => {
@@ -189,7 +264,7 @@ describe('webhook', () => {
     const r = await handle(hook(adjEvent(adjustment({ status: 'pending_approval' }), 'adjustment.created')), 'paddle/webhook', env, f.fetchImpl)
     expect(await r.json()).toEqual({ ok: true, released: true })
     expect(f.calls.some((c) => c.path.includes('reverse_purchase'))).toBe(false)
-    expect(f.calls.find((c) => c.host === 'sandbox-api.paddle.com')!.path).toBe('/adjustments?id=adj_1')
+    expect(f.calls.find((c) => c.host === 'sandbox-api.paddle.com' && c.path !== '/ips')!.path).toBe('/adjustments?id=adj_1')
   })
 
   it("asks Paddle to retry when it can't find the adjustment yet, rather than trusting the notification", async () => {

@@ -96,6 +96,10 @@ them), so they can't be spent meanwhile; if Paddle rejects it, they come back.
 Notifications can arrive out of order, so the webhook asks Paddle for the
 adjustment's current status rather than trusting the notification's.
 The balance can go below zero if the credits were already spent.
+Only Paddle's own addresses reach the handler: it reads them from Paddle's
+`/ips` (on the API host for `PADDLE_ENV`), at most once an hour, keeps the last
+good list if a refresh fails, and answers 503 (Paddle retries) if it has never
+had one. Anything else gets 403, before the signature is checked.
 
 Never in the repo, never in chat.
 

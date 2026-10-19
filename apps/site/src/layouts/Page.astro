@@ -6,6 +6,7 @@
  */
 import '../styles/fonts.css'
 import '../styles/landing.css'
+import { CONTACT } from '../data/legal'
 
 interface Props {
   title: string
@@ -46,6 +47,7 @@ const FOOTER = [
       { label: 'Privacy', href: '/privacy/' },
       { label: 'Terms', href: '/terms/' },
       { label: 'Refunds', href: '/refunds/' },
+      { label: 'Contact', href: `mailto:${CONTACT}` },
     ],
   },
 ]
@@ -73,6 +75,7 @@ const FOOTER = [
       <a class="wordmark" href="/" aria-label="Inlay, home">Inlay</a>
       <nav aria-label="Site">
         <a href="/docs/package/getting-started/">Docs</a>
+        <a href="/pricing/">Pricing</a>
         <a href={APP}>App</a>
       </nav>
     </header>
