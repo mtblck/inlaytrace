@@ -17,7 +17,7 @@ re-traces within about 120 ms of the last change.
 | **Line art** | Ink drawings and scans, one colour | Inlay | Threshold 128, specks 6 px, smoothing 1.5, corners 45° |
 | **Centerline** | Single strokes for plotters and engraving | Inlay (skeleton) | Threshold 128, specks 4 px, smoothing 1.5, corners 45°, stroke width measured |
 | **Poster** | Photos flattened into colour bands | Inlay (quantized palette) | 24 colours, specks 8 px, smoothing 1, corners 90°, stacked |
-| **Pixel art** | Hard edges, nothing smoothed | Inlay (pixel staircase) | Its exact colours (up to 32), no speck filter, up to 4096 px |
+| **Pixel art** | Hard edges, nothing smoothed | Inlay (pixel staircase) | Its exact colours (up to 32); on an image that isn't pixel art (its top colours cover under 90% of it), clustered colours as Poster picks them. No speck filter, up to 4096 px |
 
 ## Prepare
 
@@ -82,8 +82,9 @@ them (a circle overlapping another shape stays fitted). Turn it off to keep
 every outline as traced.
 
 **Shapes** (Poster only): *Stacked* draws each shape whole, larger shapes
-first, so smaller ones sit on top: a little less path data, and no hairline
-seams where shapes meet. *Cut out* gives every shape holes where others sit,
+first, so smaller ones sit on top, and each shape also reaches under the
+neighbours drawn after it, so no hairline seam shows where two shapes meet
+(on photos, 12% closer to the photo, for about a third more path data). *Cut out* gives every shape holes where others sit,
 so none overlaps (for vinyl and screen print layers). Both look the same, and
 both share every edge exactly. The flat-art presets are always cut out.
 
