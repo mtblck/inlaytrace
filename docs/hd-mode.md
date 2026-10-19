@@ -31,13 +31,13 @@ is left off the public site (`INTERNAL` in `scripts/sync-docs.mjs`).
 ## Packs
 
 One Paddle product, *Inlay HD credits*, with three one-time prices. These are the
-sandbox ids; live ids come when the live account is approved.
+sandbox and live ids (`PADDLE_ENV` picks which).
 
-| Pack | Price | Paddle takes | Sandbox price id |
-| --- | --- | --- | --- |
-| 20 credits | $5 | $0.75 (15%) | `pri_01m57wybp0tek7qeg1ge41smc3` |
-| 60 credits | $12 | $1.10 (9%) | `pri_01m57wz8aj07enh29xt4wfptm6` |
-| 200 credits | $30 | $2.00 (7%) | `pri_01m57x08gaqsn896bvgsp0j0mr` |
+| Pack | Price | Paddle takes | Sandbox price id | Live price id |
+| --- | --- | --- | --- | --- |
+| 20 credits | $5 | $0.75 (15%) | `pri_01m57wybp0tek7qeg1ge41smc3` | `pri_01m5921tb23h7mxaycgv69628d` |
+| 60 credits | $12 | $1.10 (9%) | `pri_01m57wz8aj07enh29xt4wfptm6` | `pri_01m5922vw6x3zj4j8jvjf9x74t` |
+| 200 credits | $30 | $2.00 (7%) | `pri_01m57x08gaqsn896bvgsp0j0mr` | `pri_01m5923tmqd5ja1q9cv3sqes8v` |
 
 For comparison: Vectorizer.ai's API charges $0.05 to $0.20 a credit, and
 remove.bg charges about $0.23 to $1.00 an image.
