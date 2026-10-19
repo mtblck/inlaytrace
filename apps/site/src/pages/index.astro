@@ -7,7 +7,7 @@
  */
 import Page from '../layouts/Page.astro'
 import sample from '../data/sample.json'
-import { parsePath } from 'inlaytrace'
+import { parsePath, serializePath, type Subpath } from 'inlaytrace'
 
 /** The app (apps/app), served beside this site. */
 const APP = '/app/'
@@ -21,21 +21,48 @@ const size = sample.size
 const centre = size / 2
 
 /**
- * Each piece on its own layer, in paint order, and how far it drifts when lifted: outward from the
+ * Each piece on its own layer, layered as Inlay's stacked mode draws them: every shape whole (its
+ * outline, without the holes other shapes sit in) and larger outlines first, so what sits inside a
+ * shape is painted on top of it. Lifting then shows layers on the background sheet, with nothing cut
+ * out of anything; flat, it's the same picture. Each also drifts as it rises: outward from the
  * badge's centre, by its own centroid, as a share of the board (CSS % of the layer's own size).
  */
-const pieces = (sample.inlay as Shape[]).map((p, i) => {
-  const pts = parsePath(p.d).flatMap((s) => s.nodes)
-  const cx = pts.reduce((a, n) => a + n.x, 0) / pts.length
-  const cy = pts.reduce((a, n) => a + n.y, 0) / pts.length
-  // The largest piece (the background) stays put; the rest drift out as they rise.
-  const k = i === 0 ? 0 : 0.1
-  const pct = (v: number) => `${Math.round(((v - centre) * k * 1000) / size) / 10}%`
-  // The background is the sheet the shapes lift off, not cut out with them: its outline without the
-  // hole the badge sits in. Flat, the pieces cover the hole, so the badge looks the same.
-  const d = i === 0 ? p.d.split(/(?=M)/)[0] : p.d
-  return { ...p, d, i, dx: pct(cx), dy: pct(cy) }
-})
+/** A subpath's area, its curves sampled (a circle drawn with four nodes is far bigger than their square). */
+const areaOf = (s: Subpath) => {
+  const n = s.nodes
+  const pts: { x: number; y: number }[] = []
+  for (let i = 0; i < n.length; i++) {
+    const a = n[i]
+    const b = n[(i + 1) % n.length]
+    const c1 = a.out ?? a
+    const c2 = b.in ?? b
+    for (let j = 0; j < 16; j++) {
+      const t = j / 16
+      const u = 1 - t
+      pts.push({ x: u * u * u * a.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * b.x, y: u * u * u * a.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * b.y })
+    }
+  }
+  let sum = 0
+  for (let i = 0; i < pts.length; i++) sum += pts[i].x * pts[(i + 1) % pts.length].y - pts[(i + 1) % pts.length].x * pts[i].y
+  return Math.abs(sum / 2)
+}
+/** A shape's outline: the subpath enclosing the most. */
+const outline = (d: string) => parsePath(d).map((s) => ({ s, area: areaOf(s) })).reduce((m, x) => (x.area > m.area ? x : m))
+const pieces = (sample.inlay as Shape[])
+  .map((p) => {
+    const o = outline(p.d)
+    const pts = o.s.nodes
+    const cx = pts.reduce((a, n) => a + n.x, 0) / pts.length
+    const cy = pts.reduce((a, n) => a + n.y, 0) / pts.length
+    return { ...p, d: serializePath([o.s]), area: o.area, cx, cy }
+  })
+  .sort((a, b) => b.area - a.area)
+  .map((p, i) => {
+    // The largest (the background sheet) stays put; the rest drift out as they rise.
+    const k = i === 0 ? 0 : 0.1
+    const pct = (v: number) => `${Math.round(((v - centre) * k * 1000) / size) / 10}%`
+    return { ...p, i, dx: pct(p.cx), dy: pct(p.cy) }
+  })
 
 const crop = sample.crop
 const view = `${crop.x} ${crop.y} ${crop.w} ${crop.h}`
