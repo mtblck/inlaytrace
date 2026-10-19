@@ -1482,4 +1482,6 @@ await browser.close()
 const unexpected = failures.filter((f) => f.startsWith('console') || f.startsWith('pageerror'))
 for (const f of unexpected) console.log(`  FAIL  ${f}`)
 console.log(failures.length ? `\n  ${failures.length} problem(s).\n` : '\n  All checks passed.\n')
+// On GitHub Actions each problem is also an annotation, readable on the PR and from the API without the log.
+if (process.env.GITHUB_ACTIONS) for (const f of failures) console.log(`::error title=verify::${f.replace(/\r?\n/g, ' ').slice(0, 900)}`)
 process.exit(failures.length ? 1 : 0)
