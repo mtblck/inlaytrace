@@ -85,6 +85,16 @@
 }
 
 @layer components {
+  /* The "Inlay" logo mark, set exactly as the site's (apps/site/src/styles/landing.css .wordmark). */
+  .wordmark {
+    font-family: var(--font-sans);
+    font-weight: 800;
+    font-size: 23px; /* the site's 1.35rem on its 17px root */
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--c-ink);
+    text-decoration: none;
+  }
   /* The working surface: a cutting-mat dot grid, so transparent areas of the
      image and the edge of the sheet are both legible. */
   .mat {

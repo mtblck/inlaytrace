@@ -43,7 +43,7 @@ export default function Account() {
   return (
     <div className="min-h-full">
       <header className="flex items-center justify-between border-b border-rule px-5 py-3">
-        <a href="/app/" className="font-display text-[22px] leading-none">
+        <a href="/app/" className="wordmark">
           Inlay
         </a>
         <a href="/app/" className="text-[13px] text-ink-muted hover:text-ink">

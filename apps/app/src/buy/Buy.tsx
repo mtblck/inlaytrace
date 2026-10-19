@@ -69,7 +69,7 @@ export default function Buy() {
   return (
     <div className="min-h-full">
       <header className="flex items-center justify-between border-b border-rule px-5 py-3">
-        <a href="/app/" className="font-display text-[22px] leading-none">
+        <a href="/app/" className="wordmark">
           Inlay
         </a>
         <nav className="flex gap-4 text-[13px] text-ink-muted">
