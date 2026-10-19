@@ -1082,7 +1082,7 @@ export default function App() {
 
       <main className="flex min-h-0 flex-1 flex-col lg:flex-row" data-traces={traceCount}>
         {/* ---- Work surface ---- */}
-        <div className="relative flex min-h-[60vh] flex-1 flex-col lg:min-h-0">
+        <div className="relative flex min-h-[60vh] min-w-0 flex-1 flex-col lg:min-h-0">
           {source && trace ? (
             <>
               <div className="relative min-h-0 flex-1">
@@ -1127,8 +1127,10 @@ export default function App() {
                   onAxis={moveAxis}
                 />
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rule px-4 py-2.5">
-                <div role="radiogroup" aria-label="Compare" className="flex gap-px overflow-hidden rounded-md border border-rule bg-rule">
+              {/* One row, the same height as the sidebar's footer beside it (lg). The hint shows where there's room for it
+                  (each view's button carries it as a tooltip too) and shortens rather than wrapping. */}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rule px-4 py-2.5 lg:h-13 lg:flex-nowrap lg:py-0">
+                <div role="radiogroup" aria-label="Compare" className="flex shrink-0 gap-px overflow-hidden rounded-md border border-rule bg-rule">
                   {(
                     [
                       ['split', 'Split'],
@@ -1140,6 +1142,7 @@ export default function App() {
                       key={v}
                       role="radio"
                       aria-checked={mode === v}
+                      title={COMPARE_HINT[v]}
                       onClick={() => {
                         viewChosen.current = true
                         setMode(v)
@@ -1150,12 +1153,10 @@ export default function App() {
                     </button>
                   ))}
                 </div>
-                <p className="order-last w-full text-[12.5px] text-ink-muted md:order-none md:w-auto">
-                  {mode === 'split' && 'Original on the left, SVG on the right. Drag the handle.'}
-                  {mode === 'difference' && 'Black means the SVG matches. Bright areas are where it differs.'}
-                  {mode === 'vector' && 'The SVG on its own, over a check pattern where it is transparent.'}
+                <p className="order-last w-full text-[12.5px] text-ink-muted md:order-none md:w-auto lg:min-w-0 lg:flex-1 lg:truncate lg:max-[1399px]:hidden" title={COMPARE_HINT[mode]}>
+                  {COMPARE_HINT[mode]}
                 </p>
-                <div className="flex items-center gap-3" role="group" aria-label="Overlays">
+                <div className="flex shrink-0 items-center gap-3" role="group" aria-label="Overlays">
                   <OverlayToggle
                     label="Paths"
                     on={overlays.paths}
@@ -1412,7 +1413,7 @@ export default function App() {
           </div>
 
           {/* No room for a page footer, so one quiet line ends the sidebar. */}
-          <nav aria-label="About Inlay" className="flex gap-4 border-t border-rule px-5 py-2.5 text-[12px] text-ink-muted">
+          <nav aria-label="About Inlay" className="flex items-center gap-4 border-t border-rule px-5 py-2.5 text-[12px] text-ink-muted lg:h-13 lg:py-0">
             <a href="/docs/overview/" className="hover:text-ink">
               Docs
             </a>
@@ -1431,6 +1432,13 @@ export default function App() {
     </div>
   )
 }
+
+/** The compare views, in a sentence each (the canvas footer). */
+const COMPARE_HINT = {
+  split: 'Original on the left, SVG on the right. Drag the handle.',
+  difference: 'Black means the SVG matches. Bright areas are where it differs.',
+  vector: 'The SVG on its own, over a check pattern where it is transparent.',
+} as const
 
 function Empty(props: { loading: boolean; error: string | null; onChoose: () => void; onSample: () => void }) {
   return (
@@ -1477,13 +1485,13 @@ function ZoomControl({ zoom, fit, onZoom }: { zoom: Zoom; fit: number; onZoom: (
   const pct = `${Math.round(scale * 100)}%`
   const btn = 'num rounded px-1.5 py-1 hover:text-ink disabled:opacity-40'
   return (
-    <div className="flex items-center gap-1.5" role="group" aria-label="Zoom">
+    <div className="flex shrink-0 items-center gap-1.5" role="group" aria-label="Zoom">
       <button className={`${btn} w-6`} onClick={() => onZoom(step(zoom, fit, -1))} disabled={scale <= min * 1.001} aria-label="Zoom out" title="Zoom out (⌘ −)">
         −
       </button>
       <input
         type="range"
-        className="w-24 accent-[var(--c-accent)] sm:w-28"
+        className="w-24 accent-[var(--c-accent)] sm:w-28 lg:max-xl:hidden"
         min={toSlider(min)}
         max={toSlider(max)}
         step="any"
