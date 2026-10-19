@@ -63,6 +63,8 @@ jobs:
         run: |
           # No manifest when prepare.py failed early; publish the report and log anyway.
           cp models/manifest.json report/ || true
+          # The report isn't a site: stop Vercel building this branch (it failed, emailing each run).
+          echo '{ "git": { "deploymentEnabled": false } }' > report/vercel.json
           cd report
           git init -q -b hd-models-report
           git config user.name "github-actions[bot]"
