@@ -100,4 +100,21 @@ describe('pixel art', () => {
     expect(new Set(inlay.doc.paths.map((p) => p.fill))).toEqual(new Set(Object.values(PAL).map(hex)))
     expect(inlay.nodes).toBeLessThanOrEqual(vt.nodes)
   })
+
+  it("clusters the colours of an image that isn't pixel art, so they aren't copies of one", () => {
+    // A noisy grey field (a photo's background) with a small red square: its 4
+    // commonest exact colours are greys a shade apart, covering under half of it.
+    const n = 40
+    const px = new Uint8Array(n * n * 4)
+    let seed = 7
+    const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff)
+    for (let i = 0; i < n * n; i++) {
+      const g = 120 + Math.round(rand() * 16)
+      const red = i % n >= 25 && i % n < 35 && Math.floor(i / n) >= 25 && Math.floor(i / n) < 35
+      px.set(red ? [200 + Math.round(rand() * 8), 30, 40, 255] : [g, g, g, 255], i * 4)
+    }
+    const svg = runTrace(px, n, n, { mode: 'palette', colors: 4, palette: 'exact', pixels: true, speckle: 0, tolerance: 0.25, cornerAngle: 0 })
+    const fills = new Set([...svg.matchAll(/fill="(#[0-9a-f]{6})"/g)].map((m) => m[1]))
+    expect([...fills].some((f) => parseInt(f.slice(1, 3), 16) > 180 && parseInt(f.slice(3, 5), 16) < 80)).toBe(true)
+  })
 })
