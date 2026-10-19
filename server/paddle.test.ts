@@ -119,6 +119,27 @@ describe('checkout', () => {
 
 beforeEach(() => resetPaddleIps())
 
+describe('live prices', () => {
+  const live = { ...env, PADDLE_ENV: 'production' }
+  it('sells the same three packs in production, at the same prices, with the live ids', async () => {
+    const r = await handle(new Request(`${ORIGIN}/api/checkout/config`), 'checkout/config', live, fake().fetchImpl)
+    const b = await r.json()
+    expect(b.environment).toBe('production')
+    expect(b.packs).toEqual([
+      { priceId: 'pri_01m5921tb23h7mxaycgv69628d', credits: 20, price: '$5' },
+      { priceId: 'pri_01m5922vw6x3zj4j8jvjf9x74t', credits: 60, price: '$12' },
+      { priceId: 'pri_01m5923tmqd5ja1q9cv3sqes8v', credits: 200, price: '$30' },
+    ])
+  })
+
+  it("doesn't grant credits for a sandbox price in production, or a live one in sandbox", async () => {
+    const { creditsFor } = await import('./paddle')
+    expect(creditsFor(live, PACK_60)).toBe(0)
+    expect(creditsFor(env, 'pri_01m5922vw6x3zj4j8jvjf9x74t')).toBe(0)
+    expect(creditsFor(live, 'pri_01m5922vw6x3zj4j8jvjf9x74t')).toBe(60)
+  })
+})
+
 describe("the webhook's sender", () => {
   it("accepts Paddle's addresses, as its /ips lists them now", async () => {
     const f = fake()

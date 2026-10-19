@@ -27,8 +27,11 @@ const PRICE_IDS: Record<'sandbox' | 'production', Record<number, string>> = {
     60: 'pri_01m57wz8aj07enh29xt4wfptm6',
     200: 'pri_01m57x08gaqsn896bvgsp0j0mr',
   },
-  // Filled in when the live Paddle account is approved.
-  production: {},
+  production: {
+    20: 'pri_01m5921tb23h7mxaycgv69628d', // $5
+    60: 'pri_01m5922vw6x3zj4j8jvjf9x74t', // $12
+    200: 'pri_01m5923tmqd5ja1q9cv3sqes8v', // $30
+  },
 }
 
 /** The packs on sale in this environment: pricing.ts's packs that have a Paddle price. */
