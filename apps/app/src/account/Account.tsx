@@ -1,3 +1,4 @@
+import { LegalLinks } from './LegalLinks'
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, describe, type AccountData } from './api'
 
@@ -71,6 +72,7 @@ export default function Account() {
           </p>
         )}
       </main>
+      <LegalLinks width="w-[min(560px,calc(100vw-32px))]" />
     </div>
   )
 }
