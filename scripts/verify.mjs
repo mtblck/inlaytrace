@@ -1197,29 +1197,33 @@ const siteOrigin = process.env.SITE ?? (new URL(url).hostname.endsWith('mattblac
 if (siteOrigin) {
   console.log(`\n  site ${siteOrigin}\n`)
   const landing = await newPage({ width: 1440, height: 900 })
-  // Record the board's class changes from the start, to see the pieces settle.
+  // Record the board's states from the start: the lift tilts it (iso), raises the layers (lifted), then lands.
   await landing.addInitScript(() => {
-    window.__apart = []
+    window.__states = []
     new MutationObserver(() => {
-      const b = document.querySelector('.board')
-      if (b) window.__apart.push(b.classList.contains('apart'))
+      const b = document.getElementById('board')
+      if (b) window.__states.push(b.className)
     }).observe(document, { subtree: true, attributes: true, attributeFilter: ['class'] })
   })
   const res = await landing.goto(siteOrigin)
   check(res?.ok(), `landing page loads (${res?.status()})`)
   const siteCsp = res?.headers()['content-security-policy'] ?? ''
   check(siteCsp.includes("'sha256-") && !siteCsp.includes('worker-src'), "the landing page gets the site's CSP, not the app's")
-  const pieces = await landing.locator('.board .piece').count()
-  check(pieces >= 5, `the hero board shows the traced badge (${pieces} pieces)`)
-  const moving = await landing.locator('.board .piece').evaluateAll((ps) => ps.filter((p) => p.style.getPropertyValue('--dx') !== '0px' || p.style.getPropertyValue('--dy') !== '0px').length)
-  check(moving >= pieces / 2, `most pieces have somewhere to settle from (${moving} of ${pieces})`)
-  await landing.waitForTimeout(2000)
-  const settled = await landing.evaluate(() => ({ seen: window.__apart.includes(true), now: document.querySelector('.board').classList.contains('apart') }))
-  check(settled.seen && !settled.now, 'the pieces start lifted and settle on load')
-  await landing.evaluate(() => (window.__apart = []))
-  await landing.getByRole('button', { name: 'Lift the pieces' }).click()
-  await landing.waitForTimeout(300)
-  check(await landing.evaluate(() => window.__apart.includes(true) && !document.querySelector('.board').classList.contains('apart')), '"Lift the pieces" lifts them and they settle again')
+  const layers = await landing.locator('#board .layer').count()
+  check(layers >= 5, `the hero board shows the traced badge, one layer per shape (${layers})`)
+  const drifting = await landing.locator('#board .layer').evaluateAll((ls) => ls.filter((l) => l.style.getPropertyValue('--dx') !== '0%' || l.style.getPropertyValue('--dy') !== '0%').length)
+  check(drifting >= layers / 2, `most shapes drift apart as they rise (${drifting} of ${layers})`)
+  const lifts = (states) => states.some((c) => c.includes('iso')) && states.some((c) => c.includes('lifted'))
+  await landing.waitForFunction(() => window.__states.some((c) => c.includes('lifted')), null, { timeout: 5000 })
+  await landing.waitForFunction(() => document.getElementById('board').className === 'board', null, { timeout: 8000 })
+  check(lifts(await landing.evaluate(() => window.__states)), 'on load the board tilts, the shapes lift onto layers, and it all lands flat again')
+  await landing.evaluate(() => (window.__states = []))
+  const lift = landing.getByRole('button', { name: 'Lift the pieces' })
+  await lift.click()
+  await landing.waitForTimeout(1200)
+  check(await lift.isDisabled(), '"Lift the pieces" waits while the shapes are up')
+  await landing.waitForFunction(() => !document.getElementById('replay').disabled, null, { timeout: 8000 })
+  check(lifts(await landing.evaluate(() => window.__states)) && (await landing.locator('#board').getAttribute('class')) === 'board', '"Lift the pieces" runs it again and lands flat')
   const trace = await landing.getByRole('link', { name: 'Trace an image' }).getAttribute('href')
   check((await landing.request.get(new URL(trace, siteOrigin).href)).ok(), `"Trace an image" leads to the app (${trace})`)
   // Every same-site link on the page resolves.
@@ -1232,7 +1236,8 @@ if (siteOrigin) {
   const still = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })
   const quiet = await still.newPage()
   await quiet.goto(siteOrigin)
-  check(await quiet.getByRole('button', { name: 'Lift the pieces' }).isHidden(), 'with reduced motion the pieces sit still and the replay button is hidden')
+  await quiet.waitForTimeout(1500)
+  check((await quiet.getByRole('button', { name: 'Lift the pieces' }).isHidden()) && (await quiet.locator('#board').getAttribute('class')) === 'board', 'with reduced motion the board stays flat and the button is hidden')
   await still.close()
 
   // The app's old address (mattblack.space/tools/img-to-svg/ before inlaytrace.com) keeps working.

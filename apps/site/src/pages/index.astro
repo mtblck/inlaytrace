@@ -20,14 +20,18 @@ type Shape = { d: string; fill: string; transform?: string }
 const size = sample.size
 const centre = size / 2
 
-/** How far each piece starts from home: outward from the badge's centre, by its own centroid. */
+/**
+ * Each piece on its own layer, in paint order, and how far it drifts when lifted: outward from the
+ * badge's centre, by its own centroid, as a share of the board (CSS % of the layer's own size).
+ */
 const pieces = (sample.inlay as Shape[]).map((p, i) => {
   const pts = parsePath(p.d).flatMap((s) => s.nodes)
   const cx = pts.reduce((a, n) => a + n.x, 0) / pts.length
   const cy = pts.reduce((a, n) => a + n.y, 0) / pts.length
-  // The largest piece (the background ring) stays put; the rest lift out.
-  const k = i === 0 ? 0 : 0.16
-  return { ...p, dx: Math.round((cx - centre) * k), dy: Math.round((cy - centre) * k) }
+  // The largest piece (the background) stays put; the rest drift out as they rise.
+  const k = i === 0 ? 0 : 0.1
+  const pct = (v: number) => `${Math.round(((v - centre) * k * 1000) / size) / 10}%`
+  return { ...p, i, dx: pct(cx), dy: pct(cy) }
 })
 
 const crop = sample.crop
@@ -73,13 +77,18 @@ const dot = crop.w / 90
         </div>
 
         <figure class="mat" aria-labelledby="mat-caption">
-          <svg class="board" viewBox={`0 0 ${size} ${size}`} role="img" aria-label="The sample badge as Inlay traced it, its pieces settling into place">
-            {
-              pieces.map((p) => (
-                <path class="piece" d={p.d} fill={p.fill} style={`--dx:${p.dx}px;--dy:${p.dy}px`} />
-              ))
-            }
-          </svg>
+          {/* One svg per piece, stacked: "Lift the pieces" tilts the board and raises each on its own layer. */}
+          <div class="stage">
+            <div class="board" id="board" role="img" aria-label="The sample badge as Inlay traced it. Lift the pieces tilts it and raises each shape on its own layer, then sets them back, fitting exactly.">
+              {
+                pieces.map((p) => (
+                  <svg class="layer" viewBox={`0 0 ${size} ${size}`} aria-hidden="true" style={`--i:${p.i};--dx:${p.dx};--dy:${p.dy}`}>
+                    <path d={p.d} fill={p.fill} />
+                  </svg>
+                ))
+              }
+            </div>
+          </div>
           <figcaption id="mat-caption">
             <span>The sample badge as Inlay traced it: {pieces.length} shapes, {sample.nodes.inlay} nodes.</span>
             <button type="button" class="replay" id="replay">Lift the pieces</button>
