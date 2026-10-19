@@ -34,6 +34,27 @@ thin spread of low counts between them. So:
 That recovered the sample's colours almost exactly (mean error 3.28 → 1.47) and
 cut mean error on a real illustration from 11.1 to 4.3.
 
+## Peaks spread over several bins
+
+Counting each bin alone failed on a product photo: a grey ship with red
+lettering and yellow decals came out black, white, greys and one blue, 6
+colours at a cap of 8 or 64. A photographed colour spreads over many
+neighbouring bins, none of them 0.2% of the image, and the walk stopped at the
+first such bin. So:
+
+- A bin's weight is every pixel within half the distinct-colour distance of it,
+  and only local peaks (no bin nearby holds more pixels) are candidates, so a
+  flat colour is still its own bin, not a neighbour that borrowed its weight.
+- Below 0.2%, down to 0.05%, a colour is a detail: it's kept unless it lies on
+  the line between two colours already picked (mixed in sRGB, as a renderer
+  mixes an anti-aliased edge), which is what edge shades are.
+
+On that photo Illustration went from 6 colours to 12, red and yellow among
+them (mean error 7.79 → 5.98); the clean-art scores (`npm run score`) are
+unchanged. Weighing alone shifted the badge's colours onto neighbouring bins
+(0.54% → 0.80% of pixels wrong) until candidates were limited to peaks; a flat
+0.05% floor let edge shades in (0.77%) until blends were excluded.
+
 ## Where it doesn't apply
 
 Photos have no peaks. On a photo the same change made things worse (9.9 →

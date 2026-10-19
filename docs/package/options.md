@@ -16,7 +16,7 @@ Every trace takes the same fitting options and one of two modes.
 | `smoothing` | number, px (optional) | Half-window of the smoothing over the pixel staircase. Default 12; it narrows by itself on tight curves. |
 | `shapes` | boolean (optional) | Exact shapes: an outline that has one neighbour all the way round and is a circle, an ellipse, a rectangle, a rounded rectangle or a regular polygon (3–12 sides) is drawn as that shape exactly, rather than as fitted curves. Only outlines that fit within 0.3 px RMS (0.85 px at worst) qualify, so a shape that's nearly round stays as traced. Both sides of the edge get the same shape, so shapes still tile. Default false. |
 | `pixels` | boolean (optional) | Pixel art: no clean-up and no curve fitting; every boundary is its exact pixel staircase. |
-| `stacked` | boolean (optional) | Stacked shapes, for photos: each shape is drawn whole, without the holes other shapes sit in, and larger shapes come first. The picture is the same as cut-out shapes, with less path data and no hairline seams between shapes. Holes onto transparency are kept. Default: cut out, which is what vinyl cutters and screen printers want. |
+| `stacked` | boolean (optional) | Stacked shapes, for photos: each shape is drawn whole, without the holes other shapes sit in, larger shapes first, and reaching under the neighbours drawn after it. The picture is the same as cut-out shapes, without the hairline seams where anti-aliased edges meet, for more path data. Holes onto transparency are kept. Default: cut out, which is what vinyl cutters and screen printers want. |
 
 ## Modes
 
@@ -35,8 +35,10 @@ Three helpers pick a palette from the pixels:
 
 - `peakPalette(rgba, maxColors)`: the sharp peaks of the colour histogram,
   which are flat art's real colours. Close colours (under 0.07 apart in OKLab)
-  count as one, and colours under 0.2% of the image are ignored; both can be
-  changed with a third argument, `{ minDistance, minShare }`.
+  count as one. A colour needs 0.2% of the image, or 0.05% if it isn't a blend
+  of two colours already picked (so a small decal counts, an anti-aliased edge
+  doesn't); all three can be changed with a third argument,
+  `{ minDistance, minShare, minDetail }`.
 - `exactPalette(rgba, maxColors)`: the exact colours, most-used first. For
   pixel art, where a one-pixel eye matters and two close shades are on
   purpose.

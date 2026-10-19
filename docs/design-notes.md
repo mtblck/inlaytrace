@@ -291,6 +291,19 @@ a further 10%, but softens real edges; it's left for a future setting. At
 VTracer took (2.9–4.5 s), and the SVG is about 30% larger at that size; at the
 photos' own size (450–640 px wide) it's both smaller and closer.
 
+**Stacked shapes still had seams, between neighbours.** Stacking covers a hole
+with what fills it, but two shapes side by side over a third each anti-alias
+their shared edge, and the third shows through as a darker hairline; more
+colours meant more such edges, so raising Poster's colours seemed to add
+random lines. Drawing each shape in its own colour as a 0.5 px outline cut
+error on a product photo by 11%, which measured the seams' cost. The fix keeps
+plain fills: each shape's outline is now that of itself plus every neighbour
+painted after it (still from the same fitted edges), so every edge is drawn
+once, by the later shape over the earlier one's colour. A hole in that outline
+stays open if a shape painted earlier is inside it, or transparency. On the
+three photos mean error went 11.83 → 10.42 (12%) for 37% more path data
+(148.7 → 203.1 KB, still under VTracer's 212.6).
+
 **Centerline is a skeleton, not an outline (#38).** Plotters and engravers want
 one stroke per line. AutoTrace does this but is GPL, so Inlay grew its own: the
 ink is thinned (Zhang–Suen), then any pixel whose neighbours stay connected

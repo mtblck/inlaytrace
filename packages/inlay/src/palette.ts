@@ -9,10 +9,14 @@
  * a thin spread of low-count shades. So instead of clustering, take the peaks:
  *
  *  1. Histogram at 5 bits per channel, keeping each bin's true mean colour.
- *  2. Walk bins from most to least frequent; accept a bin as a new colour only
+ *  2. Weigh each bin by the pixels within half the distinct-colour distance of
+ *     it (OKLab), so a colour spread over several bins counts in full.
+ *  3. Walk bins from heaviest to lightest; accept a bin as a new colour only
  *     if it is perceptually distinct (OKLab distance) from every colour already
- *     accepted, and holds a meaningful share of the image.
- *  3. Stop at the requested count.
+ *     accepted, and its weight is a meaningful share of the image. A smaller
+ *     share (a decal, lettering) is still a colour if it isn't a blend of two
+ *     colours already accepted (an anti-aliased edge between them).
+ *  4. Stop at the requested count.
  *
  * This is for logos and illustrations. Photos have no peaks (on a photo the
  * peaks raised mean error from 9.9 to 15.3), so they use `quantizePalette`.
@@ -22,7 +26,7 @@ export type Rgb = [number, number, number]
 export function peakPalette(
   rgba: ArrayLike<number>,
   maxColors: number,
-  { minDistance = 0.07, minShare = 0.002 }: { minDistance?: number; minShare?: number } = {},
+  { minDistance = 0.07, minShare = 0.002, minDetail = 0.0005 }: { minDistance?: number; minShare?: number; minDetail?: number } = {},
 ): string[] {
   const bins = new Map<number, { n: number; r: number; g: number; b: number }>()
   let opaque = 0
@@ -42,16 +46,71 @@ export function peakPalette(
     opaque++
   }
 
-  const sorted = [...bins.values()].sort((a, b) => b.n - a.n)
-  const picked: { lab: Rgb; rgb: Rgb }[] = []
-  for (const bin of sorted) {
-    if (picked.length >= maxColors) break
-    if (bin.n / opaque < minShare && picked.length > 0) break
+  // A colour's weight is every pixel within half the distinct-colour distance
+  // of it, not just its own bin. A flat colour is one bin either way, but a
+  // photographed one (red lettering, a yellow decal) spreads over many bins
+  // that are each too small: by its own bin alone the walk stopped at the
+  // greys, and a photo of a grey ship with red and yellow details got 6
+  // colours (black, white, greys and one blue) at any cap.
+  const radius = minDistance / 2
+  const items = [...bins.values()].map((bin) => {
     const rgb: Rgb = [bin.r / bin.n, bin.g / bin.n, bin.b / bin.n]
-    const lab = oklab(rgb)
-    if (picked.every((p) => distance(p.lab, lab) >= minDistance)) picked.push({ lab, rgb })
+    return { n: bin.n, rgb, lab: oklab(rgb), weight: 0, peak: true }
+  })
+  const cell = (v: number) => Math.floor(v / radius)
+  const grid = new Map<string, typeof items>()
+  for (const it of items) {
+    const k = `${cell(it.lab[0])},${cell(it.lab[1])},${cell(it.lab[2])}`
+    const list = grid.get(k)
+    if (list) list.push(it)
+    else grid.set(k, [it])
+  }
+  for (const it of items) {
+    const [cl, ca, cb] = it.lab.map(cell)
+    for (let i = cl - 1; i <= cl + 1; i++)
+      for (let j = ca - 1; j <= ca + 1; j++)
+        for (let k = cb - 1; k <= cb + 1; k++)
+          for (const o of grid.get(`${i},${j},${k}`) ?? [])
+            if (distance(o.lab, it.lab) <= radius) {
+              it.weight += o.n
+              if (o.n > it.n) it.peak = false
+            }
+  }
+
+  // Only local peaks are candidates (no nearby bin has more pixels), so a flat
+  // colour is its own bin, not a neighbour that borrowed its weight; heaviest first.
+  const sorted = items.filter((it) => it.peak).sort((a, b) => b.weight - a.weight || b.n - a.n)
+  const picked: { lab: Rgb; rgb: Rgb }[] = []
+  for (const it of sorted) {
+    if (picked.length >= maxColors) break
+    const share = it.weight / opaque
+    if (share < minDetail && picked.length > 0) break
+    if (!picked.every((p) => distance(p.lab, it.lab) >= minDistance)) continue
+    // Below minShare a colour is a detail (a small decal, thin lettering): kept
+    // only if it isn't a blend of two colours already picked, which is what
+    // anti-aliased edges and JPEG ringing between them are made of.
+    if (share < minShare && isBlend(it.rgb, it.lab, picked, minDistance)) continue
+    picked.push({ lab: it.lab, rgb: it.rgb })
   }
   return picked.map((p) => toHex(p.rgb))
+}
+
+/**
+ * Whether a colour lies near the line between two picked colours, mixed as a
+ * renderer mixes them (in sRGB): the nearest mix is within `tolerance` (OKLab).
+ */
+function isBlend(rgb: Rgb, lab: Rgb, picked: { rgb: Rgb }[], tolerance: number) {
+  for (let i = 0; i < picked.length; i++)
+    for (let j = i + 1; j < picked.length; j++) {
+      const a = picked[i].rgb
+      const b = picked[j].rgb
+      const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
+      const len = d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
+      if (!len) continue
+      const t = Math.min(1, Math.max(0, ((rgb[0] - a[0]) * d[0] + (rgb[1] - a[1]) * d[1] + (rgb[2] - a[2]) * d[2]) / len))
+      if (distance(oklab([a[0] + t * d[0], a[1] + t * d[1], a[2] + t * d[2]]), lab) < tolerance) return true
+    }
+  return false
 }
 
 export function oklab([r, g, b]: Rgb): Rgb {

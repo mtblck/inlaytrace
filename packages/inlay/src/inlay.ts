@@ -42,11 +42,11 @@ export type InlayOptions = FitOptions & {
   pixels?: boolean
   /**
    * Stacked shapes, for photos: each region is drawn whole, without the holes
-   * other regions sit in, and larger shapes come first so smaller ones paint
-   * over them. Every hole's outline is exactly the outline of what fills it,
-   * so the picture is the same as cut-out shapes, with less path data (each
-   * hole isn't drawn a second time) and no hairline seams where anti-aliased
-   * edges meet. A hole with transparency anywhere inside it, however deep, is
+   * other regions sit in, larger shapes first so smaller ones paint over them,
+   * and reaching under every neighbour painted after it. So each shared edge
+   * is drawn once, by the later shape over the earlier one's colour, and no
+   * hairline seam shows where anti-aliased edges meet (on photos, 12% closer
+   * to the photo than without, for about a third more path data). A hole with transparency anywhere inside it, however deep, is
    * kept, so transparency stays transparent. Default: cut out, which is what a
    * vinyl cutter or a screen printer wants.
    */
@@ -95,29 +95,75 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
   // Final regions: 4-connected components of drawn labels. Everything else is VOID.
   const { comp, compLabel, compArea } = components(labels, w, h, (l) => drawn[l])
   const chains = findChains(comp, w, h)
-  const byComp = new Map<number, Oriented[]>()
+  // Each chain is fitted once, then shared by every shape it bounds.
+  const fitted: { chain: Chain; cubics: Cubic[]; back: Cubic[] }[] = []
+  const chainsOf = new Map<number, number[]>()
   for (const c of chains) {
     const cubics = o.pixels ? staircase(c.pts, c.closed) : fitChain(c.pts, c.closed, o)
     if (!cubics.length) continue
-    if (c.left !== VOID) addOriented(byComp, c.left, { ...c, cubics, reversed: false })
-    if (c.right !== VOID) addOriented(byComp, c.right, { ...c, cubics: reverse(cubics), reversed: true })
+    const i = fitted.push({ chain: c, cubics, back: reverse(cubics) }) - 1
+    for (const id of new Set([c.left, c.right]))
+      if (id !== VOID) {
+        const list = chainsOf.get(id)
+        if (list) list.push(i)
+        else chainsOf.set(id, [i])
+      }
+  }
+  /** The outline of a set of regions: the chains with exactly one side in it, walked with the set on the left. */
+  const outline = (inSet: (id: number) => boolean, ids: Iterable<number>) => {
+    const seen = new Set<number>()
+    const out: Oriented[] = []
+    for (const id of ids)
+      for (const i of chainsOf.get(id) ?? []) {
+        if (seen.has(i)) continue
+        seen.add(i)
+        const { chain, cubics, back } = fitted[i]
+        const l = chain.left !== VOID && inSet(chain.left)
+        const r = chain.right !== VOID && inSet(chain.right)
+        if (l !== r) out.push({ ...chain, cubics: l ? cubics : back, reversed: !l })
+      }
+    return assemble(out)
   }
 
-  // Stacked shapes paint over their holes, so a hole stays wherever there is
-  // transparency inside it, however deep: one pixel of each transparent area.
-  const voids = o.stacked ? voidSeeds(comp, w, h) : []
   const shapes: { subs: Subpath[]; fill: string; area: number }[] = []
-  for (const [id, chains] of byComp) {
-    let loops = assemble(chains)
-    if (!loops.length) continue
-    let area = compArea[id]
-    if (o.stacked) {
-      // The outline is the loop enclosing the most; a hole stays if there's transparency anywhere inside it.
-      const outer = loops.reduce((a, b) => (Math.abs(b.area) > Math.abs(a.area) ? b : a))
-      loops = loops.filter((l) => l === outer || l.touchesVoid || voids.some((p) => encloses(l.pts, p)))
-      area = Math.abs(outer.area)
+  if (!o.stacked) {
+    for (const id of chainsOf.keys()) {
+      const loops = outline((r) => r === id, [id])
+      if (loops.length) shapes.push({ subs: loops.map((l) => l.sub), fill: colors[compLabel[id]], area: compArea[id] })
     }
-    shapes.push({ subs: loops.map((l) => l.sub), fill: colors[compLabel[id]], area })
+  } else {
+    // Stacked: paint order is by outline area, largest first, so containers come
+    // before what they contain. Each shape then also covers every neighbour
+    // painted after it, so each shared edge is drawn once, by the later shape,
+    // over solid colour. Two shapes meeting over a third left a hairline of the
+    // third where their anti-aliased edges met (on a photo, 11% of the error).
+    const own = new Map<number, number>()
+    for (const id of chainsOf.keys()) {
+      const loops = outline((r) => r === id, [id])
+      if (loops.length) own.set(id, Math.max(...loops.map((l) => Math.abs(l.area))))
+    }
+    const order = [...own.keys()].sort((a, b) => own.get(b)! - own.get(a)! || a - b)
+    const rank = new Map(order.map((id, i) => [id, i]))
+    // Transparency stays transparent: a hole is kept if any is inside it, however deep.
+    const voids = voidSeeds(comp, w, h)
+    for (const id of order) {
+      const set = new Set([id])
+      for (const i of chainsOf.get(id)!) {
+        const { left, right } = fitted[i].chain
+        const other = left === id ? right : left
+        if (other !== VOID && rank.has(other) && rank.get(other)! > rank.get(id)!) set.add(other)
+      }
+      const loops = outline((r) => set.has(r), set)
+      if (!loops.length) continue
+      const outer = loops.reduce((a, b) => (Math.abs(b.area) > Math.abs(a.area) ? b : a))
+      // A hole stays if transparency is inside it, or a shape painted earlier
+      // (which this one would otherwise cover). Whatever else is inside is
+      // painted later: anything enclosing a shape is larger, so earlier.
+      const kept = loops.filter(
+        (l) => l === outer || l.touchesVoid || [...l.across].some((r) => r !== VOID && rank.get(r)! < rank.get(id)!) || voids.some((p) => encloses(l.pts, p)),
+      )
+      shapes.push({ subs: kept.map((l) => l.sub), fill: colors[compLabel[id]], area: own.get(id)! })
+    }
   }
   // Largest first: for stacked shapes that is containers before what they contain.
   shapes.sort((a, b) => b.area - a.area)
@@ -594,16 +640,10 @@ function findChains(comp: Int32Array, w: number, h: number): Chain[] {
 
 type Oriented = Chain & { cubics: Cubic[]; reversed: boolean }
 
-function addOriented(map: Map<number, Oriented[]>, id: number, c: Oriented) {
-  const list = map.get(id)
-  if (list) list.push(c)
-  else map.set(id, [c])
-}
-
 const reverse = (cubics: Cubic[]): Cubic[] => cubics.map(([a, b, c, d]) => [d, c, b, a] as Cubic).reverse()
 
 /** A region's closed loop: its fitted subpath, signed area, whether VOID is across any of it, and its exact pixel-crack outline. */
-type Loop = { sub: Subpath; area: number; touchesVoid: boolean; pts: Pt[] }
+type Loop = { sub: Subpath; area: number; touchesVoid: boolean; pts: Pt[]; across: Set<number> }
 /** The region on the far side of a chain, as this region walks it. */
 const across = (c: Oriented) => (c.reversed ? c.left : c.right)
 
@@ -615,7 +655,7 @@ function assemble(chains: Oriented[]): Loop[] {
   const subs: Loop[] = []
   const open: Oriented[] = []
   for (const c of chains) {
-    if (c.closed) subs.push(loopOf(c.cubics, across(c) === VOID, c.pts))
+    if (c.closed) subs.push(loopOf(c.cubics, across(c) === VOID, c.pts, new Set([across(c)])))
     else open.push(c)
   }
   const start = (c: Oriented) => (c.reversed ? c.to : c.from)
@@ -635,12 +675,14 @@ function assemble(chains: Oriented[]): Loop[] {
     const loop: Cubic[] = []
     const pts: Pt[] = []
     let touchesVoid = false
+    const acrossIds = new Set<number>()
     let c: Oriented | undefined = first
     while (c && !used.has(c)) {
       used.add(c)
       loop.push(...c.cubics)
       pts.push(...(c.reversed ? [...c.pts].reverse() : c.pts))
       if (across(c) === VOID) touchesVoid = true
+      acrossIds.add(across(c))
       if (end(c) === start(first)) break
       const into = lastDir(c)
       // Where the region touches itself at a corner, turn left: regions are
@@ -649,16 +691,16 @@ function assemble(chains: Oriented[]): Loop[] {
         .filter((n) => !used.has(n))
         .sort((a, b) => cross(into, firstDir(a)) - cross(into, firstDir(b)))[0]
     }
-    if (loop.length) subs.push(loopOf(loop, touchesVoid, pts))
+    if (loop.length) subs.push(loopOf(loop, touchesVoid, pts, acrossIds))
   }
   return subs
 }
 
 /** A loop and its signed area (shoelace over its cubics' end points: enough to rank and orient). */
-function loopOf(cubics: Cubic[], touchesVoid: boolean, pts: Pt[]): Loop {
+function loopOf(cubics: Cubic[], touchesVoid: boolean, pts: Pt[], acrossIds: Set<number>): Loop {
   let area = 0
   for (const [a, , , d] of cubics) area += a.x * d.y - d.x * a.y
-  return { sub: toSubpath(cubics), area: area / 2, touchesVoid, pts }
+  return { sub: toSubpath(cubics), area: area / 2, touchesVoid, pts, across: acrossIds }
 }
 
 /** One pixel centre from each 4-connected area of VOID (transparent pixels) in the image. */

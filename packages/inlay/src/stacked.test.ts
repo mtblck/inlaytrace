@@ -88,11 +88,37 @@ describe('stacked shapes', () => {
     expect(differ / a.length).toBeLessThan(0.002)
   })
 
-  it('drop the holes other shapes fill, so each shape is one outline', () => {
-    const subpaths = (r: InlayResult) => r.paths.reduce((n, p) => n + parsePath(p.d).length, 0)
-    expect(subpaths(stacked)).toBeLessThan(subpaths(cut))
-    const ring = stacked.paths.find((p) => p.fill === '#d23228')!
-    expect(parsePath(ring.d)).toHaveLength(1)
+  it('drop the holes other shapes fill: only holes onto transparency stay', () => {
+    // Each shape is its outline, plus the window where it lies under it: the
+    // paper and the panel both reach under the window, so both keep it open.
+    const subs = Object.fromEntries(stacked.paths.map((p) => [p.fill, parsePath(p.d).length]))
+    expect(subs).toEqual({ '#f5f0e6': 2, '#1e3c8c': 2, '#d23228': 1, '#ebaa28': 1, '#288c46': 1 })
+  })
+
+  it('lay the earlier shape under every edge, so no seam shows through', () => {
+    // Where two colours meet, the one painted first covers both sides of the
+    // edge; the later one's anti-aliased edge then blends with it alone, not
+    // with whatever lies underneath both (a hairline seam).
+    const shapes = stacked.paths.map((p) => polygons(p.d))
+    const top = render(stacked)
+    const rank = new Map(stacked.paths.map((p, i) => [p.fill, i]))
+    let edges = 0
+    for (let y = 1; y < H - 1; y++)
+      for (let x = 1; x < W - 1; x++)
+        for (const [dx, dy] of [[1, 0], [0, 1]]) {
+          const a = top[y * W + x]
+          const b = top[(y + dy) * W + x + dx]
+          if (!a || !b || a === b) continue
+          // Only where each side is two pixels deep, so the points tested are clearly a's and b's.
+          if (top[(y - dy) * W + x - dx] !== a || top[(y + 2 * dy) * W + x + 2 * dx] !== b) continue
+          const under = shapes[Math.min(rank.get(a)!, rank.get(b)!)]
+          // One pixel in from the edge on each side, clear of the fitted curve's wobble.
+          const inA = inside(under, x + 0.5 - dx, y + 0.5 - dy)
+          const inB = inside(under, x + 0.5 + 2 * dx, y + 0.5 + 2 * dy)
+          edges++
+          expect(inA && inB, `${a} | ${b} at ${x},${y}`).toBe(true)
+        }
+    expect(edges).toBeGreaterThan(100)
   })
 
   it('keep a hole that opens onto transparency', () => {
