@@ -57,13 +57,15 @@ type FitOptions = { tolerance: number; cornerAngle: number; smoothing?: number }
 ### `peakPalette(rgba, maxColors, options?)`
 
 ```ts
-function peakPalette(rgba: ArrayLike<number>, maxColors: number, options?: { minDistance?: number; minShare?: number }): string[]
+function peakPalette(rgba: ArrayLike<number>, maxColors: number, options?: { minDistance?: number; minShare?: number; minDetail?: number }): string[]
 ```
 
-Up to `maxColors` colours from the peaks of the histogram, most common first.
-`minDistance` (OKLab, default 0.07) is how far apart two colours must be to
-count separately; `minShare` (default 0.002) is the smallest share of the
-image a colour needs.
+Up to `maxColors` colours from the peaks of the histogram, heaviest first (a
+colour's weight is the pixels within `minDistance / 2` of it). `minDistance`
+(OKLab, default 0.07) is how far apart two colours must be to count
+separately; `minShare` (default 0.002) is the share of the image a colour
+needs, and `minDetail` (default 0.0005) the smaller share enough for one that
+isn't a blend of two colours already picked.
 
 ### `exactPalette(rgba, maxColors)`
 
