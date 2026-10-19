@@ -209,7 +209,7 @@ h1 {
   padding-block: 2%;
 }
 .board {
-  --lift: clamp(9px, 2.6vw, 15px);
+  --lift: clamp(7px, 1.9vw, 11px);
   position: relative;
   aspect-ratio: 1;
   transform-style: preserve-3d;
@@ -226,11 +226,25 @@ h1 {
 }
 /* The board tilts into the isometric view of the diagrams (orthographic: no perspective). */
 .board.iso {
-  transform: translateY(9%) rotateX(55deg) rotateZ(-45deg) scale(0.74);
+  transform: translateY(7%) rotateX(55deg) rotateZ(-45deg) scale(0.76);
 }
 .board.lifted .layer {
   transform: translate3d(var(--dx), var(--dy), calc(var(--i) * var(--lift)));
   transition-delay: calc(var(--i) * 35ms);
+}
+/* Lifted, each piece gets a pale rim (the badge's cream, like a cut veneer edge) so the dark navy
+   pieces stay distinct over the green mat. Drawn behind the fill, it shows only outside the edge. */
+.board .layer path {
+  stroke: #f3ede1;
+  stroke-width: 3px;
+  stroke-opacity: 0;
+  stroke-linejoin: round;
+  paint-order: stroke;
+  vector-effect: non-scaling-stroke;
+  transition: stroke-opacity 0.6s ease;
+}
+.board.lifted .layer path {
+  stroke-opacity: 0.9;
 }
 .mat figcaption {
   display: flex;
