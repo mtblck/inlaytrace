@@ -41,12 +41,13 @@ export function Controls({ settings, onChange, onPreset, measuredStroke, prep, .
                 role="radio"
                 aria-checked={active}
                 onClick={() => onPreset(preset.id)}
-                className={`flex items-baseline justify-between gap-3 px-3 py-2 text-left transition-colors ${
+                className={`flex flex-col gap-0.5 px-3 py-2 text-left transition-colors ${
                   active ? 'bg-paper' : 'bg-paper-sunk hover:bg-paper'
                 }`}
               >
-                <span className={`text-[13.5px] font-medium whitespace-nowrap ${active ? 'text-accent' : 'text-ink'}`}>{preset.label}</span>
-                <span className="field-hint truncate text-right">{preset.hint}</span>
+                {/* Name above, description below: side by side, the descriptions were cut off in the sidebar. */}
+                <span className={`text-[13.5px] font-medium ${active ? 'text-accent' : 'text-ink'}`}>{preset.label}</span>
+                <span className="field-hint">{preset.hint}</span>
               </button>
             )
           })}
