@@ -14,7 +14,11 @@ function label() {
 if (video && toggle) {
   video.addEventListener('play', label)
   video.addEventListener('pause', label)
-  toggle.addEventListener('click', () => (video.paused ? video.play().catch(() => {}) : video.pause()))
+  toggle.addEventListener('click', () => {
+    if (video.paused) video.play().catch(label)
+    else video.pause()
+    label() // paused changes at once; the events come a moment later
+  })
   if (!still.matches) video.play().catch(label)
   label()
 }
