@@ -7,7 +7,7 @@
  */
 import Page from '../layouts/Page.astro'
 import sample from '../data/sample.json'
-import { parsePath, serializePath, type Subpath } from 'inlaytrace'
+import { parsePath } from 'inlaytrace'
 
 /** The app (apps/app), served beside this site. */
 const APP = '/app/'
@@ -19,50 +19,6 @@ const PUBLISHED = true
 type Shape = { d: string; fill: string; transform?: string }
 const size = sample.size
 const centre = size / 2
-
-/**
- * Each piece on its own layer, layered as Inlay's stacked mode draws them: every shape whole (its
- * outline, without the holes other shapes sit in) and larger outlines first, so what sits inside a
- * shape is painted on top of it. Lifting then shows layers on the background sheet, with nothing cut
- * out of anything; flat, it's the same picture. Each also drifts as it rises: outward from the
- * badge's centre, by its own centroid, as a share of the board (CSS % of the layer's own size).
- */
-/** A subpath's area, its curves sampled (a circle drawn with four nodes is far bigger than their square). */
-const areaOf = (s: Subpath) => {
-  const n = s.nodes
-  const pts: { x: number; y: number }[] = []
-  for (let i = 0; i < n.length; i++) {
-    const a = n[i]
-    const b = n[(i + 1) % n.length]
-    const c1 = a.out ?? a
-    const c2 = b.in ?? b
-    for (let j = 0; j < 16; j++) {
-      const t = j / 16
-      const u = 1 - t
-      pts.push({ x: u * u * u * a.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * b.x, y: u * u * u * a.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * b.y })
-    }
-  }
-  let sum = 0
-  for (let i = 0; i < pts.length; i++) sum += pts[i].x * pts[(i + 1) % pts.length].y - pts[(i + 1) % pts.length].x * pts[i].y
-  return Math.abs(sum / 2)
-}
-/** A shape's outline: the subpath enclosing the most. */
-const outline = (d: string) => parsePath(d).map((s) => ({ s, area: areaOf(s) })).reduce((m, x) => (x.area > m.area ? x : m))
-const pieces = (sample.inlay as Shape[])
-  .map((p) => {
-    const o = outline(p.d)
-    const pts = o.s.nodes
-    const cx = pts.reduce((a, n) => a + n.x, 0) / pts.length
-    const cy = pts.reduce((a, n) => a + n.y, 0) / pts.length
-    return { ...p, d: serializePath([o.s]), area: o.area, cx, cy }
-  })
-  .sort((a, b) => b.area - a.area)
-  .map((p, i) => {
-    // The largest (the background sheet) stays put; the rest drift out as they rise.
-    const k = i === 0 ? 0 : 0.1
-    const pct = (v: number) => `${Math.round(((v - centre) * k * 1000) / size) / 10}%`
-    return { ...p, i, dx: pct(p.cx), dy: pct(p.cy) }
-  })
 
 const crop = sample.crop
 const view = `${crop.x} ${crop.y} ${crop.w} ${crop.h}`
@@ -107,21 +63,26 @@ const dot = crop.w / 90
         </div>
 
         <figure class="mat" aria-labelledby="mat-caption">
-          {/* One svg per piece, stacked: "Lift the pieces" tilts the board and raises each on its own layer. */}
-          <div class="stage">
-            <div class="board" id="board" role="img" aria-label="The sample badge as Inlay traced it. Lift the pieces tilts it and raises each shape on its own layer, then sets them back, fitting exactly.">
-              {
-                pieces.map((p) => (
-                  <svg class="layer" viewBox={`0 0 ${size} ${size}`} aria-hidden="true" style={`--i:${p.i};--dx:${p.dx};--dy:${p.dy}`}>
-                    <path d={p.d} fill={p.fill} />
-                  </svg>
-                ))
-              }
-            </div>
-          </div>
+          {/* A loop of how Inlay works, rendered with the isogram kit. Muted and inline; landing.ts starts it
+              unless the reader prefers reduced motion, when the poster frame (the edges being traced) stays. */}
+          <video
+            class="hero-video"
+            id="hero-video"
+            width="800"
+            height="600"
+            muted
+            loop
+            playsinline
+            preload="auto"
+            poster="/media/png-to-svg.webp"
+            aria-label="An isometric conveyor: a pixel image goes in as PNG, a gantry scans its pixels, the edges between colours are traced, and flat vector shapes come out as SVG."
+          >
+            <source src="/media/png-to-svg.webm" type="video/webm" />
+            <source src="/media/png-to-svg.mp4" type="video/mp4" />
+          </video>
           <figcaption id="mat-caption">
-            <span>The sample badge as Inlay traced it: {pieces.length} shapes, {sample.nodes.inlay} nodes.</span>
-            <button type="button" class="replay" id="replay">Lift the pieces</button>
+            <span>Pixels in, shapes out: every edge between two colours is traced once.</span>
+            <button type="button" class="replay" id="replay" aria-controls="hero-video">Pause</button>
           </figcaption>
         </figure>
       </section>

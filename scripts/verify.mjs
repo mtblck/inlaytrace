@@ -1197,33 +1197,22 @@ const siteOrigin = process.env.SITE ?? (new URL(url).hostname.endsWith('mattblac
 if (siteOrigin) {
   console.log(`\n  site ${siteOrigin}\n`)
   const landing = await newPage({ width: 1440, height: 900 })
-  // Record the board's states from the start: the lift tilts it (iso), raises the layers (lifted), then lands.
-  await landing.addInitScript(() => {
-    window.__states = []
-    new MutationObserver(() => {
-      const b = document.getElementById('board')
-      if (b) window.__states.push(b.className)
-    }).observe(document, { subtree: true, attributes: true, attributeFilter: ['class'] })
-  })
   const res = await landing.goto(siteOrigin)
   check(res?.ok(), `landing page loads (${res?.status()})`)
   const siteCsp = res?.headers()['content-security-policy'] ?? ''
   check(siteCsp.includes("'sha256-") && !siteCsp.includes('worker-src'), "the landing page gets the site's CSP, not the app's")
-  const layers = await landing.locator('#board .layer').count()
-  check(layers >= 5, `the hero board shows the traced badge, one layer per shape (${layers})`)
-  const drifting = await landing.locator('#board .layer').evaluateAll((ls) => ls.filter((l) => l.style.getPropertyValue('--dx') !== '0%' || l.style.getPropertyValue('--dy') !== '0%').length)
-  check(drifting >= layers / 2, `most shapes drift apart as they rise (${drifting} of ${layers})`)
-  const lifts = (states) => states.some((c) => c.includes('iso')) && states.some((c) => c.includes('lifted'))
-  await landing.waitForFunction(() => window.__states.some((c) => c.includes('lifted')), null, { timeout: 5000 })
-  await landing.waitForFunction(() => document.getElementById('board').className === 'board', null, { timeout: 8000 })
-  check(lifts(await landing.evaluate(() => window.__states)), 'on load the board tilts, the shapes lift onto layers, and it all lands flat again')
-  await landing.evaluate(() => (window.__states = []))
-  const lift = landing.getByRole('button', { name: 'Lift the pieces' })
-  await lift.click()
-  await landing.waitForTimeout(1200)
-  check(await lift.isDisabled(), '"Lift the pieces" waits while the shapes are up')
-  await landing.waitForFunction(() => !document.getElementById('replay').disabled, null, { timeout: 8000 })
-  check(lifts(await landing.evaluate(() => window.__states)) && (await landing.locator('#board').getAttribute('class')) === 'board', '"Lift the pieces" runs it again and lands flat')
+  // The hero loop: a muted video that plays, pauses and plays again from its button.
+  const video = landing.locator('#hero-video')
+  await landing.waitForFunction(() => { const v = document.getElementById('hero-video'); return v && !v.paused && v.currentTime > 0.3 }, null, { timeout: 8000 }).catch(() => {})
+  const playing = await video.evaluate((v) => ({ paused: v.paused, t: v.currentTime, muted: v.muted, loop: v.loop, src: v.currentSrc }))
+  check(!playing.paused && playing.t > 0.3 && playing.muted && playing.loop, `the hero loop plays, muted and looping (${playing.src.split('/').pop()} at ${playing.t.toFixed(1)} s)`)
+  const toggle = landing.getByRole('button', { name: 'Pause' })
+  await toggle.click()
+  check((await video.evaluate((v) => v.paused)) && (await landing.locator('#replay').textContent()) === 'Play', 'Pause stops it, and the button then offers Play')
+  await landing.getByRole('button', { name: 'Play' }).click()
+  await landing.waitForTimeout(300)
+  check(!(await video.evaluate((v) => v.paused)), 'Play starts it again')
+  for (const f of ['png-to-svg.webm', 'png-to-svg.mp4', 'png-to-svg.webp']) check((await landing.request.get(new URL(`media/${f}`, siteOrigin).href)).ok(), `the hero's ${f} is served`)
   const trace = await landing.getByRole('link', { name: 'Trace an image' }).getAttribute('href')
   check((await landing.request.get(new URL(trace, siteOrigin).href)).ok(), `"Trace an image" leads to the app (${trace})`)
   // Every same-site link on the page resolves.
@@ -1237,7 +1226,8 @@ if (siteOrigin) {
   const quiet = await still.newPage()
   await quiet.goto(siteOrigin)
   await quiet.waitForTimeout(1500)
-  check((await quiet.getByRole('button', { name: 'Lift the pieces' }).isHidden()) && (await quiet.locator('#board').getAttribute('class')) === 'board', 'with reduced motion the board stays flat and the button is hidden')
+  const q = await quiet.locator('#hero-video').evaluate((v) => ({ paused: v.paused, t: v.currentTime }))
+  check(q.paused && q.t === 0 && (await quiet.locator('#replay').textContent()) === 'Play', 'with reduced motion the loop stays on its poster frame, and the button offers Play')
   await still.close()
 
   // The app's old address (mattblack.space/tools/img-to-svg/ before inlaytrace.com) keeps working.

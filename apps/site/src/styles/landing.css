@@ -204,47 +204,14 @@ h1 {
     24px 24px;
   background-position: -1px -1px;
 }
-.stage {
-  /* Room for the layers to rise into when the board tilts. */
-  padding-block: 2%;
-}
-.board {
-  --lift: clamp(7px, 1.9vw, 11px);
-  position: relative;
-  aspect-ratio: 1;
-  transform-style: preserve-3d;
-  transition: transform 0.9s cubic-bezier(0.3, 0.7, 0.2, 1);
-}
-.board .layer {
-  position: absolute;
-  inset: 0;
+.hero-video {
+  display: block;
   width: 100%;
-  height: 100%;
-  overflow: visible;
-  /* Lifting goes bottom layer first; settling, top layer first. */
-  transition: transform 1s cubic-bezier(0.2, 0.7, 0.15, 1) calc((12 - var(--i)) * 35ms);
-}
-/* The board tilts into the isometric view of the diagrams (orthographic: no perspective). */
-.board.iso {
-  transform: translateY(7%) rotateX(55deg) rotateZ(-45deg) scale(0.76);
-}
-.board.lifted .layer {
-  transform: translate3d(var(--dx), var(--dy), calc(var(--i) * var(--lift)));
-  transition-delay: calc(var(--i) * 35ms);
-}
-/* Lifted, each piece gets a pale rim (the badge's cream, like a cut veneer edge) so the dark navy
-   pieces stay distinct over the green mat. Drawn behind the fill, it shows only outside the edge. */
-.board .layer path {
-  stroke: #f3ede1;
-  stroke-width: 3px;
-  stroke-opacity: 0;
-  stroke-linejoin: round;
-  paint-order: stroke;
-  vector-effect: non-scaling-stroke;
-  transition: stroke-opacity 0.6s ease;
-}
-.board.lifted .layer path {
-  stroke-opacity: 0.9;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border-radius: 6px;
+  /* The video's own background, so the frame doesn't flash before it loads. */
+  background: #131515;
 }
 .mat figcaption {
   display: flex;
@@ -268,17 +235,6 @@ h1 {
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 0.18em;
-}
-.replay:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-@media (prefers-reduced-motion: reduce) {
-  .board,
-  .board .layer {
-    transform: none !important;
-    transition: none;
-  }
 }
 
 /* ---- Sections ------------------------------------------------------------- */
