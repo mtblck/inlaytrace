@@ -1,3 +1,4 @@
+import { LegalLinks } from '../account/LegalLinks'
 import { useEffect, useRef, useState } from 'react'
 import { api, type CheckoutConfig, type Pack } from '../account/api'
 import { loadPaddle, onPaddleEvent } from './paddle'
@@ -173,6 +174,7 @@ export default function Buy() {
           </div>
         )}
       </main>
+      <LegalLinks width="w-[min(640px,calc(100vw-32px))]" />
     </div>
   )
 }

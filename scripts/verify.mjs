@@ -1374,6 +1374,8 @@ if (siteOrigin) {
   check(res?.ok() && /connect-src 'self'/.test(acctCsp) && /worker-src/.test(acctCsp), "the account page loads under the app's CSP (connect-src 'self')")
   await acct.getByLabel('Email').waitFor()
   check(await acct.getByText('You only need an account to buy credits for HD mode').isVisible(), 'signed out: it says an account is only for buying HD credits')
+  const legal = await acct.getByRole('navigation', { name: 'Legal' }).locator('a').evaluateAll((as) => as.map((a) => a.getAttribute('href')))
+  check(['/terms/', '/privacy/', '/refunds/'].every((h) => legal.includes(h)), `the account page links the terms, privacy notice and refund policy (${legal.join(', ')})`)
   await acct.getByLabel('Email').fill('ada@example.com')
   await acct.getByRole('button', { name: 'Email me a sign-in link' }).click()
   await acct.getByText('Check your email.').waitFor()
