@@ -48,10 +48,73 @@ export class PaddleError extends Error {
   }
 }
 
+const apiBase = (env: PaddleEnv) => (paddleEnvironment(env) === 'production' ? 'https://api.paddle.com' : 'https://sandbox-api.paddle.com')
+
+/**
+ * Whether a request comes from one of Paddle's webhook addresses: true, false,
+ * or null when the list can't be had at all (answer 503, and Paddle retries).
+ * The list comes from Paddle's /ips (data.ipv4_cidrs), not from the code,
+ * because it can change: fetched at most once an hour per environment, and a
+ * failed refresh keeps the last good list. The client address is the one
+ * Vercel's edge sets (x-real-ip, else the first x-forwarded-for), which a
+ * caller can't override. The signature is checked as well; this keeps anyone
+ * else from reaching the handler at all.
+ */
+export async function fromPaddle(req: Request, env: PaddleEnv, fetchImpl: typeof fetch = fetch): Promise<boolean | null> {
+  const cidrs = await paddleCidrs(env, fetchImpl)
+  if (!cidrs) return null
+  const raw = req.headers.get('x-real-ip') ?? req.headers.get('x-forwarded-for')?.split(',')[0] ?? ''
+  const ip = raw.trim().replace(/^::ffff:/i, '')
+  return cidrs.some((c) => inCidr(ip, c))
+}
+
+const IPS_TTL = 60 * 60 * 1000
+const ipCache = new Map<string, { at: number; cidrs: string[] }>()
+/** For tests: forget the cached lists. */
+export const resetPaddleIps = () => ipCache.clear()
+
+async function paddleCidrs(env: PaddleEnv, fetchImpl: typeof fetch): Promise<string[] | null> {
+  const base = apiBase(env)
+  const hit = ipCache.get(base)
+  if (hit && Date.now() - hit.at < IPS_TTL) return hit.cidrs
+  try {
+    const res = await fetchImpl(`${base}/ips`)
+    if (!res.ok) throw new Error(`Paddle /ips ${res.status}`)
+    const body = (await res.json()) as { data?: { ipv4_cidrs?: unknown } }
+    const cidrs = Array.isArray(body.data?.ipv4_cidrs) ? body.data.ipv4_cidrs.filter((c): c is string => typeof c === 'string' && parseCidr(c) !== null) : []
+    if (!cidrs.length) throw new Error('Paddle /ips gave no addresses')
+    ipCache.set(base, { at: Date.now(), cidrs })
+    return cidrs
+  } catch (e) {
+    console.error(e)
+    return hit?.cidrs ?? null
+  }
+}
+
+const ipv4 = (s: string): number | null => {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(s)
+  if (!m) return null
+  const parts = m.slice(1).map(Number)
+  return parts.some((n) => n > 255) ? null : ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0
+}
+function parseCidr(c: string): { base: number; bits: number } | null {
+  const [addr, len = '32'] = c.split('/')
+  const base = ipv4(addr)
+  const bits = Number(len)
+  return base === null || !Number.isInteger(bits) || bits < 0 || bits > 32 ? null : { base, bits }
+}
+export function inCidr(ip: string, cidr: string): boolean {
+  const a = ipv4(ip)
+  const c = parseCidr(cidr)
+  if (a === null || !c) return false
+  const mask = c.bits === 0 ? 0 : (0xffffffff << (32 - c.bits)) >>> 0
+  return (a & mask) === (c.base & mask)
+}
+
 export function paddle(env: PaddleEnv, fetchImpl: typeof fetch = fetch) {
   const key = env.PADDLE_API_KEY
   if (!key) return null
-  const base = paddleEnvironment(env) === 'production' ? 'https://api.paddle.com' : 'https://sandbox-api.paddle.com'
+  const base = apiBase(env)
 
   async function call(path: string, init: RequestInit = {}) {
     const res = await fetchImpl(base + path, { ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` } })

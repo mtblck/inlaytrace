@@ -27,7 +27,7 @@
  * send JSON without a preflight this API never answers.
  */
 import { cleanup, resultPart, runJob, startRun, uploadPart, type HdEnv } from './hd.js'
-import { creditsFor, packs, paddle, paddleEnvironment, PaddleError, verifySignature, type PaddleEnv } from './paddle.js'
+import { creditsFor, fromPaddle, packs, paddle, paddleEnvironment, PaddleError, verifySignature, type PaddleEnv } from './paddle.js'
 import { isSecretKey, supabase, SupabaseError, type Env as SupabaseEnv, type Session, type Supabase, type User } from './supabase.js'
 
 export type Env = SupabaseEnv & PaddleEnv & HdEnv
@@ -185,6 +185,10 @@ type PaddleEvent = { event_type?: string; data?: Record<string, any> }
 async function webhook(req: Request, db: Supabase, env: Env, fetchImpl: typeof fetch) {
   const raw = await req.text()
   if (!env.PADDLE_WEBHOOK_SECRET) return json(PADDLE_MISSING, 503)
+  // Only Paddle's own addresses, from its live list; the signature is checked as well.
+  const source = await fromPaddle(req, env, fetchImpl)
+  if (source === null) return json({ error: "Couldn't check the sender. Try again." }, 503)
+  if (!source) return json({ error: 'Not from Paddle.' }, 403)
   if (!(await verifySignature(req.headers.get('paddle-signature'), raw, env.PADDLE_WEBHOOK_SECRET))) return json({ error: 'Bad signature.' }, 401)
   let event: PaddleEvent
   try {
