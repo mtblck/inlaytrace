@@ -31,7 +31,10 @@ const pieces = (sample.inlay as Shape[]).map((p, i) => {
   // The largest piece (the background) stays put; the rest drift out as they rise.
   const k = i === 0 ? 0 : 0.1
   const pct = (v: number) => `${Math.round(((v - centre) * k * 1000) / size) / 10}%`
-  return { ...p, i, dx: pct(cx), dy: pct(cy) }
+  // The background is the sheet the shapes lift off, not cut out with them: its outline without the
+  // hole the badge sits in. Flat, the pieces cover the hole, so the badge looks the same.
+  const d = i === 0 ? p.d.split(/(?=M)/)[0] : p.d
+  return { ...p, d, i, dx: pct(cx), dy: pct(cy) }
 })
 
 const crop = sample.crop
