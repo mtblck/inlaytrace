@@ -62,7 +62,7 @@ const dot = crop.w / 90
           <p class="fine">Free and open source. Runs in your browser: your image is never uploaded.</p>
         </div>
 
-        <figure class="mat" aria-labelledby="mat-caption">
+        <figure class="print" aria-labelledby="hero-caption">
           {/* A loop of how Inlay works, rendered with the isogram kit. Muted and inline; landing.ts starts it
               unless the reader prefers reduced motion, when the poster frame (the edges being traced) stays. */}
           <video
@@ -80,7 +80,7 @@ const dot = crop.w / 90
             <source src="/media/png-to-svg.webm" type="video/webm" />
             <source src="/media/png-to-svg.mp4" type="video/mp4" />
           </video>
-          <figcaption id="mat-caption">
+          <figcaption id="hero-caption">
             <span>Pixels in, shapes out: every edge between two colours is traced once.</span>
             <button type="button" class="replay" id="replay" aria-controls="hero-video">Pause</button>
           </figcaption>

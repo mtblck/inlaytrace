@@ -1,13 +1,10 @@
 /*
- * Inlay's landing page. A cutting mat (deep green, its grid), cool white paper,
+ * Inlay's landing page. Cool white paper, a deep cutting-mat green,
  * ink, and a registration-mark yellow used only for the main action and focus.
  * One family, Archivo, with real code in JetBrains Mono.
  */
 :root {
-  --mat: #23443a;
   --mat-deep: #1b352d;
-  --mat-line: #33584b;
-  --mat-line-strong: #4c7565;
   --paper: #f5f6f2;
   --paper-sunk: #e8ece9;
   --ink: #16201c;
@@ -15,6 +12,8 @@
   --rule: #d2d9d4;
   --mark: #f2c230;
   --link: #23614c;
+  /* The hero card is white in both themes, so its link keeps the light theme's green. */
+  --link-on-white: #23614c;
   /* Yellow on paper is 1.5:1, too faint for a focus ring; ink in light, yellow in dark and on the mat. */
   --focus: var(--ink);
   --page: var(--paper);
@@ -114,8 +113,8 @@ main,
 /* ---- Hero ---------------------------------------------------------------- */
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
-  gap: 56px;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  gap: 48px;
   align-items: center;
   padding-block: 40px 72px;
 }
@@ -186,23 +185,16 @@ h1 {
   font-size: 0.88rem;
 }
 
-/* The cutting mat: a 1 cm-ish grid with a heavier line every fifth. */
-.mat {
+/* The hero's card: a print on the page, white in either theme. A slim margin round the
+   video and a deeper strip along the bottom for the caption. */
+.print {
   margin: 0;
-  padding: 28px;
-  border-radius: 10px;
-  background-color: var(--mat);
-  background-image:
-    linear-gradient(var(--mat-line-strong) 1px, transparent 1px),
-    linear-gradient(90deg, var(--mat-line-strong) 1px, transparent 1px),
-    linear-gradient(var(--mat-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--mat-line) 1px, transparent 1px);
-  background-size:
-    120px 120px,
-    120px 120px,
-    24px 24px,
-    24px 24px;
-  background-position: -1px -1px;
+  padding: 12px 12px 0;
+  border-radius: 14px;
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  box-shadow: 0 1px 2px rgb(22 32 28 / 0.06), 0 12px 32px -12px rgb(22 32 28 / 0.18);
 }
 .hero-video {
   display: block;
@@ -213,24 +205,24 @@ h1 {
   /* The video's own background, so the frame doesn't flash before it loads. */
   background: #131515;
 }
-.mat figcaption {
+.print figcaption {
   display: flex;
   justify-content: space-between;
   gap: 16px;
   align-items: baseline;
-  margin-top: 18px;
-  color: #cfdcd4;
-  font-size: 0.85rem;
+  padding: 16px 6px 20px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
 }
-.mat :focus-visible {
-  outline-color: var(--mark);
+.print :focus-visible {
+  outline-color: var(--ink);
 }
 .replay {
   flex-shrink: 0;
   border: 0;
   padding: 0;
   background: none;
-  color: var(--mark);
+  color: var(--link-on-white);
   font: inherit;
   cursor: pointer;
   text-decoration: underline;
@@ -392,8 +384,9 @@ pre {
     grid-template-columns: minmax(0, 1fr);
     gap: 36px;
   }
-  .mat {
-    padding: 16px;
+  .print {
+    padding: 8px 8px 0;
+    border-radius: 12px;
   }
   .trio {
     grid-template-columns: 1fr 1fr;
@@ -419,8 +412,9 @@ pre {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     row-gap: 28px;
   }
-  .mat figcaption {
+  .print figcaption {
     flex-direction: column;
+    padding: 12px 4px 16px;
   }
 }
 
