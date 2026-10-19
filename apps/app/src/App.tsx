@@ -232,13 +232,35 @@ export default function App() {
     const id = sessionId.current
     void saveImage({ id, file: fileRef.current, name: source.name }).then((ok) => ok && sessionId.current === id && setSessionNote((n) => n ?? 'saved'))
   }, [source, trace])
-  // Settings and edits, as you work.
+  // Settings and edits, as you work: 600 ms after the last change (a drag is
+  // many changes), and at once when the page is hidden or unloads, so a
+  // reload straight after a change keeps it (it was lost before).
+  const pendingState = useRef<Parameters<typeof saveState>[0] | null>(null)
   useEffect(() => {
     if (!source || !trace || !sessionId.current) return
-    const id = sessionId.current
-    const t = setTimeout(() => void saveState({ id, settings, edits }), 600)
+    const state = { id: sessionId.current, settings, edits }
+    pendingState.current = state
+    const t = setTimeout(() => {
+      pendingState.current = null
+      void saveState(state)
+    }, 600)
     return () => clearTimeout(t)
   }, [source, trace, settings, edits])
+  useEffect(() => {
+    const flush = () => {
+      const state = pendingState.current
+      if (!state || state.id !== sessionId.current) return
+      pendingState.current = null
+      void saveState(state)
+    }
+    const onHidden = () => document.visibilityState === 'hidden' && flush()
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', onHidden)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', onHidden)
+    }
+  }, [])
   /** Forget everything: the saved session and what's on screen. Always asks. */
   const startOver = () =>
     setPending({

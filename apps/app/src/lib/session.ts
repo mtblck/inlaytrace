@@ -23,33 +23,50 @@ export type SavedState = { v: number; id: string; settings: Settings; edits: Edi
 const DB = 'img-to-svg'
 const STORE = 'session'
 
+/**
+ * One connection, opened on first use and kept: a save made as the page
+ * unloads (a reload straight after a change) has to start its transaction in
+ * that moment, and opening the database first took too long, so the save was
+ * lost. A connection that closes (storage cleared, another version) is reopened.
+ */
+let connection: Promise<IDBDatabase> | null = null
 function open(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  connection ??= new Promise<IDBDatabase>((resolve, reject) => {
     if (typeof indexedDB === 'undefined') return reject(new Error('no IndexedDB'))
     const req = indexedDB.open(DB, 1)
     req.onupgradeneeded = () => req.result.createObjectStore(STORE)
-    req.onsuccess = () => resolve(req.result)
+    req.onsuccess = () => {
+      const db = req.result
+      db.onclose = () => (connection = null)
+      db.onversionchange = () => {
+        db.close()
+        connection = null
+      }
+      resolve(db)
+    }
     req.onerror = () => reject(req.error)
     req.onblocked = () => reject(new Error('blocked'))
+  }).catch((e) => {
+    connection = null
+    throw e
   })
+  return connection
 }
 
 /** Run one request; undefined if storage refused. `ok` is true when the transaction committed. */
 async function run<T>(mode: IDBTransactionMode, f: (s: IDBObjectStore) => IDBRequest<T>): Promise<{ ok: boolean; result?: T }> {
   try {
     const db = await open()
-    try {
-      const result = await new Promise<T>((resolve, reject) => {
-        const tx = db.transaction(STORE, mode)
-        const req = f(tx.objectStore(STORE))
-        tx.oncomplete = () => resolve(req.result)
-        tx.onerror = () => reject(tx.error)
-        tx.onabort = () => reject(tx.error)
-      })
-      return { ok: true, result }
-    } finally {
-      db.close()
-    }
+    const result = await new Promise<T>((resolve, reject) => {
+      const tx = db.transaction(STORE, mode)
+      const req = f(tx.objectStore(STORE))
+      tx.oncomplete = () => resolve(req.result)
+      tx.onerror = () => reject(tx.error)
+      tx.onabort = () => reject(tx.error)
+      // Commit now rather than when the event loop is next idle, which an unloading page may not reach.
+      tx.commit?.()
+    })
+    return { ok: true, result }
   } catch {
     return { ok: false }
   }

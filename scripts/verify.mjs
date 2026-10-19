@@ -751,11 +751,15 @@ await page.getByRole('radio', { name: 'Split' }).click()
 
 // ---- The session survives a reload ------------------------------------------------
 {
-  await page.waitForTimeout(800) // saved 600 ms after the last change
+  // A change, then a reload straight away: the save that waits 600 ms for
+  // more changes is written as the page unloads (a quick reload lost it).
+  await page.getByRole('tab', { name: /Edit/ }).click()
+  await page.locator(INKS).nth(2).locator('input[type=color]').fill('#654321')
   await page.reload()
   await traced(page)
   check((await page.locator('[data-session]').getAttribute('data-session')) === 'restored', 'a reload restores the session, and says so')
   check((await page.locator('aside .truncate').first().innerText()) === 'sample-badge' && (await page.locator(`${VECTOR}[fill="#123456"]`).count()) > 0, 'with the same image and its colour edits')
+  check((await page.locator(`${VECTOR}[fill="#654321"]`).count()) > 0, 'including a change made just before the reload')
   await page.getByRole('radio', { name: 'Split' }).click()
 }
 
