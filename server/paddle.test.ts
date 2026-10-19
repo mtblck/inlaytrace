@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handle } from './api'
 import { inCidr, resetPaddleIps, verifySignature } from './paddle'
 
@@ -134,11 +134,39 @@ describe("the webhook's sender", () => {
     expect((await handle(none, 'paddle/webhook', env, f.fetchImpl)).status).toBe(403)
   })
 
-  it('asks /ips at most once an hour, and keeps the last list if a refresh fails', async () => {
+  it('asks /ips at most once an hour', async () => {
     const f = fake()
     await handle(hook(completed()), 'paddle/webhook', env, f.fetchImpl)
     await handle(hook(completed()), 'paddle/webhook', env, f.fetchImpl)
     expect(f.calls.filter((c) => c.path === '/ips')).toHaveLength(1)
+  })
+
+  describe('after an hour', () => {
+    beforeEach(() => vi.useFakeTimers({ now: new Date('2026-10-19T00:00:00Z'), toFake: ['Date'] }))
+    afterEach(() => vi.useRealTimers())
+
+    it('asks /ips again', async () => {
+      const f = fake()
+      await handle(hook(completed()), 'paddle/webhook', env, f.fetchImpl)
+      vi.advanceTimersByTime(61 * 60 * 1000)
+      await handle(hook(completed()), 'paddle/webhook', env, f.fetchImpl)
+      expect(f.calls.filter((c) => c.path === '/ips')).toHaveLength(2)
+    })
+
+    it('keeps the last good list when the refresh fails, and waits a while before asking again', async () => {
+      await handle(hook(completed()), 'paddle/webhook', env, fake().fetchImpl)
+      vi.advanceTimersByTime(61 * 60 * 1000)
+      const down = fake({ ips: null })
+      expect((await handle(hook(completed()), 'paddle/webhook', env, down.fetchImpl)).status).toBe(200)
+      expect((await handle(hook(completed(), undefined, '203.0.113.9'), 'paddle/webhook', env, down.fetchImpl)).status).toBe(403)
+      // Backing off: the outage isn't asked about on every delivery.
+      vi.advanceTimersByTime(60 * 1000)
+      await handle(hook(completed()), 'paddle/webhook', env, down.fetchImpl)
+      expect(down.calls.filter((c) => c.path === '/ips')).toHaveLength(1)
+      vi.advanceTimersByTime(5 * 60 * 1000)
+      await handle(hook(completed()), 'paddle/webhook', env, down.fetchImpl)
+      expect(down.calls.filter((c) => c.path === '/ips')).toHaveLength(2)
+    })
   })
 
   it('answers 503 (so Paddle retries) when there has never been a list', async () => {

@@ -69,6 +69,8 @@ export async function fromPaddle(req: Request, env: PaddleEnv, fetchImpl: typeof
 }
 
 const IPS_TTL = 60 * 60 * 1000
+/** After a failed refresh, the last good list is used this long before /ips is asked again. */
+const IPS_RETRY = 5 * 60 * 1000
 const ipCache = new Map<string, { at: number; cidrs: string[] }>()
 /** For tests: forget the cached lists. */
 export const resetPaddleIps = () => ipCache.clear()
@@ -87,7 +89,10 @@ async function paddleCidrs(env: PaddleEnv, fetchImpl: typeof fetch): Promise<str
     return cidrs
   } catch (e) {
     console.error(e)
-    return hit?.cidrs ?? null
+    if (!hit) return null
+    // Keep the last good list, and back off rather than asking again on every delivery.
+    ipCache.set(base, { at: Date.now() - IPS_TTL + IPS_RETRY, cidrs: hit.cidrs })
+    return hit.cidrs
   }
 }
 
