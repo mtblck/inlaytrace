@@ -776,6 +776,10 @@ await page.keyboard.press('Escape')
 const closed = await dialog.waitFor({ state: 'hidden', timeout: 3000 }).then(() => true, () => false)
 check(closed, 'Esc closes the shortcuts panel')
 
+// Each preset's description shows in full under its name (side by side, they were cut off).
+const cut = await page.getByRole('radiogroup', { name: 'Image type' }).locator('.field-hint').evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent))
+check(cut.length === 0, `every preset's description fits (${cut.join(', ') || 'none cut off'})`)
+
 // The header offers sign-in to someone with no session (or when /api isn't set up).
 const signIn = page.locator('header [data-account="signed-out"]')
 const signInShown = await signIn.waitFor({ timeout: 5000 }).then(() => true, () => false)
