@@ -209,10 +209,10 @@ h1 {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 800 / 614;
   border-radius: 6px;
   /* The video's own background, so the frame doesn't flash before it loads. */
-  background: #131515;
+  background: #f1f1ed;
 }
 .print figcaption {
   display: flex;
