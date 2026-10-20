@@ -69,16 +69,16 @@ const dot = crop.w / 90
             class="hero-video"
             id="hero-video"
             width="800"
-            height="600"
+            height="614"
             muted
             loop
             playsinline
             preload="auto"
-            poster="/media/png-to-svg.webp"
+            poster="/media/trace-vector-light.webp"
             aria-label="An isometric conveyor: a pixel image goes in as PNG, a gantry scans its pixels, the edges between colours are traced, and flat vector shapes come out as SVG."
           >
-            <source src="/media/png-to-svg.webm" type="video/webm" />
-            <source src="/media/png-to-svg.mp4" type="video/mp4" />
+            {/* Trying the light render, as delivered (not re-encoded yet, no MP4 fallback yet). */}
+            <source src="/media/trace-vector-light.webm" type="video/webm" />
           </video>
           <figcaption id="hero-caption">
             <span>Pixels in, shapes out: every edge between two colours is traced once.</span>
