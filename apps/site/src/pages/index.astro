@@ -20,16 +20,6 @@ type Shape = { d: string; fill: string; transform?: string }
 const size = sample.size
 const centre = size / 2
 
-/** How far each piece starts from home: outward from the badge's centre, by its own centroid. */
-const pieces = (sample.inlay as Shape[]).map((p, i) => {
-  const pts = parsePath(p.d).flatMap((s) => s.nodes)
-  const cx = pts.reduce((a, n) => a + n.x, 0) / pts.length
-  const cy = pts.reduce((a, n) => a + n.y, 0) / pts.length
-  // The largest piece (the background ring) stays put; the rest lift out.
-  const k = i === 0 ? 0 : 0.16
-  return { ...p, dx: Math.round((cx - centre) * k), dy: Math.round((cy - centre) * k) }
-})
-
 const crop = sample.crop
 const view = `${crop.x} ${crop.y} ${crop.w} ${crop.h}`
 /** Anchor points inside the close-up, to show where each tracer put its nodes. */
@@ -57,7 +47,7 @@ const dot = crop.w / 90
 <Page title="Inlay: trace images into vector shapes that fit together" description={description}>
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-text">
-          <h1 id="hero-title">Vector shapes, cut to fit.</h1>
+          <h1 id="hero-title"><span>Vector shapes,</span> <span>cut to fit.</span></h1>
           <p class="lede">
             Inlay traces logos, illustrations, line art and pixel art into SVG. Every edge between two colours is traced once and shared by both
             shapes, so they fit together exactly, like inlaid wood.
@@ -72,17 +62,27 @@ const dot = crop.w / 90
           <p class="fine">Free and open source. Runs in your browser: your image is never uploaded.</p>
         </div>
 
-        <figure class="mat" aria-labelledby="mat-caption">
-          <svg class="board" viewBox={`0 0 ${size} ${size}`} role="img" aria-label="The sample badge as Inlay traced it, its pieces settling into place">
-            {
-              pieces.map((p) => (
-                <path class="piece" d={p.d} fill={p.fill} style={`--dx:${p.dx}px;--dy:${p.dy}px`} />
-              ))
-            }
-          </svg>
-          <figcaption id="mat-caption">
-            <span>The sample badge as Inlay traced it: {pieces.length} shapes, {sample.nodes.inlay} nodes.</span>
-            <button type="button" class="replay" id="replay">Lift the pieces</button>
+        <figure class="print" aria-labelledby="hero-caption">
+          {/* A loop of how Inlay works, rendered with the isogram kit. Muted and inline; landing.ts starts it
+              unless the reader prefers reduced motion, when the poster frame (the edges being traced) stays. */}
+          <video
+            class="hero-video"
+            id="hero-video"
+            width="800"
+            height="600"
+            muted
+            loop
+            playsinline
+            preload="auto"
+            poster="/media/png-to-svg.webp"
+            aria-label="An isometric conveyor: a pixel image goes in as PNG, a gantry scans its pixels, the edges between colours are traced, and flat vector shapes come out as SVG."
+          >
+            <source src="/media/png-to-svg.webm" type="video/webm" />
+            <source src="/media/png-to-svg.mp4" type="video/mp4" />
+          </video>
+          <figcaption id="hero-caption">
+            <span>Pixels in, shapes out: every edge between two colours is traced once.</span>
+            <button type="button" class="replay" id="replay" aria-controls="hero-video">Pause</button>
           </figcaption>
         </figure>
       </section>

@@ -1197,29 +1197,23 @@ const siteOrigin = process.env.SITE ?? (new URL(url).hostname.endsWith('mattblac
 if (siteOrigin) {
   console.log(`\n  site ${siteOrigin}\n`)
   const landing = await newPage({ width: 1440, height: 900 })
-  // Record the board's class changes from the start, to see the pieces settle.
-  await landing.addInitScript(() => {
-    window.__apart = []
-    new MutationObserver(() => {
-      const b = document.querySelector('.board')
-      if (b) window.__apart.push(b.classList.contains('apart'))
-    }).observe(document, { subtree: true, attributes: true, attributeFilter: ['class'] })
-  })
   const res = await landing.goto(siteOrigin)
   check(res?.ok(), `landing page loads (${res?.status()})`)
   const siteCsp = res?.headers()['content-security-policy'] ?? ''
   check(siteCsp.includes("'sha256-") && !siteCsp.includes('worker-src'), "the landing page gets the site's CSP, not the app's")
-  const pieces = await landing.locator('.board .piece').count()
-  check(pieces >= 5, `the hero board shows the traced badge (${pieces} pieces)`)
-  const moving = await landing.locator('.board .piece').evaluateAll((ps) => ps.filter((p) => p.style.getPropertyValue('--dx') !== '0px' || p.style.getPropertyValue('--dy') !== '0px').length)
-  check(moving >= pieces / 2, `most pieces have somewhere to settle from (${moving} of ${pieces})`)
-  await landing.waitForTimeout(2000)
-  const settled = await landing.evaluate(() => ({ seen: window.__apart.includes(true), now: document.querySelector('.board').classList.contains('apart') }))
-  check(settled.seen && !settled.now, 'the pieces start lifted and settle on load')
-  await landing.evaluate(() => (window.__apart = []))
-  await landing.getByRole('button', { name: 'Lift the pieces' }).click()
+  // The hero loop: a muted video that plays, pauses and plays again from its button.
+  const video = landing.locator('#hero-video')
+  await landing.waitForFunction(() => { const v = document.getElementById('hero-video'); return v && !v.paused && v.currentTime > 0.3 }, null, { timeout: 8000 }).catch(() => {})
+  const playing = await video.evaluate((v) => ({ paused: v.paused, t: v.currentTime, muted: v.muted, loop: v.loop, src: v.currentSrc }))
+  check(!playing.paused && playing.t > 0.3 && playing.muted && playing.loop, `the hero loop plays, muted and looping (${playing.src.split('/').pop()} at ${playing.t.toFixed(1)} s)`)
+  const toggle = landing.getByRole('button', { name: 'Pause' })
+  await toggle.click()
+  const offersPlay = await landing.getByRole('button', { name: 'Play' }).waitFor({ timeout: 3000 }).then(() => true, () => false)
+  check((await video.evaluate((v) => v.paused)) && offersPlay, 'Pause stops it, and the button then offers Play')
+  await landing.getByRole('button', { name: 'Play' }).click()
   await landing.waitForTimeout(300)
-  check(await landing.evaluate(() => window.__apart.includes(true) && !document.querySelector('.board').classList.contains('apart')), '"Lift the pieces" lifts them and they settle again')
+  check(!(await video.evaluate((v) => v.paused)), 'Play starts it again')
+  for (const f of ['png-to-svg.webm', 'png-to-svg.mp4', 'png-to-svg.webp']) check((await landing.request.get(new URL(`media/${f}`, siteOrigin).href)).ok(), `the hero's ${f} is served`)
   const trace = await landing.getByRole('link', { name: 'Trace an image' }).getAttribute('href')
   check((await landing.request.get(new URL(trace, siteOrigin).href)).ok(), `"Trace an image" leads to the app (${trace})`)
   // Every same-site link on the page resolves.
@@ -1232,7 +1226,9 @@ if (siteOrigin) {
   const still = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })
   const quiet = await still.newPage()
   await quiet.goto(siteOrigin)
-  check(await quiet.getByRole('button', { name: 'Lift the pieces' }).isHidden(), 'with reduced motion the pieces sit still and the replay button is hidden')
+  await quiet.waitForTimeout(1500)
+  const q = await quiet.locator('#hero-video').evaluate((v) => ({ paused: v.paused, t: v.currentTime }))
+  check(q.paused && q.t === 0 && (await quiet.locator('#replay').textContent()) === 'Play', 'with reduced motion the loop stays on its poster frame, and the button offers Play')
   await still.close()
 
   // The app's old address (mattblack.space/tools/img-to-svg/ before inlaytrace.com) keeps working.
@@ -1487,4 +1483,6 @@ await browser.close()
 const unexpected = failures.filter((f) => f.startsWith('console') || f.startsWith('pageerror'))
 for (const f of unexpected) console.log(`  FAIL  ${f}`)
 console.log(failures.length ? `\n  ${failures.length} problem(s).\n` : '\n  All checks passed.\n')
+// On GitHub Actions each problem is also an annotation, readable on the PR and from the API without the log.
+if (process.env.GITHUB_ACTIONS) for (const f of failures) console.log(`::error title=verify::${f.replace(/\r?\n/g, ' ').slice(0, 900)}`)
 process.exit(failures.length ? 1 : 0)

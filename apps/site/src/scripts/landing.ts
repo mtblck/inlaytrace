@@ -1,26 +1,27 @@
 /**
- * The landing page's one moment of motion: the badge's pieces start lifted out
- * of place and settle into the board, showing they share every edge. It runs
- * once on load and again on "Lift the pieces". With reduced motion the pieces
- * simply sit in place.
+ * The hero loop: a muted video of how Inlay works. It plays unless the reader
+ * prefers reduced motion (then the poster frame stays and the button offers
+ * Play), and the button pauses and resumes it, since it moves for longer than
+ * five seconds.
  */
-const board = document.querySelector<SVGSVGElement>('.board')
-const replay = document.getElementById('replay')
+const video = document.getElementById('hero-video') as HTMLVideoElement | null
+const toggle = document.getElementById('replay') as HTMLButtonElement | null
 const still = matchMedia('(prefers-reduced-motion: reduce)')
 
-function settle() {
-  if (!board || still.matches) return
-  board.classList.add('apart')
-  // Two frames: the lifted position must be painted before the transition starts.
-  requestAnimationFrame(() => requestAnimationFrame(() => board.classList.remove('apart')))
+function label() {
+  if (toggle && video) toggle.textContent = video.paused ? 'Play' : 'Pause'
 }
-
-if (board && !still.matches) {
-  board.classList.add('apart')
-  setTimeout(() => board.classList.remove('apart'), 450)
+if (video && toggle) {
+  video.addEventListener('play', label)
+  video.addEventListener('pause', label)
+  toggle.addEventListener('click', () => {
+    if (video.paused) video.play().catch(label)
+    else video.pause()
+    label() // paused changes at once; the events come a moment later
+  })
+  if (!still.matches) video.play().catch(label)
+  label()
 }
-replay?.addEventListener('click', settle)
-if (still.matches && replay) replay.hidden = true
 
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy]')) {
   button.addEventListener('click', async () => {
