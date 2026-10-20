@@ -63,7 +63,7 @@ ISOGRAM.define({
     const nFound = ORDER.filter(found).length;
     // trace: one route with pen-up moves; each edge between two colours is drawn once
     const circ = Array.from({ length: 29 }, (_, i) => { const a = -PI / 2 + i / 28 * 2 * PI; return [SUN[0] + SUN[2] * Math.cos(a), SUN[1] + SUN[2] * Math.sin(a)]; });
-    const HOME = [CW + 10, CD / 2];
+    const HOME = [CW + 4, CD / 2];                                     // where the scan ends and the pen parks
     const segs = [
       { down: false, pts: [HOME, [0, HOR]] },
       { down: true, pts: [[0, HOR], [CW, HOR]] },                        // horizon: ground below, sky and mountain above
@@ -91,8 +91,12 @@ ISOGRAM.define({
     const shapes = t > tFit + 50;
     const lineOp = 1 - k.ramp(tFit + 2400, tFit + 3000);
     // gantry: the bar rides with the scan, then with the pen; the carriage rides the bar
-    const PARK = cardX + CW + 12;
-    const barX = scanning ? XA + scanU : t > tTrace && t < tFit ? XA + pen[0] : XA + CW + 12;
+    // the bar is parked at the far end (where the scan finishes and the pen comes home); while the card rides
+    // in, it glides back to the near edge so the sweep starts where it is, with no jump
+    const PARK = XA + HOME[0], START = XA - 4;
+    const barX = t < tScan + 100 ? PARK + (START - PARK) * k.ramp(tIn + 200, tScan + 100, k.easeInOut)
+      : scanning ? XA + scanU
+      : t > tTrace && t < tFit ? XA + pen[0] : PARK;
     const carY = t > tTrace && t < tFit ? CY + pen[1] : CY + CD / 2;
     const RX0 = XA - 10, RX1 = XA + CW + 18;
 
@@ -155,7 +159,6 @@ ISOGRAM.define({
       con.top.rect(6 + i * 14.5, 3.5, 10, 9, { r: 1.5, role: LOOK[c].role, tone: LOOK[c].tone, lit: (LOOK[c].lit || 0) * on, op: 0.2 + 0.8 * on });
       con.front.led(11 + i * 14.5, 4, 1.4, on * k.env(tScan + 250 + i * 380, D - 80, 150, 600));
     });
-    void PARK;
 
     g.readout(t < tScan ? 'image.png · 8 x 6 px'
       : t < tTrace ? 'colours · ' + nFound + ' / 4'
