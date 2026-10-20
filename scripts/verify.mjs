@@ -1213,7 +1213,7 @@ if (siteOrigin) {
   await landing.getByRole('button', { name: 'Play' }).click()
   await landing.waitForTimeout(300)
   check(!(await video.evaluate((v) => v.paused)), 'Play starts it again')
-  for (const f of ['trace-vector-light.webm', 'trace-vector-light.mp4', 'trace-vector-light.webp']) check((await landing.request.get(new URL(`media/${f}`, siteOrigin).href)).ok(), `the hero's ${f} is served`)
+  for (const f of ['inlay-hero.webm', 'inlay-hero.mp4', 'inlay-hero.webp']) check((await landing.request.get(new URL(`media/${f}`, siteOrigin).href)).ok(), `the hero's ${f} is served`)
   const trace = await landing.getByRole('link', { name: 'Trace an image' }).getAttribute('href')
   check((await landing.request.get(new URL(trace, siteOrigin).href)).ok(), `"Trace an image" leads to the app (${trace})`)
   // Every same-site link on the page resolves.

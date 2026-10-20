@@ -12,8 +12,9 @@
   --rule: #d2d9d4;
   --mark: #f2c230;
   --link: #23614c;
-  /* The hero card is white in both themes, so its link keeps the light theme's green. */
-  --link-on-white: #23614c;
+  /* The hero card is the cutting mat in both themes; its text and link are the mat's own. */
+  --on-mat: #b3c0b8;
+  --on-mat-line: #2c4a40;
   /* Yellow on paper is 1.5:1, too faint for a focus ring; ink in light, yellow in dark and on the mat. */
   --focus: var(--ink);
   --page: var(--paper);
@@ -194,16 +195,17 @@ h1 {
   font-size: 0.88rem;
 }
 
-/* The hero's card: a print on the page, white in either theme. A thin margin round the
-   video and a deeper strip along the bottom for the caption. */
+/* The hero's card: the cutting mat, in either theme. The loop is drawn in the mat's own green
+   (its background is the card's), with the yellow mark as its one accent, so video and card read as
+   one piece on paper or on the dark page. A deeper strip along the bottom holds the caption. */
 .print {
   margin: 0;
   padding: 8px 8px 0;
   border-radius: 12px;
-  background: #ffffff;
-  color: var(--ink);
-  border: 1px solid var(--rule);
-  box-shadow: 0 1px 2px rgb(22 32 28 / 0.06), 0 12px 32px -12px rgb(22 32 28 / 0.18);
+  background: var(--mat-deep);
+  color: var(--on-mat);
+  border: 1px solid var(--on-mat-line);
+  box-shadow: 0 1px 2px rgb(22 32 28 / 0.08), 0 12px 32px -12px rgb(22 32 28 / 0.28);
 }
 .hero-video {
   display: block;
@@ -212,7 +214,7 @@ h1 {
   aspect-ratio: 800 / 614;
   border-radius: 6px;
   /* The video's own background, so the frame doesn't flash before it loads. */
-  background: #f1f1ed;
+  background: var(--mat-deep);
 }
 .print figcaption {
   display: flex;
@@ -220,18 +222,18 @@ h1 {
   gap: 16px;
   align-items: baseline;
   padding: 16px 6px 20px;
-  color: var(--ink-soft);
+  color: var(--on-mat);
   font-size: 0.9rem;
 }
 .print :focus-visible {
-  outline-color: var(--ink);
+  outline-color: var(--mark);
 }
 .replay {
   flex-shrink: 0;
   border: 0;
   padding: 0;
   background: none;
-  color: var(--link-on-white);
+  color: var(--mark);
   font: inherit;
   cursor: pointer;
   text-decoration: underline;
