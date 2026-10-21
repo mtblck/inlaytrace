@@ -1424,7 +1424,7 @@ export default function App() {
               Source
             </a>
             <a href="https://ko-fi.com/inlay" className="hover:text-ink">
-              Support
+              Support Inlay
             </a>
           </nav>
         </aside>
