@@ -1,0 +1,17 @@
+{
+  "extraKnownMarketplaces": {
+    "mtblck": {
+      "source": {
+        "source": "github",
+        "repo": "mtblck/claude-marketplace"
+      },
+      "autoUpdate": true
+    }
+  },
+  "enabledPlugins": {
+    "pr-review@mtblck": true,
+    "repo-setup@mtblck": true,
+    "side-projects@mtblck": true,
+    "superpowers@mtblck": true
+  }
+}
