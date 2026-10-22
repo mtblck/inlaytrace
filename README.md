@@ -96,7 +96,7 @@ checked, and what to include in a bug report.
 
 ## Support
 
-Inlay is free. If it has saved you time, you can [buy it a coffee on Ko-fi](https://ko-fi.com/inlay).
+Inlay is free. If it has saved you time, you can [buy it a coffee on Ko-fi](https://ko-fi.com/mtblck).
 
 ## Licence
 
