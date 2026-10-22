@@ -35,41 +35,30 @@ jobs:
       id-token: write
     env:
       PR: ${{ github.event.pull_request.number || inputs.pr }}
-      # Skip, rather than fail, until the secrets are added to the repo.
-      HAS_SECRETS: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' && secrets.MARKETPLACE_TOKEN != '' }}
+      # Skip, rather than fail, until the secret is added to the repo.
+      HAS_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
     steps:
-      - if: env.HAS_SECRETS != 'true'
-        run: echo "::notice::CLAUDE_CODE_OAUTH_TOKEN or MARKETPLACE_TOKEN is not set; skipping Claude review."
+      - if: env.HAS_TOKEN != 'true'
+        run: echo "::notice::CLAUDE_CODE_OAUTH_TOKEN is not set; skipping Claude review."
       # Default branch first, so .claude/ (settings, hooks) comes from main, not the PR.
-      - if: env.HAS_SECRETS == 'true'
+      - if: env.HAS_TOKEN == 'true'
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
       # Then the PR's code, with full history for re-reviews and base-branch rules.
-      - if: env.HAS_SECRETS == 'true'
+      - if: env.HAS_TOKEN == 'true'
         run: |
           git fetch --no-tags origin "+refs/pull/$PR/head:refs/remotes/pr/head"
           if [ -d .claude ]; then cp -r .claude "$RUNNER_TEMP/repo-claude"; fi
           git checkout --detach pr/head
           rm -rf .claude
           if [ -d "$RUNNER_TEMP/repo-claude" ]; then cp -r "$RUNNER_TEMP/repo-claude" .claude; fi
-      # The marketplace is private: check it out with a read-only token, without
-      # leaving the token in git config, and hand the action a local path.
-      - if: env.HAS_SECRETS == 'true'
-        uses: actions/checkout@v7
-        with:
-          repository: mtblck/claude-marketplace
-          token: ${{ secrets.MARKETPLACE_TOKEN }}
-          path: .marketplace
-          persist-credentials: false
-      - if: env.HAS_SECRETS == 'true'
-        run: mv .marketplace "$RUNNER_TEMP/claude-marketplace"
-      - if: env.HAS_SECRETS == 'true'
+      - if: env.HAS_TOKEN == 'true'
         uses: anthropics/claude-code-action@f27be6b65a4652f08a2ba3cff79114829b588967 # v1, pinned: it runs with the token
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: ${{ runner.temp }}/claude-marketplace
+          plugin_marketplaces: https://github.com/mtblck/claude-marketplace.git
           plugins: pr-review@mtblck
           prompt: "/pr-review:review --comment ${{ github.repository }}/pull/${{ env.PR }}"
           claude_args: >-

@@ -41,18 +41,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 1
-      # Shared skills from the private marketplace (see claude-review.yml).
-      - uses: actions/checkout@v7
-        with:
-          repository: mtblck/claude-marketplace
-          token: ${{ secrets.MARKETPLACE_TOKEN }}
-          path: .marketplace
-          persist-credentials: false
-      - run: mv .marketplace "$RUNNER_TEMP/claude-marketplace"
       - uses: anthropics/claude-code-action@f27be6b65a4652f08a2ba3cff79114829b588967 # v1, pinned: it runs with the token
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: ${{ runner.temp }}/claude-marketplace
+          plugin_marketplaces: https://github.com/mtblck/claude-marketplace.git
           plugins: |
             pr-review@mtblck
             repo-setup@mtblck
