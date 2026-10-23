@@ -12,9 +12,9 @@
  *  - Relative links to other docs (`../features/export.md#anchor`) become site
  *    URLs (`/docs/features/export/#anchor`). Links to anything else in the
  *    repo point at the file on GitHub.
- *  - Docs listed in INTERNAL (planning notes) are left out, and so is anything
- *    between <!-- site:hide --> and <!-- /site:hide --> (notes for the board
- *    that don't belong on the public site).
+ *  - Docs listed in INTERNAL (planning notes) and the decision records in
+ *    docs/adr/ are left out, and so is anything between <!-- site:hide --> and
+ *    <!-- /site:hide --> (notes for the board that don't belong on the public site).
  *
  * Boards' `public:` frontmatter isn't consulted: that decides what anonymous
  * visitors see on the board. Everything synced here is published on the site.
@@ -32,7 +32,7 @@ const INTERNAL = new Set(['launch-plan.md', 'hd-mode.md'])
 const walk = (dir) => readdirSync(dir).flatMap((f) => (statSync(join(dir, f)).isDirectory() ? walk(join(dir, f)) : f.endsWith('.md') ? [join(dir, f)] : []))
 const files = walk(src)
   .map((f) => relative(src, f).split('\\').join('/'))
-  .filter((f) => !INTERNAL.has(f))
+  .filter((f) => !INTERNAL.has(f) && !f.startsWith('adr/'))
 const isParent = (rel) => existsSync(join(src, rel.replace(/\.md$/, ''))) && statSync(join(src, rel.replace(/\.md$/, ''))).isDirectory()
 /** docs-relative path → site URL. */
 const urlOf = (rel) => `/docs/${rel.replace(/\.md$/, '').replace(/(^|\/)index$/, '')}/`
