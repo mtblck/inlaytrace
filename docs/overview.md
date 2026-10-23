@@ -52,15 +52,5 @@ Worker so the page stays responsive.
 - [Roadmap](roadmap.md): suggested improvements, in priority order.
 - [Research](research.md): the survey of tracers, AI models and hosted APIs
   done before any code was written.
-
-## Where things live
-
-| Path | What |
-| --- | --- |
-| `apps/app/src/engine/` | The worker, `runTrace` and the presets |
-| `packages/inlay/src/fit.ts` | Curve fitting: corners, smoothing, lines and Béziers |
-| `packages/inlay/src/palette.ts` | Palettes from histogram peaks |
-| `apps/app/src/lib/doc.ts`, `history.ts`, `pathdata.ts` | The editable document, undo, path data |
-| `apps/app/src/lib/mirror.ts` | Mirroring and turning with paper.js booleans; picking the likeliest detected symmetry |
-| `apps/app/src/components/` | Canvas, controls, edit panel, colours |
-| `scripts/` | `verify` (browser E2E), `score` and `score:photos` (quality, against VTracer as a benchmark), hosting checks |
+- [Contributing](https://github.com/mtblck/inlaytrace/blob/main/CONTRIBUTING.md):
+  setting up the repo, and where each part of the code lives.

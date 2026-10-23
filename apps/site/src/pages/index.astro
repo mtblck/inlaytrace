@@ -103,14 +103,14 @@ const dot = crop.w / 90
               {(sample.inlay as Shape[]).map((p) => <path d={p.d} fill={p.fill} />)}
               {inlayNodes.map((n) => <circle class="node" cx={n.x} cy={n.y} r={dot} />)}
             </svg>
-            <figcaption><strong>Inlay</strong><span>{sample.wrongInWindow.inlay} px wrong here, {inlayNodes.length} nodes</span></figcaption>
+            <figcaption><strong>Inlay</strong><span>{sample.wrongInWindow.inlay} px differ from the source, {inlayNodes.length} nodes</span></figcaption>
           </figure>
           <figure>
             <svg viewBox={view} role="img" aria-label="VTracer's trace of the same square">
               {(sample.percolour as Shape[]).map((p) => <path d={p.d} fill={p.fill} transform={p.transform} />)}
               {vtNodes.map((n) => <circle class="node" cx={n.x} cy={n.y} r={dot} />)}
             </svg>
-            <figcaption><strong>VTracer</strong><span>{sample.wrongInWindow.percolour} px wrong here, {vtNodes.length} nodes</span></figcaption>
+            <figcaption><strong>VTracer</strong><span>{sample.wrongInWindow.percolour} px differ from the source, {vtNodes.length} nodes</span></figcaption>
           </figure>
         </div>
 

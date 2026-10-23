@@ -890,7 +890,7 @@ if (process.env.FIXTURE) {
   await traced(fx)
   await retrace(fx, () => fx.getByRole('radio', { name: /Line art/ }).click())
   const light = await fx.getByRole('radio', { name: 'Light on dark' }).getAttribute('aria-checked')
-  console.log(`         fixture: ${await fx.locator('aside .num').first().innerText()}, light ink auto-selected: ${light}`)
+  console.log(`         fixture: ${await fx.locator('aside [data-image-info]').innerText()}, light ink auto-selected: ${light}`)
   await shot(fx, '06-fixture')
   await editorChecks(fx, 'fixture', '07')
 }

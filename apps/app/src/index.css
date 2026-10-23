@@ -179,7 +179,7 @@
   .range {
     appearance: none;
     width: 100%;
-    height: 1.25rem;
+    height: 1.75rem;
     background: transparent;
   }
   .range::-webkit-slider-runnable-track {
@@ -211,6 +211,37 @@
   }
   .range:active::-webkit-slider-thumb {
     border-color: var(--c-accent);
+  }
+
+  /* Checkboxes and their labels clear WCAG's 24 px target size, and a finger's 44 px on touch. */
+  input[type='checkbox'] {
+    width: 1.125rem;
+    height: 1.125rem;
+    flex-shrink: 0;
+  }
+  label:has(> input[type='checkbox']) {
+    min-height: 1.5rem;
+  }
+  @media (pointer: coarse) {
+    .range {
+      height: 2.75rem;
+    }
+    .range::-webkit-slider-thumb {
+      width: 22px;
+      height: 22px;
+      margin-top: -10px;
+    }
+    .range::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+    }
+    input[type='checkbox'] {
+      width: 1.375rem;
+      height: 1.375rem;
+    }
+    label:has(> input[type='checkbox']) {
+      min-height: 2.75rem;
+    }
   }
 }
 

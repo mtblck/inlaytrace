@@ -1197,10 +1197,10 @@ export default function App() {
               <div className="flex items-center justify-between gap-3 border-b border-rule px-5 py-3">
                 <div className="min-w-0">
                   <div className="truncate text-[13.5px] font-medium">{source.name}</div>
-                  <div className="num">
+                  <div className="truncate text-[13px] text-ink-muted tabular-nums" data-image-info="">
                     {source.originalWidth} × {source.originalHeight}
-                    {trace && trace.width > source.originalWidth && ` · upscaled ${Math.round((trace.width / source.originalWidth) * 10) / 10}× to trace`}
-                    {trace && trace.width < source.originalWidth && ` · traced at ${trace.width} × ${trace.height}`}
+                    {trace && trace.width > source.originalWidth && `, upscaled ${Math.round((trace.width / source.originalWidth) * 10) / 10}× to trace`}
+                    {trace && trace.width < source.originalWidth && `, traced at ${trace.width} × ${trace.height}`}
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-1.5">
@@ -1358,59 +1358,62 @@ export default function App() {
             </div>
           </div>
 
-          {/* On a phone this sits straight under the canvas; on desktop it pins to the foot of the column. */}
-          <div className="order-first border-b border-rule bg-paper px-5 py-4 lg:order-none lg:border-t lg:border-b-0">
-            <dl className="mb-3 grid grid-cols-3 gap-2">
-              <Stat label="Paths" value={stats ? stats.paths.toLocaleString() : '—'} />
-              <Stat label="Nodes" value={stats ? stats.nodes.toLocaleString() : '—'} />
-              <Stat label="Size" value={stats ? formatBytes(stats.bytes) : '—'} />
-            </dl>
-            <p className="num mb-3 min-h-[1.25em]" aria-live="polite">
-              {status.kind === 'tracing' && 'Tracing…'}
-              {status.kind === 'done' && `Traced in ${status.ms.toLocaleString()} ms${fresh ? '' : ', optimising…'}`}
-              {status.kind === 'opened' && `Opened the SVG${fresh ? '' : ', optimising…'}`}
-              {status.kind === 'error' && <span className="text-accent">{status.message}</span>}
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <button className="btn btn-primary col-span-2" disabled={!trace} onClick={download}>
-                Download SVG
-              </button>
-              <button className="btn" disabled={!trace} onClick={copy}>
-                {copied ? 'Copied' : 'Copy SVG'}
-              </button>
-              <button className="btn" disabled={!trace} onClick={downloadLayers} title="One SVG per ink, in a .zip">
-                Layers (.zip)
-              </button>
+          {/* On a phone this sits straight under the canvas; on desktop it pins to the foot of the column.
+              Nothing to export before an image is open, so it waits for one. */}
+          {source && (
+            <div className="order-first border-b border-rule bg-paper px-5 py-4 lg:order-none lg:border-t lg:border-b-0">
+              <dl className="mb-3 grid grid-cols-3 gap-2">
+                <Stat label="Paths" value={stats ? stats.paths.toLocaleString() : '—'} />
+                <Stat label="Nodes" value={stats ? stats.nodes.toLocaleString() : '—'} />
+                <Stat label="Size" value={stats ? formatBytes(stats.bytes) : '—'} />
+              </dl>
+              <p className="num mb-3 min-h-[1.25em]" aria-live="polite">
+                {status.kind === 'tracing' && 'Tracing…'}
+                {status.kind === 'done' && `Traced in ${status.ms.toLocaleString()} ms${fresh ? '' : ', optimising…'}`}
+                {status.kind === 'opened' && `Opened the SVG${fresh ? '' : ', optimising…'}`}
+                {status.kind === 'error' && <span className="text-accent">{status.message}</span>}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button className="btn btn-primary col-span-2" disabled={!trace} onClick={download}>
+                  Download SVG
+                </button>
+                <button className="btn" disabled={!trace} onClick={copy}>
+                  {copied ? 'Copied' : 'Copy SVG'}
+                </button>
+                <button className="btn" disabled={!trace} onClick={downloadLayers} title="One SVG per ink, in a .zip">
+                  Layers (.zip)
+                </button>
+              </div>
+              {doc && (
+                <ExportOptions
+                  size={size}
+                  aspect={doc.width / doc.height}
+                  onSize={(s) => setExportSize({ width: s.width, unit: s.unit })}
+                  maxPixels={MAX_PNG_PIXELS}
+                  pngError={pngError}
+                  onReset={() => setExportSize(null)}
+                  isDefault={exportSize === null}
+                  disabled={!trace}
+                  onPng={downloadPng}
+                  onPdf={downloadPdf}
+                  onEps={downloadEps}
+                  onDxf={downloadDxf}
+                />
+              )}
+              {/* HD (beta), never for an opened SVG: a full-size trace for images bigger than the app traces, or a 4× upscale for small ones. */}
+              {traceSource && !traceSource.svg && (Math.max(traceSource.bitmap.width, traceSource.bitmap.height) > maxTraceEdge(settings.preset) || traceSource.bitmap.width * traceSource.bitmap.height <= UPSCALE.maxPixels) && (
+                <Hd
+                  key={traceSource.url}
+                  kind={Math.max(traceSource.bitmap.width, traceSource.bitmap.height) > maxTraceEdge(settings.preset) ? 'trace' : 'upscale'}
+                  bitmap={traceSource.bitmap}
+                  settings={settings}
+                  traceEdge={maxTraceEdge(settings.preset)}
+                  onSave={(blob) => save(blob, `${source!.name}-hd.${blob.type === 'image/png' ? 'png' : 'svg'}`)}
+                  onOpen={(blob) => void openNow(blob, `${source!.name}-hd.${blob.type === 'image/png' ? 'png' : 'svg'}`)}
+                />
+              )}
             </div>
-            {doc && (
-              <ExportOptions
-                size={size}
-                aspect={doc.width / doc.height}
-                onSize={(s) => setExportSize({ width: s.width, unit: s.unit })}
-                maxPixels={MAX_PNG_PIXELS}
-                pngError={pngError}
-                onReset={() => setExportSize(null)}
-                isDefault={exportSize === null}
-                disabled={!trace}
-                onPng={downloadPng}
-                onPdf={downloadPdf}
-                onEps={downloadEps}
-                onDxf={downloadDxf}
-              />
-            )}
-            {/* HD (beta), never for an opened SVG: a full-size trace for images bigger than the app traces, or a 4× upscale for small ones. */}
-            {traceSource && !traceSource.svg && (Math.max(traceSource.bitmap.width, traceSource.bitmap.height) > maxTraceEdge(settings.preset) || traceSource.bitmap.width * traceSource.bitmap.height <= UPSCALE.maxPixels) && (
-              <Hd
-                key={traceSource.url}
-                kind={Math.max(traceSource.bitmap.width, traceSource.bitmap.height) > maxTraceEdge(settings.preset) ? 'trace' : 'upscale'}
-                bitmap={traceSource.bitmap}
-                settings={settings}
-                traceEdge={maxTraceEdge(settings.preset)}
-                onSave={(blob) => save(blob, `${source!.name}-hd.${blob.type === 'image/png' ? 'png' : 'svg'}`)}
-                onOpen={(blob) => void openNow(blob, `${source!.name}-hd.${blob.type === 'image/png' ? 'png' : 'svg'}`)}
-              />
-            )}
-          </div>
+          )}
 
           {/* No room for a page footer, so one quiet line ends the sidebar. */}
           <nav aria-label="About Inlay" className="flex items-center gap-4 border-t border-rule px-5 py-2.5 text-[12px] text-ink-muted lg:h-13 lg:py-0">
