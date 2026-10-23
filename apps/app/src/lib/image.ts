@@ -129,6 +129,46 @@ export function hasDarkBackground(source: Source): boolean {
   return n > 0 && sum / n < 96
 }
 
+/**
+ * How many colours (at 4 bits a channel) it takes to cover 90% of an image
+ * drawn at 96 px. Flat art needs a handful: the scripts/fixtures logos 2 to 4,
+ * the sample badge 13 to 19 as a JPEG. Photos need dozens: 36 to 81 for
+ * scripts/fixtures/photos. Above PHOTO_COLOURS the app suggests Poster.
+ */
+export function coverColours(rgba: Uint8ClampedArray): number {
+  const bins = new Map<number, number>()
+  let n = 0
+  for (let i = 0; i < rgba.length; i += 4) {
+    if (rgba[i + 3] < 128) continue
+    n++
+    const k = ((rgba[i] >> 4) << 8) | ((rgba[i + 1] >> 4) << 4) | (rgba[i + 2] >> 4)
+    bins.set(k, (bins.get(k) ?? 0) + 1)
+  }
+  const counts = [...bins.values()].sort((a, b) => b - a)
+  let covered = 0
+  let k = 0
+  for (const c of counts) {
+    if (covered >= 0.9 * n) break
+    covered += c
+    k++
+  }
+  return k
+}
+const PHOTO_COLOURS = 30
+
+/** Whether the image looks like a photo, which Poster suits better than the flat-colour presets. */
+export function looksLikePhoto(source: Source): boolean {
+  if (source.svg) return false
+  const long = Math.max(source.bitmap.width, source.bitmap.height)
+  const width = Math.max(1, Math.round((source.bitmap.width / long) * 96))
+  const height = Math.max(1, Math.round((source.bitmap.height / long) * 96))
+  const canvas = new OffscreenCanvas(width, height)
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(source.bitmap, 0, 0, width, height)
+  return coverColours(ctx.getImageData(0, 0, width, height).data) > PHOTO_COLOURS
+}
+
 export function baseName(name: string) {
   const stem = name.replace(/\.[^.]+$/, '').trim()
   return (stem || 'image').replace(/[^\w.-]+/g, '-').slice(0, 60)

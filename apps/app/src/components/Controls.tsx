@@ -11,6 +11,8 @@ type Props = {
   settings: Settings
   onChange: (next: Settings) => void
   onPreset: (id: PresetId) => void
+  /** The image looks like a photo and no preset has been chosen for it yet. */
+  suggestPoster?: boolean
   /** Centerline: the stroke width the last trace measured from the ink, for the Auto label. */
   measuredStroke?: number | null
   /** The AI steps: whether the image is small enough to upscale, and what's running. */
@@ -23,7 +25,7 @@ type Props = {
   onCancelSize?: () => void
 }
 
-export function Controls({ settings, onChange, onPreset, measuredStroke, prep, ...size }: Props) {
+export function Controls({ settings, onChange, onPreset, suggestPoster, measuredStroke, prep, ...size }: Props) {
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) => onChange({ ...settings, [key]: value })
   const p = settings.preset
   const defaults = presetById(p).defaults
@@ -52,6 +54,14 @@ export function Controls({ settings, onChange, onPreset, measuredStroke, prep, .
             )
           })}
         </div>
+        {suggestPoster && (
+          <div className="mt-3 flex items-center gap-3 rounded-md bg-paper-sunk px-3 py-2.5" data-photo-hint="">
+            <p className="flex-1 text-[13px]">This looks like a photo. Poster usually suits photos better.</p>
+            <button className="btn shrink-0" onClick={() => onPreset('photo')}>
+              Use Poster
+            </button>
+          </div>
+        )}
       </Section>
 
       {prep && <Prepare settings={settings} set={set} prep={prep} />}

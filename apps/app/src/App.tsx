@@ -7,7 +7,7 @@ import { PrepClient } from './engine/prepClient'
 import type { PrepStage } from './engine/prep'
 import type { SizeRun } from './components/Controls'
 import { canMerge, isInk, maxTraceEdge, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
-import { ACCEPTED, colourAt, hasDarkBackground, loadSource, pixelsOf, UPSCALE_BELOW, type Pixels, type Source } from './lib/image'
+import { ACCEPTED, colourAt, hasDarkBackground, loadSource, looksLikePhoto, pixelsOf, UPSCALE_BELOW, type Pixels, type Source } from './lib/image'
 import { formatBytes, normalizeHex, parseTrace, statsOf, type Trace } from './lib/svg'
 import {
   buildSvg,
@@ -76,6 +76,8 @@ export default function App() {
 
   const [source, setSource] = useState<Source | null>(null)
   const [settings, setSettings] = useState<Settings>(() => settingsFor('logo'))
+  /** Whether a preset was chosen for the image on screen; until one is, a photo gets the Poster suggestion. */
+  const [presetPicked, setPresetPicked] = useState(false)
   const [trace, setTrace] = useState<Trace | null>(null)
   const [traceCount, setTraceCount] = useState(0)
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
@@ -181,6 +183,7 @@ export default function App() {
         return next
       })
       setTrace(null)
+      setPresetPicked(!!restore)
       if (restore) {
         reserveIds(restore.edits.doc)
         reserveGroups(restore.edits.doc)
@@ -1008,7 +1011,11 @@ export default function App() {
     }
   }
 
+  const photo = useMemo(() => !!source && looksLikePhoto(source), [source])
+  const suggestPoster = photo && !presetPicked && settings.preset !== 'photo'
+
   const choosePreset = (id: PresetId) => {
+    setPresetPicked(true)
     const next = settingsFor(id)
     // Reset (the same preset again) puts the sliders back but keeps merges:
     // they're decisions about this image's colours, not settings to tune.
@@ -1346,6 +1353,7 @@ export default function App() {
                 settings={settings}
                 onChange={changeSettings}
                 onPreset={choosePreset}
+                suggestPoster={suggestPoster}
                 measuredStroke={settings.preset === 'centerline' && settings.strokeWidth === 0 ? (trace?.paths[0]?.stroke ?? null) : null}
                 prep={{ smallImage: !!source && Math.max(source.bitmap.width, source.bitmap.height) < UPSCALE_BELOW, status: prepStatus, error: prepError }}
                 currentBytes={stats?.bytes ?? null}
