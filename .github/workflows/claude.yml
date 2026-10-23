@@ -47,5 +47,7 @@ jobs:
           plugin_marketplaces: https://github.com/mtblck/claude-marketplace.git
           plugins: |
             pr-review@mtblck
+            dependency-review@mtblck
+            maintenance@mtblck
             repo-setup@mtblck
             superpowers@mtblck

@@ -1,0 +1,76 @@
+name: Dependabot review
+
+# Reviews each Dependabot PR: what it really changes, whether its advisories are
+# reachable here, and supply-chain checks on every version it pulls in. Posts one
+# comment with a verdict (and updates it when Dependabot pushes again); it never
+# merges, approves or installs anything. The review is the dependency-review plugin
+# from mtblck/claude-marketplace, so a PR can't change how it is reviewed.
+#
+# Runs started by Dependabot only see *Dependabot* secrets: add
+# CLAUDE_CODE_OAUTH_TOKEN under Settings -> Secrets and variables -> Dependabot as
+# well as under Actions. Until then this skips with a notice.
+# To re-check a PR (e.g. after HOLD: TOO NEW), run it from the Actions tab.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Dependabot PR number to review
+        required: true
+
+concurrency:
+  group: dependabot-review-${{ github.event.pull_request.number || inputs.pr }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Only PRs opened and pushed by Dependabot, or a manual run (the skill checks
+    # the PR author again and stops if it isn't Dependabot).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.user.login == 'dependabot[bot]' &&
+       github.actor == 'dependabot[bot]' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Dependabot runs get a read-only token unless the workflow asks for more.
+    # Write is only for the one comment.
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      checks: read
+      security-events: read
+    env:
+      PR: ${{ github.event.pull_request.number || inputs.pr }}
+      HAS_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+    steps:
+      - if: env.HAS_TOKEN != 'true'
+        run: echo "::notice::CLAUDE_CODE_OAUTH_TOKEN is not set as a Dependabot secret; skipping Dependabot review."
+      # Default branch first, so .claude/ (settings, hooks) comes from main, not the PR.
+      - if: env.HAS_TOKEN == 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      # Then the PR's files, to read. Nothing is installed or run from them.
+      - if: env.HAS_TOKEN == 'true'
+        run: |
+          git fetch --no-tags origin "+refs/pull/$PR/head:refs/remotes/pr/head"
+          if [ -d .claude ]; then cp -r .claude "$RUNNER_TEMP/repo-claude"; fi
+          git checkout --detach pr/head
+          rm -rf .claude
+          if [ -d "$RUNNER_TEMP/repo-claude" ]; then cp -r "$RUNNER_TEMP/repo-claude" .claude; fi
+      - if: env.HAS_TOKEN == 'true'
+        uses: anthropics/claude-code-action@f27be6b65a4652f08a2ba3cff79114829b588967 # v1, pinned: it runs with the token
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_bots: dependabot[bot]
+          plugin_marketplaces: https://github.com/mtblck/claude-marketplace.git
+          plugins: dependency-review@mtblck
+          prompt: "/dependency-review:dependabot --comment ${{ github.repository }}/pull/${{ env.PR }}"
+          claude_args: >-
+            --allowedTools "Read,Grep,Glob,Agent,Bash(gh api:*),Bash(git fetch:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git rev-parse:*),Bash(git cat-file:*),Bash(npm view:*),Bash(npm diff:*),Bash(npm pack:*),Bash(jq:*),Bash(mkdir -p /tmp/depreview/:*),Bash(tar -xzf:*),Bash(unzip -q:*),Bash(diff -r:*),Bash(curl -sSf https://api.osv.dev/:*),Bash(curl -sSf https://pypi.org/:*),Bash(curl -sSfL https://files.pythonhosted.org/:*),Bash(curl -sSf https://crates.io/:*),Bash(curl -sSfL https://static.crates.io/:*)"
+          show_full_output: true

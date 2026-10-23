@@ -10,6 +10,8 @@
   },
   "enabledPlugins": {
     "pr-review@mtblck": true,
+    "dependency-review@mtblck": true,
+    "maintenance@mtblck": true,
     "repo-setup@mtblck": true,
     "side-projects@mtblck": true,
     "superpowers@mtblck": true

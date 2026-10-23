@@ -1,0 +1,42 @@
+# Dependency updates: a small, predictable stream of PRs, each reviewed by
+# claude-dependabot.yml before anyone merges it.
+#
+# - Minor and patch bumps arrive as one grouped PR a week; majors one by one,
+#   because they can need code changes.
+# - cooldown: a version must be public for a few days before Dependabot proposes
+#   it, so a hijacked release is usually caught and pulled before it reaches us.
+#   Security updates ignore cooldown and arrive as soon as an advisory is out.
+# - Security updates themselves are a repo setting, not this file: Settings ->
+#   Advanced Security -> Dependabot alerts and Dependabot security updates.
+#
+# One block per lockfile: add `directories: ["/app", "/admin"]` (or one block
+# each) for repos with several apps, and a block per other ecosystem
+# (cargo, pip, uv) that has a lockfile.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    # Held majors go here, each with the reason, e.g.:
+    # ignore:
+    #   - dependency-name: typescript
+    #     update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 3
+    groups:
+      actions:
+        patterns: ['*']
