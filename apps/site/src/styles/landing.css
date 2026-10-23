@@ -203,50 +203,88 @@ h1 {
   font-size: 0.88rem;
 }
 
-/* The hero's card: the cutting mat, in either theme. The loop is drawn in the mat's own green
-   (its background is the card's), with the yellow mark as its one accent, so video and card read as
-   one piece on paper or on the dark page. A deeper strip along the bottom holds the caption. */
+/* The hero's card: the cutting mat, in either theme, holding the badge as pixels on the left of the
+   line and as Inlay's shapes on the right. The yellow mark is its one accent: the line and the nodes. */
 .print {
   margin: 0;
-  padding: 8px 8px 0;
-  border-radius: 12px;
+  padding: 20px 20px 0;
+  border-radius: 14px;
   background: var(--mat-deep);
   color: var(--on-mat);
   border: 1px solid var(--on-mat-line);
-  box-shadow: 0 1px 2px rgb(22 32 28 / 0.08), 0 12px 32px -12px rgb(22 32 28 / 0.28);
+  box-shadow: 0 1px 2px rgb(22 32 28 / 0.08), 0 24px 48px -16px rgb(22 32 28 / 0.32);
 }
-.hero-video {
-  display: block;
+.compare {
+  --pos: 50%;
+  position: relative;
+  max-width: 480px;
+  margin-inline: auto;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  /* The picture is the handle: drags move the line, scrolls still scroll. */
+  touch-action: pan-y;
+  cursor: ew-resize;
+  user-select: none;
+}
+.compare-shapes,
+.compare-pixels {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: auto;
-  aspect-ratio: 800 / 614;
-  border-radius: 6px;
-  /* The video's own background, so the frame doesn't flash before it loads. */
-  background: var(--mat-deep);
+  height: 100%;
+  display: block;
+}
+.compare-pixels {
+  image-rendering: pixelated;
+  clip-path: inset(0 calc(100% - var(--pos)) 0 0);
+}
+.compare-shapes .node {
+  fill: var(--mark);
+  stroke: var(--ink);
+  stroke-width: 1.2;
+}
+.compare-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--pos);
+  width: 2px;
+  margin-left: -1px;
+  background: var(--mark);
+  box-shadow: 0 0 0 1px rgb(22 32 28 / 0.5);
+}
+.compare-tag {
+  position: absolute;
+  top: 10px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: rgb(22 32 28 / 0.82);
+  color: #eef2ee;
+  font-size: 0.8rem;
+}
+.compare-tag.left {
+  left: 10px;
+}
+.compare-tag.right {
+  right: 10px;
+}
+.compare-range {
+  display: block;
+  width: min(100%, 480px);
+  height: 32px;
+  margin: 12px auto 0;
+  accent-color: var(--mark);
 }
 .print figcaption {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: baseline;
-  padding: 16px 6px 20px;
+  max-width: 480px;
+  margin-inline: auto;
+  padding: 6px 0 20px;
   color: var(--on-mat);
   font-size: 0.9rem;
 }
 .print :focus-visible {
   outline-color: var(--mark);
-}
-.replay {
-  flex-shrink: 0;
-  min-height: 32px;
-  border: 0;
-  padding: 0 4px;
-  background: none;
-  color: var(--mark);
-  font: inherit;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 0.18em;
 }
 
 /* ---- Sections ------------------------------------------------------------- */
@@ -405,8 +443,8 @@ pre {
     gap: 36px;
   }
   .print {
-    padding: 6px 6px 0;
-    border-radius: 10px;
+    padding: 14px 14px 0;
+    border-radius: 12px;
   }
   /* The three stay the same size: the comparison is between the traces, not the source. */
   .trio {
@@ -435,8 +473,7 @@ pre {
     row-gap: 28px;
   }
   .print figcaption {
-    flex-direction: column;
-    padding: 12px 4px 16px;
+    padding: 4px 0 16px;
   }
 }
 

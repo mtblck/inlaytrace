@@ -36,7 +36,7 @@ Run every command from the repo root.
 and `FIXTURE=path` to also trace and edit an image of your own. It covers the
 editor (overlays, node drag, marquees, move, scale, nudges, undo, mirror
 symmetry measured on the exported SVG, the shortcuts panel) and then the site
-(its security policy, the landing page's animation and links, docs search, dark
+(its security policy, the landing page's hero slider and links, docs search, dark
 mode, phone width). It fails on any console error or CSP violation.
 
 ## Where things live

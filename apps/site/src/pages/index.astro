@@ -34,6 +34,8 @@ const nodesIn = (shapes: Shape[]) =>
       .filter((n) => n.x >= crop.x && n.x <= crop.x + crop.w && n.y >= crop.y && n.y <= crop.y + crop.h)
   })
 const inlayNodes = nodesIn(sample.inlay as Shape[])
+/** Every anchor point in Inlay's trace, for the hero. */
+const heroNodes = (sample.inlay as Shape[]).flatMap((p) => parsePath(p.d).flatMap((s) => s.nodes))
 const vtNodes = nodesIn(sample.percolour as Shape[])
 const art = sample.art.replace(/<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '')
 const artViewBox = sample.art.match(/viewBox="([^"]+)"/)?.[1] ?? `0 0 ${size} ${size}`
@@ -63,27 +65,20 @@ const dot = crop.w / 90
         </div>
 
         <figure class="print" aria-labelledby="hero-caption">
-          {/* A loop of how Inlay works, rendered with the isogram kit. Muted and inline; landing.ts starts it
-              unless the reader prefers reduced motion, when the poster frame (the edges being traced) stays. */}
-          <video
-            class="hero-video"
-            id="hero-video"
-            width="800"
-            height="614"
-            muted
-            loop
-            playsinline
-            preload="auto"
-            poster="/media/inlay-hero.webp"
-            aria-label="An isometric conveyor: a pixel image goes in as PNG, a gantry scans it and finds its four colours, its pen traces each edge between two colours once, the pixels give way to four cut shapes that lift apart and drop back in flush, and the card comes out as SVG."
-          >
-            <source src="/media/inlay-hero.webm" type="video/webm" />
-            <source src="/media/inlay-hero.mp4" type="video/mp4" />
-          </video>
-          <figcaption id="hero-caption">
-            <span>Pixels in, shapes out: every edge between two colours is traced once.</span>
-            <button type="button" class="replay" id="replay" aria-controls="hero-video">Pause</button>
-          </figcaption>
+          {/* The badge as pixels and as Inlay's shapes, split by a handle. The shapes and their nodes are the
+              real trace (sample.json); the pixels are the JPEG it traced, averaged down to 64 px so they show. */}
+          <div class="compare" id="compare" style="--pos: 50%">
+            <svg class="compare-shapes" viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Inlay's trace of the badge, with each node marked">
+              {(sample.inlay as Shape[]).map((p) => <path d={p.d} fill={p.fill} />)}
+              {heroNodes.map((n) => <circle class="node" cx={n.x} cy={n.y} r={size / 130} />)}
+            </svg>
+            <img class="compare-pixels" src={sample.coarse} width={size} height={size} alt="" />
+            <span class="compare-line" aria-hidden="true"></span>
+            <span class="compare-tag left" aria-hidden="true">Pixels</span>
+            <span class="compare-tag right" aria-hidden="true">Shapes</span>
+          </div>
+          <input type="range" class="compare-range" id="compare-range" min="0" max="100" value="50" aria-label="Pixels or shapes" aria-controls="compare" />
+          <figcaption id="hero-caption">Drag to turn the pixels into shapes. The dots are the nodes Inlay places.</figcaption>
         </figure>
       </section>
 
