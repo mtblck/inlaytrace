@@ -101,14 +101,20 @@ main,
 }
 .top nav {
   display: flex;
+  align-items: center;
   gap: 24px;
 }
-.top nav a {
+.top nav a:not(.button) {
   color: var(--text-soft);
   text-decoration: none;
 }
-.top nav a:hover {
+.top nav a:not(.button):hover {
   color: var(--text);
+}
+/* The one action in the header: the app, in the hero button's colours. */
+.button.small {
+  padding: 8px 14px;
+  font-size: 0.92rem;
 }
 
 /* ---- Hero ---------------------------------------------------------------- */
@@ -182,6 +188,8 @@ h1 {
   font-size: 0.82rem;
 }
 .copy {
+  min-height: 32px;
+  padding: 0 4px;
   border: 0;
   background: none;
   color: var(--link);
@@ -230,8 +238,9 @@ h1 {
 }
 .replay {
   flex-shrink: 0;
+  min-height: 32px;
   border: 0;
-  padding: 0;
+  padding: 0 4px;
   background: none;
   color: var(--mark);
   font: inherit;
@@ -399,16 +408,18 @@ pre {
     padding: 6px 6px 0;
     border-radius: 10px;
   }
+  /* The three stay the same size: the comparison is between the traces, not the source. */
   .trio {
-    grid-template-columns: 1fr 1fr;
-  }
-  .trio figure:first-child {
-    grid-column: 1 / -1;
+    gap: 12px;
   }
 }
 @media (max-width: 480px) {
   html {
     font-size: 16px;
+  }
+  .trio {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
   }
   .top,
   main {

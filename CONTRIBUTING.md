@@ -39,6 +39,20 @@ symmetry measured on the exported SVG, the shortcuts panel) and then the site
 (its security policy, the landing page's animation and links, docs search, dark
 mode, phone width). It fails on any console error or CSP violation.
 
+## Where things live
+
+The files behind each part, for finding your way around the code.
+
+| Path | What |
+| --- | --- |
+| `apps/app/src/engine/` | The worker, `runTrace` and the presets |
+| `packages/inlay/src/fit.ts` | Curve fitting: corners, smoothing, lines and Béziers |
+| `packages/inlay/src/palette.ts` | Palettes from histogram peaks |
+| `apps/app/src/lib/doc.ts`, `history.ts`, `pathdata.ts` | The editable document, undo, path data |
+| `apps/app/src/lib/mirror.ts` | Mirroring and turning with paper.js booleans; picking the likeliest detected symmetry |
+| `apps/app/src/components/` | Canvas, controls, edit panel, colours |
+| `scripts/` | `verify` (browser E2E), `score` and `score:photos` (quality, against VTracer as a benchmark), hosting checks |
+
 ## Changing the tracer
 
 Anything in `packages/inlay` that changes output, or a preset in

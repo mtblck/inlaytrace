@@ -99,7 +99,7 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () 
                   <dt className="text-ink-muted">{r.does}</dt>
                   <dd className="flex shrink-0 flex-wrap justify-end gap-1">
                     {r.keys.map((k) => (
-                      <kbd key={k} className="rounded border border-rule bg-paper-sunk px-1.5 py-px font-mono text-[11.5px] whitespace-nowrap text-ink">
+                      <kbd key={k} className="rounded border border-rule bg-paper-sunk px-1.5 py-px font-mono text-[12px] whitespace-nowrap text-ink">
                         {k}
                       </kbd>
                     ))}

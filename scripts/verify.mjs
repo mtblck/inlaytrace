@@ -890,7 +890,7 @@ if (process.env.FIXTURE) {
   await traced(fx)
   await retrace(fx, () => fx.getByRole('radio', { name: /Line art/ }).click())
   const light = await fx.getByRole('radio', { name: 'Light on dark' }).getAttribute('aria-checked')
-  console.log(`         fixture: ${await fx.locator('aside .num').first().innerText()}, light ink auto-selected: ${light}`)
+  console.log(`         fixture: ${await fx.locator('aside [data-image-info]').innerText()}, light ink auto-selected: ${light}`)
   await shot(fx, '06-fixture')
   await editorChecks(fx, 'fixture', '07')
 }
@@ -964,6 +964,23 @@ if (process.env.FIXTURE) {
   await retrace(sv, () => sv.getByRole('button', { name: 'Trace it as an image instead' }).click())
   check((await sv.locator('[data-svg-opened]').count()) === 0, 'and it can be traced as an image instead')
   await sv.close()
+}
+
+// ---- A photo gets the Poster suggestion -----------------------------------------
+{
+  const ph = await newPage({ width: 1440, height: 900 })
+  await ph.goto(url)
+  await ph.locator('input[type=file]').setInputFiles({ name: 'emblem.png', mimeType: 'image/png', buffer: Buffer.from(await fixturePng(ph, 'emblem.svg'), 'base64') })
+  await ph.getByText(/Traced in [\d,]+ ms/).waitFor({ timeout: 30_000 })
+  check((await ph.locator('[data-photo-hint]').count()) === 0, 'a logo gets no Poster suggestion')
+  await ph.locator('input[type=file]').setInputFiles(new URL('./fixtures/photos/rocket.jpg', import.meta.url).pathname)
+  await ph.locator('[data-photo-hint]').waitFor({ timeout: 15_000 })
+  check(true, 'a photo on Logo suggests Poster')
+  await ph.getByRole('button', { name: 'Use Poster' }).click()
+  check((await ph.getByRole('radio', { name: /^Poster/ }).getAttribute('aria-checked')) === 'true' && (await ph.locator('[data-photo-hint]').count()) === 0, 'Use Poster picks it, and the suggestion goes')
+  await ph.getByRole('radio', { name: /^Logo/ }).click()
+  check((await ph.locator('[data-photo-hint]').count()) === 0, 'a preset picked by hand is left alone: no suggestion comes back')
+  await ph.close()
 }
 
 // ---- Batch: several images, one zip --------------------------------------------

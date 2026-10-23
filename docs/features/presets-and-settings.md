@@ -19,6 +19,12 @@ re-traces within about 120 ms of the last change.
 | **Poster** | Photos flattened into colour bands | Inlay (quantized palette) | 24 colours, specks 8 px, smoothing 1, corners 90°, stacked |
 | **Pixel art** | Hard edges, nothing smoothed | Inlay (pixel staircase) | Its exact colours (up to 32); on an image that isn't pixel art (its top colours cover under 90% of it), clustered colours as Poster picks them. No speck filter, up to 4096 px |
 
+**A photo gets a suggestion.** When an image opens on another preset and looks
+like a photo (it takes more than 30 colours, at 4 bits a channel, to cover 90% of
+it drawn at 96 px), a line under the presets suggests Poster, with a button to
+switch. It never switches by itself, and once you pick a preset for that image
+it doesn't come back.
+
 ## Prepare
 
 Two optional AI steps run before tracing, in your browser:
