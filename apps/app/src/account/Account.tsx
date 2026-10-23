@@ -51,8 +51,8 @@ export default function Account() {
           Back to the app
         </a>
       </header>
-      <main className="mx-auto w-[min(560px,calc(100vw-32px))] py-10">
-        <h1 className="font-display text-[34px] leading-tight">Account</h1>
+      <main className="mx-auto w-[min(760px,calc(100vw-32px))] py-10 sm:py-12">
+        <h1 className="font-display text-[36px] leading-tight sm:text-[44px]">Account</h1>
         {view.kind === 'loading' && (
           <p className="mt-6 text-ink-muted" aria-live="polite">
             {view.note ?? 'Loading…'}
@@ -72,7 +72,7 @@ export default function Account() {
           </p>
         )}
       </main>
-      <LegalLinks width="w-[min(560px,calc(100vw-32px))]" />
+      <LegalLinks width="w-[min(760px,calc(100vw-32px))]" />
     </div>
   )
 }
@@ -111,9 +111,9 @@ function SignIn(props: { error?: string; onSent: (email: string) => void }) {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="h-9 min-w-0 flex-1 rounded-md border border-rule bg-paper px-3 text-[14px] outline-none focus-visible:border-accent"
+            className="h-11 min-w-0 flex-1 rounded-md border border-rule bg-paper px-3 text-[15px] outline-none focus-visible:border-accent"
           />
-          <button className="btn btn-primary" disabled={busy}>
+          <button className="btn btn-primary h-11 px-5" disabled={busy}>
             {busy ? 'Sending…' : 'Email me a sign-in link'}
           </button>
         </div>
@@ -166,33 +166,45 @@ function SignedIn(props: { data: AccountData; onSignedOut: () => void; onDeleted
         Signed in as <span className="text-ink">{email}</span>
       </p>
 
-      <section className="mt-8 rounded-lg border border-rule p-5" aria-labelledby="credits">
-        <h2 id="credits" className="field-label">
-          Credits
-        </h2>
-        <p className="mt-2 font-display text-[48px] leading-none tabular-nums" data-balance>
-          {balance}
-        </p>
-        <p className="field-hint mt-3">Credits pay for HD mode and never expire.</p>
-        <a href="/app/buy/" className="btn btn-primary mt-4">
+      <section className="mat mt-8 flex flex-col gap-5 rounded-2xl px-6 py-6 sm:flex-row sm:items-center sm:px-7" aria-labelledby="credits">
+        <div className="min-w-0 flex-1">
+          <h2 id="credits" className="text-[14px] text-on-mat">
+            Balance
+          </h2>
+          <p className="font-display text-[44px] leading-[1.1] text-on-mat-strong sm:text-[48px]">
+            <span className="tabular-nums" data-balance>
+              {balance}
+            </span>{' '}
+            credit{balance === 1 ? '' : 's'}
+          </p>
+          <p className="mt-1 text-[14px] text-on-mat">Credits pay for HD traces and upscales, and never expire.</p>
+        </div>
+        <a href="/app/buy/" className="btn btn-primary h-12 self-start px-5 text-[15px] sm:self-auto">
           Buy credits
         </a>
       </section>
 
-      <section className="mt-8" aria-labelledby="history">
-        <h2 id="history" className="field-label">
+      <section className="mt-10" aria-labelledby="history">
+        <h2 id="history" className="text-[17px] font-bold">
           History
         </h2>
         {ledger.length === 0 ? (
           <p className="field-hint mt-2">Nothing yet. Purchases and HD runs will show here.</p>
         ) : (
-          <table className="mt-2 w-full text-[13.5px]">
+          <table className="mt-3 w-full text-[14px]">
+            <thead>
+              <tr className="border-b border-rule text-left">
+                <th className="py-2 pr-4 font-semibold">Date</th>
+                <th className="py-2 pr-4 font-semibold">What</th>
+                <th className="py-2 text-right font-semibold">Credits</th>
+              </tr>
+            </thead>
             <tbody className="divide-y divide-rule-soft">
               {ledger.map((e) => (
                 <tr key={e.id}>
-                  <td className="py-2 pr-4 whitespace-nowrap text-ink-muted">{new Date(e.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-                  <td className="py-2 pr-4">{describe(e)}</td>
-                  <td className="num py-2 text-right whitespace-nowrap">{e.delta > 0 ? `+${e.delta}` : `−${-e.delta}`}</td>
+                  <td className="py-2.5 pr-4 whitespace-nowrap text-ink-muted">{new Date(e.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                  <td className="py-2.5 pr-4">{describe(e)}</td>
+                  <td className="num py-2.5 text-right text-[13px] whitespace-nowrap text-ink">{e.delta > 0 ? `+${e.delta}` : e.delta < 0 ? `−${-e.delta}` : '0'}</td>
                 </tr>
               ))}
             </tbody>
