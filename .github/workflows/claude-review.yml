@@ -46,7 +46,7 @@ jobs:
         run: echo "::notice::CLAUDE_CODE_OAUTH_TOKEN is not set; skipping Claude review."
       # Default branch first, so .claude/ (settings, hooks) comes from main, not the PR.
       - if: env.HAS_TOKEN == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
@@ -111,7 +111,7 @@ jobs:
           done
           echo "::notice::Perf run still going after 15 minutes; reviewing without measurements."
       - if: env.HAS_TOKEN == 'true'
-        uses: anthropics/claude-code-action@f27be6b65a4652f08a2ba3cff79114829b588967 # v1, pinned: it runs with the token
+        uses: anthropics/claude-code-action@e4a6faad497d33dbc7144135c75e41f82f0bf6c0 # v1, pinned: it runs with the token
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: https://github.com/mtblck/claude-marketplace.git
