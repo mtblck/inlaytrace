@@ -21,11 +21,13 @@ concurrency:
 
 jobs:
   review:
-    # Manual runs, or non-draft PRs from this repo (never forks).
+    # Manual runs, or non-draft PRs from this repo (never forks). Dependabot PRs
+    # get claude-dependabot.yml instead.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.draft == false &&
-       github.event.pull_request.head.repo.full_name == github.repository)
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.user.login != 'dependabot[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
