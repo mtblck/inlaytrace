@@ -1089,7 +1089,7 @@ export default function App() {
 
       <main className="flex min-h-0 flex-1 flex-col lg:flex-row" data-traces={traceCount}>
         {/* ---- Work surface ---- */}
-        <div className="relative flex min-h-[60vh] min-w-0 flex-1 flex-col lg:min-h-0">
+        <div className="relative flex min-h-[52vh] min-w-0 flex-1 flex-col lg:min-h-0">
           {source && trace ? (
             <>
               <div className="relative min-h-0 flex-1">
@@ -1198,7 +1198,7 @@ export default function App() {
         </div>
 
         {/* ---- Controls ---- */}
-        <aside className="flex w-full shrink-0 flex-col border-rule lg:w-[340px] lg:border-l">
+        <aside className={`flex w-full shrink-0 flex-col border-rule lg:w-[340px] lg:border-l lg:pb-0 ${source ? 'pb-[72px]' : ''}`}>
           <div className="min-h-0 flex-1 lg:overflow-y-auto">
             {source && (
               <div className="flex items-center justify-between gap-3 border-b border-rule px-5 py-3">
@@ -1366,10 +1366,10 @@ export default function App() {
             </div>
           </div>
 
-          {/* On a phone this sits straight under the canvas; on desktop it pins to the foot of the column.
-              Nothing to export before an image is open, so it waits for one. */}
+          {/* On desktop this pins to the foot of the column; on a phone it follows the controls, and a bar
+              pinned to the foot of the screen keeps Download in reach. Nothing to export before an image is open. */}
           {source && (
-            <div className="order-first border-b border-rule bg-paper px-5 py-4 lg:order-none lg:border-t lg:border-b-0">
+            <div id="export" className="scroll-mt-4 border-t border-rule bg-paper px-5 py-4">
               <dl className="mb-3 grid grid-cols-3 gap-2">
                 <Stat label="Paths" value={stats ? stats.paths.toLocaleString() : '—'} />
                 <Stat label="Nodes" value={stats ? stats.nodes.toLocaleString() : '—'} />
@@ -1382,7 +1382,7 @@ export default function App() {
                 {status.kind === 'error' && <span className="text-accent">{status.message}</span>}
               </p>
               <div className="grid grid-cols-2 gap-2">
-                <button className="btn btn-primary col-span-2" disabled={!trace} onClick={download}>
+                <button className="btn btn-primary col-span-2 hidden lg:inline-flex" disabled={!trace} onClick={download}>
                   Download SVG
                 </button>
                 <button className="btn" disabled={!trace} onClick={copy}>
@@ -1423,6 +1423,20 @@ export default function App() {
             </div>
           )}
 
+          {source && (
+            <div className="fixed inset-x-0 bottom-0 z-20 flex items-center gap-3 border-t border-rule bg-paper px-5 py-3 lg:hidden" data-export-bar="">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="num truncate">{stats ? `${stats.paths.toLocaleString()} paths, ${formatBytes(stats.bytes)}` : 'Tracing…'}</span>
+                <a href="#export" className="self-start text-[13px] text-accent underline underline-offset-2">
+                  More formats
+                </a>
+              </div>
+              <button className="btn btn-primary h-12 px-5" disabled={!trace} onClick={download}>
+                Download SVG
+              </button>
+            </div>
+          )}
+
           {/* No room for a page footer, so one quiet line ends the sidebar. */}
           <nav aria-label="About Inlay" className="flex items-center gap-4 border-t border-rule px-5 py-2.5 text-[12px] text-ink-muted lg:h-13 lg:py-0">
             <a href="/docs/overview/" className="hover:text-ink">
@@ -1453,28 +1467,28 @@ const COMPARE_HINT = {
 
 function Empty(props: { loading: boolean; error: string | null; onChoose: () => void; onSample: () => void }) {
   return (
-    <div className="mat grid flex-1 place-items-center p-6">
-      <div className="max-w-sm text-center">
+    <div className="mat grid flex-1 place-items-center p-4 sm:p-6">
+      <div className="w-full max-w-lg rounded-2xl border-2 border-dashed border-on-mat/45 bg-black/15 px-6 py-10 text-center sm:px-10 sm:py-14">
         {props.loading ? (
-          <p className="text-[15px] text-ink-muted" aria-live="polite">
+          <p className="text-[15px] text-on-mat" aria-live="polite">
             Tracing…
           </p>
         ) : (
           <>
-            <h2 className="font-display text-[34px] leading-tight">Drop an image here</h2>
-            <p className="mt-2 text-[14px] leading-relaxed text-balance text-ink-muted">
+            <h2 className="font-display text-[32px] leading-tight text-on-mat-strong sm:text-[42px]">Drop an image here</h2>
+            <p className="mx-auto mt-3 max-w-md text-[14.5px] leading-relaxed text-balance text-on-mat">
               Or paste one, or choose a file. PNG, JPG, WebP, GIF or BMP to trace, or an SVG to edit; several at once to trace them all. It never leaves this device: everything runs in your browser.
             </p>
-            <div className="mt-5 flex justify-center gap-2">
-              <button className="btn btn-primary" onClick={props.onChoose}>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <button className="btn btn-primary h-11 px-5 text-[15px]" onClick={props.onChoose}>
                 Choose an image
               </button>
-              <button className="btn" onClick={props.onSample}>
+              <button className="btn h-11 border-on-mat/50 bg-transparent px-5 text-[15px] text-on-mat-strong hover:bg-white/5" onClick={props.onSample}>
                 Try a sample
               </button>
             </div>
             {props.error && (
-              <p role="alert" className="mt-4 text-[13.5px] text-accent">
+              <p role="alert" className="mt-4 text-[13.5px] text-mark">
                 {props.error}
               </p>
             )}

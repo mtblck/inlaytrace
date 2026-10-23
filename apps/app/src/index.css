@@ -2,40 +2,52 @@
 @import "./fonts.css";
 
 /* ---------------------------------------------------------------------------
-   Palette — first copied from mb-portfolio/src/index.css, when the app lived
-   under mattblack.space. Warm paper and ink, one vermillion
-   accent used only for signal (the active control, the split handle, path
-   outlines), never as a fill behind text. `ink-faint` clears 4.5:1 on both
-   paper tones; it was measured there, so don't lighten it by eye.
+   Palette: the site's (apps/site/src/styles/landing.css), so the app and the
+   landing page read as one product (#121). Cool paper and green-black ink; the
+   cutting mat is the site's hero green; mustard marks the one primary action
+   per screen, always with ink on it. `accent` is the signal colour (the active
+   control, the split line, path outlines, links): the site's link green in
+   light, its mustard in dark. `ink-faint` clears 4.5:1 on both paper tones.
    --------------------------------------------------------------------------- */
 :root {
   color-scheme: light;
-  --c-paper: oklch(0.986 0.005 85);
-  --c-paper-sunk: oklch(0.962 0.007 82);
-  --c-ink: oklch(0.215 0.014 55);
-  --c-ink-muted: oklch(0.445 0.013 55);
-  --c-ink-faint: oklch(0.54 0.012 60);
-  --c-rule: oklch(0.892 0.009 72);
-  --c-rule-soft: oklch(0.935 0.007 76);
-  --c-accent: oklch(0.552 0.171 38);
-  --c-accent-ink: oklch(0.986 0.005 85);
-  --c-accent-dim: oklch(0.552 0.171 38 / 0.14);
-  --c-selection: oklch(0.552 0.171 38 / 0.18);
+  --c-paper: #f5f6f2;
+  --c-paper-sunk: #e8ece9;
+  --c-ink: #16201c;
+  --c-ink-muted: #4a5a53;
+  --c-ink-faint: #5b6a63;
+  --c-rule: #d2d9d4;
+  --c-rule-soft: #e2e7e3;
+  --c-accent: #23614c;
+  --c-accent-ink: #f5f6f2;
+  --c-accent-dim: rgb(35 97 76 / 0.12);
+  --c-selection: rgb(242 194 48 / 0.35);
+  --c-mark: #f2c230;
+  --c-mark-hover: #f7d35a;
+  --c-mark-ink: #16201c;
+  --c-mat: #1b352d;
+  --c-mat-line: rgb(179 192 184 / 0.26);
+  --c-mat-fine: rgb(179 192 184 / 0.13);
+  --c-on-mat: #b3c0b8;
+  --c-on-mat-strong: #eef2ee;
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --c-paper: oklch(0.172 0.008 65);
-  --c-paper-sunk: oklch(0.212 0.009 65);
-  --c-ink: oklch(0.932 0.008 82);
-  --c-ink-muted: oklch(0.775 0.011 75);
-  --c-ink-faint: oklch(0.62 0.011 70);
-  --c-rule: oklch(0.305 0.011 70);
-  --c-rule-soft: oklch(0.248 0.01 68);
-  --c-accent: oklch(0.702 0.153 42);
-  --c-accent-ink: oklch(0.172 0.008 65);
-  --c-accent-dim: oklch(0.702 0.153 42 / 0.16);
-  --c-selection: oklch(0.702 0.153 42 / 0.22);
+  --c-paper: #131e1a;
+  --c-paper-sunk: #1b2a24;
+  --c-ink: #eef2ee;
+  --c-ink-muted: #b3c0b8;
+  --c-ink-faint: #93a39b;
+  --c-rule: #2c3d35;
+  --c-rule-soft: #22322b;
+  --c-accent: #f2c230;
+  --c-accent-ink: #16201c;
+  --c-accent-dim: rgb(242 194 48 / 0.16);
+  --c-selection: rgb(242 194 48 / 0.28);
+  --c-mat: #0d1613;
+  --c-mat-line: rgb(179 192 184 / 0.16);
+  --c-mat-fine: rgb(179 192 184 / 0.08);
 }
 
 @theme inline {
@@ -49,8 +61,13 @@
   --color-accent: var(--c-accent);
   --color-accent-ink: var(--c-accent-ink);
   --color-accent-dim: var(--c-accent-dim);
+  --color-mark: var(--c-mark);
+  --color-mark-ink: var(--c-mark-ink);
+  --color-mat: var(--c-mat);
+  --color-on-mat: var(--c-on-mat);
+  --color-on-mat-strong: var(--c-on-mat-strong);
 
-  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-display: 'Archivo Variable', ui-sans-serif, system-ui, sans-serif;
   --font-sans: 'Archivo Variable', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
 }
@@ -95,12 +112,22 @@
     color: var(--c-ink);
     text-decoration: none;
   }
-  /* The working surface: a cutting-mat dot grid, so transparent areas of the
-     image and the edge of the sheet are both legible. */
+  /* Headings in the site's display style: Archivo at its heaviest, set tight. */
+  .font-display {
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+
+  /* The working surface: the site's green cutting mat, ruled every 16 px with
+     a stronger line every 80, so transparent areas of the image and the edge
+     of the sheet are both legible. */
   .mat {
-    background-color: var(--c-paper-sunk);
-    background-image: radial-gradient(var(--c-rule) 1px, transparent 1.2px);
-    background-size: 16px 16px;
+    background-color: var(--c-mat);
+    background-image:
+      linear-gradient(var(--c-mat-line) 1px, transparent 1px), linear-gradient(90deg, var(--c-mat-line) 1px, transparent 1px),
+      linear-gradient(var(--c-mat-fine) 1px, transparent 1px), linear-gradient(90deg, var(--c-mat-fine) 1px, transparent 1px);
+    background-size: 80px 80px, 80px 80px, 16px 16px, 16px 16px;
+    color: var(--c-on-mat);
   }
 
   /* Transparent pixels in the source image show as a fine check, the
@@ -165,13 +192,14 @@
     opacity: 0.45;
   }
   .btn-primary {
-    background: var(--c-accent);
-    border-color: var(--c-accent);
-    color: var(--c-accent-ink);
+    background: var(--c-mark);
+    border-color: var(--c-mark);
+    color: var(--c-mark-ink);
+    font-weight: 650;
   }
   .btn-primary:hover:not(:disabled) {
-    border-color: var(--c-accent);
-    filter: brightness(1.06);
+    background: var(--c-mark-hover);
+    border-color: var(--c-mark-hover);
   }
 
   /* Range inputs drawn to match the rules and accent rather than the

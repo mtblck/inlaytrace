@@ -676,10 +676,11 @@ export function Canvas(props: Props) {
               className="group absolute top-0 bottom-0 -ml-3 w-6 cursor-ew-resize"
               style={{ left: `${split}%`, touchAction: 'none' }}
             >
-              <div className="mx-auto h-full w-px bg-accent" />
-              <div className="absolute top-1/2 left-1/2 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-accent bg-paper text-accent shadow-sm">
-                <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-                  <path d="M5 3 1 7l4 4M9 3l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+              {/* White with a dark edge, so the line shows on any artwork; the handle in the site's mustard. */}
+              <div className="mx-auto h-full w-0.5 bg-white shadow-[0_0_0_1px_rgb(22_32_28/0.55)]" />
+              <div className="absolute top-1/2 left-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#16201c] bg-mark text-mark-ink shadow-sm">
+                <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
+                  <path d="M5 3 1 7l4 4M9 3l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.8" />
                 </svg>
               </div>
             </div>

@@ -7,6 +7,16 @@ import { formatBytes } from '../lib/svg'
 /** A target-size search: running (no result yet), done, or failed. */
 export type SizeRun = { target: number; from: Settings; tried: number; best: Candidate | null; result: SizeSearch | null; error?: string }
 
+/** A small line drawing per preset, for the desktop grid. */
+const PRESET_ICONS: Record<PresetId, string> = {
+  logo: 'M12 3l8 4.5v9L12 21l-8-4.5v-9z',
+  illustration: 'M4 18c3-8 6-11 8-11s3 3 4 6 2 4 4 4M4 18h16',
+  lineart: 'M4 16c3-6 5-9 7-9s2 6 4 6 3-3 5-5',
+  centerline: 'M5 19L19 5M5 12h4M15 12h4',
+  photo: 'M4 5h16v14H4zM4 11h16M4 15h16',
+  pixel: 'M5 5h5v5H5zM14 5h5v5h-5zM5 14h5v5H5zM14 14h5v5h-5z',
+}
+
 type Props = {
   settings: Settings
   onChange: (next: Settings) => void
@@ -30,11 +40,14 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
   const p = settings.preset
   const defaults = presetById(p).defaults
   const changed = (Object.keys(defaults) as (keyof typeof defaults)[]).some((k) => defaults[k] !== settings[k])
+  const hintId = useId()
 
   return (
     <>
       <Section title="What is it?">
-        <div role="radiogroup" aria-label="Image type" className="grid gap-px overflow-hidden rounded-md border border-rule bg-rule">
+        {/* Desktop: a two-column grid, so Adjust stays in view (#123). Phone: one row of chips to swipe,
+            right under the canvas (#124). The chosen preset's description sits under either. */}
+        <div role="radiogroup" aria-label="Image type" className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 lg:mx-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:px-0 lg:pb-0">
           {PRESETS.map((preset) => {
             const active = preset.id === p
             return (
@@ -42,18 +55,23 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
                 key={preset.id}
                 role="radio"
                 aria-checked={active}
+                aria-describedby={active ? `${hintId}` : undefined}
                 onClick={() => onPreset(preset.id)}
-                className={`flex flex-col gap-0.5 px-3 py-2 text-left transition-colors ${
-                  active ? 'bg-paper' : 'bg-paper-sunk hover:bg-paper'
+                className={`flex h-11 shrink-0 items-center gap-2 rounded-full px-4 text-left text-[14px] whitespace-nowrap transition-colors lg:h-12 lg:rounded-md lg:px-3 ${
+                  active ? 'border-2 border-ink bg-paper-sunk font-semibold text-ink' : 'border border-rule bg-paper font-medium text-ink hover:border-ink-faint'
                 }`}
               >
-                {/* Name above, description below: side by side, the descriptions were cut off in the sidebar. */}
-                <span className={`text-[13.5px] font-medium ${active ? 'text-accent' : 'text-ink'}`}>{preset.label}</span>
-                <span className="field-hint">{preset.hint}</span>
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" className={`hidden shrink-0 lg:block ${active ? 'text-ink' : 'text-ink-faint'}`}>
+                  <path d={PRESET_ICONS[preset.id]} />
+                </svg>
+                {preset.label}
               </button>
             )
           })}
         </div>
+        <p id={hintId} className="field-hint mt-2">
+          {presetById(p).hint}.
+        </p>
         {suggestPoster && (
           <div className="mt-3 flex items-center gap-3 rounded-md bg-paper-sunk px-3 py-2.5" data-photo-hint="">
             <p className="flex-1 text-[13px]">This looks like a photo. Poster usually suits photos better.</p>
