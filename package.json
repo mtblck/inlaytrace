@@ -46,7 +46,7 @@
     "packages/*"
   ],
   "dependencies": {
-    "@vercel/blob": "2.8.0",
+    "@vercel/blob": "2.8.2",
     "fast-png": "8.0.0",
     "jpeg-js": "0.4.4",
     "onnxruntime-node": "1.30.0"
