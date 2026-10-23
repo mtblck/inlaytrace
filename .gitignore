@@ -3,6 +3,7 @@ dist
 *.local
 .vercel
 *.tsbuildinfo
+coverage/
 apps/site/src/content/docs/docs/
 apps/site/.astro/
 

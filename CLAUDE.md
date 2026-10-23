@@ -61,3 +61,7 @@ Open PRs as drafts and mark them ready only when the work is done: that triggers
   both call it; keep logic out of the wrappers. The account and buy pages are Vite pages of their own (`apps/app/account/`, `apps/app/buy/`).
 - **Claude commits for Matt as `mtblck <105079242+mtblck@users.noreply.github.com>`.** Vercel blocks
   deploys whose author email isn't linked to Matt's account (seen on mb-portfolio).
+
+The full reasoning behind these, and every other decision worth keeping, is in
+`docs/adr/` (one short record per decision; copy `0000-template.md`). Reversing
+one means a new ADR that supersedes it, in the same PR.

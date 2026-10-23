@@ -19,14 +19,38 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The PR merge commit and its base parent, for coverage of the changed lines.
+          fetch-depth: 2
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm test
+      # `npm test`, also writing coverage/lcov.info
+      - run: npm run coverage
       # vendor + hosting:check + tsc + vite build
       - run: npm run build
+      # Report only: whole-repo and changed-line coverage in the job summary, plus
+      # coverage/diff-coverage.json for the Claude review. Fails only below the
+      # COVERAGE_MIN / DIFF_COVERAGE_MIN repository variables, when they are set.
+      - name: Coverage report
+        if: ${{ !cancelled() && hashFiles('coverage/lcov.info') != '' }}
+        run: node .github/scripts/coverage-report.mjs
+        env:
+          COVERAGE_MIN: ${{ vars.COVERAGE_MIN }}
+          DIFF_COVERAGE_MIN: ${{ vars.DIFF_COVERAGE_MIN }}
+      - name: Upload coverage
+        if: ${{ !cancelled() && hashFiles('coverage/lcov.info') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: |
+            coverage/lcov.info
+            coverage/coverage-summary.json
+            coverage/diff-coverage.json
+          retention-days: 14
+          if-no-files-found: ignore
 
   # The package as npm users get it: built, linted for publishing, and loaded
   # by plain Node on the oldest version it supports (engines: >=20) and the newest.

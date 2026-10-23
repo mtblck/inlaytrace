@@ -1,0 +1,91 @@
+name: Performance
+
+# Measures what a PR does to bundle size and Lighthouse: builds the base and the
+# head on the same runner, serves each build locally and runs Lighthouse CI on
+# the pages below. Uploads the `perf` artifact (summary.json, read by the Claude
+# review's performance angle, plus the Lighthouse reports) and writes the same
+# numbers to the job summary. It reports, it never fails a PR on a number.
+# Needs .github/scripts/perf.mjs (templates/perf.mjs in repo-setup).
+# Delete both for a repo with no web build. Multi-app repos: a job per app with
+# `defaults.run.working-directory` and its own PAGES.
+on:
+  pull_request:
+    paths-ignore: ["**.md", "docs/**", "LICENSE"]
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Paths to run Lighthouse on, space-separated. The app's main routes, no auth.
+  # The landing page (Astro) and the app.
+  PAGES: / /app/
+  RUNS: 3
+  # Serves the build on port 4173. Empty: `next start` for Next.js, else `vite preview`.
+  # scripts/serve.mjs serves dist/ the way Vercel does (vercel.json headers and rewrites).
+  START_COMMAND: node scripts/serve.mjs --port 4173
+  # Nothing downloaded here gets to run install scripts, lhci included.
+  NPM_CONFIG_IGNORE_SCRIPTS: "true"
+
+jobs:
+  perf:
+    name: Bundle size and Lighthouse
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: "*/package-lock.json"
+      # Build env the app needs (public keys only, never secrets: fork PRs run this
+      # too) goes here as `env:`.
+      - name: Build base and head
+        run: |
+          mkdir -p perf
+          for side in base head; do
+            (cd "$side" && npm ci --ignore-scripts && npm run build) || touch "perf/build-failed-$side"
+          done
+      - name: Lighthouse
+        run: |
+          for side in base head; do
+            [ -e "perf/build-failed-$side" ] && continue
+            start="$START_COMMAND"
+            if [ -z "$start" ]; then
+              if [ -d "$side/.next" ]; then start="npx next start -p 4173"; else start="npx vite preview --port 4173 --strictPort"; fi
+            fi
+            urls=(); for p in $PAGES; do urls+=("--url=http://localhost:4173$p"); done
+            (cd "$side" &&
+              npx --yes @lhci/cli@0.15.1 collect "${urls[@]}" --numberOfRuns="$RUNS" \
+                --startServerCommand="$start" --startServerReadyPattern="Local|Ready|ready|listen|localhost" &&
+              npx --yes @lhci/cli@0.15.1 upload --target=filesystem --outputDir="../perf/lighthouse-$side") ||
+              echo "::warning::Lighthouse failed on $side"
+          done
+      - name: Summarise
+        if: always()
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          node head/.github/scripts/perf.mjs base head perf
+          cat perf/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: perf
+          path: perf
+          retention-days: 14
+          if-no-files-found: ignore
