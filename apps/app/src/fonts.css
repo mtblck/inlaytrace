@@ -19,11 +19,3 @@
   font-display: optional;
   src: url('./assets/fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2');
 }
-
-@font-face {
-  font-family: 'Instrument Serif';
-  font-style: normal;
-  font-weight: 400;
-  font-display: optional;
-  src: url('./assets/fonts/instrument-serif-latin-400-normal.woff2') format('woff2');
-}
