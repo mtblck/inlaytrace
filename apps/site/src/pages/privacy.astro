@@ -19,7 +19,7 @@ import { ADDRESS, CONTACT, SELLER, SELLER_KIND, UPDATED } from '../data/legal'
 >
   <article class="prose" aria-labelledby="privacy-title">
     <h1 id="privacy-title">Privacy</h1>
-    <p class="lede">In the free app, your images never leave your device. We only learn anything about you if you buy HD credits.</p>
+    <p class="lede">In the free app, your images never leave your device. Beyond an anonymous page-view count, we only learn anything about you if you buy HD credits.</p>
 
     <h2>Who's responsible</h2>
     <p>
@@ -32,8 +32,8 @@ import { ADDRESS, CONTACT, SELLER, SELLER_KIND, UPDATED } from '../data/legal'
     <p>
       When you open an image in the <a href="/app/">app</a>, your browser decodes it, traces it, lets you edit it and exports the result,
       all on your device. Nothing is uploaded, and we never receive, see or store your files. Apart from loading its own code, the app
-      makes one small request to this site, to show whether you're signed in and how many HD credits you have; it carries no image. Its
-      security policy stops its code from sending data anywhere else.
+      makes two small requests to this site: one to show whether you're signed in and how many HD credits you have, and one to count the
+      page view. Neither carries an image. Its security policy stops its code from sending data anywhere else.
     </p>
     <p>
       The optional in-browser AI steps (removing the background, upscaling small images) work the same way: the models are downloaded from
@@ -75,7 +75,7 @@ import { ADDRESS, CONTACT, SELLER, SELLER_KIND, UPDATED } from '../data/legal'
     <h2>Who else handles data</h2>
     <ul>
       <li><strong>Paddle</strong>: payments, receipts, refunds and invoices.</li>
-      <li><strong>Vercel</strong>: hosts the site and runs its server code. Like any host, it records basic details of each request (such as IP address, browser and page) to deliver the site and keep it secure. See <a href="https://vercel.com/legal/privacy-policy">Vercel's privacy policy</a>.</li>
+      <li><strong>Vercel</strong>: hosts the site and runs its server code. Like any host, it records basic details of each request (such as IP address, browser and page) to deliver the site and keep it secure. It also counts page views (Web Analytics; see below). See <a href="https://vercel.com/legal/privacy-policy">Vercel's privacy policy</a>.</li>
       <li><strong>Supabase</strong>: stores accounts and credit balances.</li>
       <li><strong>Resend</strong>: sends the sign-in emails.</li>
     </ul>
@@ -87,9 +87,10 @@ import { ADDRESS, CONTACT, SELLER, SELLER_KIND, UPDATED } from '../data/legal'
     <h2>What we don't do</h2>
     <ul>
       <li>
-        No tracking or advertising. We count page views with Vercel Web Analytics, which sets no cookies and records only the page,
-        the referring site, and your country, browser and device type. It recognises a repeat visit within a day by a hash it then
-        discards, and never sees your images.
+        No tracking or advertising. We count page views with Vercel Web Analytics, which sets no cookies and records only the time,
+        the page, the referring site, any utm_ campaign tags in the link, and your country, browser, operating system and device type.
+        It recognises a repeat visit within a day by a hash it then discards, and never sees your images. Its script is written by
+        Vercel and served from this site.
       </li>
       <li>No third-party scripts or fonts, except Paddle's checkout on the buy page.</li>
       <li>No cookies unless you sign in.</li>

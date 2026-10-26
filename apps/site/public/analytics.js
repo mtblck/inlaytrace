@@ -5,6 +5,7 @@
  * is left out on localhost, where it would 404.
  * A file rather than an inline script, because the CSP is script-src 'self'.
  * Counts page views only: no cookies, and never the images (docs/features/privacy-and-security.md).
+ * Keep apps/app/public/analytics.js and apps/site/public/analytics.js identical (ADR 0001).
  */
 ;(function () {
   if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) return
