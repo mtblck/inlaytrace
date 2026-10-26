@@ -14,7 +14,9 @@ One npm workspace: run every command from the repo root.
 in Claude's cloud sandbox, where the Playwright CDN is blocked).
 
 CI and Claude review run on PRs (`.github/workflows/`; playbook in mtblck/boards `docs/ci.md`).
-Open PRs as drafts and mark them ready only when the work is done: that triggers the Claude review.
+Open PRs as drafts and mark them ready only when the work is done. Before marking one ready, run
+`/pr-review:review <n>` and fix what it finds; the `pr-review` plugin holds the PR at draft until then.
+Marking it ready also triggers the Claude review workflow.
 
 ## Load-bearing decisions
 
