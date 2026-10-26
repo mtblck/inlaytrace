@@ -22,6 +22,8 @@ export default defineConfig({
       title: 'Inlay',
       description: 'Trace images into vector shapes that fit together exactly.',
       favicon: '/favicon.svg',
+      // Page views for mattblack.space/analytics (public/analytics.js; skipped on localhost).
+      head: [{ tag: 'script', attrs: { src: '/analytics.js', defer: true } }],
       customCss: ['./src/styles/fonts.css', './src/styles/docs.css'],
       sidebar: [
         {

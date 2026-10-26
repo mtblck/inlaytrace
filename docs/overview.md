@@ -31,7 +31,7 @@ Worker so the page stays responsive.
 
 ## Principles
 
-- **Private by construction.** No server step, no analytics, a strict content
+- **Private by construction.** No server step, no cookies for visitors, a strict content
   security policy. See [Privacy and security](features/privacy-and-security.md).
 - **Measure, don't eyeball.** Every tracer change is scored by rendering the
   SVG back and comparing it with the clean source art (`npm run score`). The

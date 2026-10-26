@@ -7,8 +7,10 @@ order: 9
 ## Nothing leaves your device
 
 The image is decoded, traced, edited and exported in your browser. There is no
-upload, no server step, no analytics and no third-party script. Tracing runs in
+upload, no server step and no third-party script. Tracing runs in
 a Web Worker; SVGO and paper.js are loaded from the same site, on first use.
+The site counts page views with Vercel Web Analytics (no cookies, nothing about
+your images); the [privacy policy](https://inlaytrace.com/privacy/) lists what it records.
 
 The one exception is [HD](hd.md), which is paid, in beta, and
 happens only when you confirm it for an image: that image is uploaded, traced
