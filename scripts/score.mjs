@@ -65,9 +65,9 @@ const prepare = async (art) => {
 }
 const pixels = await prepare(ART)
 
-async function score(svg) {
+async function score(svg, tolerance = 96) {
   const wrong = await page.evaluate(
-    async ({ svg, size, k }) => {
+    async ({ svg, size, k, tolerance }) => {
       const img = new Image()
       img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
       await img.decode()
@@ -80,10 +80,10 @@ async function score(svg) {
       const ref = window.__ref
       let bad = 0
       for (let i = 0; i < d.length; i += 4)
-        if (Math.abs(d[i] - ref[i]) + Math.abs(d[i + 1] - ref[i + 1]) + Math.abs(d[i + 2] - ref[i + 2]) > 96) bad++
+        if (Math.abs(d[i] - ref[i]) + Math.abs(d[i + 1] - ref[i + 1]) + Math.abs(d[i + 2] - ref[i + 2]) > tolerance) bad++
       return (bad / (d.length / 4)) * 100
     },
-    { svg, size: SIZE, k: K },
+    { svg, size: SIZE, k: K, tolerance },
   )
   const nodes = [...svg.matchAll(/\bd="([^"]*)"/g)].reduce((n, m) => n + (m[1].match(/[MLCQSTHVAmlcqsthva]/g) ?? []).length, 0)
   return { wrong, nodes, paths: (svg.match(/<path\b/g) ?? []).length, kb: svg.length / 1024 }
@@ -204,6 +204,24 @@ for (const [file, title] of [
     const width = svg.match(/stroke-width="([\d.]+)"/)?.[1]
     console.log(
       `  ${PRESETS.find((p) => p.id === id).label.padEnd(14)} ${r.wrong.toFixed(2).padStart(6)}%  ${String(id === 'centerline' ? subpaths : '–').padStart(7)} ${String(r.nodes).padStart(6)} ${r.kb.toFixed(1).padStart(5)} KB  ${width ? `${width} px` : '–'}  (${ms.toFixed(0)} ms)`,
+    )
+  }
+}
+// ---- Outline illustration ---------------------------------------------------
+// Thin mid-blue outlines on white with pale tinted fills. A pale fill differs
+// from white by under 96, so this counts a pixel wrong past 24 instead: a
+// missing fill is wrong here, where on the badge it would hide.
+{
+  const art = await prepare(readFileSync(join(root, 'scripts/fixtures/outline.svg'), 'utf8'))
+  console.log(`\n  Outline illustration (outlines ${(1 * SIZE) / 200} px wide, pale fills), ${SIZE} px JPEG q72, wrong past 24\n`)
+  console.log('  Preset         Wrong px   Nodes  Paths   Size')
+  for (const id of ['logo', 'illustration', 'lineart', 'photo']) {
+    const t = performance.now()
+    const svg = runTrace(art.slice(), SIZE, SIZE, toTraceOptions(settingsFor(id)))
+    const ms = performance.now() - t
+    const r = await score(svg, 24)
+    console.log(
+      `  ${PRESETS.find((p) => p.id === id).label.padEnd(14)} ${r.wrong.toFixed(2).padStart(6)}%  ${String(r.nodes).padStart(6)} ${String(r.paths).padStart(6)} ${r.kb.toFixed(1).padStart(5)} KB  (${ms.toFixed(0)} ms)`,
     )
   }
 }

@@ -117,4 +117,25 @@ describe('pixel art', () => {
     const fills = new Set([...svg.matchAll(/fill="(#[0-9a-f]{6})"/g)].map((m) => m[1]))
     expect([...fills].some((f) => parseInt(f.slice(1, 3), 16) > 180 && parseInt(f.slice(3, 5), 16) < 80)).toBe(true)
   })
+
+  it("doesn't count a white page as pixel art: a JPEG drawing on one keeps its ink", () => {
+    // A blue drawing on a page that is 95% exactly white; the drawing's own
+    // pixels are all slightly different, so the other exact colours are near-whites.
+    const n = 60
+    const px = new Uint8Array(n * n * 4)
+    let seed = 11
+    const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff)
+    for (let i = 0; i < n * n; i++) {
+      const x = i % n
+      const y = Math.floor(i / n)
+      const ink = (x >= 10 && x < 30 && (y === 10 || y === 11)) || (y >= 10 && y < 30 && (x === 10 || x === 11))
+      const halo = !ink && x >= 8 && x < 32 && y >= 8 && y < 14
+      if (ink) px.set([70 + Math.round(rand() * 20), 125 + Math.round(rand() * 20), 165 + Math.round(rand() * 20), 255], i * 4)
+      else if (halo) px.set([244 + 4 * Math.floor(rand() * 3), 248 + 2 * Math.floor(rand() * 3), 252, 255], i * 4)
+      else px.set([255, 255, 255, 255], i * 4)
+    }
+    const svg = runTrace(px, n, n, { mode: 'palette', colors: 8, palette: 'exact', pixels: true, speckle: 0, tolerance: 0.25, cornerAngle: 0 })
+    const fills = [...svg.matchAll(/fill="(#[0-9a-f]{6})"/g)].map((m) => m[1])
+    expect(fills.some((f) => parseInt(f.slice(1, 3), 16) < 120)).toBe(true)
+  })
 })

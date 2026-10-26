@@ -17,6 +17,13 @@ const PRESET_ICONS: Record<PresetId, string> = {
   pixel: 'M5 5h5v5H5zM14 5h5v5h-5zM5 14h5v5H5zM14 14h5v5h-5z',
 }
 
+/** Line art's threshold modes: the image's own split, a fixed level, or adaptive per neighbourhood (null). */
+const THRESHOLDS = [
+  ['Auto', 'auto'],
+  ['Manual', 'manual'],
+  ['Uneven light', null],
+] as const
+
 type Props = {
   settings: Settings
   onChange: (next: Settings) => void
@@ -118,18 +125,35 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
                 </div>
                 <p className="field-hint">Which part of the image to keep. The rest becomes transparent.</p>
               </div>
-              {settings.threshold !== null && (
-                <Slider label="Ink threshold" value={settings.threshold} min={1} max={254} step={1} onChange={(v) => set('threshold', v)} format={(v) => `${v}`} hint="Move it to catch fainter strokes or drop stray ones." />
+              <div className="space-y-1.5">
+                <span className="field-label">Ink threshold</span>
+                <div role="radiogroup" aria-label="Ink threshold" className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-rule bg-rule">
+                  {THRESHOLDS.map(([label, value]) => {
+                    const on = value === 'manual' ? typeof settings.threshold === 'number' : settings.threshold === value
+                    return (
+                      <button
+                        key={label}
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => !on && set('threshold', value === 'manual' ? 128 : value)}
+                        className={`py-1.5 text-[13px] ${on ? 'bg-paper font-medium text-accent' : 'bg-paper-sunk text-ink hover:bg-paper'}`}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="field-hint">
+                  {settings.threshold === 'auto'
+                    ? 'Splits ink from paper by their own shades, so coloured ink works too.'
+                    : settings.threshold === null
+                      ? 'Compares each spot with its surroundings, for photos of paper under uneven light.'
+                      : 'Ink is anything darker than the threshold.'}
+                </p>
+              </div>
+              {typeof settings.threshold === 'number' && (
+                <Slider label="Threshold" value={settings.threshold} min={1} max={254} step={1} onChange={(v) => set('threshold', v)} format={(v) => `${v}`} hint="Move it to catch fainter strokes or drop stray ones." />
               )}
-              <label className="flex items-center gap-2 text-[13px]">
-                <input
-                  type="checkbox"
-                  className="accent-[var(--c-accent)]"
-                  checked={settings.threshold === null}
-                  onChange={(e) => set('threshold', e.target.checked ? null : 128)}
-                />
-                Adapt to uneven lighting (photos of paper)
-              </label>
             </div>
           )}
 

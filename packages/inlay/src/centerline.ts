@@ -23,8 +23,8 @@ import { serializePath, type PathNode, type Pt, type Subpath } from './path'
 import { labelBinary, mergeSpecks } from './inlay'
 
 export type CenterlineOptions = {
-  /** Ink is darker than this (0–255); null compares each pixel with its neighbourhood instead. */
-  threshold: number | null
+  /** Ink is darker than this (0–255); 'auto' splits ink from paper by the image's histogram (Otsu); null compares each pixel with its neighbourhood instead. */
+  threshold: number | 'auto' | null
   /** Ink and paper regions smaller than speckle × speckle pixels are folded into their surroundings. */
   speckle: number
   /** Max distance in pixels between the skeleton and the fitted stroke. */
