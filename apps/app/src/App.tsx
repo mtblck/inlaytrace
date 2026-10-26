@@ -42,6 +42,7 @@ import { allRefs, boxToBox, rotateAbout, hasRef, nodesInRect, pathBounds, pathsI
 import { usePersisted } from './lib/persisted'
 import { bounds, effective, fromSlider, snap, step, toSlider, type Zoom } from './lib/zoom'
 import { sampleImage } from './lib/sample'
+import { track } from './lib/track'
 import { Canvas, type Overlays, type SelectMode, type Tool, type ViewMode } from './components/Canvas'
 import { ShortcutsDialog } from './components/Shortcuts'
 import { ExportOptions } from './components/ExportOptions'
@@ -430,6 +431,8 @@ export default function App() {
           setTrace(parseTrace(res.svg))
           setTraceCount((n) => n + 1)
           setStatus({ kind: 'done', ms: res.ms })
+          // Once per image, not per retrace as the settings change.
+          track('traced', source.name)
         } catch (error) {
           setStatus({ kind: 'error', message: error instanceof Error ? error.message : String(error) })
         }
@@ -1581,6 +1584,7 @@ async function optimizeHere(svg: string) {
 }
 
 function save(blob: Blob, name: string) {
+  track('downloaded')
   const url = URL.createObjectURL(blob)
   const a = Object.assign(document.createElement('a'), { href: url, download: name })
   a.click()

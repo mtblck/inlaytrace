@@ -58,6 +58,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/_mb/events", "destination": "https://mattblack.space/boards/api/events" },
     {
       "source": "/api/hd/(.*)",
       "destination": "/api/hd?__route=hd/$1"
