@@ -57,6 +57,22 @@ describe('centerline', () => {
     for (const s of subs) expect(s.nodes).toHaveLength(2)
   })
 
+  it('carries thick strokes straight through a slanted crossing and a T', () => {
+    // Thinning pinches an X of 8 px strokes toward its middle and bends a T's
+    // stem to meet the bar; the strokes must stay within a pixel of straight.
+    const lines: [number, number, number, number][] = [
+      [20, 10, 56, 90],
+      [56, 10, 20, 90],
+      [110, 30, 190, 30],
+      [150, 30, 150, 90],
+    ]
+    const ink = (x: number, y: number) => lines.some(([ax, ay, bx, by]) => seg(x, y, ax, ay, bx, by) < 4)
+    const d = centerline(paint(ink, 200, 100), 200, 100, options).paths[0].d
+    // Before the junctions were refitted the X bent 2.5 px off its lines.
+    const worst = Math.max(...samples(d).map((p) => Math.min(...lines.map(([ax, ay, bx, by]) => seg(p.x, p.y, ax, ay, bx, by)))))
+    expect(worst).toBeLessThan(1)
+  })
+
   it('traces a ring as one closed loop', () => {
     const subs = parsePath(centerline(paint((x, y) => Math.abs(Math.hypot(x - 50, y - 50) - 30) < 2), 100, 100, options).paths[0].d)
     expect(subs).toHaveLength(1)

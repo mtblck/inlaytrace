@@ -208,6 +208,35 @@ describe('the edges of those fixes', () => {
     expect(area(paths[0].d)).toBeGreaterThan(0.85 * 2 * half * (80 + 60))
   })
 
+  it('keeps 1 px lines at a slant in one piece', () => {
+    // A V of 1.1 px lines at 51° and 31°. No pixel is covered whole, and at a
+    // slant the ink is a staircase touching only at corners: as 4-connected
+    // regions, specks that speck clean-up erased, leaving dashes or nothing.
+    const [w, h, half] = [120, 70, 0.55]
+    const arms = [
+      [20, 10, 60, 60],
+      [60, 60, 110, 30],
+    ]
+    const near = (X: number, Y: number) =>
+      arms.some(([ax, ay, bx, by]) => {
+        const [dx, dy] = [bx - ax, by - ay]
+        const t = Math.max(0, Math.min(1, ((X - ax) * dx + (Y - ay) * dy) / (dx * dx + dy * dy)))
+        return Math.hypot(X - ax - t * dx, Y - ay - t * dy) <= half
+      })
+    const img = new Uint8Array(w * h * 4)
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        let cov = 0
+        for (let s = 0; s < 16; s++) if (near(x + ((s % 4) + 0.5) / 4, y + (Math.floor(s / 4) + 0.5) / 4)) cov++
+        const t = cov / 16
+        img.set([255 - t * 176, 255 - t * 121, 255 - t * 80, 255], (y * w + x) * 4)
+      }
+    const fit = { speckle: 4, tolerance: 0.75, cornerAngle: 60 }
+    expect(pathsOf(traceInlay(img.slice(), w, h, { ...fit, mode: 'binary', threshold: 'auto' }))).toHaveLength(1)
+    const inks = pathsOf(traceInlay(img.slice(), w, h, { ...fit, mode: 'palette', palette: ['#ffffff', '#4f86af'] })).filter((p) => p.fill !== '#ffffff')
+    expect(inks).toHaveLength(1)
+  })
+
   it('grows no spikes on noisy letter stems', () => {
     // 2.6–3.6 px stems, anti-aliased at sub-pixel offsets, their ink noisy as lossy compression leaves it.
     // Their nearly parallel sides "met" far past the pixels, and least-squares handles shot out: 95 px.
