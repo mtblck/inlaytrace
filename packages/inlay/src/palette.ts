@@ -40,24 +40,9 @@ export function peakPalette(
     minFlat = 0.001,
   }: { minDistance?: number; minShare?: number; minDetail?: number; width?: number; minTint?: number; minFlat?: number } = {},
 ): string[] {
-  const bins = new Map<number, Bin>()
-  let opaque = 0
-  for (let i = 0; i < rgba.length; i += 4) {
-    if (rgba[i + 3] < 128) continue
-    const r = rgba[i]
-    const g = rgba[i + 1]
-    const b = rgba[i + 2]
-    const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3)
-    const bin = bins.get(key)
-    if (bin) {
-      bin.n++
-      bin.r += r
-      bin.g += g
-      bin.b += b
-    } else bins.set(key, { n: 1, r, g, b })
-    opaque++
-  }
-
+  const bins = histogram(rgba)
+  for (let i = 0; i < rgba.length; i += 4) if (rgba[i + 3] >= 128) bins.add(i)
+  const opaque = bins.total
   // A colour's weight is every pixel within half the distinct-colour distance
   // of it, not just its own bin. A flat colour is one bin either way, but a
   // photographed one (red lettering, a yellow decal) spreads over many bins
@@ -65,9 +50,9 @@ export function peakPalette(
   // greys, and a photo of a grey ship with red and yellow details got 6
   // colours (black, white, greys and one blue) at any cap.
   const flat = width ? flatBins(rgba, width) : null
-  const items = [...bins].map(([key, bin]) => {
-    const rgb: Rgb = [bin.r / bin.n, bin.g / bin.n, bin.b / bin.n]
-    return { n: bin.n, flat: flat?.get(key)?.n ?? 0, rgb, lab: oklab(rgb), weight: 0, flatWeight: 0, peak: true }
+  const items = bins.keys.map((key) => {
+    const rgb = bins.mean(key)
+    return { n: bins.n[key], flat: flat?.n[key] ?? 0, rgb, lab: oklab(rgb), weight: 0, flatWeight: 0, peak: true }
   })
   weigh(items, minDistance / 2)
 
@@ -101,7 +86,33 @@ const EDGE_FLAT = 0.05
  */
 const EDGE_SHARE = 0.02
 
-type Bin = { n: number; r: number; g: number; b: number }
+/**
+ * Pixels binned at 5 bits per channel (a 15-bit key), with each bin's colour
+ * sums for its true mean. Typed arrays, not a Map: with the flat pass this
+ * took a third less time on a 2048 px logo. `keys`
+ * lists the used bins in the order first seen, as a Map would iterate them.
+ */
+function histogram(rgba: ArrayLike<number>) {
+  const n = new Uint32Array(32768)
+  const sum = new Float64Array(32768 * 3)
+  const keys: number[] = []
+  const bins = {
+    n,
+    keys,
+    total: 0,
+    add(i: number) {
+      const key = ((rgba[i] >> 3) << 10) | ((rgba[i + 1] >> 3) << 5) | (rgba[i + 2] >> 3)
+      if (!n[key]++) keys.push(key)
+      sum[key * 3] += rgba[i]
+      sum[key * 3 + 1] += rgba[i + 1]
+      sum[key * 3 + 2] += rgba[i + 2]
+      bins.total++
+    },
+    mean: (key: number): Rgb => [sum[key * 3] / n[key], sum[key * 3 + 1] / n[key], sum[key * 3 + 2] / n[key]],
+  }
+  return bins
+}
+type Histogram = ReturnType<typeof histogram>
 
 /**
  * The image's flat pixels, binned as peakPalette bins them. A pixel is flat
@@ -110,21 +121,21 @@ type Bin = { n: number; r: number; g: number; b: number }
  */
 function flatBins(rgba: ArrayLike<number>, w: number) {
   const h = Math.floor(rgba.length / 4 / w)
-  const bins = new Map<number, Bin>()
-  const near = (i: number, j: number) =>
-    rgba[j + 3] >= 128 && Math.abs(rgba[i] - rgba[j]) <= 8 && Math.abs(rgba[i + 1] - rgba[j + 1]) <= 8 && Math.abs(rgba[i + 2] - rgba[j + 2]) <= 8
+  const bins = histogram(rgba)
+  // Each neighbouring pair compared once: whether a pixel is near the one to
+  // its right (bit 1) and below (bit 2), both opaque.
+  const near = new Uint8Array(w * h)
+  const close = (i: number, j: number) =>
+    rgba[i + 3] >= 128 && rgba[j + 3] >= 128 && Math.abs(rgba[i] - rgba[j]) <= 8 && Math.abs(rgba[i + 1] - rgba[j + 1]) <= 8 && Math.abs(rgba[i + 2] - rgba[j + 2]) <= 8
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const p = y * w + x
+      near[p] = (x < w - 1 && close(p * 4, p * 4 + 4) ? 1 : 0) | (y < h - 1 && close(p * 4, (p + w) * 4) ? 2 : 0)
+    }
   for (let y = 1; y < h - 1; y++)
     for (let x = 1; x < w - 1; x++) {
-      const i = (y * w + x) * 4
-      if (rgba[i + 3] < 128 || !near(i, i - 4) || !near(i, i + 4) || !near(i, i - 4 * w) || !near(i, i + 4 * w)) continue
-      const key = ((rgba[i] >> 3) << 10) | ((rgba[i + 1] >> 3) << 5) | (rgba[i + 2] >> 3)
-      const bin = bins.get(key)
-      if (bin) {
-        bin.n++
-        bin.r += rgba[i]
-        bin.g += rgba[i + 1]
-        bin.b += rgba[i + 2]
-      } else bins.set(key, { n: 1, r: rgba[i], g: rgba[i + 1], b: rgba[i + 2] })
+      const p = y * w + x
+      if ((near[p] & 3) === 3 && near[p - 1] & 1 && near[p - w] & 2) bins.add(p * 4)
     }
   return bins
 }
@@ -171,11 +182,11 @@ function weigh<T extends { n: number; flat: number; lab: Rgb; weight: number; fl
  */
 const TINT_LIGHTNESS = 0.85
 
-function flatTints(flat: Map<number, Bin>, opaque: number, picked: { lab: Rgb }[], room: number, minTint: number, minFlat: number) {
+function flatTints(flat: Histogram, opaque: number, picked: { lab: Rgb }[], room: number, minTint: number, minFlat: number) {
   // As in the main walk, but over flat pixels only, and closer together.
-  const items = [...flat.values()].map((bin) => {
-    const rgb: Rgb = [bin.r / bin.n, bin.g / bin.n, bin.b / bin.n]
-    return { n: bin.n, flat: bin.n, rgb, lab: oklab(rgb), weight: 0, flatWeight: 0, peak: true }
+  const items = flat.keys.map((key) => {
+    const rgb = flat.mean(key)
+    return { n: flat.n[key], flat: flat.n[key], rgb, lab: oklab(rgb), weight: 0, flatWeight: 0, peak: true }
   })
   weigh(items, minTint / 2)
   const out: { lab: Rgb; rgb: Rgb }[] = []
