@@ -1,6 +1,6 @@
 import { useId, useState, type ReactNode } from 'react'
 import type { PrepStage } from '../engine/prep'
-import { PRESETS, hasExactShapes, isInk, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
+import { PRESETS, canStrokeLines, hasExactShapes, isInk, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
 import type { Candidate, SizeSearch } from '../engine/targetSize'
 import { formatBytes } from '../lib/svg'
 
@@ -11,6 +11,7 @@ export type SizeRun = { target: number; from: Settings; tried: number; best: Can
 const PRESET_ICONS: Record<PresetId, string> = {
   logo: 'M12 3l8 4.5v9L12 21l-8-4.5v-9z',
   illustration: 'M4 18c3-8 6-11 8-11s3 3 4 6 2 4 4 4M4 18h16',
+  outline: 'M5 19V9l7-5 7 5v10zM5 13h14',
   lineart: 'M4 16c3-6 5-9 7-9s2 6 4 6 3-3 5-5',
   centerline: 'M5 19L19 5M5 12h4M15 12h4',
   photo: 'M4 5h16v14H4zM4 11h16M4 15h16',
@@ -201,6 +202,30 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
                 {settings.exact
                   ? 'Circles, ellipses, rectangles and regular polygons are drawn as true shapes.'
                   : 'Every outline is fitted as traced, even where it is nearly a circle or a square.'}
+              </p>
+            </div>
+          )}
+
+          {canStrokeLines(p) && (
+            <div className="space-y-1.5">
+              <span className="field-label">Lines as strokes</span>
+              <div role="radiogroup" aria-label="Lines as strokes" className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-rule bg-rule">
+                {([true, false] as const).map((v) => (
+                  <button
+                    key={String(v)}
+                    role="radio"
+                    aria-checked={settings.lines === v}
+                    onClick={() => set('lines', v)}
+                    className={`py-1.5 text-[13px] ${settings.lines === v ? 'bg-paper font-medium text-accent' : 'bg-paper-sunk text-ink hover:bg-paper'}`}
+                  >
+                    {v ? 'On' : 'Off'}
+                  </button>
+                ))}
+              </div>
+              <p className="field-hint">
+                {settings.lines
+                  ? 'Thin outlines become single lines of even width, and the fills meet beneath them. Text too small to follow stays as shapes.'
+                  : 'Outlines are traced as shapes, like everything else.'}
               </p>
             </div>
           )}

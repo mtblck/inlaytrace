@@ -262,3 +262,59 @@ describe('small text on an illustration', () => {
     expect(paths.filter((p) => p.fill === '#6b6b6b')).toHaveLength(0)
   })
 })
+
+describe('lines as strokes', () => {
+  const strokesOf = (svg: string) => [...svg.matchAll(/<path d="([^"]*)" fill="none" stroke="([^"]*)" stroke-width="([^"]*)"/g)].map((m) => ({ d: m[1], stroke: m[2], width: Number(m[3]) }))
+  const svg = traceInlay(px, W, H, { ...LOGO, speckle: 4, mode: 'palette', palette: peakPalette(px, 8, { width: W }), strokes: true })
+
+  it('traces the outlines, stem and dash as one stroked path, at the width drawn', () => {
+    const lines = strokesOf(svg)
+    expect(lines).toHaveLength(1)
+    expect(near(lines[0].stroke, INK, 0.06) || near(lines[0].stroke, DARK, 0.06)).toBe(true)
+    expect(lines[0].width).toBeGreaterThan(2.5)
+    expect(lines[0].width).toBeLessThan(3.6)
+    // The hull's outline is one closed loop; the stem and the dash are open strokes.
+    const subs = parsePath(lines[0].d)
+    expect(subs.filter((s) => s.closed)).toHaveLength(1)
+    expect(subs).toHaveLength(3)
+  })
+
+  it('leaves no shapes in either shade of the ink, and the fills meet under the line', () => {
+    expect(areaNear(svg, INK, 0.03) + areaNear(svg, DARK, 0.03)).toBe(0)
+    // The pale fill reaches the middle of the outline: the hull inside its centreline, less the band, plus the moon.
+    const hull = (148.5 - 31.5) * (158.5 - 91.5) - (148.5 - 31.5) * 15
+    const pale = hull + Math.PI * 45 ** 2
+    expect(areaNear(svg, PALE, 0.015)).toBeGreaterThan(0.95 * pale)
+    expect(areaNear(svg, PALE, 0.015)).toBeLessThan(1.05 * pale)
+  })
+
+  it('keeps lettering too small to follow as shapes', () => {
+    const W2 = 200
+    const H2 = 40
+    const text = new Uint8Array(W2 * H2 * 4)
+    // Eight 1.5 px grey rings and a 3 px blue rule, anti-aliased on white.
+    for (let y = 0; y < H2; y++)
+      for (let x = 0; x < W2; x++) {
+        let ink = 0
+        let blue = 0
+        for (let sy = 0; sy < 4; sy++)
+          for (let sx = 0; sx < 4; sx++) {
+            const fx = x + (sx + 0.5) / 4
+            const fy = y + (sy + 0.5) / 4
+            const cx = 20 + 14 * Math.round((fx - 20) / 14)
+            if (cx >= 20 && cx <= 118 && Math.abs(Math.hypot(fx - cx, fy - 20) - 3.5) < 0.75) ink++
+            if (fx >= 140 && fx < 190 && fy >= 18 && fy < 21) blue++
+          }
+        const c = [0, 1, 2].map((k) => Math.round(255 + ((107 - 255) * ink + (INK[k] - 255) * blue) / 16))
+        text.set([...c, 255], (y * W2 + x) * 4)
+      }
+    const out = traceInlay(text, W2, H2, { ...LOGO, mode: 'palette', palette: ['#ffffff', '#568cb6', '#6b6b6b'], strokes: true })
+    expect(pathsOf(out).filter((p) => p.fill === '#6b6b6b')).toHaveLength(8)
+    expect(strokesOf(out).map((l) => l.stroke)).toEqual(['#568cb6'])
+  })
+
+  it('is ignored for photos, binary and pixel art', () => {
+    const palette = peakPalette(px, 8, { width: W })
+    for (const o of [{ photo: true }, { pixels: true }]) expect(strokesOf(traceInlay(px, W, H, { ...LOGO, mode: 'palette', palette, strokes: true, ...o }))).toHaveLength(0)
+  })
+})

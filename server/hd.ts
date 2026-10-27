@@ -93,6 +93,7 @@ export function cleanSettings(raw: unknown): Settings | null {
     shapes: s.shapes === 'stacked' ? 'stacked' : 'cutout',
     exact: s.exact === true,
     strokeWidth: num(s.strokeWidth, 0, 64, 0),
+    lines: s.lines === true,
     merge,
     removeBackground: false,
     aiUpscale: false,

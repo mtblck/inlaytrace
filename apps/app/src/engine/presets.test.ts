@@ -104,7 +104,7 @@ describe('peak palette', () => {
 describe('exact shapes setting', () => {
   it('is on for the flat-art presets and only reaches the tracer there', () => {
     for (const p of PRESETS) {
-      const on = p.id === 'logo' || p.id === 'illustration' || p.id === 'lineart'
+      const on = p.id === 'logo' || p.id === 'illustration' || p.id === 'outline' || p.id === 'lineart'
       expect(settingsFor(p.id).exact).toBe(on)
       expect(!!toTraceOptions(settingsFor(p.id)).shapes).toBe(on)
       // Turned on by hand, Poster and Pixel art still don't use it.
@@ -117,5 +117,43 @@ describe('exact shapes setting', () => {
     expect(checkSettings({ ...settingsFor('logo'), exact: false }).exact).toBe(false)
     const { exact: _, ...old } = settingsFor('illustration')
     expect(checkSettings(old).exact).toBe(true)
+  })
+})
+
+describe('lines as strokes setting', () => {
+  it('is on for Outline art, offered on Logo and Illustration, and only reaches the tracer there', () => {
+    for (const p of PRESETS) {
+      const offered = p.id === 'logo' || p.id === 'illustration' || p.id === 'outline'
+      expect(settingsFor(p.id).lines).toBe(p.id === 'outline')
+      expect(!!toTraceOptions({ ...settingsFor(p.id), lines: true }).strokes).toBe(offered)
+      expect(toTraceOptions({ ...settingsFor(p.id), lines: false }).strokes).toBeUndefined()
+    }
+  })
+
+  it('traces an outlined card with a stroked line, the fills meeting beneath it', () => {
+    // A pale card outlined 3 px in blue, on white.
+    const w = 120
+    const h = 80
+    const px = new Uint8Array(w * h * 4)
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const inside = x >= 20 && x < 100 && y >= 15 && y < 65
+        const edge = inside && (x < 23 || x >= 97 || y < 18 || y >= 62)
+        px.set([...(edge ? [76, 132, 172] : inside ? [226, 238, 246] : [255, 255, 255]), 255], (y * w + x) * 4)
+      }
+    const t = trace(px, w, h, toTraceOptions(settingsFor('outline')))
+    const lines = t.paths.filter((p) => p.stroke)
+    expect(lines).toHaveLength(1)
+    expect(lines[0].stroke).toBeGreaterThan(2.5)
+    expect(lines[0].stroke).toBeLessThan(3.6)
+    expect(t.paths.filter((p) => !p.stroke && p.fill === lines[0].fill)).toHaveLength(0)
+    // Illustration, the same but shapes: the outline is a filled ring.
+    expect(trace(px, w, h, toTraceOptions(settingsFor('illustration'))).paths.some((p) => p.stroke)).toBe(false)
+  })
+
+  it('survives a saved session, and a session from before it gets the default', () => {
+    expect(checkSettings({ ...settingsFor('logo'), lines: true }).lines).toBe(true)
+    const { lines: _, ...old } = settingsFor('outline')
+    expect(checkSettings(old).lines).toBe(true)
   })
 })

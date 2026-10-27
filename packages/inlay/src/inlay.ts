@@ -30,6 +30,7 @@
 import { fitChain, isFlat, type Cubic, type FitOptions } from './fit'
 import { oklab, type Rgb } from './palette'
 import { serializePath, type PathNode, type Pt, type Subpath } from './path'
+import { skeletonStrokes } from './skeleton'
 
 export type InlayOptions = FitOptions & {
   /** Regions smaller than speckle × speckle pixels are merged into their surroundings. */
@@ -58,6 +59,15 @@ export type InlayOptions = FitOptions & {
    * but on photos it kept so many real regions that files grew by half.
    */
   photo?: boolean
+  /**
+   * Outline art: draw thin lines of ink as lines. A colour that is mostly
+   * thin, long regions (outlines, small lettering) is traced down its middle
+   * as round-capped strokes of the width measured from it, and the shapes
+   * around each line grow to meet under it, so a line can be moved or
+   * restyled without a gap opening. Palette mode only; ignored for photos
+   * and pixel art.
+   */
+  strokes?: boolean
 } & (
     /**
      * `merge` folds colours together before any region is built, so the edge
@@ -78,14 +88,22 @@ export type InlayOptions = FitOptions & {
 
 const VOID = -1 // outside the image, transparent pixels, and line art's paper
 
-/** One filled shape: path data (M/L/C/Z, absolute, nonzero fill) and its colour. */
-export type InlayPath = { d: string; fill: string }
+/**
+ * One filled shape: path data (M/L/C/Z, absolute, nonzero fill) and its
+ * colour. With `stroke` (a width in px), a line drawn in that colour instead,
+ * with round caps and joins.
+ */
+export type InlayPath = { d: string; fill: string; stroke?: number }
 /** A trace: the drawing's size in pixels and its shapes, largest first (paint order). */
 export type InlayResult = { width: number; height: number; paths: InlayPath[] }
 
 /** The trace as an SVG document. */
 export function toSvg(r: InlayResult): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${r.width}" height="${r.height}" viewBox="0 0 ${r.width} ${r.height}">\n${r.paths.map((p) => `<path d="${p.d}" fill="${p.fill}"/>`).join('\n')}\n</svg>\n`
+  const path = (p: InlayPath) =>
+    p.stroke
+      ? `<path d="${p.d}" fill="none" stroke="${p.fill}" stroke-width="${p.stroke}" stroke-linecap="round" stroke-linejoin="round"/>`
+      : `<path d="${p.d}" fill="${p.fill}"/>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${r.width}" height="${r.height}" viewBox="0 0 ${r.width} ${r.height}">\n${r.paths.map(path).join('\n')}\n</svg>\n`
 }
 
 /** Trace to an SVG string; `trace` gives the shapes as data. */
@@ -103,6 +121,7 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
   const labs = o.mode === 'palette' && !o.photo ? colors.map((c) => (c ? oklab(hexToRgb(c)) : null)) : undefined
   mergeSpecks(labels, w, h, Math.max(0, Math.round(o.speckle)) ** 2, labs)
   if (labs && !o.pixels) mergeSlivers(labels, w, h, labs)
+  const lines = o.mode === 'palette' && o.strokes && labs && !o.pixels ? strokesOf(rgba, labels, w, h, colors, labs, drawn, o) : []
 
   // Final regions: 4-connected components of drawn labels. Everything else is VOID.
   const { comp, compLabel, compArea } = components(labels, w, h, (l) => drawn[l])
@@ -179,7 +198,8 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
   }
   // Largest first: for stacked shapes that is containers before what they contain.
   shapes.sort((a, b) => b.area - a.area)
-  return { width: w, height: h, paths: shapes.map((x) => ({ d: serializePath(x.subs), fill: x.fill })) }
+  // Lines on top, over the seams of the shapes that meet under them.
+  return { width: w, height: h, paths: [...shapes.map((x) => ({ d: serializePath(x.subs), fill: x.fill })), ...lines] }
 }
 
 /**
@@ -742,6 +762,181 @@ function mergeSlivers(labels: Int32Array, w: number, h: number, labs: (Rgb | nul
     }
     if (!changed) return
     for (let i = 0; i < w * h; i++) if (to[comp[i]] >= 0) labels[i] = to[comp[i]]
+  }
+}
+
+/** A region is thin enough to be a line when no pixel is more than this far (px) inside its edge: lines up to about 8 px wide. */
+const LINE_HALF = 4
+/** And long enough: at least this many times as long as it is wide, so a dot stays a shape. */
+const LINE_LENGTH = 3
+/** A colour is drawn as lines when at least this share of it is thin, long regions. */
+const LINE_SHARE = 0.5
+/** Lines measured thinner than this (px) stay shapes. */
+const LINE_WIDTH = 2.5
+/** And how far off the line–paper blend (a share of the distance between them) they may stray. */
+const LINE_OFF = 0.15
+
+/**
+ * The 4-connected regions of `keep` labels, how deep each goes (in thirds of a
+ * pixel, by a 3-4 chamfer distance from its edge), and which are thin and long
+ * enough to be lines.
+ */
+function thinRegions(labels: Int32Array, w: number, h: number, keep: (label: number) => boolean) {
+  const n = w * h
+  const { comp, compLabel, compArea } = components(labels, w, h, keep)
+  const depth = new Int32Array(n)
+  const same = (i: number, j: number) => comp[i] === comp[j]
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x
+      const edge = comp[i] === VOID || x === 0 || y === 0 || x === w - 1 || y === h - 1 || !same(i, i - 1) || !same(i, i + 1) || !same(i, i - w) || !same(i, i + w)
+      depth[i] = edge ? 3 : 1 << 30
+    }
+  const relax = (i: number, j: number, step: number) => {
+    if (same(i, j) && depth[j] + step < depth[i]) depth[i] = depth[j] + step
+  }
+  for (let y = 1; y < h - 1; y++)
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x
+      relax(i, i - 1, 3), relax(i, i - w, 3), relax(i, i - w - 1, 4), relax(i, i - w + 1, 4)
+    }
+  for (let y = h - 2; y > 0; y--)
+    for (let x = w - 2; x > 0; x--) {
+      const i = y * w + x
+      relax(i, i + 1, 3), relax(i, i + w, 3), relax(i, i + w + 1, 4), relax(i, i + w - 1, 4)
+    }
+  const m = compArea.length
+  const deepest = new Int32Array(m)
+  for (let i = 0; i < n; i++) if (comp[i] !== VOID && depth[i] > deepest[comp[i]]) deepest[comp[i]] = depth[i]
+  const thin = new Uint8Array(m)
+  for (let id = 0; id < m; id++) {
+    // Its width: a pixel at depth 1 is on the edge, so a 3 px line's middle is 2 deep.
+    const wide = (2 * deepest[id]) / 3 - 1
+    if (wide <= 2 * LINE_HALF && compArea[id] >= LINE_LENGTH * wide ** 2) thin[id] = 1
+  }
+  return { comp, compLabel, compArea, deepest, thin }
+}
+
+/**
+ * Outline art's lines. Finds the colours that are mostly thin, long regions
+ * (an outline 3 px wide, 1.5 px lettering), traces those regions down their
+ * middle as strokes (one path a colour, at the width measured from its ink),
+ * and hands their pixels to the shapes either side, which meet under the
+ * line's middle. The paper is never a line, however thin its gaps.
+ */
+function strokesOf(rgba: ArrayLike<number>, labels: Int32Array, w: number, h: number, colors: string[], labs: (Rgb | null)[], drawn: boolean[], o: FitOptions): InlayPath[] {
+  const n = w * h
+  const { comp, compLabel, compArea, thin } = thinRegions(labels, w, h, (l) => drawn[l])
+  // Colours that are mostly lines, but never the commonest (the paper).
+  const total = new Map<number, number>()
+  const inLines = new Map<number, number>()
+  for (let id = 0; id < compArea.length; id++) {
+    const l = compLabel[id]
+    total.set(l, (total.get(l) ?? 0) + compArea[id])
+    if (thin[id]) inLines.set(l, (inLines.get(l) ?? 0) + compArea[id])
+  }
+  const paper = [...total].reduce((a, b) => (b[1] > a[1] ? b : a), [-1, -1])[0]
+  const lineColours = [...inLines].filter(([l, a]) => l !== paper && a >= LINE_SHARE * total.get(l)!).map(([l]) => l)
+  if (!lineColours.length) return []
+
+  const line = new Uint8Array(n)
+  const out: InlayPath[] = []
+  // Most line first: a shade of it (lossy compression leaves two) goes into
+  // its ink, and has little of its own left after.
+  for (const l of lineColours.sort((a, b) => inLines.get(b)! - inLines.get(a)!)) {
+    const inky = blendTest(labs[l]!, labs[paper] ?? [1, 0, 0])
+    const like = labs.map((c, k) => k !== paper && drawn[k] && !!c && inky(c))
+    // The line's ink: its thin regions, and those of its shades taken
+    // together, which a lossy save can cut into pieces too short to count alone.
+    const mask = new Int32Array(n)
+    for (let i = 0; i < n; i++) mask[i] = like[labels[i]] && !line[i] ? 1 : 0
+    const all = thinRegions(mask, w, h, (v) => v === 1)
+    const ink = new Uint8Array(n)
+    for (let i = 0; i < n; i++) if (!line[i] && ((comp[i] !== VOID && thin[comp[i]] && like[compLabel[comp[i]]]) || (all.comp[i] !== VOID && all.thin[all.comp[i]]))) ink[i] = 1
+    // Shapes in the line's colour or darker (a dot, a heading) keep their
+    // pixels, but a scrap no more than a pixel or two across, or a blot no
+    // bigger than the line is wide where it bends or meets another, is a piece
+    // of the line the palette cut off.
+    const solid = (i: number) => {
+      const id = all.comp[i]
+      return line[i] === 1 || (id !== VOID && !all.thin[id] && all.deepest[id] > 3 && all.compArea[id] > (2 * LINE_HALF) ** 2)
+    }
+    edgesOf(ink, solid, rgba, w, inky)
+    const { subs, measured } = skeletonStrokes(ink, w, h, o)
+    // Below LINE_WIDTH a centreline can't follow the ink (small lettering): it stays shapes.
+    if (!subs.length || measured < LINE_WIDTH) continue
+    out.push({ d: serializePath(subs), fill: colors[l], stroke: Math.round(measured * 100) / 100 })
+    for (let i = 0; i < n; i++) if (ink[i]) line[i] = 1
+  }
+  if (!out.length) return out
+  // The shapes either side grow into the line, a pixel a step, so they meet
+  // under its middle.
+  let front: number[] = []
+  const taken = new Uint8Array(n)
+  for (let i = 0; i < n; i++) if (!line[i]) taken[i] = 1
+  for (let i = 0; i < n; i++) {
+    if (taken[i]) continue
+    const x = i % w
+    if ((x > 0 && taken[i - 1]) || (x < w - 1 && taken[i + 1]) || (i >= w && taken[i - w]) || (i + w < n && taken[i + w])) front.push(i)
+  }
+  while (front.length) {
+    const next: number[] = []
+    const grown: [number, number][] = []
+    for (const i of front) {
+      if (taken[i]) continue
+      const x = i % w
+      const from = x > 0 && taken[i - 1] ? i - 1 : x < w - 1 && taken[i + 1] ? i + 1 : i >= w && taken[i - w] ? i - w : i + w < n && taken[i + w] ? i + w : -1
+      if (from >= 0) grown.push([i, labels[from]])
+    }
+    for (const [i, l] of grown) {
+      if (taken[i]) continue
+      labels[i] = l
+      taken[i] = 1
+      const x = i % w
+      for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) if (j >= 0 && j < n && !taken[j]) next.push(j)
+    }
+    front = next
+  }
+  return out
+}
+
+/** Whether a colour lies between the paper and the line (or beyond, darker), nearer the line. */
+function blendTest(line: Rgb, paper: Rgb): (lab: Rgb) => boolean {
+  const span = [line[0] - paper[0], line[1] - paper[1], line[2] - paper[2]]
+  const len2 = span[0] ** 2 + span[1] ** 2 + span[2] ** 2
+  return (lab) => {
+    if (!len2) return false
+    const d = [lab[0] - paper[0], lab[1] - paper[1], lab[2] - paper[2]]
+    const t = (d[0] * span[0] + d[1] * span[1] + d[2] * span[2]) / len2
+    const off = (d[0] - t * span[0]) ** 2 + (d[1] - t * span[1]) ** 2 + (d[2] - t * span[2]) ** 2
+    return t >= 0.5 && t <= 2 && off <= LINE_OFF ** 2 * len2
+  }
+}
+
+/**
+ * Gives a line back the pixels the palette handed to other colours: its
+ * anti-aliased edges, and stretches drawn a shade darker. Grows the ink into
+ * every touching pixel whose own colour passes `inky`, short of `blocked`
+ * shapes. Without them a line comes out broken and thinner than drawn.
+ */
+function edgesOf(ink: Uint8Array, blocked: (i: number) => boolean, rgba: ArrayLike<number>, w: number, inky: (lab: Rgb) => boolean) {
+  const n = ink.length
+  const seen = ink.slice()
+  let front: number[] = []
+  for (let i = 0; i < n; i++) if (ink[i]) front.push(i)
+  while (front.length) {
+    const next: number[] = []
+    for (const i of front) {
+      const x = i % w
+      for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) {
+        if (j < 0 || j >= n || seen[j]) continue
+        seen[j] = 1
+        if (rgba[j * 4 + 3] < 128 || blocked(j) || !inky(oklab([rgba[j * 4], rgba[j * 4 + 1], rgba[j * 4 + 2]]))) continue
+        ink[j] = 1
+        next.push(j)
+      }
+    }
+    front = next
   }
 }
 

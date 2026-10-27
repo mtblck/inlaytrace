@@ -214,6 +214,37 @@ and ring come out cleaner too. The outline fixture went from 2.1%
 to 2.0% wrong; the badge and emblems score the same (a few more nodes),
 and the pen drawing is unchanged.
 
+**Outline art: lines as strokes.** Even traced well, an outline drawn as a
+3 px line comes out as a thin filled ring whose two edges are fitted apart, so
+it wobbles in width, and it can't be thinned, recoloured as one line or moved
+off the fill. With `strokes` (the Outline art preset, or *Lines as strokes* on
+Logo and Illustration) the colours that are mostly thin, long regions are
+traced as Centerline traces ink, down the middle, sharing its skeleton code
+(`skeleton.ts`), and the shapes either side grow into the line's pixels a step
+at a time so they meet under its middle. What it took on the sinking ship:
+
+- *Width by distance, not area.* A region is a line when a 3-4 chamfer
+  distance puts nothing more than 8 px wide in it and it is at least three
+  times as long as wide; a dot stays a shape. A colour is lines when half of it
+  is.
+- *Lossy shades.* The ship's outline is two blues, the second darker in
+  stretches, and short dashes come in halves of each. A line's ink is its own
+  thin regions plus those of every colour that lies between the paper and it
+  (or beyond, darker) within 0.15 of the blend, taken together, then grown into
+  any touching pixel of such a colour, its anti-aliased edges included. Grey
+  text near blue lines doesn't count as a darker blue: 0.3 off the blend.
+- *Blots at bends.* Where a line turns sharply the palette left a darker blot
+  a few pixels across; blocking every solid shape of the line's colour cut the
+  bow's line there, so only shapes larger than 8 × 8 px block it.
+- *Small text stays shapes.* At 1.5 px the skeleton of a letter is a few
+  pixels between junctions, and pruning ate stems and arches ("h" came out as
+  "n"). Lines measured under 2.5 px wide stay as shapes; the same letters at
+  HD's full size would be wide enough.
+
+On the outline fixture Outline art scores 2.08% wrong against Illustration's
+2.01%, with 197 nodes against 359 and 6.0 KB against 9.9; the badge doesn't
+change (it has no lines), and without `strokes` nothing does.
+
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
 most one waiting request per channel (trace, optimise), replacing it when a
