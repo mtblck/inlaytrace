@@ -211,16 +211,20 @@ async function nodeOpChecks(page, label) {
   const n0 = await nodes()
   const len0 = await outlineLength()
   const d0 = await page.locator('[data-outline-hit]').getAttribute('d')
-  // A point on the outline, 37% of the way round, clear of existing nodes.
+  // A point on the outline, 37% of the way round, clear of existing nodes and
+  // with the selected shape under it: on an edge shared with a neighbour, a
+  // press goes to whichever shape is under the pointer.
   const spot = await page.evaluate(() => {
     const el = document.querySelector('[data-outline-hit]')
+    const id = document.querySelector('[data-selected]').getAttribute('data-selected')
+    const ownAt = (p) => document.elementsFromPoint(p.x, p.y).find((e) => e.dataset?.pathId)?.dataset.pathId === id
     const total = el.getTotalLength()
     const m = el.getScreenCTM()
     const taken = [...document.querySelectorAll('[data-node]')].map((n) => n.getBoundingClientRect())
     for (const f of [0.37, 0.21, 0.63, 0.81, 0.12, 0.5]) {
       const q = el.getPointAtLength(total * f)
       const p = new DOMPoint(q.x, q.y).matrixTransform(m)
-      if (taken.every((r) => Math.hypot(r.x + r.width / 2 - p.x, r.y + r.height / 2 - p.y) > 16)) return { x: p.x, y: p.y }
+      if (taken.every((r) => Math.hypot(r.x + r.width / 2 - p.x, r.y + r.height / 2 - p.y) > 16) && ownAt(p)) return { x: p.x, y: p.y }
     }
     return null
   })
@@ -252,12 +256,33 @@ async function nodeOpChecks(page, label) {
     await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2)
   }
   if (corner) {
+    // The corner's angle, from the outline 4 units either side of it.
+    const box = await page.locator(`[data-node="${corner}"]`).boundingBox()
+    const angle = await page.evaluate(({ x, y }) => {
+      const el = document.querySelector('[data-outline-hit]')
+      const at = new DOMPoint(x, y).matrixTransform(el.getScreenCTM().inverse())
+      const total = el.getTotalLength()
+      let best = 0
+      for (let l = 0, bd = Infinity; l < total; l += 0.25) {
+        const q = el.getPointAtLength(l)
+        const d = Math.hypot(q.x - at.x, q.y - at.y)
+        if (d < bd) (bd = d), (best = l)
+      }
+      const c = el.getPointAtLength(best)
+      const a = el.getPointAtLength((best - 4 + total) % total)
+      const b = el.getPointAtLength((best + 4) % total)
+      const u = [a.x - c.x, a.y - c.y]
+      const v = [b.x - c.x, b.y - c.y]
+      return Math.acos((u[0] * v[0] + u[1] * v[1]) / (Math.hypot(...u) * Math.hypot(...v)))
+    }, { x: box.x + box.width / 2, y: box.y + box.height / 2 })
     await press(corner)
     await page.getByLabel('Corner radius').fill('3')
     await page.getByRole('button', { name: 'Round corner' }).click()
     const rounded = await outlineLength()
-    // Cutting a corner with a 3 px arc shortens the outline by a little under 2 × 3 × (1 − π/4) ≈ 1.3 px at 90°.
-    check((await nodes()) === n0 + 1 && rounded < len0 && len0 - rounded < 3, `${label}: Round corner replaces a corner with two nodes and an arc (outline ${len0.toFixed(1)} → ${rounded.toFixed(1)})`)
+    // A 3 px arc in a corner of angle φ cuts 2 × 3 / tan(φ/2) of edge and adds 3 × (π − φ) of arc:
+    // about 1.3 px at 90°, more at a sharper corner (at most: a short edge caps the radius).
+    const cut = (6 / Math.tan(angle / 2) - 3 * (Math.PI - angle))
+    check((await nodes()) === n0 + 1 && rounded < len0 && len0 - rounded < cut + 1, `${label}: Round corner replaces a corner with two nodes and an arc (outline ${len0.toFixed(1)} → ${rounded.toFixed(1)}, ${Math.round((angle * 180) / Math.PI)}° corner, at most about ${cut.toFixed(1)} shorter)`)
     await page.keyboard.press(`${MOD}+z`)
     await press(corner)
     await page.getByRole('button', { name: 'Smooth' }).click()
