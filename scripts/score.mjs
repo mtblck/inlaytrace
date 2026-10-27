@@ -95,15 +95,15 @@ await page.evaluate(() => {
 })
 
 // The input (JPEG, as the app's sample) and the reference (clean, at 4×, kept in the page).
-const prepare = async (art, line) => {
+const prepare = async (art, line, type = 'image/jpeg', quality = 0.72) => {
   const b64 = await page.evaluate(
-  async ({ art, size, k, pal, line }) => {
+  async ({ art, size, k, pal, line, type, quality }) => {
     const img = new Image()
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(art)
     await img.decode()
     const c = new OffscreenCanvas(size, size)
     c.getContext('2d').drawImage(img, 0, 0, size, size)
-    const jpg = await c.convertToBlob({ type: 'image/jpeg', quality: 0.72 })
+    const jpg = await c.convertToBlob({ type, quality })
     const d = new OffscreenCanvas(size, size)
     d.getContext('2d').drawImage(await createImageBitmap(jpg), 0, 0)
     const px = d.getContext('2d').getImageData(0, 0, size, size).data
@@ -131,7 +131,7 @@ const prepare = async (art, line) => {
     for (let i = 0; i < px.length; i += 0x8000) s += String.fromCharCode(...px.subarray(i, i + 0x8000))
     return btoa(s)
   },
-  { art, size: SIZE, k: K, pal: paletteOf(art).map(rgbOf), line: line ? rgbOf(line) : null },
+  { art, size: SIZE, k: K, pal: paletteOf(art).map(rgbOf), line: line ? rgbOf(line) : null, type, quality },
   )
   return new Uint8Array(Buffer.from(b64, 'base64'))
 }
@@ -323,6 +323,9 @@ await flatArt('outline.svg', `Outline illustration (outlines ${(1 * SIZE) / 200}
 // line width wide that is drawn, not broken. Every junction joined and the gap
 // kept is 8 pieces.
 await flatArt('junctions.svg', 'Junctions (lines 3.2 px wide)', '#4f86af', ['illustration', 'outline', 'lineart', 'centerline'])
+// Lines 2.2 px wide, under the width Outline art draws as strokes, where
+// each line's two sides used to meet at its ends and taper it to a point.
+await flatArt('junctions-thin.svg', 'Junctions (lines 2.2 px wide)', '#4f86af', ['logo', 'illustration', 'lineart', 'centerline'])
 
 // ---- Overlaps ---------------------------------------------------------------
 // Shapes partly behind others, down to a thin crescent: what cut-out shapes

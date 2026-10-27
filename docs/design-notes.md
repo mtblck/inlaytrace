@@ -252,6 +252,19 @@ On the outline fixture Outline art scores 2.06% wrong against Illustration's
 change (it has no lines), and without `strokes` nothing does. It adds about
 300 ms to an 800 × 600 trace.
 
+**Thin lines keep their ends.** With `npm run score` counting line pieces
+(#144), a copy of the junction fixture with 2.2 px lines came out as 11 pieces
+for 8 in every outline preset, at the default settings and as JPEG: each arm
+of the T and the Y tapered to a point, which is how the sinking ship's thin
+outlines looked broken. A T has one corner, under its bar, so each arm's end is
+a 2 px turn in the middle of one long run. The fitter found each side of an arm
+as a straight stretch, and a gap under 4 px between two straight stretches is
+a stub to skip, so the second side started where the first ended: the two
+sides met at a point. A gap where the outline turns back on itself is the end
+of a line, not a stub, and is now fitted as a little cap. All 8 pieces come
+through in every preset (2.25% → 2.05% wrong); nothing else in the score moves
+beyond a node or two.
+
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
 most one waiting request per channel (trace, optimise), replacing it when a

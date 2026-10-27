@@ -93,11 +93,11 @@ the badge's measure; here a pixel is wrong past 24:
 
 | Preset | Wrong pixels at 4× | Regions | Lines | Nodes | Paths | Size |
 | --- | --- | --- | --- | --- | --- | --- |
-| Logo | 2.02% | 20/20 | 7/7 | 348 | 20 | 9.5 KB |
-| Illustration | 2.01% | 20/20 | 7/7 | 359 | 20 | 9.9 KB |
-| Outline art | 2.06% | 20/20 | 7/7 | 271 | 15 | 6.9 KB |
-| Line art | 13.36% | 13/20 | 6/7 | 136 | 6 | 3.6 KB |
-| Poster | 2.62% | 12/20 | 5/7 | 610 | 53 | 20.0 KB |
+| Logo | 2.02% | 20/20 | 7/7 | 330 | 20 | 9.7 KB |
+| Illustration | 2.01% | 20/20 | 7/7 | 341 | 20 | 10.1 KB |
+| Outline art | 2.06% | 20/20 | 7/7 | 249 | 15 | 7.0 KB |
+| Line art | 13.36% | 13/20 | 6/7 | 128 | 6 | 3.7 KB |
+| Poster | 2.62% | 12/20 | 5/7 | 614 | 53 | 20.2 KB |
 
 Before the outline fixes Logo and Illustration were 13.0% wrong here: the
 fills weren't in the palette and the outlines dissolved into the paper. Line
@@ -111,10 +111,23 @@ open:
 
 | Preset | Wrong pixels at 4× | Regions | Lines | Nodes | Size |
 | --- | --- | --- | --- | --- | --- |
-| Illustration | 2.89% | 12/13 | 8/8 | 170 | 3.0 KB |
+| Illustration | 2.90% | 13/13 | 8/8 | 190 | 3.7 KB |
 | Outline art | 2.96% | 13/13 | 8/8 | 72 | 1.2 KB |
-| Line art | 3.08% | 13/13 | 8/8 | 108 | 1.8 KB |
+| Line art | 3.11% | 13/13 | 8/8 | 113 | 2.0 KB |
 | Centerline | 3.31% | 13/13 | 8/8 | 49 | 0.9 KB |
+
+The same drawing with lines 0.7 units wide (`junctions-thin.svg`, 2.2 px at
+640 px, under the 2.5 px Outline art draws as strokes):
+
+| Preset | Wrong pixels at 4× | Regions | Lines | Nodes | Size |
+| --- | --- | --- | --- | --- | --- |
+| Logo | 2.05% | 13/13 | 8/8 | 168 | 3.0 KB |
+| Illustration | 2.05% | 13/13 | 8/8 | 168 | 3.0 KB |
+| Line art | 2.04% | 13/13 | 8/8 | 94 | 1.9 KB |
+| Centerline | 2.15% | 13/13 | 8/8 | 38 | 0.7 KB |
+
+Before #145 every outline preset made 11 pieces of these 8 (2.25% wrong):
+each arm of the T and the Y tapered to a point, so the lines looked broken.
 
 And flat shapes partly behind others (`scripts/fixtures/overlap.svg`: a pale
 moon and a disc behind a bar, a crescent, and an L-shaped sliver 1.5 units wide):
@@ -123,12 +136,12 @@ moon and a disc behind a bar, a crescent, and an L-shaped sliver 1.5 units wide)
 | --- | --- | --- | --- | --- |
 | Logo | 0.18% | 8/8 | 86 | 2.1 KB |
 | Illustration | 0.18% | 8/8 | 88 | 2.2 KB |
-| Poster | 1.13% | 8/8 | 283 | 6.3 KB |
+| Poster | 1.13% | 8/8 | 288 | 6.4 KB |
 
-These two are baselines for line gap closing (#145), stacked shapes (#146) and
-junction clean-up (#148). Both are JPEG at q72 and come through whole; the
-sinking-ship breaks came from heavier lossy WebP, so a fixture that reproduces
-them is still to add.
+These are baselines for line gap closing (#145), stacked shapes (#146) and
+junction clean-up (#148). Saving them as heavy lossy WebP (quality 0.3) instead
+changes little now; lines thinner still (about 1 px) break into pieces in every
+preset (Centerline least), because their pixels are lost before any fitting.
 
 Run it before shipping any change to the tracer, the fitter or a preset.
 
