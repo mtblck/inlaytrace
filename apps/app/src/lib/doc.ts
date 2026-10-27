@@ -14,15 +14,19 @@
  * attached state shows the latest trace, not the one that was current when
  * the snapshot was taken.
  */
-import { normalizeHex, type Trace } from './svg'
+import { checkGradient, gradientMarkup, normalizeHex, type Gradient, type Trace } from './svg'
 import { mapPoints, parsePath, serializePath, type Pt } from './pathdata'
 
 /**
  * `fill` is the path's colour; with `stroke` (a width in px) the path is
- * stroked in it, not filled. Paths with the same `group` are one group: they
+ * stroked in it, not filled. With `gradient`, the path is filled with that
+ * instead, and `fill` (its average colour) is the ink it belongs to: recolouring
+ * that ink fills it flat. Paths with the same `group` are one group: they
  * select together, sit next to each other in paint order, and export as a <g>.
  */
-export type DocPath = { id: string; d: string; fill: string; stroke?: number; group?: string }
+export type DocPath = { id: string; d: string; fill: string; stroke?: number; group?: string; gradient?: Gradient }
+/** A path as drawn, its colour resolved. */
+export type ShownPath = { id: string; d: string; fill: string; stroke?: number; group?: string; gradient?: Gradient }
 export type Doc = { width: number; height: number; paths: DocPath[] }
 export type InkEdits = { recolor: Record<string, string>; removed: string[] }
 /**
@@ -38,6 +42,17 @@ export const NO_EDITS: Edits = { inks: NO_INKS, doc: null, background: null }
 
 const PATH_DATA = /^[\d\s,.eE+\-MmLlHhVvCcSsQqTtAaZz]*$/
 const ID = /^[\w-]+$/
+
+// Gradients are checked once each too, and only the checked copy is drawn.
+const checkedGradients = new WeakMap<Gradient, Gradient | null>()
+function safeGradient(g: Gradient) {
+  let ok = checkedGradients.get(g)
+  if (ok === undefined) {
+    ok = checkGradient(g)
+    checkedGradients.set(g, ok)
+  }
+  return ok
+}
 
 // Paths are immutable and shared between undo snapshots, so each one is
 // checked once. Re-checking every path on every drag move cost ~75 ms a move
@@ -72,6 +87,7 @@ export function docFromTrace(trace: Trace): Doc {
       d: p.transform ? bakeTransform(p.d, p.transform) : p.d,
       fill: p.fill,
       ...(p.stroke ? { stroke: p.stroke } : {}),
+      ...(p.gradient ? { gradient: p.transform ? moveGradient(p.gradient, parseTransform(p.transform)) : p.gradient } : {}),
     })),
   }
 }
@@ -94,15 +110,30 @@ export function shownFill(inks: InkEdits, fill: string): string | null {
 
 /** Paths as drawn: removed inks dropped, recolours applied, anything malformed skipped. */
 export function visiblePaths(doc: Doc, inks: InkEdits, only?: string) {
-  const out: { id: string; d: string; fill: string; stroke?: number; group?: string }[] = []
+  const out: ShownPath[] = []
   for (const p of doc.paths) {
     if (only && p.fill !== only) continue
     const fill = shownFill(inks, p.fill)
     // Edited `d` is ours, but it is still checked: this string becomes markup.
     if (!fill || !isSafe(p)) continue
-    out.push({ id: p.id, d: p.d, fill, ...(validStroke(p.stroke) ? { stroke: p.stroke } : {}), ...(p.group && GROUP.test(p.group) ? { group: p.group } : {}) })
+    // A recoloured ink is drawn flat in its new colour, gradient or not.
+    const gradient = p.gradient && !validStroke(p.stroke) && !inks.recolor[p.fill] ? safeGradient(p.gradient) : null
+    out.push({
+      id: p.id,
+      d: p.d,
+      fill,
+      ...(validStroke(p.stroke) ? { stroke: p.stroke } : {}),
+      ...(p.group && GROUP.test(p.group) ? { group: p.group } : {}),
+      ...(gradient ? { gradient } : {}),
+    })
   }
   return out
+}
+
+/** A gradient carried along with its shape by an affine move (SVG's matrix order). */
+export function moveGradient(g: Gradient, m: Matrix | null): Gradient {
+  if (!m) return g
+  return { ...g, transform: g.transform ? multiply(m, g.transform) : m }
 }
 
 /**
@@ -113,16 +144,22 @@ export function buildSvg(doc: Doc, inks: InkEdits = NO_INKS, only?: string, back
   const w = Number(doc.width) || 0
   const h = Number(doc.height) || 0
   const bg = background ? normalizeHex(background) : null
+  const paths = visiblePaths(doc, inks, only)
+  const defs = paths.flatMap((p) => (p.gradient ? [gradientMarkup(p.gradient, gradientId(p.id))] : []))
   const body = [
+    ...(defs.length ? ['<defs>', ...defs, '</defs>'] : []),
     // First, so it sits behind every shape.
     ...(bg ? [`<rect width="${w}" height="${h}" fill="${bg}"/>`] : []),
-    ...grouped(visiblePaths(doc, inks, only)),
+    ...grouped(paths),
   ].join('\n')
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n${body}\n</svg>\n`
 }
 
+/** The id of a path's gradient in the exported SVG. */
+const gradientId = (pathId: string) => `gr-${pathId}`
+
 /** Paths as markup, each run of one group's paths wrapped in a <g>. */
-function grouped(paths: { d: string; fill: string; stroke?: number; group?: string }[]) {
+function grouped(paths: ShownPath[]) {
   const out: string[] = []
   for (let i = 0; i < paths.length; ) {
     const g = paths[i].group
@@ -139,11 +176,10 @@ function grouped(paths: { d: string; fill: string; stroke?: number; group?: stri
 const GROUP = /^g\d+$/
 const validStroke = (s: unknown): s is number => typeof s === 'number' && Number.isFinite(s) && s > 0
 
-/** One path as markup: filled, or a round-capped stroke in its colour. */
-export function pathMarkup(p: { d: string; fill: string; stroke?: number }) {
-  return p.stroke
-    ? `<path d="${p.d}" fill="none" stroke="${p.fill}" stroke-width="${Math.round(p.stroke * 100) / 100}" stroke-linecap="round" stroke-linejoin="round"/>`
-    : `<path d="${p.d}" fill="${p.fill}"/>`
+/** One path as markup: filled (with its gradient, its colour the fallback), or a round-capped stroke in its colour. */
+export function pathMarkup(p: { id?: string; d: string; fill: string; stroke?: number; gradient?: Gradient }) {
+  if (p.stroke) return `<path d="${p.d}" fill="none" stroke="${p.fill}" stroke-width="${Math.round(p.stroke * 100) / 100}" stroke-linecap="round" stroke-linejoin="round"/>`
+  return p.gradient && p.id ? `<path d="${p.d}" fill="url(#${gradientId(p.id)}) ${p.fill}"/>` : `<path d="${p.d}" fill="${p.fill}"/>`
 }
 
 /** Whether a document draws strokes (centerline) rather than filled shapes. */
@@ -292,7 +328,14 @@ export function groupPaths(doc: Doc, ids: string[]): Doc {
 export function ungroupPaths(doc: Doc, ids: string[]): Doc {
   const groups = new Set(doc.paths.filter((p) => p.group && ids.includes(p.id)).map((p) => p.group))
   if (!groups.size) return doc
-  return { ...doc, paths: doc.paths.map((p) => (p.group && groups.has(p.group) ? { id: p.id, d: p.d, fill: p.fill, ...(p.stroke ? { stroke: p.stroke } : {}) } : p)) }
+  return {
+    ...doc,
+    paths: doc.paths.map((p) => {
+      if (!p.group || !groups.has(p.group)) return p
+      const { group: _, ...rest } = p
+      return rest
+    }),
+  }
 }
 
 export type Arrange = 'forward' | 'backward' | 'front' | 'back'

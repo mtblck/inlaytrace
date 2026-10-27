@@ -180,13 +180,14 @@ uses about half the nodes on the junction fixtures.
 And soft shading (`scripts/fixtures/shaded.svg`: a sky and a hill shaded by
 linear gradients, a ball by a radial one, and a flat house). Flat fills band
 each shade into tints, each off by more than 24 across much of its width;
-with `gradients` (#150) each shade is one shape with a gradient again:
+with `gradients` (#150, on for stacked Illustration and Outline art) each
+shade is one shape with a gradient again:
 
 | Preset | Wrong pixels at 4× | Regions | Nodes | Paths | Size |
 | --- | --- | --- | --- | --- | --- |
 | Logo | 32.84% | 6/8 | 222 | 13 | 6.6 KB |
-| Illustration | 32.50% | 7/8 | 397 | 20 | 12.3 KB |
-| Illustration, gradients | 0.19% | 8/8 | 61 | 6 | 2.2 KB |
+| Illustration (stacked, gradients) | 0.19% | 8/8 | 61 | 6 | 2.2 KB |
+| Illustration, cut out (flat) | 32.50% | 7/8 | 414 | 20 | 12.7 KB |
 | Poster | 0.85% | 8/8 | 1540 | 37 | 50.1 KB |
 | Poster, gradients | 0.76% | 8/8 | 93 | 7 | 3.7 KB |
 

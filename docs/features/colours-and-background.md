@@ -9,7 +9,9 @@ shapes use it, most-used first. Selecting a shape highlights its colour.
 
 ## Replace a colour
 
-Click a swatch and pick a new colour. Every shape in that colour changes. The
+Click a swatch and pick a new colour. Every shape in that colour changes. A
+shape with a gradient is listed under its average colour, and replacing that
+colour fills it flat. The
 row shows the original colour beside the new one, and *Reset* puts it back. One
 session in the colour picker is one undo step, however much you drag it around.
 

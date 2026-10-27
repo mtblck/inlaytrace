@@ -401,7 +401,7 @@ await flatArt('overlap.svg', 'Overlapping shapes', null, ['logo', 'logo:stacked'
 // A sky, a ball and a hill shaded with gradients, beside flat shapes. Flat
 // fills turn shading into bands of tints: more shapes, and steps where the art
 // is smooth.
-await flatArt('shaded.svg', 'Soft shading (two linear gradients, one radial, flat shapes)', null, ['logo', 'illustration', 'illustration:gradients', 'photo', 'photo:gradients'])
+await flatArt('shaded.svg', 'Soft shading (two linear gradients, one radial, flat shapes)', null, ['logo', 'illustration', 'illustration:cutout', 'photo', 'photo:gradients'])
 
 // ---- Lossless --------------------------------------------------------------
 // The same drawings saved as PNG, the way most logos arrive. Without JPEG's

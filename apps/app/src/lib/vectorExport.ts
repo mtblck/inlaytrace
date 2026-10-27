@@ -3,10 +3,13 @@
  * library: both are a handful of path operators per shape. Every shape becomes
  * a filled vector path (nonzero fill, as in the SVG), or for centerline a
  * round-capped stroke, so print shops, cutters and plotters get real curves,
- * not a picture.
+ * not a picture. A gradient fill is a smooth shading clipped to its shape
+ * (PDF's `sh`, PostScript 3's `shfill`); DXF has no fills, so a gradient shape
+ * is on its average colour's layer.
  */
 import { zlibSync, strToU8 } from 'fflate'
 import { parsePath } from './pathdata'
+import type { Gradient } from './svg'
 
 export type Unit = 'px' | 'mm' | 'in' | 'pt'
 export const UNITS: Unit[] = ['px', 'mm', 'in', 'pt']
@@ -18,7 +21,7 @@ export const convert = (v: number, from: Unit, to: Unit) => (v * PT[from]) / PT[
 export type ExportSize = { width: number; height: number; unit: Unit }
 
 /** Shapes as drawn: colour already resolved (recolours applied, removed inks gone). */
-export type Drawable = { width: number; height: number; background: string | null; paths: { d: string; fill: string; stroke?: number }[] }
+export type Drawable = { width: number; height: number; background: string | null; paths: { d: string; fill: string; stroke?: number; gradient?: Gradient }[] }
 
 const fmt = (n: number) => {
   const r = Math.round(n * 1000) / 1000
@@ -75,7 +78,37 @@ function pathOps(d: string, map: (x: number, y: number) => [number, number], ops
   return out.join('\n')
 }
 
-type Ops = { m: string; l: string; c: string; h: string; color: (c: number[]) => string; fill: string; strokeStyle: (c: number[], width: number) => string; stroke: string }
+type Ops = {
+  m: string
+  l: string
+  c: string
+  h: string
+  color: (c: number[]) => string
+  fill: string
+  strokeStyle: (c: number[], width: number) => string
+  stroke: string
+  /** Paint a shading dictionary inside the current path, its coordinates mapped by `matrix` (a b c d e f). */
+  shade: (geometry: string, matrix: number[], shading: string) => string
+}
+
+/**
+ * A gradient as a shading dictionary, in the syntax PDF and PostScript share:
+ * axial or radial, extended past both ends as SVG pads, its colour a stitching
+ * of linear pieces between the stops.
+ */
+export function shadingOf(g: Gradient): string {
+  const stops = [...g.stops].sort((a, b) => a.offset - b.offset)
+  // The function runs over 0–1: the first and last colours hold before and after the stops.
+  if (stops[0].offset > 0) stops.unshift({ offset: 0, color: stops[0].color })
+  if (stops[stops.length - 1].offset < 1) stops.push({ offset: 1, color: stops[stops.length - 1].color })
+  if (stops.length === 1) stops.push({ offset: 1, color: stops[0].color })
+  const arr = (v: number[]) => `[${v.map(fmt).join(' ')}]`
+  const pieces = stops.slice(1).map((s, i) => `<< /FunctionType 2 /Domain [0 1] /C0 ${arr(rgb(stops[i].color))} /C1 ${arr(rgb(s.color))} /N 1 >>`)
+  const bounds = stops.slice(1, -1).map((s) => s.offset)
+  const fn = `<< /FunctionType 3 /Domain [0 1] /Functions [${pieces.join(' ')}] /Bounds ${arr(bounds)} /Encode ${arr(pieces.flatMap(() => [0, 1]))} >>`
+  const coords = g.type === 'linear' ? [g.x1, g.y1, g.x2, g.y2] : [g.cx, g.cy, 0, g.cx, g.cy, g.r]
+  return `<< /ShadingType ${g.type === 'linear' ? 2 : 3} /ColorSpace /DeviceRGB /Coords ${arr(coords)} /Function ${fn} /Extend [true true] >>`
+}
 
 function body(drawing: Drawable, wPt: number, hPt: number, ops: Ops) {
   const sx = wPt / drawing.width
@@ -88,7 +121,11 @@ function body(drawing: Drawable, wPt: number, hPt: number, ops: Ops) {
     if (!geometry) continue
     // A stroke's width scales with the drawing (the mean of the two scales, for a stretched export).
     if (path.stroke) parts.push(`${ops.strokeStyle(rgb(path.fill), (path.stroke * (sx + sy)) / 2)}\n${geometry}\n${ops.stroke}`)
-    else parts.push(`${ops.color(rgb(path.fill))}\n${geometry}\n${ops.fill}`)
+    else if (path.gradient) {
+      // Gradient space → drawing pixels (its transform) → points (map).
+      const [a, b, c, d, e, f] = path.gradient.transform ?? [1, 0, 0, 1, 0, 0]
+      parts.push(ops.shade(geometry, [sx * a, -sy * b, sx * c, -sy * d, sx * e, hPt - sy * f], shadingOf(path.gradient)))
+    } else parts.push(`${ops.color(rgb(path.fill))}\n${geometry}\n${ops.fill}`)
   }
   return parts.join('\n')
 }
@@ -97,6 +134,7 @@ function body(drawing: Drawable, wPt: number, hPt: number, ops: Ops) {
 export function buildPdf(drawing: Drawable, size: ExportSize, title = 'Inlay'): Uint8Array {
   const w = toPt(size.width, size.unit)
   const h = toPt(size.height, size.unit)
+  const shadings: string[] = []
   const content = body(drawing, w, h, {
     m: 'm',
     l: 'l',
@@ -107,13 +145,19 @@ export function buildPdf(drawing: Drawable, size: ExportSize, title = 'Inlay'): 
     // Round caps and joins (1 J, 1 j), as in the SVG.
     strokeStyle: (c, width) => `${c.map(fmt).join(' ')} RG ${fmt(width)} w 1 J 1 j`,
     stroke: 'S',
+    // Shadings are named in the page's resources; the clip is nonzero (W), as the fill is.
+    shade: (geometry, matrix, shading) => {
+      const name = `Sh${shadings.length}`
+      shadings.push(`/${name} ${shading}`)
+      return `q\n${geometry}\nW n\n${matrix.map(fmt).join(' ')} cm\n/${name} sh\nQ`
+    },
   })
   const stream = zlibSync(strToU8(content), { level: 9 })
   const esc = (s: string) => s.replace(/[\\()]/g, '\\$&').replace(/[^\x20-\x7e]/g, '?')
   const objects: (string | Uint8Array)[][] = [
     ['<< /Type /Catalog /Pages 2 0 R >>'],
     ['<< /Type /Pages /Kids [3 0 R] /Count 1 >>'],
-    [`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${fmt(w)} ${fmt(h)}] /Contents 4 0 R /Resources << >> >>`],
+    [`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${fmt(w)} ${fmt(h)}] /Contents 4 0 R /Resources << ${shadings.length ? `/Shading << ${shadings.join(' ')} >> ` : ''}>> >>`],
     [`<< /Length ${stream.length} /Filter /FlateDecode >>\nstream\n`, stream, '\nendstream'],
     [`<< /Title (${esc(title)}) /Producer (Inlay, an image-to-SVG tracer) >>`],
   ]
@@ -159,6 +203,7 @@ export function buildEps(drawing: Drawable, size: ExportSize, title = 'Inlay'): 
     fill: 'fill',
     strokeStyle: (c, width) => `${c.map(fmt).join(' ')} setrgbcolor ${fmt(width)} setlinewidth 1 setlinecap 1 setlinejoin`,
     stroke: 'stroke',
+    shade: (geometry, matrix, shading) => `gsave\n${geometry}\nclip newpath\n[${matrix.map(fmt).join(' ')}] concat\n${shading} shfill\ngrestore`,
   })
   return [
     '%!PS-Adobe-3.0 EPSF-3.0',
@@ -166,6 +211,8 @@ export function buildEps(drawing: Drawable, size: ExportSize, title = 'Inlay'): 
     `%%HiResBoundingBox: 0 0 ${fmt(w)} ${fmt(h)}`,
     `%%Title: ${title.replace(/[\r\n]/g, ' ')}`,
     '%%Creator: Inlay, an image-to-SVG tracer',
+    // Gradients need PostScript 3's shfill.
+    ...(drawing.paths.some((p) => p.gradient && !p.stroke) ? ['%%LanguageLevel: 3'] : []),
     '%%Pages: 1',
     '%%EndComments',
     'gsave',

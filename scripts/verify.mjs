@@ -992,6 +992,22 @@ if (process.env.FIXTURE) {
   await sv.close()
 }
 
+// ---- Soft shading as gradients -------------------------------------------------
+{
+  const gr = await newPage({ width: 1440, height: 900 })
+  await gr.goto(url)
+  await gr.locator('input[type=file]').setInputFiles({ name: 'shaded.png', mimeType: 'image/png', buffer: Buffer.from(await fixturePng(gr, 'shaded.svg'), 'base64') })
+  await traced(gr)
+  await retrace(gr, () => gr.getByRole('radio', { name: /^Illustration/ }).click())
+  const shaded = () => gr.locator(VECTOR).evaluateAll((ps) => ps.filter((p) => /^url\(#/.test(p.getAttribute('fill') ?? '')).length)
+  check((await shaded()) === 3, `Illustration draws the sky, hill and ball with gradients (${await shaded()})`)
+  const exported = await exportSvg(gr)
+  check((exported.match(/<(linear|radial)Gradient/g) ?? []).length === 3 && /fill="url\(#[\w-]+\) #[0-9a-f]{3,6}"/.test(exported), 'the export keeps them, each with its colour as the fallback')
+  await retrace(gr, () => gr.getByRole('radiogroup', { name: 'Shapes' }).getByRole('radio', { name: 'Cut out' }).click())
+  check((await shaded()) === 0, 'cut out, every fill is flat')
+  await gr.close()
+}
+
 // ---- A photo gets the Poster suggestion -----------------------------------------
 {
   const ph = await newPage({ width: 1440, height: 900 })
