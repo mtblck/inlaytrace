@@ -439,8 +439,8 @@ function Prepare({ settings, set, prep }: { settings: Settings; set: <K extends 
             Recognise text <span className="field-hint">(experimental)</span>
             <span className="field-hint block">
               {prep.textPreset
-                ? 'Reads the text (Tesseract, 3 MB) and redraws it in the closest of 100 Google Fonts (7 MB), as outlined shapes. Best on clear text over a flat colour, 18 px and up.'
-                : "Text comes out as type in the colour presets and Line art; this preset traces it."}
+                ? 'Reads the text (Tesseract, 4 MB) and redraws it in the closest of 108 Google Fonts (7 MB), as outlined shapes. Best on clear text over a flat colour, 18 px and up.'
+                : 'Text comes out as type in the colour presets (Logo, Illustration, Outline art, Poster); this one traces it.'}
             </span>
           </span>
         </label>

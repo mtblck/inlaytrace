@@ -16,7 +16,7 @@ import * as ort from 'onnxruntime-web/wasm'
 import wasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url'
 import { maskFrom, u2Input, upscaleTiles } from './prepCore'
 import { loadFonts } from './text/fonts'
-import { matchText, type TextRun } from './text/match'
+import { matchText, rebackground, type TextRun } from './text/match'
 import { initOcr, readText } from './text/ocr'
 
 export type PrepRequest = { type: 'prep'; id: number; rgba: ArrayBuffer; width: number; height: number; background: boolean; upscale: boolean; text: boolean }
@@ -89,6 +89,8 @@ self.onmessage = async (event: MessageEvent<PrepRequest>) => {
     if (mask) {
       const alpha = await resizeGray(mask.data, mask.width, mask.height, width, height)
       for (let i = 0; i < width * height; i++) rgba[i * 4 + 3] = Math.min(rgba[i * 4 + 3], alpha[i])
+      // Painting text out then uses the background as masked, often transparent.
+      rebackground(rgba, width, height, text)
     }
     post({ type: 'prepared', id: req.id, rgba: rgba.buffer as ArrayBuffer, width, height, text }, [rgba.buffer as ArrayBuffer])
   } catch (error) {

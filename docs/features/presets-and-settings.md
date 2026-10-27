@@ -37,7 +37,7 @@ Three optional AI steps run before tracing, in your browser:
 - **Upscale 4× with AI** (images under 512 px): Real-ESRGAN rebuilds a small,
   blurry image at four times the size, with sharper edges, before tracing.
 - **Recognise text** (experimental): Tesseract finds and reads the text, then
-  each block of text is matched to the closest of about 100 Google Fonts
+  each block of text is matched to the closest of 108 Google Fonts
   families (467 styles) by drawing the same words in every one and keeping the
   best overlap. The words come out as outlined glyph shapes in that font, at
   the measured size and colour, like *Create Outlines* in Illustrator, and the
@@ -45,10 +45,12 @@ Three optional AI steps run before tracing, in your browser:
   font well (custom lettering, a script logo, text the OCR misread) stays
   traced, and so does text on a busy background, which can't be painted out
   cleanly. Works best on clear text over a flat colour, 18 px tall and up: on a
-  benchmark of 60 images it picked the right family 92% of the time, and the
-  size within about 1%, but small text in a damaged JPEG is often a lookalike.
-  The text shapes are ordinary shapes: recolour, edit or delete them like any
-  other. Not in Centerline or Pixel art, which trace text as usual.
+  benchmark of 60 images it picked the right family 56 times and the weight
+  54, with the size within about 1%, but small text in a damaged JPEG is often
+  a lookalike. The text shapes are ordinary shapes: recolour, edit or delete
+  them like any other. Only in the colour presets (Logo, Illustration, Outline
+  art, Poster): Line art keeps to one ink, and Centerline and Pixel art trace
+  text as usual.
 
 The models download from this site the first time (4.4 and 4.9 MB, plus the
 3.7 MB runtime; for text, Tesseract's 1 MB engine, its 3 MB English model and

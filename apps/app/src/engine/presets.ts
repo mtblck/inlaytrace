@@ -119,8 +119,12 @@ export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetB
 export const isInk = (id: PresetId) => id === 'lineart' || id === 'centerline'
 
 /** Exact shapes: the flat-art presets (a photo has none, and pixel art keeps its staircase). */
-/** Presets that draw recognised text as type: not strokes (Centerline) or pixel grids. */
-export const canSetText = (id: PresetId) => id !== 'centerline' && id !== 'pixel'
+/**
+ * Presets that draw recognised text as type, in its own colour: the colour ones.
+ * Not Line art (one ink, which the text's colour would break), Centerline
+ * (strokes) or Pixel art.
+ */
+export const canSetText = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline' || id === 'photo'
 
 export const hasExactShapes = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline' || id === 'lineart'
 

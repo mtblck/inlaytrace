@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { parse, type PathCommand } from 'opentype.js'
-import { linesFromTsv, matchText, MIN_SCORE, paintOut, type FontStyle, type OcrLine } from './match'
+import { linesFromTsv, matchText, MIN_SCORE, paintOut, rebackground, type FontStyle, type OcrLine } from './match'
 import { rasterize } from './raster'
 
 const DIR = new URL('../../../public/models/fonts/', import.meta.url)
@@ -100,6 +100,37 @@ describe('recognising text', () => {
     const img = blank(560, 120, (x) => [255 - (x % 120), 180, 90 + (x % 90)])
     const line = draw(img, style('Montserrat-700'), ['Fresh', 'coffee'], 36, 20, 70, [20, 20, 20])
     expect(matchText(img.rgba, img.width, img.height, [line], CANDIDATES)).toEqual([])
+  })
+
+  it('keeps columns side by side apart, each in its own font', () => {
+    const img = blank(900, 90, () => [255, 255, 255])
+    const left = draw(img, style('Montserrat-700'), ['Fresh', 'coffee'], 34, 16, 55, [17, 17, 17])
+    const right = draw(img, style('Lora-400'), ['Quality', 'trust'], 34, 500, 55, [17, 17, 17])
+    const runs = matchText(img.rgba, img.width, img.height, [left, right], CANDIDATES)
+    expect(runs.map((r) => [r.text, r.family])).toEqual([
+      ['Fresh coffee', 'Montserrat'],
+      ['Quality trust', 'Lora'],
+    ])
+  })
+
+  it('drops a word that matches the font badly, beside words that match it well', () => {
+    const img = blank(700, 90, () => [255, 255, 255])
+    const line = draw(img, style('Montserrat-700'), ['Fresh', 'coffee', 'roasted'], 34, 16, 55, [17, 17, 17])
+    // Artwork at the end of the line, which OCR read as "Il".
+    for (let y = 25; y < 60; y++) for (let x = 560; x < 600; x++) if ((x + y) % 5 < 2) img.rgba.set([17, 17, 17, 255], (y * 700 + x) * 4)
+    line.words.push({ text: 'Il', conf: 60, box: { x0: 560, y0: 25, x1: 600, y1: 60 } })
+    const [run] = matchText(img.rgba, img.width, img.height, [line], CANDIDATES)
+    expect(run.text).toBe('Fresh coffee roasted')
+    expect(run.boxes).toHaveLength(3)
+  })
+
+  it('takes the background again after it is removed, so painting out leaves it transparent', () => {
+    const img = blank(560, 120, () => [255, 255, 255])
+    const line = draw(img, style('Montserrat-700'), ['Fresh', 'coffee'], 36, 20, 70, [29, 53, 87])
+    const runs = matchText(img.rgba, img.width, img.height, [line], CANDIDATES)
+    for (let i = 3; i < img.rgba.length; i += 4) img.rgba[i] = 0
+    rebackground(img.rgba, img.width, img.height, runs)
+    expect(runs[0].boxes.every((b) => b.bg[3] === 0)).toBe(true)
   })
 
   it('paints out word boxes in their background, at the scale of the traced pixels', () => {

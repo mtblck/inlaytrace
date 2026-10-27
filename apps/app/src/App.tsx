@@ -6,6 +6,7 @@ import { SVGO } from './engine/svgo'
 import { PrepClient } from './engine/prepClient'
 import type { PrepStage } from './engine/prep'
 import { paintOut, type TextRun } from './engine/text/match'
+import type { Candidate } from './engine/targetSize'
 import type { SizeRun } from './components/Controls'
 import { canMerge, canSetText, isInk, maxTraceEdge, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
 import { ACCEPTED, colourAt, hasDarkBackground, loadSource, looksLikePhoto, pixelsOf, UPSCALE_BELOW, type Pixels, type Source } from './lib/image'
@@ -341,7 +342,7 @@ export default function App() {
   // Recognising text finds lines to draw as type; the tracer gets the image
   // with them painted out.
   const wantUpscale = settings.aiUpscale && !!source && Math.max(source.bitmap.width, source.bitmap.height) < UPSCALE_BELOW
-  const wantText = settings.recogniseText && !!source && !source.svg
+  const wantText = settings.recogniseText && canSetText(settings.preset) && !!source && !source.svg
   const prepKey = source && (settings.removeBackground || wantUpscale || wantText) ? `${source.url}|${settings.removeBackground}|${wantUpscale}|${wantText}` : null
   useEffect(() => {
     if (!source || !prepKey) {
@@ -388,7 +389,7 @@ export default function App() {
   }, [source, prepKey, prepClient])
   /** What gets traced: the prepared image when a step is on (none until it's ready), else the original. */
   const traceSource = prepKey ? (prepared?.key === prepKey ? prepared.source : null) : source
-  const traceText = prepKey && prepared?.key === prepKey && canSetText(settings.preset) ? prepared.text : NO_TEXT
+  const traceText = wantText && prepared?.key === prepKey ? prepared.text : NO_TEXT
 
   // ---- Tracing ------------------------------------------------------------
   useEffect(() => {
@@ -949,13 +950,21 @@ export default function App() {
     const maxEdge = maxTraceEdge(settings.preset)
     const upscale = settings.preset !== 'pixel'
     const { rgba, width, height, upscale: scale } = pixelsOf(traceSource, maxEdge, upscale)
+    // Recognised text is the same whatever the settings: it's painted out of what
+    // the search traces, and its markup counts against the target.
+    if (traceText.length) paintOut(rgba, width, height, traceText, width / traceSource.bitmap.width)
+    const textBytes = traceText.length ? withText({ width: width / scale, height: height / scale, paths: [] }, traceText, traceSource.bitmap.width).paths.reduce((n, p) => n + p.d.length + 30, 0) : 0
+    const withTextBytes = (c: Candidate): Candidate => ({ ...c, bytes: c.bytes + textBytes })
     const target = Math.round(kb * 1024)
     const from = settings
     setSizeRun({ target, from, tried: 0, best: null, result: null })
-    const res = await sizeClient.fitSize(rgba, width, height, from, target, (tried, best) => setSizeRun((r) => (r && r.from === from ? { ...r, tried, best } : r)), scale)
+    const res = await sizeClient.fitSize(rgba, width, height, from, Math.max(1, target - textBytes), (tried, best) => setSizeRun((r) => (r && r.from === from ? { ...r, tried, best: withTextBytes(best) } : r)), scale)
     setSizeRun((r) => {
       if (!r || r.from !== from) return r // cancelled, or another search started
-      if (res?.type === 'sized') return { ...r, tried: res.result.tried, best: res.result.best, result: res.result }
+      if (res?.type === 'sized') {
+        const result = { ...res.result, start: withTextBytes(res.result.start), best: withTextBytes(res.result.best) }
+        return { ...r, tried: result.tried, best: result.best, result }
+      }
       return { ...r, error: res?.type === 'error' ? res.message : 'The search stopped.' }
     })
   }

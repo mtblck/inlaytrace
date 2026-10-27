@@ -32,7 +32,7 @@ the device, `connect-src 'self'`, no GPL, WebAssembly only in the AI worker):
   the time and the weight 87%, with sizes within about 1%, in a few hundred lines
   and no model. On shrunk JPEGs it held at 18 px and up (31 of 36) but not below.
 - **The fonts.** Google Fonts can't be fetched from the app (CSP), and matching
-  needs outlines, so we serve our own: about 100 popular families, 467 static
+  needs outlines, so we serve our own: 108 popular families, 467 static
   styles, subset to Latin and kerning, as WOFF (7.3 MB). All OFL, Apache or UFL;
   outlines of them in a user's SVG are the user's artwork.
 

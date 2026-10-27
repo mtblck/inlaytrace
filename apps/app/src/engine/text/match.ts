@@ -6,10 +6,10 @@
  * OCR has already said what the letters are, so instead of classifying the
  * font cold, every candidate draws the same words, scaled onto the word's
  * ink, and the one whose ink overlaps best wins (soft IoU). The same pass
- * gives the size and the position. On 60 images of known fonts (from 70
- * families) this picked the right family 92% of the time and the weight 87%,
- * with sizes within about 1%; on shrunk JPEGs, 31 of 36 at 18 px and up but
- * under half below that. A block that matches no font well enough stays
+ * gives the size and the position. On 60 images of known fonts, against all
+ * the bundled styles, this picked the right family 56 times and the weight 54,
+ * with sizes within about 1%. On shrunk JPEGs (a 70-family trial) it held at
+ * 18 px and up, 31 of 36, but got under half right below that. A block that matches no font well enough stays
  * traced, which also screens out OCR's misreads of artwork.
  *
  * Pure (no DOM): the AI worker runs it, and tests run it in Node.
@@ -108,6 +108,20 @@ function rgbAt(rgba: ArrayLike<number>, i: number): [number, number, number] {
 const median = (v: number[]) => [...v].sort((a, b) => a - b)[v.length >> 1]
 const dist = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
 
+/** The offsets into RGBA of a box's border pixels. */
+function edge(width: number, b: Box) {
+  const out: number[] = []
+  for (let x = b.x0; x < b.x1; x++) out.push((b.y0 * width + x) * 4, ((b.y1 - 1) * width + x) * 4)
+  for (let y = b.y0 + 1; y < b.y1 - 1; y++) out.push((y * width + b.x0) * 4, (y * width + b.x1 - 1) * 4)
+  return out
+}
+
+/** The median colour, alpha included, of a box's border. */
+function edgeColour(rgba: ArrayLike<number>, width: number, height: number, b: Box): Rgba {
+  const ring = edge(width, { x0: Math.max(0, b.x0), y0: Math.max(0, b.y0), x1: Math.min(width, b.x1), y1: Math.min(height, b.y1) })
+  return [0, 1, 2, 3].map((c) => median(ring.map((i) => rgba[i + c]))) as Rgba
+}
+
 function measure(rgba: ArrayLike<number>, width: number, height: number, word: OcrWord): Measured | null {
   const pad = Math.max(2, Math.round((word.box.y1 - word.box.y0) * 0.08))
   const x = Math.max(0, word.box.x0 - pad)
@@ -116,12 +130,10 @@ function measure(rgba: ArrayLike<number>, width: number, height: number, word: O
   const H = Math.min(height, word.box.y1 + pad) - y
   if (W < 3 || H < 3) return null
   // The background: the median of the box's edge.
-  const ring: number[] = []
-  for (let i = 0; i < W; i++) ring.push(((y * width + x + i) * 4), (((y + H - 1) * width + x + i) * 4))
-  for (let j = 1; j < H - 1; j++) ring.push((((y + j) * width + x) * 4), (((y + j) * width + x + W - 1) * 4))
+  const ring = edge(width, { x0: x, y0: y, x1: x + W, y1: y + H })
   const ringRgb = ring.map((i) => rgbAt(rgba, i))
   const bgRgb = [0, 1, 2].map((c) => median(ringRgb.map((p) => p[c]))) as [number, number, number]
-  const bg: Rgba = [...([0, 1, 2].map((c) => median(ring.map((i) => rgba[i + c]))) as [number, number, number]), median(ring.map((i) => rgba[i + 3]))]
+  const bg = edgeColour(rgba, width, height, { x0: x, y0: y, x1: x + W, y1: y + H })
   const flat = ringRgb.filter((p) => dist(p, bgRgb) < 24).length >= 0.9 * ringRgb.length
   // Distance from the background, and the ink's colour from the strongest pixels.
   const d = new Float32Array(W * H)
@@ -167,7 +179,8 @@ function measure(rgba: ArrayLike<number>, width: number, height: number, word: O
 // ---- Fonts --------------------------------------------------------------------------
 
 type Laid = { commands: PathCommand[]; box: Box }
-const laidOut = new WeakMap<FontStyle, Map<string, Laid>>()
+/** Laid-out words, kept for one matchText call (hundreds of styles × the words judged). */
+let laidOut = new WeakMap<FontStyle, Map<string, Laid>>()
 
 /**
  * `text` in `style` at 1000 px from the origin, with its ink box. Characters,
@@ -269,17 +282,28 @@ function bestFont(styles: FontStyle[], words: Measured[]) {
 
 // ---- Blocks and lines -------------------------------------------------------------------
 
-/** Lines grouped into blocks: similar height, each close below the last. One font per block. */
+/**
+ * Lines grouped into blocks, one font per block: a line joins a block of lines
+ * of similar height that ends just above it and overlaps it across, so columns
+ * side by side stay apart.
+ */
 function blocks(lines: Measured[][]) {
   const height = (l: Measured[]) => median(l.map((w) => w.box.y1 - w.box.y0))
-  const out: { h: number; bottom: number; lines: Measured[][] }[] = []
+  const out: { h: number; x0: number; x1: number; bottom: number; lines: Measured[][] }[] = []
   for (const l of [...lines].sort((a, b) => a[0].box.y0 - b[0].box.y0)) {
     const h = height(l)
     const top = Math.min(...l.map((w) => w.box.y0))
-    const last = out.at(-1)
-    if (last && Math.abs(h - last.h) / last.h < 0.2 && top - last.bottom < 1.5 * h) last.lines.push(l)
-    else out.push({ h, bottom: 0, lines: [l] })
-    out.at(-1)!.bottom = Math.max(...l.map((w) => w.box.y1))
+    const x0 = Math.min(...l.map((w) => w.box.x0))
+    const x1 = Math.max(...l.map((w) => w.box.x1))
+    const bottom = Math.max(...l.map((w) => w.box.y1))
+    const block = out.find((b) => Math.abs(h - b.h) / b.h < 0.2 && top - b.bottom > -0.5 * h && top - b.bottom < 1.5 * h && x0 < b.x1 && x1 > b.x0)
+    if (!block) out.push({ h, x0, x1, bottom, lines: [l] })
+    else {
+      block.lines.push(l)
+      block.x0 = Math.min(block.x0, x0)
+      block.x1 = Math.max(block.x1, x1)
+      block.bottom = Math.max(block.bottom, bottom)
+    }
   }
   return out
 }
@@ -293,49 +317,49 @@ function pathData(commands: PathCommand[]) {
     .join('')
 }
 
+/** `word`'s best fit in `style` over the scale nudges. */
+function bestFit(style: FontStyle, word: Measured) {
+  return NUDGES.map((n) => fit(style, word, n)).reduce((a, b) => (b.iou > a.iou ? b : a))
+}
+
 /**
  * One line in its block's font: one size (the median of its words' fits) and one
  * baseline (the median of theirs), each word centred across its own ink.
  * Coordinates go back to the image's pixels.
  */
-function outline(style: FontStyle, line: Measured[]) {
-  const fits = line.map((w) => {
-    let best = fit(style, w, 1)
-    for (const n of NUDGES) {
-      const f = fit(style, w, n)
-      if (f.iou > best.iou) best = f
-    }
-    return best
-  })
+function outline(style: FontStyle, line: { word: Measured; s: number }[]) {
   // In image pixels: the line's scale, then the baseline each word implies at it.
-  const size = median(fits.map((f, i) => f.s * line[i].k))
+  const size = median(line.map(({ word, s }) => s * word.k))
   const centre = (w: Measured, lo: number, hi: number, at: number) => at + ((lo + hi) / 2) * w.k
-  const baseline = median(line.map((w) => centre(w, w.ink.y0, w.ink.y1, w.y) - ((layout(style, w.text).box.y0 + layout(style, w.text).box.y1) / 2) * size))
   const commands: PathCommand[] = []
-  for (const w of line) {
-    const { commands: glyphs, box } = layout(style, w.text)
-    commands.push(...moved(glyphs, size, centre(w, w.ink.x0, w.ink.x1, w.x) - ((box.x0 + box.x1) / 2) * size, baseline))
-  }
+  const placed = line.map(({ word }) => ({ word, ...layout(style, word.text) }))
+  const baseline = median(placed.map(({ word, box }) => centre(word, word.ink.y0, word.ink.y1, word.y) - ((box.y0 + box.y1) / 2) * size))
+  for (const { word, commands: glyphs, box } of placed) commands.push(...moved(glyphs, size, centre(word, word.ink.x0, word.ink.x1, word.x) - ((box.x0 + box.x1) / 2) * size, baseline))
   return { size: size * 1000, d: pathData(commands) }
 }
 
 /**
  * The text runs to draw instead of tracing: lines from blocks whose best font
  * matched well enough, minus words that can't be painted out cleanly (on a
- * busy background) or that the font can't draw.
+ * busy background), that the font can't draw, or that don't match it well
+ * themselves (artwork OCR read as a word, beside real text).
  */
 export function matchText(rgba: ArrayLike<number>, width: number, height: number, lines: OcrLine[], styles: FontStyle[]): TextRun[] {
+  laidOut = new WeakMap()
   const measured = lines.map((l) => l.words.map((w) => measure(rgba, width, height, w)).filter((w): w is Measured => !!w)).filter((l) => l.length)
   const runs: TextRun[] = []
   for (const block of blocks(measured)) {
     const best = bestFont(styles, block.lines.flat())
     if (!best || best.score < MIN_SCORE) continue
     const { style } = best
-    const kept = block.lines.map((l) => l.filter((w) => w.flat && covers(style, w.text))).filter((l) => l.length)
+    const kept = block.lines
+      .map((l) => l.filter((w) => w.flat && covers(style, w.text)).map((word) => ({ word, ...bestFit(style, word) })).filter((f) => f.iou >= MIN_SCORE))
+      .filter((l) => l.length)
     if (!kept.length) continue
-    const fill = hex([0, 1, 2].map((c) => median(kept.flat().map((w) => w.colour[c]))))
-    for (const line of kept) {
-      const { size, d } = outline(style, line)
+    const fill = hex([0, 1, 2].map((c) => median(kept.flat().map((f) => f.word.colour[c]))))
+    for (const fits of kept) {
+      const line = fits.map((f) => f.word)
+      const { size, d } = outline(style, fits)
       runs.push({
         text: line.map((w) => w.text).join(' '),
         family: style.family,
@@ -348,7 +372,16 @@ export function matchText(rgba: ArrayLike<number>, width: number, height: number
       })
     }
   }
+  laidOut = new WeakMap()
   return runs
+}
+
+/**
+ * Each word box's background again, from `rgba` as it is now: after background
+ * removal, what paintOut fills with is the masked colour, not the original.
+ */
+export function rebackground(rgba: ArrayLike<number>, width: number, height: number, runs: TextRun[]) {
+  for (const run of runs) for (const b of run.boxes) b.bg = edgeColour(rgba, width, height, b)
 }
 
 /**
