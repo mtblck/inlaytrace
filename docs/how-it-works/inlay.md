@@ -37,6 +37,13 @@ takes the closest colour **among its neighbours** rather than the closest
 overall. Otherwise an edge between red and blue grows a one-pixel purple
 sliver along its whole length.
 
+Two exceptions in flat art (not Poster). A pixel far from every palette colour
+(over 0.05) is first read as a mix of the two colours whose blend explains it,
+so a grey letter's pale edge counts as grey and white, not as a light blue. And
+a pixel whose neighbours are all one colour isn't an edge between two: it's a
+stroke too thin to have sure pixels of its own (1.5 px text), and keeps its
+colour rather than taking the paper's.
+
 ### 2. Clean the map
 
 - **Spurs:** a pixel whose eight neighbours are at least seven of one other
@@ -46,7 +53,10 @@ sliver along its whole length.
   nearest colour among their neighbours, smallest first (on photos, Poster,
   the colour they share most edge with). Lossy compression splits a thin
   stroke into two shades of its ink, and by shared edge each piece joined the
-  paper it mostly touches, so the stroke dissolved.
+  paper it mostly touches, so the stroke dissolved. In flat art a speck at
+  least 0.25 from every colour around it (a letter, a dot) is a shape and
+  stays, from an eighth of the speck size up (at least 6 px), so raising the
+  setting still clears it.
 - **Slivers** (flat art): regions under 2 px wide on average merge into a
   neighbour within 0.12 of their colour in OKLab, so a letter stem dark at its
   edges and lighter down its middle becomes one shape, not a spike-prone
