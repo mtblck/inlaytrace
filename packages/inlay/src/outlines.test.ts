@@ -159,6 +159,11 @@ describe('the edges of those fixes', () => {
     expect(pathsOf(traceInlay(img, 100, 100, { ...LOGO, mode: 'binary', threshold: 'auto' }))).toHaveLength(0)
   })
 
+  it("adds no tints for a photo's smooth dark shades, which are flat too", () => {
+    const img = flat(200, 200, (x) => [20 + (x >> 2), 30 + (x >> 2), 60 + (x >> 1)])
+    expect(peakPalette(img, 16, { width: 200 })).toEqual(peakPalette(img, 16))
+  })
+
   it('takes a zero minTint as no minimum, without hanging', () => {
     expect(peakPalette(px, 8, { width: W, minTint: 0 }).length).toBeGreaterThan(0)
   })

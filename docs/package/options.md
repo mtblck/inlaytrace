@@ -42,7 +42,7 @@ Three helpers pick a palette from the pixels:
   `{ minDistance, minShare, minDetail }`. Pass the image's `width` too: then
   pale tints are found by their flatness (a light fill on white, too close to
   white to count as a peak), and a blend that is never flat is left out at any
-  share under 2%. `minTint` (0.02) and `minFlat` (0.001) tune the tints.
+  share under 2%. `minTint` (0.02) and `minFlat` (0.001) tune the tints, which are only ever pale (OKLab lightness 0.85 or more).
 - `exactPalette(rgba, maxColors)`: the exact colours, most-used first. For
   pixel art, where a one-pixel eye matters and two close shades are on
   purpose.

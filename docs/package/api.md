@@ -73,7 +73,7 @@ needs, and `minDetail` (default 0.0005) the smaller share enough for one that
 isn't a blend of two colours already picked. Given the image's `width`, it
 also looks at which pixels are flat (their four neighbours within 8 per
 channel): a blend that is never flat is an edge and is left out at any share
-under 2%, and spare slots go to flat tints at least `minTint` (default 0.02)
+under 2%, and spare slots go to pale flat tints at least `minTint` (default 0.02)
 from every colour picked and flat over at least `minFlat` (default 0.001) of
 the image, such as a pale fill on white.
 

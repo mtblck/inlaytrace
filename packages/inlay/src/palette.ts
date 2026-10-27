@@ -18,7 +18,7 @@
  *     colours already accepted (an anti-aliased edge between them).
  *  4. Stop at the requested count.
  *  5. Given the image's `width`, fill what's left of the count with pale tints:
- *     flat colours (pixels that match their four neighbours) too close to a
+ *     light flat colours (pixels that match their four neighbours) too close to a
  *     picked colour for step 3. A light-blue fill on white is 0.03 from it in
  *     OKLab and lies on the line from white to the blue ink, so step 3 calls
  *     it an edge between the two; but an edge is never flat, and a fill is.
@@ -164,6 +164,13 @@ function weigh<T extends { n: number; flat: number; lab: Rgb; weight: number; fl
  * sinking-ship illustration (blue outlines on white, the ship and moon filled
  * with pale blues) this found the three fills and nothing else.
  */
+/**
+ * Tints are pale (OKLab lightness): a photo's smooth sky or skin is flat too,
+ * and its dark shades filled Illustration's 16 colours with near-copies that
+ * doubled the SVG. The fills tints exist for are light washes behind ink.
+ */
+const TINT_LIGHTNESS = 0.85
+
 function flatTints(flat: Map<number, Bin>, opaque: number, picked: { lab: Rgb }[], room: number, minTint: number, minFlat: number) {
   // As in the main walk, but over flat pixels only, and closer together.
   const items = [...flat.values()].map((bin) => {
@@ -172,7 +179,8 @@ function flatTints(flat: Map<number, Bin>, opaque: number, picked: { lab: Rgb }[
   })
   weigh(items, minTint / 2)
   const out: { lab: Rgb; rgb: Rgb }[] = []
-  for (const it of items.filter((it) => it.peak && it.weight >= minFlat * opaque).sort((a, b) => b.weight - a.weight)) {
+  const tint = (it: (typeof items)[number]) => it.peak && it.lab[0] >= TINT_LIGHTNESS && it.weight >= minFlat * opaque
+  for (const it of items.filter(tint).sort((a, b) => b.weight - a.weight)) {
     if (out.length >= room) break
     if ([...picked, ...out].every((p) => distance(p.lab, it.lab) >= minTint)) out.push({ lab: it.lab, rgb: it.rgb })
   }
