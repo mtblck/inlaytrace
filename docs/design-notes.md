@@ -338,6 +338,49 @@ badge, emblem, outline and overlap fixtures wrong pixels fall 2–16% for the
 same nodes; brightness alone gives the blend where the colours differ in it.
 Render-and-score for exact shapes, the other half of #147, is still to do.
 
+**Nearly straight lines snap to 0°, 45° and 90°.** People draw those with a
+snap, but a fit to the pixels leaves them a fraction of a degree off, more
+after JPEG: on the outline and junction fixtures about a third of the long
+lines were under 1° from square (a 191 px edge 1.15 px out of level). A line at
+least 8 px long and within 1° of horizontal, vertical or 45° is made exactly
+that (`snapLines` in fit.ts), turned about its middle or about an open chain's
+end, which stays fixed so the edge is still shared exactly; neighbouring lines
+in one direction become one line, and each node moves to where its snapped
+lines meet (at most 1.5 px, else the line is left), turning the handle of a
+curve beside it too, so a smooth join stays smooth. A needle whose two sides
+snap level, opposite ways, is left as fitted, since no point is on both. Lines
+either side of a junction that both snap pass through it, so they come out
+collinear too. Exact shapes are not snapped (a regular polygon would stop being
+regular), nor is the editor's Simplify, which refits what someone drew. The
+badge's 43° and 47° sides are 1.7° and 2.3° from 45° and stay as drawn, which is
+what set 1°. Wrong pixels are unchanged within ±0.02 points (`score`,
+`score:photos`) and nodes the same or a few fewer (outline fixture with Logo,
+330 to 328); files grow about 2%, since a snapped line through the mean of its
+nodes rarely lands on a whole pixel. Near-parallel lines that
+are not square are left alone for now.
+
+**PolyFit's polygon-first corners would not help.** PolyFit (Dominici et al.
+2020, MIT) fits a polygon to the pixels first, then a random forest picks a
+curve or a corner for each run; people preferred it to earlier tracers on
+low-resolution clip art. Its research code builds on Linux after small fixes
+(Windows `dirent.h` and `cairo.lib`, MSVC-only syntax). It takes exact colours,
+so the fixtures were rendered at 32, 64 and 128 px with every pixel snapped to
+its palette colour, traced by both, and compared with the clean art at 640 px
+(skipping a one-pixel border). In black and white, PolyFit's home ground, it
+got up to 7 times as many pixels wrong as Logo, never fewer (emblem at 64 px: 3.9% against
+1.4%; badge at 128: 6.2% against 0.9%), used more nodes in all but two cases,
+took 0.2 s to 7 min against Inlay's 20 to 100 ms, and crashed on an internal
+check for 2 of the 18 inputs (on 6 of 12 in colour, where it also leaves
+pixel steps at three-colour junctions). Part of the gap is that its outlines run
+through the boundary pixels' centres, about 0.7 px inside a shape. By eye,
+its corners are not better either: it rounds the emblem's top point that
+Inlay keeps sharp and turns the round hole into a diamond. The one thing it does
+better is keep some of the pinwheel's leaf tips sharp at 64 px, where Inlay
+rounds them, since a corner's sides are measured 3 to 9 px out and a leaf at
+64 px is barely wider than that. At 128 px both keep most tips. So nothing
+from PolyFit is ported, and it stays out of `score`, as it needs a patched
+C++ build.
+
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
 most one waiting request per channel (trace, optimise), replacing it when a

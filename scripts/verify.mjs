@@ -221,7 +221,8 @@ async function nodeOpChecks(page, label) {
     const total = el.getTotalLength()
     const m = el.getScreenCTM()
     const taken = [...document.querySelectorAll('[data-node]')].map((n) => n.getBoundingClientRect())
-    for (const f of [0.37, 0.21, 0.63, 0.81, 0.12, 0.5]) {
+    // The usual spots first, then every 5% round, so a retrace that moves a node doesn't fail the run.
+    for (const f of [0.37, 0.21, 0.63, 0.81, 0.12, 0.5, ...Array.from({ length: 19 }, (_, i) => (i + 1) / 20)]) {
       const q = el.getPointAtLength(total * f)
       const p = new DOMPoint(q.x, q.y).matrixTransform(m)
       if (taken.every((r) => Math.hypot(r.x + r.width / 2 - p.x, r.y + r.height / 2 - p.y) > 16) && ownAt(p)) return { x: p.x, y: p.y }

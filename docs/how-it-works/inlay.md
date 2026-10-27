@@ -83,6 +83,11 @@ the pixel-edge staircase: the anti-aliased pixels either side of an edge say
 how much of each colour they hold, which puts the edge to within a tenth of a
 pixel. JPEGs and photos skip this, since their noise would move edges.
 
+A line within 1° of horizontal, vertical or 45° is then made exactly that,
+turning about its middle (or about the chain's end, which stays put so the
+edge is still shared), and the nodes beside it move to where the snapped lines
+meet.
+
 With `shapes` on, a closed chain (one neighbour all the way round) is first
 checked against exact shapes (`packages/inlay/src/shapes.ts`). The pixel
 region's area, centroid and second moments give the candidate directly: an

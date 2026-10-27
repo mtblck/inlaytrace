@@ -264,7 +264,7 @@ export function simplifySubpaths(subs: Subpath[], tolerance: number): Subpath[] 
     if (s.nodes.length < 3) return s
     const pts = sample(s)
     if (pts.length < 4) return s
-    const cubics = fitChain(pts, s.closed, { tolerance, cornerAngle: 45, smoothing: 2 })
+    const cubics = fitChain(pts, s.closed, { tolerance, cornerAngle: 45, smoothing: 2, snap: false })
     if (!cubics.length) return s
     const next = fromCubics(cubics, s.closed)
     if (next.nodes.length < (s.closed ? 3 : 2) || next.nodes.length >= s.nodes.length) return s
