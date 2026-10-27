@@ -32,8 +32,9 @@ import { ADDRESS, CONTACT, SELLER, SELLER_KIND, UPDATED } from '../data/legal'
     <p>
       When you open an image in the <a href="/app/">app</a>, your browser decodes it, traces it, lets you edit it and exports the result,
       all on your device. Nothing is uploaded, and we never receive, see or store your files. Apart from loading its own code, the app
-      makes two small requests to this site: one to show whether you're signed in and how many HD credits you have, and one to count the
-      page view. Neither carries an image. Its security policy stops its code from sending data anywhere else.
+      makes small requests to this site: one to show whether you're signed in and how many HD credits you have, and others that count
+      the page view and each finished trace and download. None carries an image. Its security policy stops its code from sending data
+      anywhere else.
     </p>
     <p>
       The optional in-browser AI steps (removing the background, upscaling small images) work the same way: the models are downloaded from
@@ -91,6 +92,11 @@ import { ADDRESS, CONTACT, SELLER, SELLER_KIND, UPDATED } from '../data/legal'
         the page, the referring site, any utm_ campaign tags in the link, and your country, browser, operating system and device type.
         It recognises a repeat visit within a day by a hash it then discards, and never sees your images. Its script is written by
         Vercel and served from this site.
+      </li>
+      <li>
+        We also keep daily totals on mattblack.space, the site of Inlay's maker: page views, visits (with only the kind of place you came
+        from, such as a search engine, LinkedIn or another site), and how many images are traced and downloaded. Each just adds one to
+        that day's count. No cookie, IP address or identifier is kept, nor which page you were on or anything about your image.
       </li>
       <li>No third-party scripts or fonts, except Paddle's checkout on the buy page.</li>
       <li>No cookies unless you sign in.</li>

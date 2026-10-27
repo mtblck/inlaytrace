@@ -10,7 +10,9 @@ The image is decoded, traced, edited and exported in your browser. There is no
 upload, no server step and no third-party script. Tracing runs in
 a Web Worker; SVGO and paper.js are loaded from the same site, on first use.
 The site counts page views with Vercel Web Analytics (no cookies, nothing about
-your images); the [privacy policy](https://inlaytrace.com/privacy/) lists what it records.
+your images), and sends page views, visits and finished traces and downloads to
+mattblack.space's shared counter as daily totals (ADR 0002); the
+[privacy policy](https://inlaytrace.com/privacy/) lists what each records.
 
 The one exception is [HD](hd.md), which is paid, in beta, and
 happens only when you confirm it for an image: that image is uploaded, traced

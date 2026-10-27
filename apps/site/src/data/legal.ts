@@ -10,5 +10,5 @@ export const ADDRESS = '3781 Harris Blvd NW, Kennesaw, GA 30144, USA'
 export const CONTACT = 'hello@inlaytrace.com'
 /** Paddle requires 14 to 90 days. */
 export const REFUND_DAYS = 30
-export const UPDATED = '26 October 2026'
+export const UPDATED = '27 October 2026'
 
