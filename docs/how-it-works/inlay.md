@@ -28,7 +28,8 @@ background shows through. The answer was to trace each edge **once**.
 ### 1. Label every pixel
 
 Each pixel gets the nearest [palette](palettes.md) colour in OKLab (Line art:
-ink or paper, by a fixed threshold or a local-mean one for photos of paper).
+ink or paper, by one threshold for the whole image, the image's own Otsu split
+by default, or a local-mean one for photos of paper).
 Transparent pixels are left out.
 
 A pixel that sits clearly between two colours (anti-aliasing, JPEG ringing)
@@ -42,7 +43,15 @@ sliver along its whole length.
   colour takes that colour. JPEG noise leaves exactly these single-pixel spurs
   and nicks where colours meet, and fitted they became bumps and notches.
 - **Specks:** regions smaller than *Ignore specks*² pixels merge into the
-  colour they share most edge with, smallest first.
+  nearest colour among their neighbours, smallest first (on photos, Poster,
+  the colour they share most edge with). Lossy compression splits a thin
+  stroke into two shades of its ink, and by shared edge each piece joined the
+  paper it mostly touches, so the stroke dissolved.
+- **Slivers** (flat art): regions under 2 px wide on average merge into a
+  neighbour within 0.12 of their colour in OKLab, so a letter stem dark at its
+  edges and lighter down its middle becomes one shape, not a spike-prone
+  strip inside another. A hairline of a colour of its own has no neighbour
+  that close and stays.
 
 ### 3. Walk the boundaries
 

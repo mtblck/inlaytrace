@@ -85,7 +85,7 @@ export function cleanSettings(raw: unknown): Settings | null {
   return {
     preset: s.preset as PresetId,
     colors: Math.round(num(s.colors, 2, 64, 8)),
-    threshold: s.threshold === null ? null : Math.round(num(s.threshold, 0, 255, 128)),
+    threshold: s.threshold === null || s.threshold === 'auto' ? s.threshold : Math.round(num(s.threshold, 0, 255, 128)),
     lightInk: s.lightInk === true,
     speckle: num(s.speckle, 0, 256, 4),
     smoothing: num(s.smoothing, 0, 3, 1),

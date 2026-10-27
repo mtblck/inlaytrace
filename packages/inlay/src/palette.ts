@@ -69,7 +69,7 @@ export function peakPalette(
     const rgb: Rgb = [bin.r / bin.n, bin.g / bin.n, bin.b / bin.n]
     return { n: bin.n, flat: flat?.get(key)?.n ?? 0, rgb, lab: oklab(rgb), weight: 0, flatWeight: 0, peak: true }
   })
-  weigh(items, minDistance / 2, (it) => it.n)
+  weigh(items, minDistance / 2)
 
   // Only local peaks are candidates (no nearby bin has more pixels), so a flat
   // colour is its own bin, not a neighbour that borrowed its weight; heaviest first.
@@ -85,7 +85,7 @@ export function peakPalette(
     // anti-aliased edges and JPEG ringing between them are made of. Given the
     // width, a blend that is almost never flat is an edge at any share: thin
     // blue outlines on white have so much edge that it outweighed minShare.
-    const edge = share < minShare || (flat !== null && it.flatWeight < EDGE_FLAT * it.weight)
+    const edge = share < minShare || (flat !== null && share < EDGE_SHARE && it.flatWeight < EDGE_FLAT * it.weight)
     if (edge && isBlend(it.rgb, it.lab, picked, minDistance)) continue
     picked.push({ lab: it.lab, rgb: it.rgb })
   }
@@ -95,6 +95,11 @@ export function peakPalette(
 
 /** Below this share of flat pixels, a colour is an edge's, not a fill's. */
 const EDGE_FLAT = 0.05
+/**
+ * But only below this share of the image: 1 px grey rules or a dithered fill
+ * are never flat either, and at 8% of a logo they are a colour of their own.
+ */
+const EDGE_SHARE = 0.02
 
 type Bin = { n: number; r: number; g: number; b: number }
 
@@ -126,10 +131,11 @@ function flatBins(rgba: ArrayLike<number>, w: number) {
 
 /**
  * Each item's weight (the pixels of every bin within `radius` of it in OKLab)
- * and flat weight, and whether it is a local peak of `count` (no bin within
+ * and flat weight, and whether it is a local peak (no bin within
  * `radius` has more). A grid of `radius` cells keeps it near linear.
  */
-function weigh<T extends { n: number; flat: number; lab: Rgb; weight: number; flatWeight: number; peak: boolean }>(items: T[], radius: number, count: (it: T) => number) {
+function weigh<T extends { n: number; flat: number; lab: Rgb; weight: number; flatWeight: number; peak: boolean }>(items: T[], radius: number) {
+  radius = Math.max(radius, 1e-3) // a zero radius would make every grid cell infinite
   const cell = (v: number) => Math.floor(v / radius)
   const grid = new Map<string, T[]>()
   for (const it of items) {
@@ -147,7 +153,7 @@ function weigh<T extends { n: number; flat: number; lab: Rgb; weight: number; fl
             if (distance(o.lab, it.lab) <= radius) {
               it.weight += o.n
               it.flatWeight += o.flat
-              if (count(o) > count(it)) it.peak = false
+              if (o.n > it.n) it.peak = false
             }
   }
 }
@@ -164,7 +170,7 @@ function flatTints(flat: Map<number, Bin>, opaque: number, picked: { lab: Rgb }[
     const rgb: Rgb = [bin.r / bin.n, bin.g / bin.n, bin.b / bin.n]
     return { n: bin.n, flat: bin.n, rgb, lab: oklab(rgb), weight: 0, flatWeight: 0, peak: true }
   })
-  weigh(items, minTint / 2, (it) => it.n)
+  weigh(items, minTint / 2)
   const out: { lab: Rgb; rgb: Rgb }[] = []
   for (const it of items.filter((it) => it.peak && it.weight >= minFlat * opaque).sort((a, b) => b.weight - a.weight)) {
     if (out.length >= room) break

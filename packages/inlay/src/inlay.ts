@@ -51,6 +51,13 @@ export type InlayOptions = FitOptions & {
    * vinyl cutter or a screen printer wants.
    */
   stacked?: boolean
+  /**
+   * Photos: specks join the colour they share the most edge with, and slivers
+   * are left alone. Flat art's clean-up (specks join the nearest colour, and
+   * slivers of one ink's two shades fold together) keeps thin strokes whole,
+   * but on photos it kept so many real regions that files grew by half.
+   */
+  photo?: boolean
 } & (
     /**
      * `merge` folds colours together before any region is built, so the edge
@@ -61,7 +68,8 @@ export type InlayOptions = FitOptions & {
     /**
      * Ink is darker than `threshold` (0–255). With 'auto', the threshold is
      * the image's own split between ink and paper (Otsu's), so coloured ink
-     * works as well as black. When null, each pixel is compared with its
+     * works as well as black (a page with no clear ink, such as a blank
+     * scan, falls back to 128). When null, each pixel is compared with its
      * neighbourhood instead, for photos of paper under uneven light.
      * Only ink is drawn.
      */
@@ -92,7 +100,7 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
   if (o.mode === 'palette' && o.merge) mergeLabels(labels, colors, o.merge)
   // A lone pixel in pixel art is deliberate, not a stray.
   if (!o.pixels) despur(labels, w, h)
-  const labs = o.mode === 'palette' ? colors.map((c) => (c ? oklab(hexToRgb(c)) : null)) : undefined
+  const labs = o.mode === 'palette' && !o.photo ? colors.map((c) => (c ? oklab(hexToRgb(c)) : null)) : undefined
   mergeSpecks(labels, w, h, Math.max(0, Math.round(o.speckle)) ** 2, labs)
   if (labs && !o.pixels) mergeSlivers(labels, w, h, labs)
 
@@ -321,10 +329,9 @@ export function labelBinary(rgba: ArrayLike<number>, w: number, h: number, thres
     // A fixed 128 assumes black ink: a mid-blue line (luminance 122, JPEG
     // noise either side of it) came out in pieces. The image's own split
     // falls between the ink and the paper whatever their colours.
-    const t = threshold === 'auto' ? otsu(lum, alpha) : threshold
+    const t = threshold === 'auto' ? autoThreshold(lum, alpha) : threshold
     for (let i = 0; i < n; i++) labels[i] = alpha[i] && lum[i] < t ? 0 : 1
-  }
-  else {
+  } else {
     // Ink is clearly darker than its surroundings (a window a sixteenth of the
     // image across) and on the dark side of the image's overall split, so
     // a smudge on blank paper doesn't count.
@@ -357,6 +364,33 @@ function boxMean(v: Uint8Array, w: number, h: number, r: number) {
     }
   }
   return out
+}
+
+/** Below this gap between the two sides' mean luminance, Otsu has split one population. */
+const MIN_INK_CONTRAST = 40
+
+/**
+ * Otsu's split, unless it falls inside a single population: a blank page
+ * photographed with some noise splits down its own middle, and half of it
+ * would trace as ink. Then the fixed 128 it replaced.
+ */
+function autoThreshold(lum: Uint8Array, alpha: Uint8Array) {
+  const t = otsu(lum, alpha)
+  let dark = 0
+  let darkSum = 0
+  let light = 0
+  let lightSum = 0
+  for (let i = 0; i < lum.length; i++) {
+    if (!alpha[i]) continue
+    if (lum[i] < t) {
+      dark++
+      darkSum += lum[i]
+    } else {
+      light++
+      lightSum += lum[i]
+    }
+  }
+  return dark && light && lightSum / light - darkSum / dark >= MIN_INK_CONTRAST ? t : 128
 }
 
 /** Otsu's threshold over opaque pixels: the split that best separates two populations. */
@@ -548,8 +582,10 @@ function mergeSpecksOnce(labels: Int32Array, w: number, h: number, minArea: numb
       if (y < h - 1) vote(i + w)
     }
     // A neighbour merged into this speck's own colour earlier in the pass, so
-    // it is part of a larger region now: the next pass decides whether it's still small.
-    if (joined) continue
+    // it is part of a larger region now: the next pass decides whether it's
+    // still small. (Flat art only: on photos waiting kept regions that, merged
+    // a pass early as before, cost nothing visible.)
+    if (joined && labs) continue
     let best = own
     let most = 0
     const mine = labs?.[own]
@@ -573,8 +609,8 @@ function mergeSpecksOnce(labels: Int32Array, w: number, h: number, minArea: numb
 
 /** Regions narrower than this on average (2 × area / perimeter, px) are slivers. */
 const SLIVER_WIDTH = 2
-/** A sliver joins a neighbour only this close in colour (OKLab): two shades of one ink, not a hairline. */
-const SLIVER_DISTANCE = 0.15
+/** A sliver joins a neighbour only this close in colour (OKLab): two shades of one ink (0.08–0.11 apart), not a grey hairline on white (#d4d4d4 is 0.13 from it). */
+const SLIVER_DISTANCE = 0.12
 
 /**
  * Fold slivers into a neighbour of nearly the same colour. JPEG and WebP
@@ -582,7 +618,8 @@ const SLIVER_DISTANCE = 0.15
  * out dark at its edges and lighter down the middle), and a one-pixel strip
  * of one shade inside the other fitted as a spike shooting out of the
  * letter. A hairline of a colour of its own has no neighbour that close, so
- * it stays.
+ * it stays. Within a pass a sliver waits if a neighbour has already moved,
+ * so two side by side don't just swap colours.
  */
 function mergeSlivers(labels: Int32Array, w: number, h: number, labs: (Rgb | null)[]) {
   for (let pass = 0; pass < 4; pass++) {
@@ -590,14 +627,14 @@ function mergeSlivers(labels: Int32Array, w: number, h: number, labs: (Rgb | nul
     const m = compArea.length
     const perimeter = new Int32Array(m)
     const label = new Int32Array(m)
-    // Contact between each sliver candidate and each neighbouring label.
-    const contact = new Map<number, Map<number, number>>()
+    // Each region's neighbouring regions.
+    const around = new Map<number, Set<number>>()
     const touch = (a: number, b: number) => {
       const id = comp[a]
       perimeter[id]++
-      let c = contact.get(id)
-      if (!c) contact.set(id, (c = new Map()))
-      c.set(labels[b], (c.get(labels[b]) ?? 0) + 1)
+      let c = around.get(id)
+      if (!c) around.set(id, (c = new Set()))
+      c.add(comp[b])
     }
     for (let y = 0; y < h; y++)
       for (let x = 0; x < w; x++) {
@@ -608,16 +645,16 @@ function mergeSlivers(labels: Int32Array, w: number, h: number, labs: (Rgb | nul
       }
     const to = new Int32Array(m).fill(-1)
     let changed = false
-    for (const [id, c] of contact) {
+    for (const [id, near] of around) {
       if ((2 * compArea[id]) / perimeter[id] >= SLIVER_WIDTH) continue
       const mine = labs[label[id]]
-      if (!mine) continue
+      if (!mine || [...near].some((n) => to[n] >= 0)) continue
       let best = -1
-      let near = SLIVER_DISTANCE
-      for (const l of c.keys()) {
-        const lab = labs[l]
+      let bd = SLIVER_DISTANCE
+      for (const n of near) {
+        const lab = labs[label[n]]
         const d = lab ? Math.hypot(lab[0] - mine[0], lab[1] - mine[1], lab[2] - mine[2]) : Infinity
-        if (d < near) (near = d), (best = l)
+        if (d < bd) (bd = d), (best = label[n])
       }
       if (best < 0) continue
       to[id] = best

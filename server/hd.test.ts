@@ -121,6 +121,11 @@ describe('trace settings', () => {
     expect(s.removeBackground).toBe(false)
   })
 
+  it("keep Line art's Auto threshold, so HD splits ink from paper as the preview did", () => {
+    expect(cleanSettings({ ...SETTINGS, preset: 'lineart', threshold: 'auto' })!.threshold).toBe('auto')
+    expect(cleanSettings({ ...SETTINGS, preset: 'lineart', threshold: 'bogus' })!.threshold).toBe(128)
+  })
+
   it('scale the speckle filter (an area) and stroke width to the full-size image', () => {
     const s = scaleSettings({ ...cleanSettings(SETTINGS)!, strokeWidth: 2 }, 4096, 2048) // twice the app's 2048
     expect(s.speckle).toBe(32)

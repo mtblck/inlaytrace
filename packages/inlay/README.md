@@ -53,7 +53,7 @@ toSvg(result) // '<svg …>…</svg>'
 | `mode: 'palette', palette` | Flat colour art. `palette` is the colours to label pixels with: `peakPalette(rgba, n, { width })` takes the sharp peaks of the histogram (flat art's real colours), and given the image's width also pale tints found by their flatness (a light fill on white); `exactPalette(rgba, n)` takes the image's exact colours, most-used first. |
 | `mode: 'palette', palette, merge` | Fold colours together before regions are built, so the edge between them disappears: `{ '#from': '#into' }`. |
 | `mode: 'palette', palette: exactPalette(…), pixels: true` | Pixel art: no clean-up of lone pixels, no curve fitting; every boundary is its pixel staircase with straight runs joined. |
-| `mode: 'palette', palette: quantizePalette(…), stacked: true` | Photos as flat colour bands. `quantizePalette(rgba, n)` clusters the image's colours (k-means in OKLab, deterministic); `stacked` draws each shape whole, larger first, instead of cutting holes. |
+| `mode: 'palette', palette: quantizePalette(…), stacked: true, photo: true` | Photos as flat colour bands. `quantizePalette(rgba, n)` clusters the image's colours (k-means in OKLab, deterministic); `stacked` draws each shape whole, larger first, instead of cutting holes. |
 | `mode: 'binary', threshold` | Line art: ink darker than `threshold` (0–255), the image's own ink/paper split when `'auto'` (Otsu; coloured ink works too), or adaptive per neighbourhood when `null`. Only the ink is drawn. |
 
 ### Also exported

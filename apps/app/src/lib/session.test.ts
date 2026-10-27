@@ -14,6 +14,12 @@ describe('restoring a saved session', () => {
     expect(s.shapes).toBe(settingsFor('illustration').shapes)
     expect(s.merge).toEqual({ '#ff0000': '#00ff00' })
   })
+  it("keeps Line art's threshold mode: Auto, a level, or Uneven light", () => {
+    expect(checkSettings({ preset: 'lineart', threshold: 'auto' }).threshold).toBe('auto')
+    expect(checkSettings({ preset: 'lineart', threshold: 90 }).threshold).toBe(90)
+    expect(checkSettings({ preset: 'lineart', threshold: null }).threshold).toBeNull()
+    expect(checkSettings({ preset: 'lineart', threshold: 'dark' }).threshold).toBe('auto')
+  })
   it('drops malformed edits rather than letting them into markup or files', () => {
     expect(checkEdits('x')).toEqual({ inks: { recolor: {}, removed: [] }, doc: null, background: null })
     const e = checkEdits({

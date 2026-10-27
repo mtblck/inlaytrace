@@ -7,7 +7,7 @@
  * Line art's fixed threshold broke every stroke.
  */
 import { describe, expect, it } from 'vitest'
-import { pointAt, type Cubic } from './fit'
+import { fitChain, pointAt, type Cubic } from './fit'
 import { parsePath, type Pt } from './path'
 import { oklab, peakPalette, type Rgb } from './palette'
 import { traceInlay } from './inlay'
@@ -114,7 +114,7 @@ describe('flat outline illustrations', () => {
     expect(areaNear(svg, TINT, 0.015)).toBeGreaterThan(0.85 * mask.tint)
   })
 
-  it('keeps a 3 px stem as a shape, not a line', () => {
+  it('keeps a letter stem whole through speck clean-up', () => {
     const svg = traceInlay(px, W, H, { ...LOGO, speckle: 4, mode: 'palette', palette: peakPalette(px, 8, { width: W }) })
     const stem = pathsOf(svg).find((p) => parsePath(p.d).some((s) => s.nodes.every((n) => n.x > 196 && n.x < 207 && n.y > 135 && n.y < 162)))
     expect(stem).toBeDefined()
@@ -128,5 +128,88 @@ describe('flat outline illustrations', () => {
     expect(ink(128)).toBeLessThan(0.8 * mask.stroke)
     expect(ink('auto')).toBeGreaterThan(0.9 * mask.stroke)
     expect(ink('auto')).toBeLessThan(1.3 * mask.stroke)
+  })
+})
+
+describe('the edges of those fixes', () => {
+  /** A w × h image painted per pixel, no anti-aliasing. */
+  const flat = (w: number, h: number, paint: (x: number, y: number) => Rgb) => {
+    const out = new Uint8Array(w * h * 4)
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) out.set([...paint(x, y), 255], (y * w + x) * 4)
+    return out
+  }
+
+  it('folds a stem banded in two shades into one, not swapping them back and forth', () => {
+    // Columns DARK | INK | DARK, 180 px tall: three slivers side by side.
+    const img = flat(40, 200, (x, y) => (y >= 10 && y < 190 && x >= 19 && x < 22 ? (x === 20 ? INK : DARK) : WHITE))
+    const svg = traceInlay(img, 40, 200, { ...LOGO, mode: 'palette', palette: ['#ffffff', '#568cb6', '#3c6c8c'] })
+    expect(pathsOf(svg).filter((p) => p.fill !== '#ffffff')).toHaveLength(1)
+  })
+
+  it('keeps a plentiful colour that is never flat: 1 px grey rules beside black', () => {
+    const img = flat(100, 100, (x, y) => (x < 30 && y < 30 ? [0, 0, 0] : y % 4 === 0 && y > 40 ? [120, 120, 120] : WHITE))
+    expect(peakPalette(img, 8, { width: 100 })).toContain('#787878')
+  })
+
+  it("doesn't split a blank, noisy page into ink and paper", () => {
+    const img = flat(100, 100, (x, y) => {
+      const v = 228 + Math.round(hash(x, y) * 14)
+      return [v, v, v]
+    })
+    expect(pathsOf(traceInlay(img, 100, 100, { ...LOGO, mode: 'binary', threshold: 'auto' }))).toHaveLength(0)
+  })
+
+  it('takes a zero minTint as no minimum, without hanging', () => {
+    expect(peakPalette(px, 8, { width: W, minTint: 0 }).length).toBeGreaterThan(0)
+  })
+
+  it('fits a 3 px stem as a shape, not a line', () => {
+    // Its ends are too narrow to measure as corners: both long sides were fitted between the same two nodes.
+    const pts: Pt[] = []
+    for (let y = 0; y < 17; y++) pts.push({ x: 0, y })
+    for (let x = 0; x < 3; x++) pts.push({ x, y: 17 })
+    for (let y = 17; y > 0; y--) pts.push({ x: 3, y })
+    for (let x = 3; x > 0; x--) pts.push({ x, y: 0 })
+    const d = `M${fitChain(pts, true, { tolerance: 1, cornerAngle: 45 })
+      .map((c, i) => `${i ? '' : `${c[0].x} ${c[0].y}`}C${c[1].x} ${c[1].y} ${c[2].x} ${c[2].y} ${c[3].x} ${c[3].y}`)
+      .join('')}Z`
+    expect(area(d)).toBeGreaterThan(0.75 * 3 * 17)
+  })
+
+  it('grows no spikes on noisy letter stems', () => {
+    // 2.6–3.6 px stems, anti-aliased at sub-pixel offsets, their ink noisy as lossy compression leaves it.
+    // Their nearly parallel sides "met" far past the pixels, and least-squares handles shot out: 95 px.
+    let worst = 0
+    for (let k = 0; k < 200; k++) {
+      const [w, h, x0, sw, y0, y1] = [30, 40, 10 + (k % 7) / 7, 2.6 + (k % 5) * 0.25, 10 + (k % 3) / 3, 28 + (k % 4) / 4]
+      const img = new Uint8Array(w * h * 4)
+      for (let y = 0; y < h; y++)
+        for (let x = 0; x < w; x++) {
+          let cov = 0
+          for (let s = 0; s < 16; s++) {
+            const X = x + ((s % 4) + 0.5) / 4
+            const Y = y + (Math.floor(s / 4) + 0.5) / 4
+            if (X >= x0 && X < x0 + sw && Y >= y0 && Y < y1) cov++
+          }
+          const t = Math.min(1, Math.max(0, cov / 16 + (cov ? (hash(x + 97 * k, y) - 0.5) * 0.6 : 0)))
+          img.set([255 - t * 170, 255 - t * 120, 255 - t * 80, 255], (y * w + x) * 4)
+        }
+      for (const p of pathsOf(traceInlay(img, w, h, { mode: 'binary', threshold: 'auto', speckle: 2, tolerance: 1, cornerAngle: 45 })))
+        for (const s of parsePath(p.d))
+          for (const n of s.nodes)
+            for (const q of [n, n.in, n.out]) if (q) worst = Math.max(worst, y0 - q.y, q.y - y1, x0 - q.x, q.x - x0 - sw)
+    }
+    expect(worst).toBeLessThan(8)
+  })
+
+  it('leaves out a blend that is only ever an edge, given the width, even past minShare', () => {
+    // Black squares on white at half-pixel offsets: their edges are mid-grey, 0.8% of the image.
+    const img = flat(100, 100, (x, y) => {
+      const inSq = (v: number) => v % 50 >= 5 && v % 50 < 15
+      const edge = (v: number) => v % 50 === 15
+      return (inSq(x) || edge(x)) && (inSq(y) || edge(y)) ? (edge(x) || edge(y) ? [128, 128, 128] : [0, 0, 0]) : WHITE
+    })
+    expect(peakPalette(img, 8)).toContain('#808080')
+    expect(peakPalette(img, 8, { width: 100 })).not.toContain('#808080')
   })
 })

@@ -48,6 +48,7 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
   const defaults = presetById(p).defaults
   const changed = (Object.keys(defaults) as (keyof typeof defaults)[]).some((k) => defaults[k] !== settings[k])
   const hintId = useId()
+  const thresholdHintId = useId()
 
   return (
     <>
@@ -135,6 +136,7 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
                         key={label}
                         role="radio"
                         aria-checked={on}
+                        aria-describedby={on ? thresholdHintId : undefined}
                         onClick={() => !on && set('threshold', value === 'manual' ? 128 : value)}
                         className={`py-1.5 text-[13px] ${on ? 'bg-paper font-medium text-accent' : 'bg-paper-sunk text-ink hover:bg-paper'}`}
                       >
@@ -143,12 +145,12 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
                     )
                   })}
                 </div>
-                <p className="field-hint">
+                <p id={thresholdHintId} className="field-hint">
                   {settings.threshold === 'auto'
                     ? 'Splits ink from paper by their own shades, so coloured ink works too.'
                     : settings.threshold === null
                       ? 'Compares each spot with its surroundings, for photos of paper under uneven light.'
-                      : 'Ink is anything darker than the threshold.'}
+                      : `Ink is anything ${settings.lightInk ? 'lighter' : 'darker'} than the threshold.`}
                 </p>
               </div>
               {typeof settings.threshold === 'number' && (

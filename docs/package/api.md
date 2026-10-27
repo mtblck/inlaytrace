@@ -44,9 +44,10 @@ type InlayOptions = FitOptions & {
   speckle: number
   pixels?: boolean
   stacked?: boolean
+  photo?: boolean
 } & (
     | { mode: 'palette'; palette: string[]; merge?: Record<string, string> }
-    | { mode: 'binary'; threshold: number | null }
+    | { mode: 'binary'; threshold: number | 'auto' | null }
   )
 
 type FitOptions = { tolerance: number; cornerAngle: number; smoothing?: number }
@@ -57,7 +58,11 @@ type FitOptions = { tolerance: number; cornerAngle: number; smoothing?: number }
 ### `peakPalette(rgba, maxColors, options?)`
 
 ```ts
-function peakPalette(rgba: ArrayLike<number>, maxColors: number, options?: { minDistance?: number; minShare?: number; minDetail?: number }): string[]
+function peakPalette(
+  rgba: ArrayLike<number>,
+  maxColors: number,
+  options?: { minDistance?: number; minShare?: number; minDetail?: number; width?: number; minTint?: number; minFlat?: number },
+): string[]
 ```
 
 Up to `maxColors` colours from the peaks of the histogram, heaviest first (a
@@ -65,7 +70,12 @@ colour's weight is the pixels within `minDistance / 2` of it). `minDistance`
 (OKLab, default 0.07) is how far apart two colours must be to count
 separately; `minShare` (default 0.002) is the share of the image a colour
 needs, and `minDetail` (default 0.0005) the smaller share enough for one that
-isn't a blend of two colours already picked.
+isn't a blend of two colours already picked. Given the image's `width`, it
+also looks at which pixels are flat (their four neighbours within 8 per
+channel): a blend that is never flat is an edge and is left out at any share
+under 2%, and spare slots go to flat tints at least `minTint` (default 0.02)
+from every colour picked and flat over at least `minFlat` (default 0.001) of
+the image, such as a pale fill on white.
 
 ### `exactPalette(rgba, maxColors)`
 
@@ -104,7 +114,7 @@ use.
 function centerline(rgba: ArrayLike<number>, width: number, height: number, options: CenterlineOptions): CenterlineResult
 
 type CenterlineOptions = {
-  threshold: number | null // ink is darker than this (0–255); null adapts to the neighbourhood
+  threshold: number | 'auto' | null // ink is darker than this (0–255); 'auto' is the image's own split (Otsu); null adapts to the neighbourhood
   speckle: number // ink and paper specks smaller than speckle × speckle px are folded away
   tolerance: number // px between the skeleton and the fitted stroke
   cornerAngle: number // degrees

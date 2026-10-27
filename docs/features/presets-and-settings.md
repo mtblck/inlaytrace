@@ -14,8 +14,8 @@ re-traces within about 120 ms of the last change.
 | --- | --- | --- | --- |
 | **Logo** | Few flat colours, crisp corners | Inlay | 8 colours, specks 8 px, smoothing 1.5, corners 45° |
 | **Illustration** | More colours, smooth curves | Inlay | 16 colours, specks 4 px, smoothing 1, corners 60° |
-| **Line art** | Ink drawings and scans, one colour | Inlay | Threshold 128, specks 6 px, smoothing 1.5, corners 45° |
-| **Centerline** | Single strokes for plotters and engraving | Inlay (skeleton) | Threshold 128, specks 4 px, smoothing 1.5, corners 45°, stroke width measured |
+| **Line art** | Ink drawings and scans, one colour | Inlay | Threshold Auto, specks 6 px, smoothing 1.5, corners 45° |
+| **Centerline** | Single strokes for plotters and engraving | Inlay (skeleton) | Threshold Auto, specks 4 px, smoothing 1.5, corners 45°, stroke width measured |
 | **Poster** | Photos flattened into colour bands | Inlay (quantized palette) | 24 colours, specks 8 px, smoothing 1, corners 90°, stacked |
 | **Pixel art** | Hard edges, nothing smoothed | Inlay (pixel staircase) | Its exact colours (up to 32); on an image that isn't pixel art (its top colours cover under 90% of it), clustered colours as Poster picks them. No speck filter, up to 4096 px |
 
@@ -52,9 +52,10 @@ side and makes the rest transparent; *Light on dark* inverts first. It's chosen
 automatically when the image's border is dark, which turns a white logo on black
 into black shapes on transparent in one step.
 
-**Ink threshold** (Line art, Centerline, 1–254): which grey counts as ink. *Adapt to uneven
-lighting* compares each pixel with its surroundings instead, for photos of
-paper.
+**Ink threshold** (Line art, Centerline): which grey counts as ink. *Auto* (the
+default) splits ink from paper by the image's own shades, so coloured ink
+works as well as black. *Manual* sets the level yourself (1–254). *Uneven
+light* compares each pixel with its surroundings instead, for photos of paper.
 
 **Stroke width** (Centerline, Auto or 0.5–24 px): Centerline draws each line
 of ink as one stroke down its middle, rather than the outline round it, which
