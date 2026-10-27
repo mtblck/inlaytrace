@@ -52,7 +52,7 @@ export const traceCenterline = (rgba: ArrayLike<number>, w: number, h: number, o
 
 export function centerlineToSvg(r: CenterlineResult): string {
   const paths = r.paths.map((p) => `<path d="${attr(p.d)}" fill="none" stroke="${attr(p.stroke)}" stroke-width="${attr(round(p.strokeWidth))}" stroke-linecap="round" stroke-linejoin="round"/>`)
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${r.width}" height="${r.height}" viewBox="0 0 ${r.width} ${r.height}">\n${paths.join('\n')}\n</svg>\n`
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${attr(r.width)}" height="${attr(r.height)}" viewBox="0 0 ${attr(r.width)} ${attr(r.height)}">\n${paths.join('\n')}\n</svg>\n`
 }
 
 const round = (n: number) => Math.round(n * 100) / 100

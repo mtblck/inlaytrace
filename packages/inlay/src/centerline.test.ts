@@ -93,6 +93,13 @@ describe('centerline', () => {
     expect(centerlineToSvg(r)).toContain('fill="none" stroke="#000000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"')
   })
 
+  it("keeps a caller's size and colour inside their attributes", () => {
+    const svg = centerlineToSvg({ width: '2" onload="alert(1)' as unknown as number, height: 2, measuredWidth: 1, paths: [{ d: 'M0 0L2 2', stroke: '<x>', strokeWidth: 1 }] })
+    expect(svg).not.toContain('" onload')
+    expect(svg).toContain('width="2&quot; onload=&quot;alert(1)"')
+    expect(svg).toContain('stroke="&lt;x>"')
+  })
+
   it('draws nothing on blank paper', () => {
     expect(centerline(paint(() => false), 100, 100, options).paths).toEqual([])
   })
