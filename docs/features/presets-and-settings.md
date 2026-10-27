@@ -96,15 +96,18 @@ every outline as traced.
 outlines of a flat illustration become single lines of even width down their
 middle (stroked paths with round ends), instead of thin filled rings, and the
 fills either side meet under each line's middle, so nothing shows through if
-you move or thin a line. A colour counts as lines when at least half of it is
-in regions no more than 8 px wide and at least three times as long; its
+you move or thin a line. A colour counts as lines when it stands out from the
+paper and at least 30% of it is in thin, long parts (up to 8 px wide); an
+outline that runs into a solid area of the same ink still counts. Its
 anti-aliased edges and any darker shade a lossy save left along it join the
-line, and the width is measured from all of it. Lines measured under 2.5 px
-wide (small lettering) stay as shapes, since a centreline can't follow letters
-that small. Dots, headings and other solid shapes in the line's colour stay
-shapes too. On the outline test illustration it is as accurate as
-Illustration with 45% fewer nodes and a 40% smaller file; the lines can be
-recoloured, moved and node-edited like Centerline's strokes.
+line. Each connected piece is then measured, and only the long ones (eight
+times as long as wide) near the colour's usual width become lines, at that
+width: small lettering (under 2.5 px), short marks, dots and a heading in the
+same ink stay shapes, since a centreline can't follow letters well. The widths
+grow with the image when it was upscaled for tracing. On the outline test
+illustration it is as accurate as Illustration (2.06% of pixels wrong against
+2.01%) with a quarter fewer nodes and a 30% smaller file. The lines can be recoloured, moved and node-edited like
+Centerline's strokes, and as with Centerline, *Mirror* is off.
 
 **Shapes** (Poster only): *Stacked* draws each shape whole, larger shapes
 first, so smaller ones sit on top, and each shape also reaches under the

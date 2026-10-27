@@ -2,4 +2,4 @@
 'inlaytrace': minor
 ---
 
-New `strokes` option for flat outline art: in palette mode, a colour that is mostly thin, long regions is traced down its middle as one stroked path (`InlayPath.stroke` is the width measured from its ink), with its anti-aliased edges and darker shades joined in, and the shapes either side meet beneath it. Lines under 2.5 px wide, and solid shapes in the line's colour, stay shapes. Off by default; output without it is unchanged.
+New `strokes` option for flat outline art: in palette mode, the colours drawn mostly as thin, long lines are traced down their middle as one stroked path each (`InlayPath.stroke` is the width measured from the ink), with their anti-aliased edges and darker shades joined in, and the shapes either side meet beneath them. Small lettering, short marks and solid shapes stay shapes. `scale` says how far the image was enlarged, so the line widths scale with it. Off by default; output without it is unchanged.

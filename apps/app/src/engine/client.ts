@@ -61,8 +61,8 @@ export class TraceClient {
    * Search trace settings for a file under `target` bytes. Long (many traces),
    * so the app runs it on a client of its own, leaving the main one free to trace.
    */
-  fitSize(rgba: Uint8ClampedArray, width: number, height: number, settings: Settings, target: number, progress: (tried: number, best: Candidate) => void) {
-    const request: WorkerRequest = { type: 'size', id: this.nextId++, rgba: rgba.slice().buffer, width, height, settings, target }
+  fitSize(rgba: Uint8ClampedArray, width: number, height: number, settings: Settings, target: number, progress: (tried: number, best: Candidate) => void, scale = 1) {
+    const request: WorkerRequest = { type: 'size', id: this.nextId++, rgba: rgba.slice().buffer, width, height, settings, target, scale }
     return this.send('size', request, (r) => r.type === 'progress' && progress(r.tried, r.best))
   }
 

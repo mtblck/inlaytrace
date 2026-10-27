@@ -160,7 +160,8 @@ class UserError extends Error {}
 async function process(run: HdRun, image: { data: Uint8Array; width: number; height: number }, env: HdEnv, deadline: number): Promise<{ bytes: Uint8Array; type: string }> {
   if (run.kind === 'trace') {
     const settings = run.options.settings as Settings
-    const svg = runTrace(image.data, image.width, image.height, toTraceOptions(scaleSettings(settings, image.width, image.height)))
+    const k = fullSize(settings, image.width, image.height)
+    const svg = runTrace(image.data, image.width, image.height, toTraceOptions(scaleSettings(settings, image.width, image.height), k))
     return { bytes: new TextEncoder().encode(svg), type: 'image/svg+xml' }
   }
   if (run.kind === 'upscale') {
@@ -170,6 +171,9 @@ async function process(run: HdRun, image: { data: Uint8Array; width: number; hei
   throw new Error(`No processor for ${run.kind}.`)
 }
 
+/** How many times bigger the full-size image is than the app's trace of it. */
+const fullSize = (s: Settings, width: number, height: number) => Math.max(1, Math.max(width, height) / maxTraceEdge(s.preset))
+
 /**
  * Settings tuned on the app's trace are in its pixels: at full size the same
  * speck is bigger, so the speckle filter (an area) and a set stroke width scale
@@ -177,7 +181,7 @@ async function process(run: HdRun, image: { data: Uint8Array; width: number; hei
  * what HD is for.
  */
 export function scaleSettings(s: Settings, width: number, height: number): Settings {
-  const k = Math.max(1, Math.max(width, height) / maxTraceEdge(s.preset))
+  const k = fullSize(s, width, height)
   return { ...s, speckle: Math.round(s.speckle * k * k), strokeWidth: s.strokeWidth * k }
 }
 

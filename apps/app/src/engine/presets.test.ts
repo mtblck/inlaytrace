@@ -125,6 +125,12 @@ describe('Outline art', () => {
     for (const p of PRESETS) expect(!!toTraceOptions(settingsFor(p.id)).strokes).toBe(p.id === 'outline')
   })
 
+  it('passes on how far the image was enlarged, for its line widths', () => {
+    expect(toTraceOptions(settingsFor('outline'), 2.5).scale).toBe(2.5)
+    expect(toTraceOptions(settingsFor('outline')).scale).toBeUndefined()
+    expect(toTraceOptions(settingsFor('illustration'), 2.5).scale).toBeUndefined()
+  })
+
   it('traces an outlined card with a stroked line, the fills meeting beneath it', () => {
     // A pale card outlined 3 px in blue, on white.
     const w = 120

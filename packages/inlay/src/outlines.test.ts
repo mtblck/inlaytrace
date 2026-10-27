@@ -267,20 +267,23 @@ describe('lines as strokes', () => {
   const strokesOf = (svg: string) => [...svg.matchAll(/<path d="([^"]*)" fill="none" stroke="([^"]*)" stroke-width="([^"]*)"/g)].map((m) => ({ d: m[1], stroke: m[2], width: Number(m[3]) }))
   const svg = traceInlay(px, W, H, { ...LOGO, speckle: 4, mode: 'palette', palette: peakPalette(px, 8, { width: W }), strokes: true })
 
-  it('traces the outlines, stem and dash as one stroked path, at the width drawn', () => {
+  it('traces the outline as one stroked loop at the width drawn, and short marks as shapes', () => {
     const lines = strokesOf(svg)
     expect(lines).toHaveLength(1)
     expect(near(lines[0].stroke, INK, 0.06) || near(lines[0].stroke, DARK, 0.06)).toBe(true)
     expect(lines[0].width).toBeGreaterThan(2.5)
     expect(lines[0].width).toBeLessThan(3.6)
-    // The hull's outline is one closed loop; the stem and the dash are open strokes.
+    // The hull's outline is one closed loop. The stem and the dash are under
+    // eight times as long as wide, too short to tell from a letter's stroke.
     const subs = parsePath(lines[0].d)
-    expect(subs.filter((s) => s.closed)).toHaveLength(1)
-    expect(subs).toHaveLength(3)
+    expect(subs).toHaveLength(1)
+    expect(subs[0].closed).toBe(true)
+    const marks = areaNear(svg, INK, 0.03) + areaNear(svg, DARK, 0.03)
+    expect(marks).toBeGreaterThan(0.8 * (3 * 17 + 20 * 3))
+    expect(marks).toBeLessThan(1.25 * (3 * 17 + 20 * 3))
   })
 
-  it('leaves no shapes in either shade of the ink, and the fills meet under the line', () => {
-    expect(areaNear(svg, INK, 0.03) + areaNear(svg, DARK, 0.03)).toBe(0)
+  it('lets the fills meet under the line', () => {
     // The pale fill reaches the middle of the outline: the hull inside its centreline, less the band, plus the moon.
     const hull = (148.5 - 31.5) * (158.5 - 91.5) - (148.5 - 31.5) * 15
     const pale = hull + Math.PI * 45 ** 2
@@ -316,5 +319,74 @@ describe('lines as strokes', () => {
   it('is ignored for photos, binary and pixel art', () => {
     const palette = peakPalette(px, 8, { width: W })
     for (const o of [{ photo: true }, { pixels: true }]) expect(strokesOf(traceInlay(px, W, H, { ...LOGO, mode: 'palette', palette, strokes: true, ...o }))).toHaveLength(0)
+    expect(strokesOf(traceInlay(px, W, H, { ...LOGO, mode: 'binary', threshold: 'auto', strokes: true } as Parameters<typeof traceInlay>[3]))).toHaveLength(0)
+  })
+
+  /** A w × h image painted with RGBA per pixel, 4 × 4 samples each, so edges are anti-aliased. */
+  const paint = (w: number, h: number, at: (x: number, y: number) => number[] | null, ground: number[] | null) => {
+    const out = new Uint8Array(w * h * 4)
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const acc = [0, 0, 0, 0]
+        for (let sy = 0; sy < 4; sy++)
+          for (let sx = 0; sx < 4; sx++) {
+            const c = at(x + (sx + 0.5) / 4, y + (sy + 0.5) / 4) ?? ground
+            if (!c) continue
+            for (let k = 0; k < 3; k++) acc[k] += c[k]
+            acc[3]++
+          }
+        out.set(acc[3] ? [...acc.slice(0, 3).map((v) => Math.round(v / acc[3])), Math.round((acc[3] / 16) * 255)] : [0, 0, 0, 0], (y * w + x) * 4)
+      }
+    return out
+  }
+  const BLACK = [20, 20, 20]
+  /** A 3 px outline round a 120 × 80 card at (20, 20), with `inside` painted within. */
+  const card = (x: number, y: number, inside: (x: number, y: number) => number[] | null) => {
+    const inCard = x >= 20 && x < 140 && y >= 20 && y < 100
+    if (!inCard) return null
+    if (x < 23 || x >= 137 || y < 23 || y >= 97) return BLACK
+    return inside(x, y)
+  }
+  const traceIt = (img: Uint8Array, palette: string[], extra = {}) => traceInlay(img, 160, 120, { ...LOGO, speckle: 4, mode: 'palette', palette, strokes: true, ...extra })
+
+  it('finds lines on a transparent background, where the ink is the commonest colour', () => {
+    const img = paint(160, 120, (x, y) => card(x, y, () => null), null)
+    const lines = strokesOf(traceIt(img, ['#141414']))
+    expect(lines).toHaveLength(1)
+    expect(parsePath(lines[0].d)[0].closed).toBe(true)
+  })
+
+  it('keeps an outline a line where a solid area of its ink runs into it, and the area a shape', () => {
+    // A 40 × 30 block of the ink joined to the outline's inside, on a pale card.
+    const img = paint(160, 120, (x, y) => card(x, y, (x, y) => (x < 63 && y < 53 ? BLACK : [226, 238, 246])), [255, 255, 255])
+    const svg = traceIt(img, ['#ffffff', '#e2eef6', '#141414'])
+    expect(strokesOf(svg)).toHaveLength(1)
+    const block = pathsOf(svg).filter((p) => p.fill === '#141414')
+    expect(block).toHaveLength(1)
+    expect(area(block[0].d)).toBeGreaterThan(0.8 * 40 * 30)
+  })
+
+  it('draws rules of one ink as lines and its small lettering beside them as shapes', () => {
+    // The card's 3 px outline, and inside it a row of 1.5 px rings in the same ink.
+    const ring = (x: number, y: number) => {
+      const cx = 40 + 14 * Math.round((x - 40) / 14)
+      return cx <= 110 && Math.abs(Math.hypot(x - cx, y - 60) - 3.5) < 0.75 ? BLACK : null
+    }
+    const svg = traceIt(paint(160, 120, (x, y) => card(x, y, ring), [255, 255, 255]), ['#ffffff', '#141414'])
+    const lines = strokesOf(svg)
+    expect(lines).toHaveLength(1)
+    expect(lines[0].width).toBeGreaterThan(2.5)
+    expect(pathsOf(svg).filter((p) => p.fill === '#141414').length).toBeGreaterThanOrEqual(6)
+  })
+
+  it('takes wider lines as lines when the image was enlarged', () => {
+    // The same card drawn twice the size: a 6 px outline, which at scale 1 is
+    // wide enough to be a line already; at 10 px it needs the scale.
+    const big = (w: number) => (x: number, y: number) => (x >= 20 && x < 140 && y >= 20 && y < 100 && (x < 20 + w || x >= 140 - w || y < 20 + w || y >= 100 - w) ? BLACK : null)
+    const img = paint(160, 120, big(10), [255, 255, 255])
+    expect(strokesOf(traceIt(img, ['#ffffff', '#141414']))).toHaveLength(0)
+    const lines = strokesOf(traceIt(img, ['#ffffff', '#141414'], { scale: 2 }))
+    expect(lines).toHaveLength(1)
+    expect(lines[0].width).toBeGreaterThan(9)
   })
 })

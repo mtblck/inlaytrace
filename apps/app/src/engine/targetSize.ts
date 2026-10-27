@@ -46,12 +46,12 @@ function moves(s: Settings, big: boolean): Settings[] {
  * the bytes the export would have (the worker runs SVGO); `progress` hears
  * about each trace.
  */
-export function searchSize(rgba: Uint8Array, width: number, height: number, from: Settings, target: number, measure: (svg: string) => number, progress?: (tried: number, best: Candidate) => void): SizeSearch {
+export function searchSize(rgba: Uint8Array, width: number, height: number, from: Settings, target: number, measure: (svg: string) => number, progress?: (tried: number, best: Candidate) => void, scale = 1): SizeSearch {
   const reference = flatten(rgba)
   let tried = 0
   const evaluate = (settings: Settings): Candidate => {
     tried++
-    const svg = runTrace(rgba.slice(), width, height, toTraceOptions(settings))
+    const svg = runTrace(rgba.slice(), width, height, toTraceOptions(settings, scale))
     return { settings, bytes: measure(svg), error: meanError(svg, reference, width, height) }
   }
   const start = evaluate(from)

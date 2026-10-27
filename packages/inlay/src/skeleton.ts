@@ -16,9 +16,9 @@
 import { fitChain, isFlat, type Cubic } from './fit'
 import type { PathNode, Pt, Subpath } from './path'
 
-/** The ink's skeleton as fitted subpaths (open, or closed for a loop), and the stroke width measured from the ink. */
-export function skeletonStrokes(ink: Uint8Array, w: number, h: number, o: { tolerance: number; cornerAngle: number }): { subs: Subpath[]; measured: number } {
-  const skel = thin(ink, w, h)
+/** The ink's skeleton as fitted subpaths (open, or closed for a loop), and the stroke width measured from the ink. `thinned` is the skeleton, if already thinned; it is pruned in place. */
+export function skeletonStrokes(ink: Uint8Array, w: number, h: number, o: { tolerance: number; cornerAngle: number }, thinned?: Uint8Array): { subs: Subpath[]; measured: number } {
+  const skel = thinned ?? thin(ink, w, h)
   const measured = strokeWidthOf(skel, ink, w)
   prune(skel, w, h, Math.max(3, Math.round(measured)))
   const subs: Subpath[] = []
@@ -51,6 +51,29 @@ function strokeWidthOf(skel: Uint8Array, ink: Uint8Array, w: number) {
     if (x > 0 && skel[i + w - 1]) length += Math.SQRT2
   }
   return length > 0 ? Math.max(1, area / length) : 1
+}
+
+/**
+ * Each of `m` regions of the ink (`comp`, VOID outside): its skeleton's length
+ * and its stroke width (and the skeleton itself, thinning being local to each region), measured as `strokeWidthOf` does (0 where it thins to
+ * a single pixel, which no stroke can be drawn along).
+ */
+export function regionWidths(ink: Uint8Array, w: number, h: number, comp: Int32Array, m: number): { width: Float64Array; length: Float64Array; skel: Uint8Array } {
+  const skel = thin(ink, w, h)
+  const area = new Float64Array(m)
+  const length = new Float64Array(m)
+  for (let i = 0; i < ink.length; i++) {
+    const c = comp[i]
+    if (!ink[i] || c < 0) continue
+    area[c]++
+    if (!skel[i]) continue
+    const x = i % w
+    if (x + 1 < w && skel[i + 1]) length[c] += 1
+    if (skel[i + w]) length[c] += 1
+    if (x + 1 < w && skel[i + w + 1]) length[c] += Math.SQRT2
+    if (x > 0 && skel[i + w - 1]) length[c] += Math.SQRT2
+  }
+  return { width: area.map((a, c) => (length[c] > 0 ? Math.max(1, a / length[c]) : 0)), length, skel }
 }
 
 // ---- Thinning ------------------------------------------------------------------

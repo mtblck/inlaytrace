@@ -14,7 +14,7 @@ export type WorkerRequest =
   | { type: 'trace'; id: number; rgba: ArrayBuffer; width: number; height: number; options: TraceOptions }
   | { type: 'optimize'; id: number; svg: string }
   | { type: 'symmetry'; id: number; rgba: ArrayBuffer; width: number; height: number }
-  | { type: 'size'; id: number; rgba: ArrayBuffer; width: number; height: number; settings: Settings; target: number }
+  | { type: 'size'; id: number; rgba: ArrayBuffer; width: number; height: number; settings: Settings; target: number; scale: number }
 
 export type WorkerResponse =
   | { type: 'traced'; id: number; svg: string; ms: number }
@@ -42,7 +42,7 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
       svgo ??= import('svgo/browser')
       const { optimize } = await svgo
       const measure = (svg: string) => new TextEncoder().encode(optimize(svg, SVGO).data).length
-      const result = searchSize(new Uint8Array(req.rgba), req.width, req.height, req.settings, req.target, measure, (tried, best) => post({ type: 'progress', id: req.id, tried, best }))
+      const result = searchSize(new Uint8Array(req.rgba), req.width, req.height, req.settings, req.target, measure, (tried, best) => post({ type: 'progress', id: req.id, tried, best }), req.scale)
       post({ type: 'sized', id: req.id, result })
     } else if (req.type === 'symmetry') {
       post({ type: 'symmetry', id: req.id, found: detectSymmetry(new Uint8Array(req.rgba), req.width, req.height) })

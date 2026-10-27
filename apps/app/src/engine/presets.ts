@@ -61,6 +61,9 @@ export type Preset = {
   defaults: Omit<Settings, 'preset' | 'merge' | 'removeBackground' | 'aiUpscale'>
 }
 
+/** Illustration's defaults, which Outline art shares: it differs only in tracing lines as strokes. */
+const ILLUSTRATION: Preset['defaults'] = { colors: 16, threshold: null, lightInk: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked', exact: true, strokeWidth: 0 }
+
 export const PRESETS: Preset[] = [
   {
     id: 'logo',
@@ -72,13 +75,13 @@ export const PRESETS: Preset[] = [
     id: 'illustration',
     label: 'Illustration',
     hint: 'More colours, smooth curves',
-    defaults: { colors: 16, threshold: null, lightInk: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked', exact: true, strokeWidth: 0 },
+    defaults: ILLUSTRATION,
   },
   {
     id: 'outline',
     label: 'Outline art',
     hint: 'Drawn outlines kept as editable lines',
-    defaults: { colors: 16, threshold: null, lightInk: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked', exact: true, strokeWidth: 0 },
+    defaults: ILLUSTRATION,
   },
   {
     id: 'lineart',
@@ -141,6 +144,8 @@ export type TraceOptions = {
   shapes?: boolean
   /** Palette mode: trace thin outlines as stroked lines. */
   strokes?: boolean
+  /** With strokes: how many times the image was enlarged for tracing, so line widths scale with it. */
+  scale?: number
   /** Centerline mode: the stroke width in px; measured when left out. */
   strokeWidth?: number
   /** Binary and centerline modes. */
@@ -153,8 +158,11 @@ export type TraceOptions = {
  * is Inlay now; they differ in how the palette is picked and how shapes are
  * drawn. Poster moved from VTracer in #53, where on three photos it was 17%
  * closer to the photo with 57% fewer shapes and a 30% smaller file.
+ *
+ * `scale` is how many times the image was enlarged for tracing (a small
+ * image upscaled, or HD's full size); Outline art's line widths grow with it.
  */
-export function toTraceOptions(s: Settings): TraceOptions {
+export function toTraceOptions(s: Settings, scale = 1): TraceOptions {
   const fit = { speckle: s.speckle, tolerance: toleranceFor(s.smoothing), cornerAngle: s.corners, ...(s.exact && hasExactShapes(s.preset) ? { shapes: true } : {}) }
   if (s.preset === 'centerline') return { ...fit, mode: 'centerline', threshold: s.threshold, ...(s.strokeWidth > 0 ? { strokeWidth: s.strokeWidth } : {}), ...(s.lightInk ? { invert: true } : {}) }
   if (s.preset === 'lineart') return { ...fit, mode: 'binary', threshold: s.threshold, ...(s.lightInk ? { invert: true } : {}) }
@@ -165,7 +173,7 @@ export function toTraceOptions(s: Settings): TraceOptions {
   if (s.preset === 'photo') return { ...fit, mode: 'palette', colors: s.colors, palette: 'quantize', stacked: s.shapes === 'stacked' }
   // Logo, Illustration and Outline art: flat art's real colours are the histogram's peaks.
   // Outline art traces its thin outlines as stroked lines, the fills meeting beneath them.
-  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', ...merge, ...(s.preset === 'outline' ? { strokes: true } : {}) }
+  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', ...merge, ...(s.preset === 'outline' ? { strokes: true, ...(scale > 1 ? { scale } : {}) } : {}) }
 }
 
 /** Pixel art keeps every source pixel; everything else is traced at this size at most. */
