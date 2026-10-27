@@ -38,7 +38,7 @@ function traceInlay(rgba: ArrayLike<number>, width: number, height: number, opti
 
 ```ts
 type InlayResult = { width: number; height: number; paths: InlayPath[] }
-type InlayPath = { d: string; fill: string } // absolute M/L/C/Z, nonzero fill; largest first
+type InlayPath = { d: string; fill: string; stroke?: number } // absolute M/L/C/Z, nonzero fill; largest first. With `strokes`, lines come last: `stroke` is their width, `fill` their colour, unfilled
 
 type InlayOptions = FitOptions & {
   speckle: number

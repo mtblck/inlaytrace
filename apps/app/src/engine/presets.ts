@@ -26,7 +26,7 @@
  *    On a photo it was worse (9.9 to 15.3), so Poster kept the quantizer; since
  *    #53 it quantizes with Inlay (quantizePalette, k-means in OKLab).
  */
-export type PresetId = 'logo' | 'illustration' | 'lineart' | 'centerline' | 'photo' | 'pixel'
+export type PresetId = 'logo' | 'illustration' | 'outline' | 'lineart' | 'centerline' | 'photo' | 'pixel'
 
 export type Settings = {
   preset: PresetId
@@ -61,6 +61,9 @@ export type Preset = {
   defaults: Omit<Settings, 'preset' | 'merge' | 'removeBackground' | 'aiUpscale'>
 }
 
+/** Illustration's defaults, which Outline art shares: it differs only in tracing lines as strokes. */
+const ILLUSTRATION: Preset['defaults'] = { colors: 16, threshold: null, lightInk: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked', exact: true, strokeWidth: 0 }
+
 export const PRESETS: Preset[] = [
   {
     id: 'logo',
@@ -72,7 +75,13 @@ export const PRESETS: Preset[] = [
     id: 'illustration',
     label: 'Illustration',
     hint: 'More colours, smooth curves',
-    defaults: { colors: 16, threshold: null, lightInk: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked', exact: true, strokeWidth: 0 },
+    defaults: ILLUSTRATION,
+  },
+  {
+    id: 'outline',
+    label: 'Outline art',
+    hint: 'Drawn outlines kept as editable lines',
+    defaults: ILLUSTRATION,
   },
   {
     id: 'lineart',
@@ -108,10 +117,10 @@ export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetB
 export const isInk = (id: PresetId) => id === 'lineart' || id === 'centerline'
 
 /** Exact shapes: the flat-art presets (a photo has none, and pixel art keeps its staircase). */
-export const hasExactShapes = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'lineart'
+export const hasExactShapes = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline' || id === 'lineart'
 
 /** Merging colours: the flat-art presets, whose palettes are real colours (Poster's are cluster averages). */
-export const canMerge = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'pixel'
+export const canMerge = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline' || id === 'pixel'
 
 /**
  * Smoothing 0–3 → fitting tolerance in px. The Logo default (1.5) lands on
@@ -133,6 +142,10 @@ export type TraceOptions = {
   stacked?: boolean
   /** Draw circles, ellipses, (rounded) rectangles and regular polygons exactly. */
   shapes?: boolean
+  /** Palette mode: trace thin outlines as stroked lines. */
+  strokes?: boolean
+  /** With strokes: how many times the image was enlarged for tracing, so line widths scale with it. */
+  scale?: number
   /** Centerline mode: the stroke width in px; measured when left out. */
   strokeWidth?: number
   /** Binary and centerline modes. */
@@ -145,8 +158,11 @@ export type TraceOptions = {
  * is Inlay now; they differ in how the palette is picked and how shapes are
  * drawn. Poster moved from VTracer in #53, where on three photos it was 17%
  * closer to the photo with 57% fewer shapes and a 30% smaller file.
+ *
+ * `scale` is how many times the image was enlarged for tracing (a small
+ * image upscaled, or HD's full size); Outline art's line widths grow with it.
  */
-export function toTraceOptions(s: Settings): TraceOptions {
+export function toTraceOptions(s: Settings, scale = 1): TraceOptions {
   const fit = { speckle: s.speckle, tolerance: toleranceFor(s.smoothing), cornerAngle: s.corners, ...(s.exact && hasExactShapes(s.preset) ? { shapes: true } : {}) }
   if (s.preset === 'centerline') return { ...fit, mode: 'centerline', threshold: s.threshold, ...(s.strokeWidth > 0 ? { strokeWidth: s.strokeWidth } : {}), ...(s.lightInk ? { invert: true } : {}) }
   if (s.preset === 'lineart') return { ...fit, mode: 'binary', threshold: s.threshold, ...(s.lightInk ? { invert: true } : {}) }
@@ -155,8 +171,9 @@ export function toTraceOptions(s: Settings): TraceOptions {
   if (s.preset === 'pixel') return { ...fit, mode: 'palette', colors: s.colors, palette: 'exact', pixels: true, ...merge }
   // Poster: photos have no histogram peaks, so the palette is quantized (k-means in OKLab), and shapes stack by default.
   if (s.preset === 'photo') return { ...fit, mode: 'palette', colors: s.colors, palette: 'quantize', stacked: s.shapes === 'stacked' }
-  // Logo and Illustration: flat art's real colours are the histogram's peaks.
-  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', ...merge }
+  // Logo, Illustration and Outline art: flat art's real colours are the histogram's peaks.
+  // Outline art traces its thin outlines as stroked lines, the fills meeting beneath them.
+  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', ...merge, ...(s.preset === 'outline' ? { strokes: true, ...(scale > 1 ? { scale } : {}) } : {}) }
 }
 
 /** Pixel art keeps every source pixel; everything else is traced at this size at most. */

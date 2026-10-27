@@ -403,7 +403,7 @@ export default function App() {
       }
       const { rgba, width, height } = cached.pixels
       setStatus({ kind: 'tracing' })
-      const res = await client.trace(rgba, width, height, toTraceOptions(settings))
+      const res = await client.trace(rgba, width, height, toTraceOptions(settings, cached.pixels.upscale))
       if (!res) return // superseded by a newer request
       if (symmetryOf.current !== cached.pixels) {
         // Once per set of pixels, not per trace: settings don't change the answer.
@@ -937,11 +937,11 @@ export default function App() {
     if (!traceSource) return
     const maxEdge = maxTraceEdge(settings.preset)
     const upscale = settings.preset !== 'pixel'
-    const { rgba, width, height } = pixelsOf(traceSource, maxEdge, upscale)
+    const { rgba, width, height, upscale: scale } = pixelsOf(traceSource, maxEdge, upscale)
     const target = Math.round(kb * 1024)
     const from = settings
     setSizeRun({ target, from, tried: 0, best: null, result: null })
-    const res = await sizeClient.fitSize(rgba, width, height, from, target, (tried, best) => setSizeRun((r) => (r && r.from === from ? { ...r, tried, best } : r)))
+    const res = await sizeClient.fitSize(rgba, width, height, from, target, (tried, best) => setSizeRun((r) => (r && r.from === from ? { ...r, tried, best } : r)), scale)
     setSizeRun((r) => {
       if (!r || r.from !== from) return r // cancelled, or another search started
       if (res?.type === 'sized') return { ...r, tried: res.result.tried, best: res.result.best, result: res.result }

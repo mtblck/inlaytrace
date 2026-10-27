@@ -37,7 +37,7 @@ type Props = {
   width: number
   height: number
   onAxis: (axis: Axis) => void
-  /** Centerline strokes can't be mirrored (the booleans work on filled areas), so the tool is off. */
+  /** Stroked lines (Centerline, Outline art) can't be mirrored: the booleans work on filled areas, so the tool is off. */
   strokes: boolean
   /** The symmetry found in the image, if any is likely, with the share of the drawing that matches it. */
   detected: (Axis & { score: number }) | null
@@ -85,7 +85,7 @@ export function EditPanel(p: Props) {
             role="radio"
             aria-checked={p.tool === t}
             aria-keyshortcuts={key}
-            title={t === 'mirror' && p.strokes ? 'Mirror works on filled shapes, not centerline strokes' : `${label} (${key})`}
+            title={t === 'mirror' && p.strokes ? 'Mirror works on filled shapes, and this trace has lines' : `${label} (${key})`}
             disabled={t === 'mirror' && p.strokes}
             onClick={() => p.onTool(t)}
             className={`py-1.5 text-[13px] disabled:cursor-not-allowed disabled:text-ink-faint ${p.tool === t ? 'bg-paper font-medium text-accent' : 'bg-paper-sunk text-ink hover:bg-paper'}`}

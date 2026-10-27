@@ -14,6 +14,7 @@ re-traces within about 120 ms of the last change.
 | --- | --- | --- | --- |
 | **Logo** | Few flat colours, crisp corners | Inlay | 8 colours, specks 8 px, smoothing 1.5, corners 45° |
 | **Illustration** | More colours, smooth curves | Inlay | 16 colours, specks 4 px, smoothing 1, corners 60° |
+| **Outline art** | Drawn outlines kept as editable lines | Inlay, with lines as strokes | 16 colours, specks 4 px, smoothing 1, corners 60° |
 | **Line art** | Ink drawings and scans, one colour | Inlay | Threshold Auto, specks 6 px, smoothing 1.5, corners 45° |
 | **Centerline** | Single strokes for plotters and engraving | Inlay (skeleton) | Threshold Auto, specks 4 px, smoothing 1.5, corners 45°, stroke width measured |
 | **Poster** | Photos flattened into colour bands | Inlay (quantized palette) | 24 colours, specks 8 px, smoothing 1, corners 90°, stacked |
@@ -69,8 +70,8 @@ node-edited like shapes; *Mirror* works on filled shapes only, so it's off for
 them. A 2048 px drawing with thick ink traces in about 1.5 s.
 
 **Ignore specks** (0–32 px): regions smaller than this many pixels squared merge
-into their surroundings. Raise it for noisy scans or JPEG speckle. In Logo and
-Illustration, small shapes that stand out from everything around them (letters,
+into their surroundings. Raise it for noisy scans or JPEG speckle. In Logo,
+Illustration and Outline art, small shapes that stand out from everything around them (letters,
 dots) are kept from an eighth of that size up, so small text survives the
 default; raise it further to clear them too, or for dark dust on a scan.
 
@@ -83,13 +84,30 @@ smaller file.
 curves. See [Curve fitting](../how-it-works/curve-fitting.md) for how a corner
 is told apart from a tight curve.
 
-**Exact shapes** (Logo, Illustration, Line art; on by default): an outline
+**Exact shapes** (Logo, Illustration, Outline art, Line art; on by default): an outline
 that is a circle, an ellipse, a rectangle, a rounded rectangle or a regular
 polygon is drawn as that exact shape, with true right angles and equal sides,
 instead of curves fitted to its pixels. Only outlines that follow the shape
 closely all the way round count, and only those with a single colour round
 them (a circle overlapping another shape stays fitted). Turn it off to keep
 every outline as traced.
+
+**Outline art's lines**: Outline art is Illustration, except that the
+outlines of a flat illustration become single lines of even width down their
+middle (stroked paths with round ends), instead of thin filled rings, and the
+fills either side meet under each line's middle, so nothing shows through if
+you move or thin a line. A colour counts as lines when it stands out from the
+paper and at least 30% of it is in thin, long parts (up to 8 px wide); an
+outline that runs into a solid area of the same ink still counts. Its
+anti-aliased edges and any darker shade a lossy save left along it join the
+line. Each connected piece is then measured, and only the long ones (eight
+times as long as wide) near the colour's usual width become lines, at that
+width: small lettering (under 2.5 px), short marks, dots and a heading in the
+same ink stay shapes, since a centreline can't follow letters well. The widths
+grow with the image when it was upscaled for tracing. On the outline test
+illustration it is as accurate as Illustration (2.06% of pixels wrong against
+2.01%) with a quarter fewer nodes and a 30% smaller file. The lines can be recoloured, moved and node-edited like
+Centerline's strokes, and as with Centerline, *Mirror* is off.
 
 **Shapes** (Poster only): *Stacked* draws each shape whole, larger shapes
 first, so smaller ones sit on top, and each shape also reaches under the

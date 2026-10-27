@@ -11,6 +11,7 @@ export type SizeRun = { target: number; from: Settings; tried: number; best: Can
 const PRESET_ICONS: Record<PresetId, string> = {
   logo: 'M12 3l8 4.5v9L12 21l-8-4.5v-9z',
   illustration: 'M4 18c3-8 6-11 8-11s3 3 4 6 2 4 4 4M4 18h16',
+  outline: 'M5 19V9l7-5 7 5v10zM5 13h14',
   lineart: 'M4 16c3-6 5-9 7-9s2 6 4 6 3-3 5-5',
   centerline: 'M5 19L19 5M5 12h4M15 12h4',
   photo: 'M4 5h16v14H4zM4 11h16M4 15h16',

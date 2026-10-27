@@ -215,7 +215,7 @@ for (const [file, title] of [
   const art = await prepare(readFileSync(join(root, 'scripts/fixtures/outline.svg'), 'utf8'))
   console.log(`\n  Outline illustration (outlines ${(1 * SIZE) / 200} px wide, pale fills), ${SIZE} px JPEG q72, wrong past 24\n`)
   console.log('  Preset         Wrong px   Nodes  Paths   Size')
-  for (const id of ['logo', 'illustration', 'lineart', 'photo']) {
+  for (const id of ['logo', 'illustration', 'outline', 'lineart', 'photo']) {
     const t = performance.now()
     const svg = runTrace(art.slice(), SIZE, SIZE, toTraceOptions(settingsFor(id)))
     const ms = performance.now() - t

@@ -214,6 +214,44 @@ and ring come out cleaner too. The outline fixture went from 2.1%
 to 2.0% wrong; the badge and emblems score the same (a few more nodes),
 and the pen drawing is unchanged.
 
+**Outline art: lines as strokes.** Even traced well, an outline drawn as a
+3 px line comes out as a thin filled ring whose two edges are fitted apart, so
+it wobbles in width, and it can't be thinned, recoloured as one line or moved
+off the fill. With `strokes` (the Outline art preset) the colours that are
+mostly lines are traced as Centerline traces ink, down the middle, sharing its
+skeleton code (`skeleton.ts`), and the shapes either side grow into the line's
+pixels a step at a time so they meet under its middle. What it took on the
+sinking ship, and in review:
+
+- *Thin parts, not thin regions.* A 3-4 chamfer distance finds everything
+  deeper than an 8 px line; those discs are cut away, and what remains of each
+  region is thin when it is at least three times as long as wide. Judging
+  whole regions instead lost any outline that runs into a solid area of the
+  same ink. A colour is lines when it stands 0.25 (OKLab) from the paper (a
+  pale fill squeezed between two lines is thin too) and 30% of it is thin.
+  On a transparent background there is no paper colour: the ink can be the
+  commonest colour there.
+- *Lossy shades.* The ship's outline is two blues, the second darker in
+  stretches, and short dashes come in halves of each. A line's ink takes the
+  thin parts of every colour between the paper and it (or beyond, darker)
+  within 0.15 of the blend, taken together, then grows into any touching
+  pixel of such a colour, its anti-aliased edges included, short of the solid
+  areas cut away above. Grey text near blue lines doesn't count: 0.3 off.
+- *One width a colour, measured a piece at a time.* Each connected piece of
+  ink gets its own width (area over skeleton length). Only pieces at least
+  2.5 px wide, eight times as long as wide and within 20% of the colour's
+  usual (area-weighted median) width are drawn, at that width. At 1.5 px a
+  letter's skeleton is a few pixels between junctions and pruning ate stems
+  ("h" came out as "n"); at five times as long, the heading's "t" and "r"
+  (the same blue as the outlines, 4–5 px) branched into wrong shapes. Short
+  marks stay shapes too, which costs some of the saving. All the widths
+  scale with `scale` when the image was enlarged for tracing.
+
+On the outline fixture Outline art scores 2.06% wrong against Illustration's
+2.01%, with 271 nodes against 359 and 6.9 KB against 9.9; the badge doesn't
+change (it has no lines), and without `strokes` nothing does. It adds about
+300 ms to an 800 × 600 trace.
+
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
 most one waiting request per channel (trace, optimise), replacing it when a

@@ -8,7 +8,7 @@ import { fitChain, pointAt, type Cubic } from './fit'
 import { parsePath, type Pt } from './path'
 import { gunzipSync } from 'fflate'
 import { SAMPLE_CAPS } from './fixtures/sample-caps'
-import { mergeLabels, otsu, traceInlay } from './inlay'
+import { mergeLabels, otsu, toSvg, traceInlay } from './inlay'
 
 type Paint = (x: number, y: number) => [number, number, number, number?]
 
@@ -287,5 +287,14 @@ describe('shared-edge tracer', () => {
     const t = otsu(lum, new Uint8Array(100).fill(1))
     expect(t).toBeGreaterThan(30)
     expect(t).toBeLessThanOrEqual(220)
+  })
+})
+
+describe('toSvg', () => {
+  it("keeps a caller's colour inside its attribute", () => {
+    const svg = toSvg({ width: 2, height: 2, paths: [{ d: 'M0 0L2 0L2 2Z', fill: '#fff" onload="alert(1)' }, { d: 'M0 0L2 2', fill: '<x>', stroke: 1 }] })
+    expect(svg).not.toContain('" onload')
+    expect(svg).toContain('fill="#fff&quot; onload=&quot;alert(1)"')
+    expect(svg).toContain('stroke="&lt;x>"')
   })
 })

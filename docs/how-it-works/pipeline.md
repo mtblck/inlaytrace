@@ -30,7 +30,7 @@ which the unit tests also call, so the tests and the app can't drift apart:
 
 - **Centerline** → Inlay's skeleton tracer (`packages/inlay/src/centerline.ts`):
   single strokes down the middle of the ink.
-- **Logo, Illustration, Line art** → [Inlay](inlay.md), our shared-edge
+- **Logo, Illustration, Outline art, Line art** → [Inlay](inlay.md), our shared-edge
   tracer, with a palette from [histogram peaks](palettes.md) (or ink/paper for
   line art).
 - **Pixel art** → Inlay with the image's exact colours, keeping every pixel.

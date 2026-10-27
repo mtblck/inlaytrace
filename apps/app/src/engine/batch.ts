@@ -48,7 +48,7 @@ export async function runBatch(files: File[], settings: Settings, client: TraceC
         URL.revokeObjectURL(source.url)
       }
       const { rgba, width, height } = pixels
-      const traced = await client.trace(rgba, width, height, toTraceOptions(settings))
+      const traced = await client.trace(rgba, width, height, toTraceOptions(settings, pixels.upscale))
       if (!traced) return null
       if (traced.type !== 'traced') throw new Error(traced.type === 'error' ? traced.message : 'The trace stopped.')
       const optimised = await client.optimize(traced.svg)
