@@ -125,6 +125,14 @@ describe('snapping lines', () => {
     ])
   })
 
+  it("keeps a run across a closed loop's start as one line", () => {
+    // The loop starts halfway along its top edge, so that edge is its first line and its last.
+    const out = snapLines(loop([P(30, 10), P(60, 10.2), P(60.2, 40), P(10, 40.1), P(10.1, 10.1)]), true)
+    expect(out).toHaveLength(4)
+    for (let k = 0; k < 4; k++) expect(out[k][3]).toEqual(out[(k + 1) % 4][0])
+    for (const [a, , , b] of out) expect(Math.min(Math.abs(a.x - b.x), Math.abs(a.y - b.y))).toBeLessThan(1e-9)
+  })
+
   it("keeps a needle's two sides apart", () => {
     const needle = loop([P(0, 0), P(60, 0.7), P(0, 1.4), P(-20, 30)])
     const area = (cs: Cubic[]) => cs.reduce((a, [p, , , q]) => a + p.x * q.y - q.x * p.y, 0) / 2
