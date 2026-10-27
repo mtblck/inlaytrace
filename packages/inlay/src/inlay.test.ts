@@ -117,6 +117,37 @@ describe('snapping lines', () => {
     ])
   })
 
+  it('makes consecutive lines in one direction one line', () => {
+    const out = snapLines([line(P(0, 0), P(30, 0.2)), line(P(30, 0.2), P(60, 0.5)), line(P(60, 0.5), P(60.3, 40))], false)
+    expect(out.map((c) => [c[0], c[3]])).toEqual([
+      [P(0, 0), P(60.3, 0)],
+      [P(60.3, 0), P(60.3, 40)],
+    ])
+  })
+
+  it("keeps a needle's two sides apart", () => {
+    const needle = loop([P(0, 0), P(60, 0.7), P(0, 1.4), P(-20, 30)])
+    const area = (cs: Cubic[]) => cs.reduce((a, [p, , , q]) => a + p.x * q.y - q.x * p.y, 0) / 2
+    expect(snapLines(needle, true)).toEqual(needle)
+  })
+
+  it('turns the handle of a curve beside a snapped line with it', () => {
+    const out = snapLines([line(P(0, 0), P(40, 0.4)), [P(40, 0.4), P(50, 0.5), P(60, 5), P(60, 15)]], false)
+    const [a, h] = out[1]
+    expect(Math.abs(h.y - a.y)).toBeLessThan(1e-9) // leaves along the now level line, still smooth
+  })
+
+  it("snaps every line it can, however many it can't", () => {
+    // Five long sides each 0.9° off, too far to snap, and one short one that can.
+    const far = [0, 1, 2, 3, 4].flatMap((i) => [line(P(i * 300, 0), P(i * 300 + 200, 3.1)), line(P(i * 300 + 200, 3.1), P(i * 300 + 300, 0))])
+    const near = [...far, line(P(1500, 0), P(1540, 0.3)), line(P(1540, 0.3), P(1540.2, 40))]
+    const out = snapLines(near, false)
+    const [a, , , b] = out[out.length - 2]
+    expect(b.y).toBeCloseTo(a.y)
+    expect(out[out.length - 1][3].x).toBeCloseTo(1540.2)
+    expect(out[0]).toEqual(far[0])
+  })
+
   it('leaves a line drawn at a slant, a curve, and a line pinned at both ends', () => {
     const slant = loop([P(10, 10), P(60, 12), P(35, 40)])
     expect(snapLines(slant, true)).toEqual(slant)

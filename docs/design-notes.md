@@ -346,12 +346,17 @@ least 8 px long and within 1° of horizontal, vertical or 45° is made exactly
 that (`snapLines` in fit.ts), turned about its middle or about an open chain's
 end, which stays fixed so the edge is still shared exactly; neighbouring lines
 in one direction become one line, and each node moves to where its snapped
-lines meet (at most 1.5 px, else the line is left). Lines either side of a
-junction that both snap pass through it, so they come out collinear too. The
+lines meet (at most 1.5 px, else the line is left), turning the handle of a
+curve beside it too, so a smooth join stays smooth. A needle whose two sides
+snap level, opposite ways, is left as fitted, since no point is on both. Lines
+either side of a junction that both snap pass through it, so they come out
+collinear too. Exact shapes are not snapped (a regular polygon would stop being
+regular), nor is the editor's Simplify, which refits what someone drew. The
 badge's 43° and 47° sides are 1.7° and 2.3° from 45° and stay as drawn, which is
-what set 1°. Wrong pixels and nodes are unchanged within ±0.02 points
-(`score`, `score:photos`); files grow about 2%, since a snapped line through
-the mean of its nodes rarely lands on a whole pixel. Near-parallel lines that
+what set 1°. Wrong pixels are unchanged within ±0.02 points (`score`,
+`score:photos`) and nodes the same or a few fewer (outline fixture with Logo,
+330 to 328); files grow about 2%, since a snapped line through the mean of its
+nodes rarely lands on a whole pixel. Near-parallel lines that
 are not square are left alone for now.
 
 **PolyFit's polygon-first corners would not help.** PolyFit (Dominici et al.

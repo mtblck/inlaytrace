@@ -45,6 +45,11 @@ export type FitOptions = {
    * or a regular polygon as that exact shape (see shapes.ts). Default false.
    */
   shapes?: boolean
+  /**
+   * Make lines within 1° of horizontal, vertical or 45° exactly that (see
+   * `snapLines`). Default true; exact shapes are never snapped.
+   */
+  snap?: boolean
 }
 
 /** A cubic Bézier: start, two handles, end. A straight line has handles on the chord. */
@@ -91,7 +96,7 @@ export function isFlat([p0, c1, c2, p3]: Cubic) {
  * `points` stays the pixel outline that the area check measures.
  */
 export function fitChain(points: Pt[], closed: boolean, o: FitOptions, fine?: Pt[]): Cubic[] {
-  const out = snapLines(fitOnce(points, closed, o, false, fine), closed)
+  const out = fitOnce(points, closed, o, false, fine)
   if (!closed || !out.length) return out
   // A thin closed shape can collapse: the ends of a 3 px stem (an i, a dash)
   // are too narrow to measure as corners, so its two long sides were fitted
@@ -99,7 +104,7 @@ export function fitChain(points: Pt[], closed: boolean, o: FitOptions, fine?: Pt
   // all. Then fit it as a smooth loop, and failing that keep its pixel outline.
   const want = Math.abs(loopArea(points))
   if (Math.abs(loopArea(sampled(out))) >= want / 2) return out
-  const loop = snapLines(fitOnce(points, closed, o, true, fine), closed)
+  const loop = fitOnce(points, closed, o, true, fine)
   if (loop.length && Math.abs(loopArea(sampled(loop))) >= want / 2) return loop
   return polygon(turns(points), true)
 }
@@ -156,7 +161,8 @@ function fitOnce(points: Pt[], closed: boolean, o: FitOptions, smoothLoop: boole
     }
     const run = smoothed.true
     const t = norm(sub(run[1], run[run.length - 2]))
-    return flatten(fitMixed(smoothed, o.tolerance, t, mul(t, -1), 0))
+    const loop = flatten(fitMixed(smoothed, o.tolerance, t, mul(t, -1), 0))
+    return o.snap === false ? loop : snapLines(loop, true)
   }
 
   // Break points: the corners, plus an open chain's two fixed ends.
@@ -182,7 +188,7 @@ function fitOnce(points: Pt[], closed: boolean, o: FitOptions, smoothLoop: boole
     run[run.length - 1] = to.at
     out.push(...fitBetween(smooth(run, false, o.smoothing ?? SMOOTH), o.tolerance))
   }
-  return flatten(out)
+  return o.snap === false ? flatten(out) : snapLines(flatten(out), closed)
 }
 
 /** Straight runs written as exact lines, so they serialise as L, not C. */
@@ -205,7 +211,8 @@ const SNAP_MOVE = 1.5
  * middle, or about an open chain's end, which stays fixed so the edge is
  * still shared exactly; consecutive lines in one direction become one line;
  * each node then moves to where its snapped lines meet, or onto its one
- * snapped line, carrying the curve handle beside it. Two lines either side
+ * snapped line, carrying the curve handle beside it, turned with the line.
+ * A needle's two sides, snapped opposite ways, are left as they were. Two lines either side
  * of a junction that both snap pass through the same point, so they are
  * collinear too.
  */
@@ -216,77 +223,95 @@ export function snapLines(cubics: Cubic[], closed: boolean): Cubic[] {
   const node = (k: number) => (k < n ? cubics[k][0] : cubics[n - 1][3])
   const fixed = (k: number) => !closed && (k === 0 || k === n)
   const end = (k: number) => (closed ? (k + 1) % n : k + 1)
-  // Each line's snapped direction (radians), or none.
-  const angle: (number | null)[] = cubics.map((c) => {
-    const d = sub(c[3], c[0])
-    if (!isFlat(c) || len(d) < SNAP_MIN) return null
-    const a = Math.atan2(d.y, d.x)
-    const to = Math.round(a / (Math.PI / 4)) * (Math.PI / 4)
-    return Math.abs(a - to) < (SNAP * Math.PI) / 180 ? to : null
+  const prev = (k: number) => (closed ? (k - 1 + n) % n : k - 1)
+  // Each line's direction as fitted, and snapped (radians), or none.
+  const was = cubics.map((c) => Math.atan2(c[3].y - c[0].y, c[3].x - c[0].x))
+  const angle: (number | null)[] = cubics.map((c, k) => {
+    if (!isFlat(c) || dist(c[0], c[3]) < SNAP_MIN) return null
+    const to = Math.round(was[k] / (Math.PI / 4)) * (Math.PI / 4)
+    return Math.abs(was[k] - to) < (SNAP * Math.PI) / 180 ? to : null
   })
-  for (let attempt = 0; attempt < 4; attempt++) {
-    // Groups of consecutive lines in one direction, each one infinite line:
-    // through the group's fixed node if it has one, else its nodes' mean.
+  // Each round drops every line that can't snap, until none is dropped.
+  for (let round = 0; round <= n; round++) {
+    // Runs of consecutive lines snapped the same way (a hairpin's two sides
+    // point opposite ways and stay apart), each one infinite line: through
+    // its fixed node if it has one, else through the mean of its nodes.
+    const same = (i: number, j: number) => angle[i] !== null && angle[j] !== null && Math.cos(angle[i]! - angle[j]!) > 1 - 1e-9
     const group = new Array<number>(n).fill(-1)
     const groups: { dir: Pt; at: Pt; members: number[] }[] = []
+    const drop = new Set<number>()
     for (let k = 0; k < n; k++) {
       if (angle[k] === null || group[k] >= 0) continue
-      const parallel = (j: number) => angle[j] !== null && Math.abs(Math.sin(angle[j]! - angle[k]!)) < 1e-9
       let first = k
-      if (closed) for (let i = 0; i < n - 1 && parallel((first - 1 + n) % n) && (first - 1 + n) % n !== k; i++) first = (first - 1 + n) % n
+      if (closed) for (let i = 1; i < n && same(prev(first), k) && prev(first) !== k; i++) first = prev(first)
       const members: number[] = []
-      for (let j = first; members.length < n && parallel(j) && group[j] < 0; j = closed ? (j + 1) % n : j + 1) {
+      for (let j = first; members.length < n && j < n && same(j, k) && group[j] < 0; j = closed ? (j + 1) % n : j + 1) {
         group[j] = groups.length
         members.push(j)
-        if (!closed && j === n - 1) break
       }
       const ends = [...new Set(members.flatMap((j) => [j, end(j)]))]
       const dir = { x: Math.cos(angle[k]!), y: Math.sin(angle[k]!) }
       const pinned = ends.filter(fixed).map(node)
       const across = (p: Pt) => p.x * -dir.y + p.y * dir.x
-      if (pinned.length > 1 && Math.abs(across(pinned[0]) - across(pinned[1])) > 1e-6) {
-        for (const j of members) angle[j] = null
-        groups.push({ dir, at: { x: 0, y: 0 }, members: [] })
-        continue
-      }
+      if (pinned.length > 1 && Math.abs(across(pinned[0]) - across(pinned[1])) > 1e-6) members.forEach((j) => drop.add(j))
       const pts = pinned.length ? pinned : ends.map(node)
       groups.push({ dir, at: mul(pts.reduce(add, { x: 0, y: 0 }), 1 / pts.length), members })
     }
+    const live = (j: number) => j >= 0 && group[j] >= 0 && !drop.has(j)
     const onto = (g: (typeof groups)[number], p: Pt) => add(g.at, mul(g.dir, dot(sub(p, g.at), g.dir)))
     const moved: Pt[] = []
-    let tooFar = -1
     for (let k = 0; k < nodes; k++) {
       const p = node(k)
-      const before = closed ? (k - 1 + n) % n : k - 1
-      const after = k < n ? k : -1
-      const gs = [...new Set([before, after].filter((j) => j >= 0 && group[j] >= 0 && groups[group[j]].members.length).map((j) => group[j]))].map((i) => groups[i])
+      const sides = [prev(k), k < n ? k : -1].filter(live)
+      const gs = [...new Set(sides.map((j) => group[j]))].map((i) => groups[i])
       let q = p
       if (fixed(k) || !gs.length) q = p
       else if (gs.length === 1) q = onto(gs[0], p)
-      else q = intersect(gs[0].at, add(gs[0].at, gs[0].dir), gs[1].at, add(gs[1].at, gs[1].dir)) ?? onto(gs[0], p)
-      if (dist(p, q) > SNAP_MOVE && tooFar < 0) tooFar = [before, after].find((j) => j >= 0 && group[j] >= 0)!
+      else {
+        const meet = intersect(gs[0].at, add(gs[0].at, gs[0].dir), gs[1].at, add(gs[1].at, gs[1].dir))
+        // A needle's tip, between two sides snapped level: they can't both pass through it.
+        if (!meet) for (const j of sides) groups[group[j]].members.forEach((m) => drop.add(m))
+        q = meet ?? p
+      }
+      if (dist(p, q) > SNAP_MOVE) for (const j of sides) groups[group[j]].members.forEach((m) => drop.add(m))
       moved.push(q)
     }
-    if (tooFar >= 0) {
-      for (const j of groups[group[tooFar]].members) angle[j] = null
+    // A line whose nodes would pass each other is left as it was.
+    for (let k = 0; k < n; k++) if (live(k) && dot(sub(moved[end(k) % nodes], moved[k]), sub(cubics[k][3], cubics[k][0])) <= 0) groups[group[k]].members.forEach((m) => drop.add(m))
+    if (drop.size) {
+      drop.forEach((j) => (angle[j] = null))
       continue
     }
-    const out: Cubic[] = []
+    // Rebuild: snapped lines through the moved nodes, one line per run; a
+    // curve keeps its shape, its handle beside a snapped line turned with it
+    // so a smooth join stays smooth.
+    const turned = (h: Pt, at: Pt, j: number) => {
+      if (!live(j)) return sub(h, at)
+      const t = angle[j]! - was[j]
+      const v = sub(h, at)
+      return { x: v.x * Math.cos(t) - v.y * Math.sin(t), y: v.x * Math.sin(t) + v.y * Math.cos(t) }
+    }
+    const out: { c: Cubic; g: number }[] = []
     for (let k = 0; k < n; k++) {
       const [p0, c1, c2, p3] = cubics[k]
       const a = moved[k]
       const b = moved[end(k) % nodes]
-      if (group[k] >= 0 && groups[group[k]].members.length) {
-        // A line that would turn round (its nodes passed each other) is left as it was.
-        if (dot(sub(b, a), sub(p3, p0)) <= 0) {
-          angle[k] = null
-          out.length = 0
-          break
-        }
-        out.push(line(a, b))
-      } else out.push(isFlat(cubics[k]) ? line(a, b) : [a, add(c1, sub(a, p0)), add(c2, sub(b, p3)), b])
+      if (live(k)) out.push({ c: line(a, b), g: group[k] })
+      else if (isFlat(cubics[k])) out.push({ c: line(a, b), g: -1 })
+      else out.push({ c: [a, add(a, turned(c1, p0, prev(k))), add(b, turned(c2, p3, end(k) < n ? end(k) : -1)), b], g: -1 })
     }
-    if (out.length === n) return out
+    // A closed loop starts where a run does, so no run is split at the seam.
+    if (closed && out.length > 1 && out[0].g >= 0 && out[0].g === out[out.length - 1].g) {
+      const k = out.findIndex((o) => o.g !== out[0].g)
+      if (k > 0) out.push(...out.splice(0, k))
+    }
+    const merged: { c: Cubic; g: number }[] = []
+    for (const o of out) {
+      const last = merged[merged.length - 1]
+      if (last && o.g >= 0 && last.g === o.g) last.c = line(last.c[0], o.c[3])
+      else merged.push({ ...o })
+    }
+    return merged.map((o) => o.c)
   }
   return cubics
 }
