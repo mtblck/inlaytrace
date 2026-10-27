@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeHex, parseTrace, statsOf } from './svg'
+import { normalizeHex, parseTrace, statsOf, withText } from './svg'
 
 const RAW = `<?xml version="1.0" encoding="UTF-8"?>
 <!-- Generator: visioncortex VTracer 1.0.0-alpha.4 -->
@@ -50,5 +50,16 @@ describe('helpers', () => {
     const s = statsOf('<svg><path d="M0,0L1,1C1,1,1,1,1,1Z"/></svg>')
     expect(s).toMatchObject({ paths: 1, nodes: 4 })
     expect(s.bytes).toBeGreaterThan(0)
+  })
+})
+
+describe('recognised text on a trace', () => {
+  it('goes on top, scaled from the image to the trace', () => {
+    const trace = { width: 200, height: 100, paths: [{ d: 'M0 0L200 0L200 100Z', fill: '#ffffff' }] }
+    const out = withText(trace, [{ d: 'M10 20Q15 10 20 20Z', fill: '#1D3557' }], 100)
+    expect(out.paths).toHaveLength(2)
+    expect(out.paths[1].fill).toBe('#1d3557')
+    expect(out.paths[1].d).toMatch(/^M20 40C/)
+    expect(withText(trace, [], 100)).toBe(trace)
   })
 })

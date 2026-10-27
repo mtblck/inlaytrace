@@ -106,6 +106,7 @@ export function checkSettings(x: unknown): Settings {
   if (typeof x.exact === 'boolean') out.exact = x.exact
   if (typeof x.removeBackground === 'boolean') out.removeBackground = x.removeBackground
   if (typeof x.aiUpscale === 'boolean') out.aiUpscale = x.aiUpscale
+  if (typeof x.recogniseText === 'boolean') out.recogniseText = x.recogniseText
   if (typeof x.strokeWidth === 'number' && Number.isFinite(x.strokeWidth) && x.strokeWidth >= 0) out.strokeWidth = x.strokeWidth
   if (x.shapes === 'stacked' || x.shapes === 'cutout') out.shapes = x.shapes
   if (isObj(x.merge)) out.merge = Object.fromEntries(Object.entries(x.merge).filter(([a, b]) => normalizeHex(a) && typeof b === 'string' && normalizeHex(b)) as [string, string][])

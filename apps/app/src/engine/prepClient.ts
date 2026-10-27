@@ -6,8 +6,9 @@
  * superseded promise resolves null.
  */
 import type { PrepRequest, PrepResponse, PrepStage } from './prep'
+import type { TextRun } from './text/match'
 
-export type Prepared = { rgba: Uint8ClampedArray; width: number; height: number }
+export type Prepared = { rgba: Uint8ClampedArray; width: number; height: number; text: TextRun[] }
 
 export class PrepClient {
   private worker?: Worker
@@ -23,7 +24,7 @@ export class PrepClient {
       if (!p || m.id !== p.id) return
       if (m.type === 'progress') return p.progress(m.stage, m.done, m.total)
       this.pending = undefined
-      p.resolve(m.type === 'prepared' ? { rgba: new Uint8ClampedArray(m.rgba), width: m.width, height: m.height } : new Error(m.message))
+      p.resolve(m.type === 'prepared' ? { rgba: new Uint8ClampedArray(m.rgba), width: m.width, height: m.height, text: m.text } : new Error(m.message))
     }
     worker.onerror = (e) => {
       const p = this.pending
@@ -35,7 +36,7 @@ export class PrepClient {
     return worker
   }
 
-  prepare(rgba: Uint8ClampedArray, width: number, height: number, steps: { background: boolean; upscale: boolean }, progress: (stage: PrepStage, done: number, total: number) => void) {
+  prepare(rgba: Uint8ClampedArray, width: number, height: number, steps: { background: boolean; upscale: boolean; text: boolean }, progress: (stage: PrepStage, done: number, total: number) => void) {
     // Anything still running is for an older request: stop it rather than wait.
     if (this.pending) this.stop()
     return new Promise<Prepared | Error | null>((resolve) => {

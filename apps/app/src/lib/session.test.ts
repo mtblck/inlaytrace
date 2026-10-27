@@ -13,6 +13,8 @@ describe('restoring a saved session', () => {
     expect(s.smoothing).toBe(2)
     expect(s.shapes).toBe(settingsFor('illustration').shapes)
     expect(s.merge).toEqual({ '#ff0000': '#00ff00' })
+    expect(checkSettings({ preset: 'logo', recogniseText: true }).recogniseText).toBe(true)
+    expect(checkSettings({ preset: 'logo', recogniseText: 'yes' }).recogniseText).toBe(false)
   })
   it("keeps Line art's threshold mode: Auto, a level, or Uneven light", () => {
     expect(checkSettings({ preset: 'lineart', threshold: 'auto' }).threshold).toBe('auto')

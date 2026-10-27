@@ -96,6 +96,7 @@ export function cleanSettings(raw: unknown): Settings | null {
     merge,
     removeBackground: false,
     aiUpscale: false,
+    recogniseText: false,
   }
 }
 

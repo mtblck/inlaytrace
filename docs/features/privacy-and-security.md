@@ -20,11 +20,13 @@ at full size on Inlay's server, and deleted as soon as the result is back. The
 app sends nothing to the server before you confirm, and talks only to its own
 site even then.
 
-The optional AI steps (*Remove the background*, *Upscale 4× with AI*) run in
-the browser too. Their runtime (ONNX Runtime, about 3.7 MB compressed) and
-models (about 4.5 MB each) are downloaded **from this site** the first time a
-step is used; the image is processed on your device and nothing about it is
-sent anywhere. The browser tests check that the steps contact no other site.
+The optional AI steps (*Remove the background*, *Upscale 4× with AI*,
+*Recognise text*) run in the browser too. Their runtimes (ONNX Runtime, about
+3.7 MB compressed; Tesseract, about 1 MB), models (about 4.5 MB each; 3 MB for
+reading text) and the fonts text is matched to (7 MB, from Google Fonts but
+served by this site) are downloaded **from this site** the first time a step is
+used; the image is processed on your device and nothing about it is sent
+anywhere. The browser tests check that the steps contact no other site.
 
 ## What's kept in your browser
 

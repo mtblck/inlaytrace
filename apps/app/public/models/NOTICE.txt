@@ -13,3 +13,15 @@ realesr-general-x4v3.onnx
   Super-Resolution with Pure Synthetic Data", ICCVW 2021.
   Weights: https://github.com/xinntao/Real-ESRGAN (BSD 3-Clause License),
   release v0.2.5.0, converted from PyTorch to ONNX (opset 17) unchanged.
+
+ocr/eng.traineddata.gz
+  Tesseract's English LSTM model (tessdata_best, integer version), used to
+  read text for "Recognise text", run by Tesseract's WebAssembly build
+  (tesseract.js-core). Ray Smith et al., https://github.com/tesseract-ocr.
+  Model: https://github.com/tesseract-ocr/tessdata_best (Apache License 2.0),
+  as packaged by @tesseract.js-data/eng (4.0.0_best_int), unchanged.
+  Engine: https://github.com/naptha/tesseract.js-core (Apache License 2.0).
+
+fonts/
+  Google Fonts families that recognised text is matched to and redrawn in,
+  subset to Latin (OFL 1.1, Apache 2.0 or UFL 1.0; fonts/LICENSES.txt).

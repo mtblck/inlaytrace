@@ -34,7 +34,7 @@ type Props = {
   /** Centerline: the stroke width the last trace measured from the ink, for the Auto label. */
   measuredStroke?: number | null
   /** The AI steps: whether the image is small enough to upscale, and what's running. */
-  prep?: { smallImage: boolean; status: { stage: PrepStage; done: number; total: number } | null; error: string | null }
+  prep?: { smallImage: boolean; textPreset: boolean; text: { family: string; weight: number; size: number }[] | null; status: { stage: PrepStage; done: number; total: number } | null; error: string | null }
   /** The optimised SVG's size now, and the target-size search. */
   currentBytes?: number | null
   sizeRun?: SizeRun | null
@@ -393,10 +393,22 @@ function Slider(props: {
 /** Smoothing shows the fitting tolerance it sets: Inlay always fits within one (±0.25 px at the bottom of the scale). */
 export const smoothingLabel = (v: number) => `±${toleranceFor(v).toFixed(2)} px`
 
-const STAGE: Record<PrepStage, string> = { runtime: 'Loading the AI runtime', background: 'Removing the background', upscale: 'Upscaling' }
+const STAGE: Record<PrepStage, string> = { runtime: 'Loading the AI runtime', background: 'Removing the background', upscale: 'Upscaling', textData: 'Loading text recognition', text: 'Reading text' }
+
+const WEIGHT: Record<number, string> = { 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'SemiBold', 700: 'Bold', 800: 'ExtraBold' }
+
+/** "Nunito Bold 25 px, Montserrat Medium 13 px": each font once, at the size of its first line. */
+export function fontsUsed(text: { family: string; weight: number; size: number }[]) {
+  const seen = new Map<string, number>()
+  for (const t of text) {
+    const name = `${t.family} ${WEIGHT[t.weight] ?? t.weight}`
+    if (!seen.has(name)) seen.set(name, t.size)
+  }
+  return [...seen].map(([name, size]) => `${name} ${Math.round(size)} px`).join(', ')
+}
 
 /**
- * Optional AI steps before tracing. Both run in this browser; the models are
+ * Optional AI steps before tracing. All run in this browser; the models are
  * fetched from this site the first time, which the hints say plainly.
  */
 function Prepare({ settings, set, prep }: { settings: Settings; set: <K extends keyof Settings>(key: K, value: Settings[K]) => void; prep: NonNullable<Props['prep']> }) {
@@ -421,7 +433,23 @@ function Prepare({ settings, set, prep }: { settings: Settings; set: <K extends 
             </span>
           </span>
         </label>
-        <p className="field-hint">Both run in your browser; your image isn't uploaded. The models download from this site the first time.</p>
+        <label className={`flex items-start gap-2 text-[13px] ${prep.textPreset ? '' : 'opacity-60'}`}>
+          <input type="checkbox" className="mt-0.5 accent-[var(--c-accent)]" checked={settings.recogniseText} disabled={!prep.textPreset} onChange={(e) => set('recogniseText', e.target.checked)} />
+          <span>
+            Recognise text <span className="field-hint">(experimental)</span>
+            <span className="field-hint block">
+              {prep.textPreset
+                ? 'Reads the text (Tesseract, 4 MB) and redraws it in the closest of 108 Google Fonts (7 MB), as outlined shapes. Best on clear text over a flat colour, 18 px and up.'
+                : 'Text comes out as type in the colour presets (Logo, Illustration, Outline art, Poster); this one traces it.'}
+            </span>
+          </span>
+        </label>
+        {settings.recogniseText && prep.textPreset && prep.text && !busy && (
+          <p className="text-[12.5px]" data-text-found="">
+            {prep.text.length ? `Set as type: ${fontsUsed(prep.text)}.` : 'No text matched a font well enough, so it’s traced.'}
+          </p>
+        )}
+        <p className="field-hint">All of these run in your browser; your image isn't uploaded. The models download from this site the first time.</p>
         {busy && (
           <p className="text-[12.5px]" role="status" data-prep-status="">
             {busy}

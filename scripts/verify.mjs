@@ -1190,6 +1190,36 @@ if (process.env.FIXTURE) {
   })
   check((await ai.getByRole('alert').count()) === 0, 'AI upscaling runs on a small image (Real-ESRGAN, in the browser)')
   await shot(ai, '07u-upscaled')
+
+  // Recognising text: a line of type comes back as outlined shapes in a matched font.
+  const poster = await ai.evaluate(async () => {
+    const c = new OffscreenCanvas(720, 260)
+    const x = c.getContext('2d')
+    x.fillStyle = '#fff'
+    x.fillRect(0, 0, 720, 260)
+    x.fillStyle = '#1d3557'
+    x.font = 'bold 56px sans-serif'
+    x.fillText('Summer sale ends Sunday', 30, 110)
+    x.font = '28px serif'
+    x.fillText('Quality you can trust, every day', 30, 190)
+    const u = new Uint8Array(await (await c.convertToBlob({ type: 'image/png' })).arrayBuffer())
+    let s = ''
+    for (const v of u) s += String.fromCharCode(v)
+    return btoa(s)
+  })
+  await ai.getByLabel('Upscale 4× with AI').uncheck()
+  await ai.locator('input[type=file]').setInputFiles({ name: 'poster.png', mimeType: 'image/png', buffer: Buffer.from(poster, 'base64') })
+  await traced(ai)
+  const textRequests = requests.length
+  await retrace(ai, async () => {
+    await ai.getByLabel(/Recognise text/).check()
+    await ai.locator('[data-prep-status]').waitFor({ state: 'detached', timeout: 120_000 })
+  })
+  check((await ai.getByRole('alert').count()) === 0, 'text recognition runs (Tesseract, in the browser)')
+  const found = (await ai.locator('[data-text-found]').textContent()) ?? ''
+  check(/^Set as type: .+ \d+ px/.test(found), `and sets the text in a matched font (${found})`)
+  check(requests.slice(textRequests).every((u) => u.origin === new URL(url).origin || u.protocol === 'blob:' || u.protocol === 'data:'), 'its engine, model and fonts all come from this site')
+  await shot(ai, '07t-text')
   await ai.close()
 }
 

@@ -16,9 +16,9 @@ What's cached, and when:
   visit, all at once. Pages check the network first, so a new version shows
   the next time you open it; the old copy is deleted once the new one takes
   over.
-- **The AI models and their runtime** (*Prepare*, about 13 MB) only the first
-  time you use them, then offline from then on. Nobody who doesn't use them
-  downloads them.
+- **The AI models, their runtimes and the text fonts** (*Prepare*, about 13 MB,
+  and 11 MB more for *Recognise text*) only the first time you use them, then
+  offline from then on. Nobody who doesn't use them downloads them.
 
 Nothing about your images is in this cache: it's the app's files only. Your
 session (the image and edits) is kept separately, as before; see
