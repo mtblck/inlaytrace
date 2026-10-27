@@ -396,6 +396,26 @@ await flatArt('junctions-thick.svg', 'Junctions (lines 8 px wide)', '#4f86af', [
 // whole behind the shapes in front.
 await flatArt('overlap.svg', 'Overlapping shapes', null, ['logo', 'logo:stacked', 'illustration', 'illustration:cutout', 'photo'], { wholes: true })
 
+// ---- Lossless --------------------------------------------------------------
+// The same drawings saved as PNG, the way most logos arrive. Without JPEG's
+// noise, an anti-aliased pixel says where in it the edge runs, and Inlay
+// places edges between pixels from that.
+console.log(`\n  Saved as PNG, wrong past 96 (badge) or 24 (fixtures)\n`)
+console.log(`  ${'Drawing'.padEnd(16)} ${'Preset'.padEnd(14)} Wrong px   Nodes   Size`)
+for (const [name, file, line] of [
+  ['Badge', null, null],
+  ['Emblem', 'emblem.svg', null],
+  ['Outline', 'outline.svg', '#4f86af'],
+  ['Overlap', 'overlap.svg', null],
+]) {
+  const art = await prepare(file ? readFileSync(join(root, 'scripts/fixtures', file), 'utf8') : ART, line, 'image/png')
+  for (const id of ['logo', 'illustration']) {
+    const svg = runTrace(art.slice(), SIZE, SIZE, toTraceOptions(settingsFor(id)))
+    const r = await score(svg, file ? 24 : 96)
+    console.log(`  ${name.padEnd(16)} ${PRESETS.find((p) => p.id === id).label.padEnd(14)} ${r.wrong.toFixed(2).padStart(7)}%  ${String(r.nodes).padStart(6)} ${r.kb.toFixed(1).padStart(5)} KB`)
+  }
+}
+
 console.log()
 await browser.close()
 await vite.close()

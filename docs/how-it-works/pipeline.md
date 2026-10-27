@@ -32,7 +32,8 @@ which the unit tests also call, so the tests and the app can't drift apart:
   single strokes down the middle of the ink.
 - **Logo, Illustration, Outline art, Line art** → [Inlay](inlay.md), our shared-edge
   tracer, with a palette from [histogram peaks](palettes.md) (or ink/paper for
-  line art).
+  line art). Illustration and Outline art stack their shapes by default: each
+  shape is drawn whole, with the parts hidden behind another completed.
 - **Pixel art** → Inlay with the image's exact colours, keeping every pixel.
 - **Poster** → Inlay with a [quantized palette](palettes.md) and stacked shapes.
 

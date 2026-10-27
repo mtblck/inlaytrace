@@ -77,6 +77,12 @@ Every chain becomes lines and curves exactly once, by the
 [curve fitter](curve-fitting.md). Nothing about the fit depends on which side
 it's viewed from.
 
+In a clean image (nearly every pixel inside a shape exactly its palette
+colour, as in a PNG export), the fitter gets points between pixels instead of
+the pixel-edge staircase: the anti-aliased pixels either side of an edge say
+how much of each colour they hold, which puts the edge to within a tenth of a
+pixel. JPEGs and photos skip this, since their noise would move edges.
+
 With `shapes` on, a closed chain (one neighbour all the way round) is first
 checked against exact shapes (`packages/inlay/src/shapes.ts`). The pixel
 region's area, centroid and second moments give the candidate directly: an
@@ -95,6 +101,13 @@ sees from the other side. Where a region touches itself at a corner, the walk
 turns left, which keeps diagonal neighbours as separate shapes. Holes are
 wound the opposite way, so the default fill rule cuts them. Each region is one
 `<path>`, largest first.
+
+With `stacked` on (Illustration and Outline art by default), shapes become
+layers instead. Where the boundary between two shapes ends at a third, the
+shape whose outline carries straight on is in front and the one whose outline
+turns there is behind. Each hidden run of a back shape's outline is completed
+as the circle or corner its visible part implies, or a smooth curve, and kept
+only if it stays under the shapes in front. Shapes are painted back to front.
 
 **Result:** neighbouring shapes share the *same* fitted edge. No gaps, no
 overlaps, which is also what a vinyl cutter or a screen printer needs. A unit

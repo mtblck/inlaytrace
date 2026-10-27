@@ -125,6 +125,10 @@ describe('Outline art', () => {
     for (const p of PRESETS) expect(!!toTraceOptions(settingsFor(p.id)).strokes).toBe(p.id === 'outline')
   })
 
+  it('stacks Illustration and Outline art by default, but not Logo', () => {
+    for (const id of ['logo', 'illustration', 'outline'] as const) expect(toTraceOptions(settingsFor(id)).stacked).toBe(id !== 'logo')
+  })
+
   it('passes on how far the image was enlarged, for its line widths', () => {
     expect(toTraceOptions(settingsFor('outline'), 2.5).scale).toBe(2.5)
     expect(toTraceOptions(settingsFor('outline')).scale).toBeUndefined()

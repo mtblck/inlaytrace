@@ -298,3 +298,30 @@ describe('toSvg', () => {
     expect(svg).toContain('stroke="&lt;x>"')
   })
 })
+
+describe('edges between pixels', () => {
+  it.each([false, true])('places straight edges from the anti-aliasing of a lossless image (exact shapes: %s)', (shapes) => {
+    // A rectangle whose sides fall inside pixels, rendered with exact coverage.
+    const [w, h, X0, X1, Y0, Y1] = [60, 60, 10.3, 40.7, 12.25, 44.6]
+    const img = new Uint8Array(w * h * 4)
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const t = Math.max(0, Math.min(x + 1, X1) - Math.max(x, X0)) * Math.max(0, Math.min(y + 1, Y1) - Math.max(y, Y0))
+        img.set([255 - t * 225, 255 - t * 195, 255 - t * 115, 255], (y * w + x) * 4)
+      }
+    const svg = traceInlay(img, w, h, { mode: 'palette', palette: ['#ffffff', '#1e3c8c'], speckle: 2, tolerance: 0.75, cornerAngle: 60, shapes })
+    const d = svg.match(/<path d="([^"]*)" fill="#1e3c8c"/)![1]
+    const nums = [...d.matchAll(/-?\d+(\.\d+)?/g)].map((m) => Number(m[0]))
+    const xs = nums.filter((_, i) => i % 2 === 0)
+    const ys = nums.filter((_, i) => i % 2 === 1)
+    // On the pixel grid the sides were at 10, 41, 12 and 45, and the corners rounded.
+    for (const [got, want] of [
+      [Math.min(...xs), X0],
+      [Math.max(...xs), X1],
+      [Math.min(...ys), Y0],
+      [Math.max(...ys), Y1],
+    ])
+      expect(Math.abs(got - want)).toBeLessThan(0.1)
+    expect(d).not.toContain('C')
+  })
+})

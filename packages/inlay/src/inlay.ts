@@ -136,6 +136,9 @@ export const traceInlay = (rgba: ArrayLike<number>, w: number, h: number, o: Inl
  */
 export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOptions): InlayResult {
   const { labels, colors, drawn } = o.mode === 'palette' ? labelPalette(rgba, w, h, o.palette, !o.photo) : labelBinary(rgba, w, h, o.threshold)
+  // Edges placed between pixels, from their anti-aliasing: only in an image saved without loss
+  // (judged before merged inks and lines relabel pixels), and not for photos.
+  const clean = o.mode === 'palette' && !o.pixels && !o.photo && lossless(rgba, labels, w, h, colors)
   if (o.mode === 'palette' && o.merge) mergeLabels(labels, colors, o.merge)
   // A lone pixel in pixel art is deliberate, not a stray.
   if (!o.pixels) despur(labels, w, h)
@@ -149,11 +152,12 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
   // Final regions: 4-connected components of drawn labels. Everything else is VOID.
   const { comp, compLabel, compArea } = components(labels, w, h, (l) => drawn[l])
   const chains = findChains(comp, w, h)
+  const rgbOf = clean ? (id: number) => hexToRgb(colors[compLabel[id]]) : null
   // Each chain is fitted once, then shared by every shape it bounds.
   const fitted: { chain: Chain; cubics: Cubic[]; back: Cubic[] }[] = []
   const chainsOf = new Map<number, number[]>()
   for (const c of chains) {
-    const cubics = o.pixels ? staircase(c.pts, c.closed) : fitChain(c.pts, c.closed, o)
+    const cubics = o.pixels ? staircase(c.pts, c.closed) : fitChain(c.pts, c.closed, o, rgbOf ? edgePoints(c, comp, w, rgba, rgbOf) : undefined)
     if (!cubics.length) continue
     const i = fitted.push({ chain: c, cubics, back: reverse(cubics) }) - 1
     for (const id of new Set([c.left, c.right]))
@@ -414,6 +418,135 @@ function collinear(a: Cubic, b: Cubic) {
   const lu = Math.hypot(u.x, u.y)
   const lv = Math.hypot(v.x, v.y)
   return lu > 0 && lv > 0 && (u.x * v.x + u.y * v.y) / (lu * lv) > Math.cos(Math.PI / 180)
+}
+
+/** The share of solid pixels within SOLID of their colour, from which an image counts as saved without loss. */
+const LOSSLESS = 0.99
+
+/**
+ * Whether an image looks saved without loss: the pixels inside each region
+ * (all four neighbours the same colour) are its colour, within SOLID. In the
+ * score's drawings saved as PNG, 99.99% are; as JPEG q72, 84–97%. JPEG's
+ * noise skews the blends at edges, and edges read from them moved the wrong
+ * way (on the overlap fixture, 0.18% wrong became 0.19%).
+ */
+function lossless(rgba: ArrayLike<number>, labels: Int32Array, w: number, h: number, colors: string[]) {
+  const pal = colors.map((c) => (c ? hexToRgb(c) : null))
+  let inside = 0
+  let exact = 0
+  for (let y = 1; y < h - 1; y++)
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x
+      const l = labels[i]
+      const c = pal[l]
+      if (!c || labels[i - 1] !== l || labels[i + 1] !== l || labels[i - w] !== l || labels[i + w] !== l) continue
+      inside++
+      if (Math.abs(rgba[i * 4] - c[0]) <= SOLID && Math.abs(rgba[i * 4 + 1] - c[1]) <= SOLID && Math.abs(rgba[i * 4 + 2] - c[2]) <= SOLID) exact++
+    }
+  return inside > 0 && exact >= LOSSLESS * inside
+}
+
+/** How far (px) an edge point may move off its pixel crack. */
+const SUBPIXEL = 0.35
+/** Runs of cracks at least this long either side of a turn make it a corner. */
+const CORNER_RUN = 3
+/** A pixel within this much (per channel, 0–255) of its colour is solid. */
+const SOLID = 3
+/** Two colours closer than this (RGB) are too alike to place an edge between by blending. */
+const SUBPIXEL_CONTRAST = 48
+
+/**
+ * A chain's points at sub-pixel precision: each pixel corner along it, moved
+ * across to where the anti-aliasing puts the edge. A pixel between
+ * colours A and B is a blend, a share α of A; with A's pixel and B's pixel
+ * either side of the crack, the edge is α_A + α_B − 1 px from the crack, into
+ * B (Open Vectorizer's reading of anti-aliasing as coverage). The ends stay on
+ * their junctions, so neighbours still share them.
+ */
+function edgePoints(c: Chain, comp: Int32Array, w: number, rgba: ArrayLike<number>, rgbOf: (id: number) => Rgb): Pt[] | undefined {
+  if (c.left === VOID || c.right === VOID) return undefined
+  const A = rgbOf(c.left)
+  const B = rgbOf(c.right)
+  const d: Rgb = [B[0] - A[0], B[1] - A[1], B[2] - A[2]]
+  const len2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
+  if (len2 < SUBPIXEL_CONTRAST * SUBPIXEL_CONTRAST) return undefined
+  const dLum = 0.299 * d[0] + 0.587 * d[1] + 0.114 * d[2]
+  // A's share of a pixel, or null if its colour isn't on the way from A to B.
+  const share = (x: number, y: number, id: number) => {
+    const i = y * w + x
+    if (comp[i] !== id) return null
+    const p = [rgba[i * 4] - A[0], rgba[i * 4 + 1] - A[1], rgba[i * 4 + 2] - A[2]]
+    let t = (p[0] * d[0] + p[1] * d[1] + p[2] * d[2]) / len2
+    const off = Math.hypot(p[0] - t * d[0], p[1] - t * d[1], p[2] - t * d[2])
+    if (off > Math.sqrt(len2) / 4) return null
+    // JPEG keeps colour at half resolution and brightness at full: where the
+    // two differ in brightness, read the blend from that alone.
+    if (Math.abs(dLum) >= SUBPIXEL_CONTRAST) t = (0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2]) / dLum
+    return 1 - Math.min(1, Math.max(0, t))
+  }
+  // Every unit crack, as its start vertex, its normal (towards the right-hand
+  // region, y down) and how far the edge sits off it along that normal.
+  const pts = c.pts
+  const cracks: { x: number; y: number; nx: number; ny: number; e: number; run: number }[] = []
+  let good = 0
+  const m = c.closed ? pts.length : pts.length - 1
+  for (let k = 0; k < m; k++) {
+    const a = pts[k]
+    const b = pts[(k + 1) % pts.length]
+    const L = Math.abs(b.x - a.x) + Math.abs(b.y - a.y)
+    const dx = Math.sign(b.x - a.x)
+    const dy = Math.sign(b.y - a.y)
+    const nx = -dy
+    const ny = dx
+    for (let s = 0; s < L; s++) {
+      const mx = a.x + dx * (s + 0.5)
+      const my = a.y + dy * (s + 0.5)
+      const l = share(Math.floor(mx - nx / 2), Math.floor(my - ny / 2), c.left)
+      const r = share(Math.floor(mx + nx / 2), Math.floor(my + ny / 2), c.right)
+      // Only where the next two pixels in on each side are solidly its colour.
+      // Across a line a few pixels wide neither side is (JPEG lightens its
+      // ink), and moving both its edges, and its pixel corners at each end,
+      // tapered it and broke it.
+      const solid = (depth: number, id: number, C: Rgb) => {
+        const x = Math.floor(mx + (nx * depth) / 2)
+        const y = Math.floor(my + (ny * depth) / 2)
+        if (x < 0 || y < 0 || x >= w || y >= comp.length / w) return false
+        const i = (y * w + x) * 4
+        return comp[i / 4] === id && Math.abs(rgba[i] - C[0]) <= SOLID && Math.abs(rgba[i + 1] - C[1]) <= SOLID && Math.abs(rgba[i + 2] - C[2]) <= SOLID
+      }
+      const ok = l !== null && r !== null && solid(-3, c.left, A) && solid(3, c.right, B) && solid(-5, c.left, A) && solid(5, c.right, B)
+      if (ok) good++
+      cracks.push({ x: mx, y: my, nx, ny, e: ok ? Math.max(-SUBPIXEL, Math.min(SUBPIXEL, l! + r! - 1)) : NaN, run: L })
+    }
+    // Near a corner the pixels in are the other side's, so no crack there is
+    // measured: it takes the nearest measured offset along its own straight
+    // run, and the run reaches the corner where it would. Left on the pixel
+    // grid, it bent the run's end by a third of a pixel and rounded the corner.
+    const run = cracks.slice(cracks.length - L)
+    const measured = run.map((q) => q.e)
+    run.forEach((q, s) => {
+      if (!Number.isNaN(q.e)) return
+      let best = NaN
+      for (let step = 1; step < L && Number.isNaN(best); step++) best = [measured[s - step], measured[s + step]].find((e) => e !== undefined && !Number.isNaN(e)) ?? NaN
+      q.e = Number.isNaN(best) ? 0 : best
+    })
+  }
+  // Mostly a thin line, or blended where it shouldn't be: leave it on its pixel corners.
+  if (good < cracks.length / 2) return undefined
+  // The midpoint of each crack, moved; and each pixel corner between two long
+  // runs (a real corner, not a step of a slanted edge), moved by both its
+  // cracks' offsets, to where the two moved runs meet. Without them the
+  // square ends of a bar fitted as round.
+  const out: Pt[] = c.closed ? [] : [pts[0]]
+  const n = cracks.length
+  cracks.forEach((q, k) => {
+    const p = cracks[(k - 1 + n) % n]
+    if ((c.closed || k > 0) && (p.nx !== q.nx || p.ny !== q.ny) && p.run >= CORNER_RUN && q.run >= CORNER_RUN)
+      out.push({ x: q.x - q.ny / 2 + p.nx * p.e + q.nx * q.e, y: q.y + q.nx / 2 + p.ny * p.e + q.ny * q.e })
+    out.push({ x: q.x + q.nx * q.e, y: q.y + q.ny * q.e })
+  })
+  if (!c.closed) out.push(pts[pts.length - 1])
+  return out
 }
 
 /**

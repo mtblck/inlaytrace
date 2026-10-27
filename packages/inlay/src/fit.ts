@@ -85,10 +85,12 @@ export function isFlat([p0, c1, c2, p3]: Cubic) {
 /**
  * Fit a chain. Open: from points[0] to the last point, which stay fixed.
  * Closed: points[0] is not repeated at the end; the result is a loop that starts
- * at a corner if there is one.
+ * at a corner if there is one. `fine`, if given, is the same chain placed more
+ * exactly (between pixels) and is what gets fitted, exact shapes included;
+ * `points` stays the pixel outline that the area check measures.
  */
-export function fitChain(points: Pt[], closed: boolean, o: FitOptions): Cubic[] {
-  const out = fitOnce(points, closed, o, false)
+export function fitChain(points: Pt[], closed: boolean, o: FitOptions, fine?: Pt[]): Cubic[] {
+  const out = fitOnce(points, closed, o, false, fine)
   if (!closed || !out.length) return out
   // A thin closed shape can collapse: the ends of a 3 px stem (an i, a dash)
   // are too narrow to measure as corners, so its two long sides were fitted
@@ -96,7 +98,7 @@ export function fitChain(points: Pt[], closed: boolean, o: FitOptions): Cubic[] 
   // all. Then fit it as a smooth loop, and failing that keep its pixel outline.
   const want = Math.abs(loopArea(points))
   if (Math.abs(loopArea(sampled(out))) >= want / 2) return out
-  const loop = fitOnce(points, closed, o, true)
+  const loop = fitOnce(points, closed, o, true, fine)
   if (loop.length && Math.abs(loopArea(sampled(loop))) >= want / 2) return loop
   return polygon(turns(points), true)
 }
@@ -123,8 +125,8 @@ function turns(pts: Pt[]) {
   return out.length >= 3 ? out : pts
 }
 
-function fitOnce(points: Pt[], closed: boolean, o: FitOptions, smoothLoop: boolean): Cubic[] {
-  const pts = resample(points, closed)
+function fitOnce(points: Pt[], closed: boolean, o: FitOptions, smoothLoop: boolean, fine?: Pt[]): Cubic[] {
+  const pts = resample(fine ?? points, closed)
   const n = pts.length
   if (n < 2) return []
   if (!closed && n === 2) return [line(pts[0], pts[1])]
@@ -134,7 +136,7 @@ function fitOnce(points: Pt[], closed: boolean, o: FitOptions, smoothLoop: boole
   const corners = smoothLoop ? [] : findCorners(pts, closed, o.cornerAngle).filter((c) => closed || (dist(c.at, pts[0]) >= MIN_GAP && dist(c.at, pts[n - 1]) >= MIN_GAP))
 
   if (closed && o.shapes) {
-    const shape = fitShape(points, corners.map((c) => c.at))
+    const shape = fitShape(fine ?? points, corners.map((c) => c.at))
     if (shape) return shape.cubics
   }
 
