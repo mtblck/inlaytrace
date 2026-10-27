@@ -691,15 +691,15 @@ function fitRun(pts: Pt[], t1: Pt, t2: Pt, tolerance: number, depth = 0, skipSta
       ...fitRun(pts.slice(mid), mul(tm, -1), t2, tolerance, depth + 1, 0, skipEnd),
     ]
   }
-  let u = chordParams(pts)
-  let bez = generate(pts, u, t1, t2)
+  let { u, arc } = chordParams(pts)
+  let bez = generate(pts, u, t1, t2, arc)
   let { error, split } = maxError(pts, bez, u, skipStart, skipEnd)
   const tol2 = tolerance * tolerance
   if (error <= tol2) return [bez]
   if (error <= tol2 * 4) {
     for (let it = 0; it < 4; it++) {
       u = u.map((ui, i) => newton(bez, pts[i], ui))
-      bez = generate(pts, u, t1, t2)
+      bez = generate(pts, u, t1, t2, arc)
       ;({ error, split } = maxError(pts, bez, u, skipStart, skipEnd))
       if (error <= tol2) return [bez]
     }
@@ -716,11 +716,12 @@ function fitRun(pts: Pt[], t1: Pt, t2: Pt, tolerance: number, depth = 0, skipSta
   ]
 }
 
+/** Each point's share of the way along the run, and the run's length. */
 function chordParams(pts: Pt[]) {
   const u = [0]
   for (let i = 1; i < pts.length; i++) u.push(u[i - 1] + dist(pts[i], pts[i - 1]))
-  const total = u[u.length - 1] || 1
-  return u.map((x) => x / total)
+  const arc = u[u.length - 1]
+  return { u: u.map((x) => x / (arc || 1)), arc }
 }
 
 const B = [(t: number) => (1 - t) ** 3, (t: number) => 3 * t * (1 - t) ** 2, (t: number) => 3 * t * t * (1 - t), (t: number) => t ** 3]
@@ -729,8 +730,8 @@ export function pointAt(b: Cubic, t: number): Pt {
   return add(add(mul(b[0], B[0](t)), mul(b[1], B[1](t))), add(mul(b[2], B[2](t)), mul(b[3], B[3](t))))
 }
 
-/** Least-squares handle lengths along the given tangents (Schneider's GenerateBezier). */
-function generate(pts: Pt[], u: number[], t1: Pt, t2: Pt): Cubic {
+/** Least-squares handle lengths along the given tangents (Schneider's GenerateBezier); `arc` is the run's length. */
+function generate(pts: Pt[], u: number[], t1: Pt, t2: Pt, arc: number): Cubic {
   const p0 = pts[0]
   const p3 = pts[pts.length - 1]
   let c00 = 0
@@ -754,8 +755,6 @@ function generate(pts: Pt[], u: number[], t1: Pt, t2: Pt): Cubic {
   const seg = dist(p0, p3)
   // Handles longer than the run itself overshoot it: on a thin letter stem a
   // least-squares fit put one 100 px out, and the stem grew a 40 px spike.
-  let arc = 0
-  for (let i = 1; i < pts.length; i++) arc += dist(pts[i - 1], pts[i])
   // Degenerate, backwards or overlong handles: fall back to a third of the chord.
   if (alpha1 < 1e-6 * seg || alpha2 < 1e-6 * seg || alpha1 > arc || alpha2 > arc) alpha1 = alpha2 = seg / 3
   return [p0, add(p0, mul(t1, alpha1)), add(p3, mul(t2, alpha2)), p3]
