@@ -18,9 +18,11 @@
  * can lazy-load it (src/lib/paper.ts) and the tests can load it under jsdom.
  */
 import type PaperNS from 'paper/dist/paper-core'
-import type { Doc, DocPath } from './doc'
+import { newId, type Doc, type DocPath } from './doc'
 import type { Symmetry } from 'inlaytrace'
 import { parsePath, serializePath } from './pathdata'
+import { moveGradient } from './svg'
+import { rotateAbout } from './transform'
 
 type Paper = typeof PaperNS
 type Item = InstanceType<Paper['PathItem']>
@@ -137,6 +139,15 @@ export function mirrorDoc(paper: Paper, doc: Doc, axis: Axis): Doc {
     if (isEmpty(kept)) return
     const reflected = kept.clone({ insert: false }) as Item
     reflected.scale(vertical ? -1 : 1, vertical ? 1 : -1, pivot)
+    // One shape has one gradient: a shaded shape stays two, the copy with its gradient mirrored too.
+    if (p.gradient) {
+      const flip: [number, number, number, number, number, number] = vertical ? [-1, 0, 0, 1, 2 * a, 0] : [1, 0, 0, -1, 0, 2 * a]
+      const here = serializePath(parsePath(kept.pathData))
+      const there = serializePath(parsePath(reflected.pathData))
+      if (here) paths.push({ ...p, d: here })
+      if (there) paths.push({ ...p, id: newId(), d: there, gradient: moveGradient(p.gradient, flip) })
+      return
+    }
     const whole = kept.unite(reflected, { insert: false }) as Item
     if (isEmpty(whole)) return
     // Re-serialised through our own writer so mirrored paths use the same
@@ -175,6 +186,20 @@ function turnDoc(paper: Paper, doc: Doc, axis: TurnAxis): Doc {
     if (Math.abs(areaOf(inCircle) - Math.PI * r * r) < 1e-3 * r * r) return void paths.push(p)
     let whole = item.subtract(circle, { insert: false }) as Item
     const kept = item.intersect(slice, { insert: false }) as Item
+    // A shaded shape: the part outside the circle, then each turned copy with its gradient turned too.
+    if (p.gradient) {
+      const outside = isEmpty(whole) ? '' : serializePath(parsePath(whole.pathData))
+      if (outside) paths.push({ ...p, d: outside })
+      if (!isEmpty(kept))
+        for (let k = 0; k < order; k++) {
+          const turned = kept.clone({ insert: false }) as Item
+          if (k) turned.rotate((360 * k) / order, centre)
+          const d = serializePath(parsePath(turned.pathData))
+          const m = rotateAbout({ x: axis.cx, y: axis.cy }, (360 * k) / order)
+          if (d) paths.push({ ...p, id: outside || k ? newId() : p.id, d, gradient: k ? moveGradient(p.gradient, [m.a, m.b, m.c, m.d, m.e, m.f]) : p.gradient })
+        }
+      return
+    }
     if (!isEmpty(kept))
       for (let k = 0; k < order; k++) {
         const turned = kept.clone({ insert: false }) as Item

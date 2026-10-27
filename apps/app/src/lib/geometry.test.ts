@@ -105,6 +105,18 @@ describe('mirror', () => {
     const out = mirrorDoc(paper, doc, centreAxis(doc, 'vertical', 'end'))
     expect(out.paths.map((p) => p.fill)).toEqual(['#000000', '#ff0000'])
   })
+  it('mirrors a gradient with its shape: two halves, the copy with its gradient reflected', () => {
+    const gradient = { type: 'linear' as const, x1: 0, y1: 0, x2: 100, y2: 0, stops: [{ offset: 0, color: '#000000' }, { offset: 1, color: '#ffffff' }] }
+    const shaded: Doc = { ...doc, paths: [{ ...doc.paths[0], gradient }] }
+    const out = mirrorDoc(paper, shaded, centreAxis(shaded, 'vertical', 'start'))
+    expect(out.paths).toHaveLength(2)
+    expect(out.paths[0]).toMatchObject({ id: 'blob', gradient })
+    expect(out.paths[1].id).not.toBe('blob')
+    expect(out.paths[1].gradient!.transform).toEqual([-1, 0, 0, 1, 100, 0])
+    const xs = (d: string) => points(d).filter((_, i) => i % 2 === 0)
+    expect(Math.max(...xs(out.paths[0].d))).toBeCloseTo(50, 1)
+    expect(Math.min(...xs(out.paths[1].d))).toBeCloseTo(50, 1)
+  })
 })
 
 describe('turn', () => {
@@ -134,6 +146,17 @@ describe('turn', () => {
       }
     })
   }
+
+  it('turns a gradient with each copy of its shape', () => {
+    const gradient = { type: 'radial' as const, cx: 55, cy: 30, r: 15, stops: [{ offset: 0, color: '#ffffff' }, { offset: 1, color: '#000000' }] }
+    const shaded: Doc = { ...doc, paths: [{ ...doc.paths[0], gradient }] }
+    const out = mirrorDoc(paper, shaded, centreTurn(shaded, 4))
+    expect(out.paths).toHaveLength(4)
+    expect(out.paths[0].gradient).toEqual(gradient)
+    // A quarter turn clockwise about (50, 50): (x, y) → (100 − y, x).
+    expect(out.paths[1].gradient!.transform!.map((v) => Math.round(v * 1e6) / 1e6)).toEqual([0, 1, -1, 0, 100, 0])
+    expect(new Set(out.paths.map((p) => p.id)).size).toBe(4)
+  })
 
   it('leaves what lies outside the circle alone, so a background keeps its corners', () => {
     const bg: Doc = { width: 100, height: 100, paths: [{ id: 'bg', fill: '#ffffff', d: 'M0 0L100 0L100 100L0 100Z' }, ...doc.paths] }

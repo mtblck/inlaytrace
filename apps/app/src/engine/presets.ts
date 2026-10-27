@@ -146,7 +146,7 @@ export type TraceOptions = {
   strokes?: boolean
   /** With strokes: how many times the image was enlarged for tracing, so line widths scale with it. */
   scale?: number
-  /** Palette mode: soft shading as gradient fills. No preset sets it yet: the editor and exports draw flat colours only. */
+  /** Palette mode: soft shading as gradient fills (Illustration and Outline art, stacked). */
   gradients?: boolean
   /** Centerline mode: the stroke width in px; measured when left out. */
   strokeWidth?: number
@@ -175,7 +175,9 @@ export function toTraceOptions(s: Settings, scale = 1): TraceOptions {
   if (s.preset === 'photo') return { ...fit, mode: 'palette', colors: s.colors, palette: 'quantize', stacked: s.shapes === 'stacked' }
   // Logo, Illustration and Outline art: flat art's real colours are the histogram's peaks.
   // Outline art traces its thin outlines as stroked lines, the fills meeting beneath them.
-  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', stacked: s.shapes === 'stacked', ...merge, ...(s.preset === 'outline' ? { strokes: true, ...(scale > 1 ? { scale } : {}) } : {}) }
+  // Illustration and Outline art, stacked, draw soft shading as gradients; cut out is for cutters, which can't.
+  const gradients = s.shapes === 'stacked' && (s.preset === 'illustration' || s.preset === 'outline') ? { gradients: true } : {}
+  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', stacked: s.shapes === 'stacked', ...merge, ...gradients, ...(s.preset === 'outline' ? { strokes: true, ...(scale > 1 ? { scale } : {}) } : {}) }
 }
 
 /** Pixel art keeps every source pixel; everything else is traced at this size at most. */

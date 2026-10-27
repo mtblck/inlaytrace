@@ -26,13 +26,16 @@ and offers PNG, PDF, EPS and DXF.
   size you'll get. Transparent unless you've added a background.
 - **PDF**: one page exactly the export size, every shape a filled vector path
   in its shown colour (Centerline strokes stay round-capped strokes, their
-  width scaled with the page), with the background behind them if set. Built in the
+  width scaled with the page, and a gradient a smooth shading clipped to its
+  shape), with the background behind them if set. Built in the
   browser (`apps/app/src/lib/vectorExport.ts`): five objects and a compressed content
   stream, checked with `qpdf --check` and by rendering it back.
 - **EPS**: the same paths as PostScript, with a bounding box of the export
-  size, for print and cutting software that still asks for it.
+  size, for print and cutting software that still asks for it. Gradients use
+  PostScript 3's `shfill`.
 - **DXF**: for CAD, CNC routers and laser cutters. One layer per colour (named
-  for it, `INK_1E3C8C`, with the nearest CAD colour), every outline a closed
+  for it, `INK_1E3C8C`, with the nearest CAD colour; a gradient shape is on its
+  average colour's layer), every outline a closed
   polyline and every Centerline stroke an open one. Curves are flattened to
   within 0.05 px of the drawing (0.05 mm on a 640 px trace exported at
   640 mm), at the export size in its unit, with millimetres and inches named

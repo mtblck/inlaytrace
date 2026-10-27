@@ -402,8 +402,9 @@ short to judge, or a lighter speck on the shade's anti-aliased rim). On the
 test drawing Illustration then draws 6 shapes with 0.19% wrong and 61 nodes
 (from 397), and Poster 7 shapes for 1,540 nodes down to 93; every other
 fixture traces the same with it on. On the three photos Poster's error is
-unchanged (10.41 to 10.43), with 3% fewer shapes and 70% more time, so it is
-an option, off by default. A cutter can only cut flat colour.
+unchanged (10.41 to 10.43), with 3% fewer shapes and 70% more time, so
+Poster leaves it off; so do Logo and anything cut out, since a cutter can
+only cut flat colour. In the package it is an option, off by default.
 
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
@@ -510,6 +511,25 @@ and a byte-exact cross-reference table; the tests check every offset, and the
 file passes `qpdf --check` and renders back the same as the SVG in Poppler.
 Coordinates are flipped (both formats put the origin bottom-left) and scaled
 from the viewBox to points.
+
+**A gradient is a fill, not an ink.** The trace writes a shaded shape's
+fill as `url(#…) #rrggbb`: the gradient, then its average colour as the
+fallback. The app keys the shape's ink by that colour, so the palette, ink
+edits and per-colour layers work as before, and replacing the colour fills
+the shape flat (a recoloured gradient would need a rule for every stop, and
+flat is what someone replacing a colour usually wants). The gradient is read
+into numbers and colours and written back from them, never copied as
+markup. Moving, scaling or turning a shape composes the transform into the
+gradient's own `gradientTransform`, so the gradient goes with it exactly,
+even under a stretch; a node edit leaves it where it is. Mirror can't join a
+shaded shape to its copy, as one path has one gradient, so it keeps the two
+halves (or the turned copies) as shapes of their own, each copy's gradient
+mirrored or turned with it. A shaded ink can't be merged: its colour is an
+average no pixel is labelled with. PDF clips a shading
+(`sh`, axial or radial, its colour a stitching of linear pieces, extended
+past both ends as SVG pads) to the path; EPS does the same with
+PostScript 3's `shfill`; DXF has no fills. Stacked Illustration and Outline
+art turn it on; Logo, Poster and anything cut out don't.
 
 **Merging colours happens before regions exist.** Making two colours the same
 leaves two shapes and the seam between them. Merging relabels one colour's

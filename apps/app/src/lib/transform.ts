@@ -6,6 +6,7 @@
  * same space as the path data, so nothing here knows about zoom.
  */
 import { mapPoints, parsePath, serializePath, type NodeRef, type PathNode, type Pt, type Subpath } from './pathdata'
+import { moveGradient, type Gradient } from './svg'
 
 export type Box = { x: number; y: number; w: number; h: number }
 /** x' = a·x + c·y + e, y' = b·x + d·y + f: SVG's matrix(a b c d e f). */
@@ -37,11 +38,15 @@ export function transformPath(d: string, m: Affine): string {
 /**
  * A path's geometry under a transform, and a stroke's width with it (by the
  * square root of the area scale), so a scaled centerline drawing keeps its
- * look: half the size, half the width.
+ * look: half the size, half the width. A gradient goes with its shape.
  */
-export function transformShape(p: { d: string; stroke?: number }, m: Affine): { d: string; stroke?: number } {
+export function transformShape(p: { d: string; stroke?: number; gradient?: Gradient }, m: Affine): { d: string; stroke?: number; gradient?: Gradient } {
   const d = transformPath(p.d, m)
-  return p.stroke ? { d, stroke: Math.round(p.stroke * Math.sqrt(Math.abs(m.a * m.d - m.b * m.c)) * 100) / 100 } : { d }
+  return {
+    d,
+    ...(p.stroke ? { stroke: Math.round(p.stroke * Math.sqrt(Math.abs(m.a * m.d - m.b * m.c)) * 100) / 100 } : {}),
+    ...(p.gradient ? { gradient: moveGradient(p.gradient, [m.a, m.b, m.c, m.d, m.e, m.f]) } : {}),
+  }
 }
 
 // ---- Bounds ------------------------------------------------------------------

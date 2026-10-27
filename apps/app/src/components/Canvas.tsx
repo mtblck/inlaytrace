@@ -1,7 +1,9 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent } from 'react'
+import type { ShownPath } from '../lib/doc'
 import { turnRadius, turnSlice, type Axis } from '../lib/mirror'
 import { isSmooth, parsePath, type NodePart, type NodeRef, type Pt, type Subpath } from '../lib/pathdata'
 import { angleAt, HANDLE_SET, handlePoint, hasRef, normRect, pathBounds, rotateAbout, scaleFromHandle, translate, union, type Affine, type Box, type Handle } from '../lib/transform'
+import type { Gradient } from '../lib/svg'
 import { anchorScroll, effective, snap, step, wheelFactor, type Zoom } from '../lib/zoom'
 
 export type ViewMode = 'split' | 'difference' | 'vector'
@@ -9,7 +11,7 @@ export type Tool = 'select' | 'nodes' | 'mirror'
 /** How a click or marquee combines with the current selection: Shift adds (or toggles), Alt removes. */
 export type SelectMode = 'set' | 'add' | 'toggle' | 'subtract'
 export type Overlays = { paths: boolean; pathColor: string; nodes: boolean; nodeColor: string }
-export type ShownPath = { id: string; d: string; fill: string; stroke?: number }
+export type { ShownPath }
 
 type Props = {
   imageUrl: string
@@ -461,7 +463,7 @@ export function Canvas(props: Props) {
           >
             {props.background && <rect width={width} height={height} fill={props.background} data-background="" />}
             {props.paths.map((p) => (
-              <VectorPath key={p.id} d={p.d} fill={p.fill} stroke={p.stroke} />
+              <VectorPath key={p.id} id={p.id} d={p.d} fill={p.fill} stroke={p.stroke} gradient={p.gradient} />
             ))}
           </svg>
 
@@ -693,11 +695,34 @@ export function Canvas(props: Props) {
 
 // Each shape is its own memoised element: dragging a node changes one path,
 // and the thousands of others in a busy trace skip re-rendering entirely.
-const VectorPath = memo(function VectorPath({ d, fill, stroke }: { d: string; fill: string; stroke?: number }) {
+const VectorPath = memo(function VectorPath({ id, d, fill, stroke, gradient }: { id: string; d: string; fill: string; stroke?: number; gradient?: Gradient }) {
   // A centerline stroke: drawn in its colour, not filled, as it will be exported.
   if (stroke) return <path d={d} fill="none" stroke={fill} strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" />
-  return <path d={d} fill={fill} />
+  if (!gradient) return <path d={d} fill={fill} />
+  // Not the export's ids: the exported SVG may be shown on the same page.
+  const gid = `canvas-gr-${id}`
+  return (
+    <>
+      <defs>
+        <GradientDef g={gradient} id={gid} />
+      </defs>
+      <path d={d} fill={`url(#${gid}) ${fill}`} />
+    </>
+  )
 })
+function GradientDef({ g, id }: { g: Gradient; id: string }) {
+  const stops = g.stops.map((s, i) => <stop key={i} offset={s.offset} stopColor={s.color} />)
+  const transform = g.transform ? `matrix(${g.transform.join(' ')})` : undefined
+  return g.type === 'linear' ? (
+    <linearGradient id={id} gradientUnits="userSpaceOnUse" x1={g.x1} y1={g.y1} x2={g.x2} y2={g.y2} gradientTransform={transform}>
+      {stops}
+    </linearGradient>
+  ) : (
+    <radialGradient id={id} gradientUnits="userSpaceOnUse" cx={g.cx} cy={g.cy} r={g.r} gradientTransform={transform}>
+      {stops}
+    </radialGradient>
+  )
+}
 const OutlinePath = memo(function OutlinePath({ d }: { d: string }) {
   return <path d={d} vectorEffect="non-scaling-stroke" />
 })

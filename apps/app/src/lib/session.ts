@@ -12,7 +12,7 @@
  * windows, storage full, blocked site data); the app then works as before.
  */
 import { PRESETS, settingsFor, type Settings } from '../engine/presets'
-import { normalizeHex } from './svg'
+import { checkGradient, normalizeHex } from './svg'
 import type { Doc, Edits } from './doc'
 
 const VERSION = 1
@@ -125,13 +125,17 @@ export function checkEdits(x: unknown): Edits {
   if (isObj(d) && typeof d.width === 'number' && typeof d.height === 'number' && Array.isArray(d.paths)) {
     const paths = d.paths
       .filter((p): p is Doc['paths'][number] => isObj(p) && typeof p.id === 'string' && typeof p.d === 'string' && typeof p.fill === 'string')
-      .map(({ id, d, fill, stroke, group }) => ({
-        id,
-        d,
-        fill,
-        ...(typeof stroke === 'number' && Number.isFinite(stroke) && stroke > 0 ? { stroke } : {}),
-        ...(typeof group === 'string' && /^g\d+$/.test(group) ? { group } : {}),
-      }))
+      .map(({ id, d, fill, stroke, group, gradient }) => {
+        const g = gradient === undefined ? null : checkGradient(gradient)
+        return {
+          id,
+          d,
+          fill,
+          ...(typeof stroke === 'number' && Number.isFinite(stroke) && stroke > 0 ? { stroke } : {}),
+          ...(typeof group === 'string' && /^g\d+$/.test(group) ? { group } : {}),
+          ...(g ? { gradient: g } : {}),
+        }
+      })
     doc = { width: d.width, height: d.height, paths }
   }
   return { inks: { recolor, removed }, doc, background }

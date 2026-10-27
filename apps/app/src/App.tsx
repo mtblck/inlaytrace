@@ -569,7 +569,7 @@ export default function App() {
     const ids = new Set(selectedIds)
     // Captured here, not in the updater: React may run the updater after this
     // handler has already cleared the ref at the end of the drag.
-    transformBase.current ??= new Map(doc.paths.filter((p) => ids.has(p.id)).map((p) => [p.id, { d: p.d, stroke: p.stroke }]))
+    transformBase.current ??= new Map(doc.paths.filter((p) => ids.has(p.id)).map((p) => [p.id, { d: p.d, stroke: p.stroke, gradient: p.gradient }]))
     const base = transformBase.current
     commit((e) => {
       const d = docOf(e, traced)
@@ -599,7 +599,7 @@ export default function App() {
   const setBox = (field: keyof Box, value: number, lock: boolean) => {
     if (!traced || !doc || !selectionBox) return
     const ids = new Set(selectedIds)
-    boxBase.current ??= { box: selectionBox, paths: new Map(doc.paths.filter((p) => ids.has(p.id)).map((p) => [p.id, { d: p.d, stroke: p.stroke }])) }
+    boxBase.current ??= { box: selectionBox, paths: new Map(doc.paths.filter((p) => ids.has(p.id)).map((p) => [p.id, { d: p.d, stroke: p.stroke, gradient: p.gradient }])) }
     const { box, paths } = boxBase.current
     // Everything but the typed field comes from the captured box too, never
     // from the current one, which the previous keystroke has rounded.

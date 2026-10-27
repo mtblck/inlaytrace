@@ -142,7 +142,7 @@ export function toSvg(r: InlayResult): string {
   }
   const body = r.paths.map(path).join('\n')
   const head = defs.length ? `<defs>\n${defs.join('\n')}\n</defs>\n` : ''
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${r.width}" height="${r.height}" viewBox="0 0 ${r.width} ${r.height}">\n${head}${body}\n</svg>\n`
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${attr(r.width)}" height="${attr(r.height)}" viewBox="0 0 ${attr(r.width)} ${attr(r.height)}">\n${head}${body}\n</svg>\n`
 }
 
 const num = (v: number) => String(Math.round(v * 100) / 100)

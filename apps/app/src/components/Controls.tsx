@@ -227,8 +227,12 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
                 {settings.shapes === 'stacked'
                   ? p === 'photo'
                     ? 'Shapes sit on top of each other. Smallest files.'
-                    : 'Shapes sit on top of each other, each drawn whole, even where another hides it.'
-                  : 'No shape overlaps another. Use for vinyl cutting and screen print layers.'}
+                    : p === 'logo'
+                      ? 'Shapes sit on top of each other, each drawn whole, even where another hides it.'
+                      : 'Shapes sit on top of each other, each drawn whole, and soft shading is one shape with a gradient.'
+                  : p === 'logo' || p === 'photo'
+                    ? 'No shape overlaps another. Use for vinyl cutting and screen print layers.'
+                    : 'No shape overlaps another, and every fill is flat. Use for vinyl cutting and screen print layers.'}
               </p>
             </div>
           )}
