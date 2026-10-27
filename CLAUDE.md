@@ -22,8 +22,8 @@ Marking it ready also triggers the Claude review workflow.
 
 - **Client-only.** Tracing runs in a Web Worker (`apps/app/src/engine/`). Images never leave the device, except
   for HD (paid, opt-in per image, `server/hd.ts`), which traces the same image at full size on the server.
-- **Page views only.** Vercel Web Analytics, same-origin, via `apps/app/public/analytics.js` and
-  `apps/site/public/analytics.js` (keep identical; skipped on localhost). No cookies; the privacy page lists what it records (ADR 0001).
+- **Counts only.** Vercel Web Analytics plus page views to mattblack.space's shared counter (`/_mb/events`), same-origin, via `apps/app/public/analytics.js` and
+  `apps/site/public/analytics.js` (keep identical; skipped on localhost). No cookies; the privacy page lists what it records (ADRs 0001, 0002).
 - **Layout:** `apps/app` (Vite root; its config sets `root`, so scripts run it from the repo root with
   `-c apps/app/vite.config.ts`), `apps/site` (Astro + Starlight: landing at `/`, docs at `/docs/`),
   `packages/inlay`, root `vitest.config.ts` running app and package as projects.

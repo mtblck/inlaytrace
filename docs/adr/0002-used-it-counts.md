@@ -30,3 +30,8 @@ name only.
 - Counting is skipped off inlaytrace.com, so localhost, previews and tests never count.
 - A new event needs its name in Boards' projects.json first; until then the
   counter answers 400 and nothing is counted.
+- 2026-10-27: Page views go to the same counter, from `analytics.js` in both the app
+  and the site (mtblck/boards ADR 0005), because Vercel's query API isn't open on
+  this plan. A page view carries only the project; the first page of an arrival
+  from another site adds that site's hostname, which Boards turns into a kind
+  (search, LinkedIn, other) and drops.
