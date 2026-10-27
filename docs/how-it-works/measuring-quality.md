@@ -94,8 +94,8 @@ the badge's measure; here a pixel is wrong past 24:
 | Preset | Wrong pixels at 4× | Regions | Lines | Nodes | Paths | Size |
 | --- | --- | --- | --- | --- | --- | --- |
 | Logo | 2.02% | 20/20 | 7/7 | 330 | 20 | 9.7 KB |
-| Illustration | 2.01% | 20/20 | 7/7 | 341 | 20 | 10.1 KB |
-| Outline art | 2.06% | 20/20 | 7/7 | 244 | 15 | 6.9 KB |
+| Illustration | 2.02% | 20/20 | 7/7 | 342 | 21 | 9.9 KB |
+| Outline art | 2.07% | 20/20 | 7/7 | 246 | 15 | 7.1 KB |
 | Line art | 13.36% | 13/20 | 6/7 | 128 | 6 | 3.7 KB |
 | Poster | 2.62% | 12/20 | 5/7 | 614 | 53 | 20.2 KB |
 
@@ -140,6 +140,21 @@ the skeleton toward each junction:
 Before junctions were refitted (#148) Centerline drew the X pinched, for 55
 nodes; wrong pixels barely move (6.77%) because a skeleton also stops short of
 every end, which costs far more.
+
+And with lines 0.35 units wide (`junctions-hair.svg`, 1.1 px), so thin that no
+pixel is wholly ink and a slanted line is a staircase of pixels touching only at
+their corners:
+
+| Preset | Wrong pixels at 4× | Regions | Lines | Nodes | Size |
+| --- | --- | --- | --- | --- | --- |
+| Logo | 1.51% | 13/13 | 8/8 | 176 | 3.3 KB |
+| Illustration | 1.52% | 13/13 | 8/8 | 205 | 3.8 KB |
+| Line art | 1.58% | 13/13 | 8/8 | 90 | 1.8 KB |
+| Centerline | 1.74% | 13/13 | 8/8 | 37 | 0.7 KB |
+
+Before diagonal steps were joined (#145) the slanted lines fell apart: 25 pieces
+with Logo (for 1126 nodes), 16 with Line art, 10 with Illustration and
+Centerline, and Illustration lost two of the regions.
 
 And flat shapes partly behind others (`scripts/fixtures/overlap.svg`: a pale
 moon and a disc behind a bar, a crescent, and an L-shaped sliver 1.5 units wide):

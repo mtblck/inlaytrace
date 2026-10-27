@@ -278,6 +278,21 @@ parallel or that point is more than a stroke width away). The X now stays
 within a pixel of straight, and Centerline uses 43 nodes there instead of 55;
 the other fixtures lose a few nodes and score the same.
 
+**Slanted hairlines stay joined.** A line about a pixel wide at a slant is a
+staircase of pixels that touch only at their corners, and Inlay's regions are
+4-connected, so each step was a speck of its own and speck clean-up erased it.
+That, not lost pixels, broke 1 px outlines: on the junction fixture at 1.1 px,
+Logo made 25 pieces of 8 and Line art 16. Wherever two pixels of a label touch
+only at a corner across two of another (a 2 × 2 checkerboard), one of the two
+corner pixels now joins them: for the label that isn't the background (the
+commonest label, or one not drawn), else for the pair the corner pixel is
+nearer in colour, and always the corner pixel nearer the pair's colour, the
+anti-aliased half of the step. Every preset but Poster then makes 8 of 8 there
+(Logo 176 nodes instead of 1126), and the other fixtures score the same. On
+photos it cut error 2% for 5% more size, so Poster doesn't join. Gap closing
+proper (pairing the ends of lines that really are broken, as Fourey et al.
+2018 do) waits for a fixture where it is needed.
+
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
 most one waiting request per channel (trace, optimise), replacing it when a

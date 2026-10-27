@@ -328,6 +328,9 @@ await flatArt('junctions.svg', 'Junctions (lines 3.2 px wide)', '#4f86af', ['ill
 await flatArt('junctions-thin.svg', 'Junctions (lines 2.2 px wide)', '#4f86af', ['logo', 'illustration', 'lineart', 'centerline'])
 // Lines 8 px wide: the skeleton Centerline draws bends toward each junction
 // over about a stroke's width, so a crossing is pinched unless refitted.
+// Lines 1.1 px wide: at a slant, a staircase of pixels that touch only at
+// corners, and paler than the ink, since no pixel is wholly covered.
+await flatArt('junctions-hair.svg', 'Junctions (lines 1.1 px wide)', '#4f86af', ['logo', 'illustration', 'lineart', 'centerline'])
 await flatArt('junctions-thick.svg', 'Junctions (lines 8 px wide)', '#4f86af', ['lineart', 'centerline'])
 
 // ---- Overlaps ---------------------------------------------------------------

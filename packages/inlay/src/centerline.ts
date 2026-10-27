@@ -19,7 +19,7 @@
  * Everything here is written for this project (MIT); no GPL tracer is used.
  */
 import { serializePath } from './path'
-import { attr, labelBinary, mergeSpecks } from './inlay'
+import { attr, joinDiagonals, labelBinary, mergeSpecks } from './inlay'
 import { skeletonStrokes } from './skeleton'
 
 export type CenterlineOptions = {
@@ -58,7 +58,8 @@ export function centerlineToSvg(r: CenterlineResult): string {
 const round = (n: number) => Math.round(n * 100) / 100
 
 export function centerline(rgba: ArrayLike<number>, w: number, h: number, o: CenterlineOptions): CenterlineResult {
-  const { labels } = labelBinary(rgba, w, h, o.threshold)
+  const { labels, drawn } = labelBinary(rgba, w, h, o.threshold)
+  joinDiagonals(labels, w, h, rgba, drawn)
   mergeSpecks(labels, w, h, Math.max(0, Math.round(o.speckle)) ** 2)
   const ink = new Uint8Array(w * h)
   for (let i = 0; i < ink.length; i++) ink[i] = labels[i] === 0 ? 1 : 0

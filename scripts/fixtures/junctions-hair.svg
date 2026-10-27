@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- junctions.svg with lines 0.35 units wide (1.1 px at 640 px), for npm run score (made for this
+       repo, MIT). Lines this thin lose pixels before tracing starts (#145). A T, a Y,
+       an X, a box with a cross, a box drawn with a gap, and three dashes. Joined as drawn, that
+       is 8 pieces. -->
+  <rect width="200" height="200" fill="#ffffff"/>
+  <g fill="none" stroke="#4f86af" stroke-width="0.35" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 40 H80 M50 40 V80"/>
+    <path d="M110 80 L130 55 L150 80 M130 55 V25"/>
+    <path d="M160 25 L190 75 M190 25 L160 75"/>
+    <path d="M20 110 H80 V170 H20 Z M50 110 V170 M20 140 H80"/>
+    <path d="M120 110 H170 V170 H110 V110 H117"/>
+    <path d="M20 190 H50 M55 190 H85 M90 190 H120"/>
+  </g>
+</svg>

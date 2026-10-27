@@ -130,6 +130,8 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
   if (o.mode === 'palette' && o.merge) mergeLabels(labels, colors, o.merge)
   // A lone pixel in pixel art is deliberate, not a stray.
   if (!o.pixels) despur(labels, w, h)
+  // Not photos: there it traded 2% less error for 5% more size (score:photos).
+  if (!o.pixels && !(o.mode === 'palette' && o.photo)) joinDiagonals(labels, w, h, rgba, drawn)
   const labs = o.mode === 'palette' && !o.photo ? colors.map((c) => (c ? oklab(hexToRgb(c)) : null)) : undefined
   mergeSpecks(labels, w, h, Math.max(0, Math.round(o.speckle)) ** 2, labs)
   if (labs && !o.pixels) mergeSlivers(labels, w, h, labs)
@@ -553,6 +555,48 @@ function despur(labels: Int32Array, w: number, h: number) {
         if (bestCount >= 7) labels[i] = best
       }
   }
+}
+
+/**
+ * Regions are 4-connected, so a line one pixel wide that runs diagonally, a
+ * staircase of pixels touching only at corners, fell apart into specks, and
+ * mergeSpecks then erased them: a 1 px outline at a slant traced as dashes or
+ * not at all. Where two pixels of a colour touch only at a corner, across two
+ * of another (a 2 × 2 checkerboard), one pair has to be joined. Join the pair
+ * that isn't the background (the commonest label, or one that isn't drawn),
+ * so the paper parts and the line goes on; between two inks, the pair whose
+ * colour the corner pixel is nearer. The corner pixel that joins them is the
+ * one whose colour is nearer the pair's: the anti-aliased half of the step.
+ */
+export function joinDiagonals(labels: Int32Array, w: number, h: number, rgba: ArrayLike<number>, drawn: boolean[]) {
+  const count = new Map<number, number>()
+  for (let i = 0; i < labels.length; i++) count.set(labels[i], (count.get(labels[i]) ?? 0) + 1)
+  let paper = -1
+  for (const [l, c] of count) if (paper < 0 || c > count.get(paper)!) paper = l
+  const back = (l: number) => l === paper || !drawn[l]
+  const far = (i: number, a: number, b: number) =>
+    Math.hypot(rgba[i * 4] - (rgba[a * 4] + rgba[b * 4]) / 2, rgba[i * 4 + 1] - (rgba[a * 4 + 1] + rgba[b * 4 + 1]) / 2, rgba[i * 4 + 2] - (rgba[a * 4 + 2] + rgba[b * 4 + 2]) / 2)
+  for (let y = 0; y < h - 1; y++)
+    for (let x = 0; x < w - 1; x++) {
+      const tl = y * w + x
+      const tr = tl + 1
+      const bl = tl + w
+      const br = bl + 1
+      // Either diagonal can be the pair: tl–br across tr and bl, or tr–bl across tl and br.
+      if (labels[tl] !== labels[br] || labels[tr] !== labels[bl] || labels[tl] === labels[tr]) continue
+      const a = labels[tl]
+      const b = labels[tr]
+      let joinMain: boolean
+      if (back(a) !== back(b)) joinMain = back(b)
+      else {
+        // Each pair's cost: how far its best corner pixel's colour is from it.
+        const costMain = Math.min(far(tr, tl, br), far(bl, tl, br))
+        const costAnti = Math.min(far(tl, tr, bl), far(br, tr, bl))
+        joinMain = costMain <= costAnti
+      }
+      if (joinMain) labels[far(tr, tl, br) <= far(bl, tl, br) ? tr : bl] = a
+      else labels[far(tl, tr, bl) <= far(br, tr, bl) ? tl : br] = b
+    }
 }
 
 const NEIGHBOURS = [
