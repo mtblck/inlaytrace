@@ -111,7 +111,7 @@ describe('tracing', () => {
     const svg = toSvg(trace(px, W, H, { ...opts, gradients: true }))
     const ids = [...svg.matchAll(/Gradient id="([^"]+)" gradientUnits="userSpaceOnUse"/g)].map((m) => m[1])
     expect(ids).toHaveLength(2)
-    for (const id of ids) expect(svg).toContain(`fill="url(#${id})"`)
+    for (const id of ids) expect(svg).toMatch(new RegExp(`fill="url\\(#${id}\\) #[0-9a-f]{6}"`))
     expect(svg).toMatch(/^<svg[^>]*>\n<defs>\n</)
     // Another drawing names its gradients differently, so both can sit in one page.
     const other = toSvg(trace(image(W, H, (x, y) => mix(SKY_TOP, SKY_LOW, x / W)), W, H, { ...opts, gradients: true }))

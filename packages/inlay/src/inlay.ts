@@ -137,7 +137,8 @@ export function toSvg(r: InlayResult): string {
     if (!p.gradient) return `<path d="${attr(p.d)}" fill="${attr(p.fill)}"/>`
     const id = `g${tag}-${defs.length}`
     defs.push(gradientMarkup(p.gradient, id))
-    return `<path d="${attr(p.d)}" fill="url(#${id})"/>`
+    // The flat colour after the url is the fallback for anything that can't draw the gradient.
+    return `<path d="${attr(p.d)}" fill="url(#${id}) ${attr(p.fill)}"/>`
   }
   const body = r.paths.map(path).join('\n')
   const head = defs.length ? `<defs>\n${defs.join('\n')}\n</defs>\n` : ''
