@@ -177,6 +177,24 @@ Illustration and Outline art stack by default; Logo stays cut out. Stacking also
 drops the holes in the paper and in shapes that hold others, which is why it
 uses about half the nodes on the junction fixtures.
 
+Every drawing above arrives as JPEG. The badge and three fixtures saved as PNG
+instead, the way most logos arrive, show what edges placed between pixels
+(#147) gain when the anti-aliasing isn't masked by compression noise:
+
+| Drawing | Preset | Wrong pixels at 4× | Nodes | Size | Before #147 |
+| --- | --- | --- | --- | --- | --- |
+| Badge | Logo | 0.49% | 162 | 4.8 KB | 0.51%, 162 nodes |
+| Badge | Illustration | 0.46% | 176 | 5.5 KB | 0.50%, 173 nodes |
+| Emblem | Logo | 0.28% | 59 | 2.0 KB | 0.32%, 61 nodes |
+| Emblem | Illustration | 0.25% | 39 | 1.3 KB | 0.26%, 42 nodes |
+| Outline | Logo | 0.44% | 314 | 8.8 KB | 0.44%, 311 nodes |
+| Outline | Illustration | 0.41% | 164 | 4.9 KB | 0.44%, 163 nodes |
+| Overlap | Logo | 0.17% | 78 | 1.9 KB | 0.20%, 78 nodes |
+| Overlap | Illustration | 0.16% | 49 | 1.4 KB | 0.19%, 50 nodes |
+
+The badge and fixtures count wrong pixels past 96 and 24 as above. The JPEG
+results are unchanged, by design: there the edges stay on the pixel grid.
+
 Run it before shipping any change to the tracer, the fitter or a preset.
 
 ## `npm run score:photos`: Poster on photos

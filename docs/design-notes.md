@@ -315,6 +315,25 @@ stacking, which reaches under every later neighbour so no seam shows; flat art
 keeps cut-out seams, as before. Illustration and Outline art stack by default;
 Logo stays cut out, for vinyl.
 
+**Edges sit between pixels when the image is clean.** Chains run along pixel
+cracks, so every edge was on the pixel grid, up to half a pixel off, and a small
+shape came out lumpy. Open Vectorizer (MIT) reads an anti-aliased pixel as a
+measurement instead: between colours A and B it is a blend, a share α of A.
+With A's pixel and B's either side of a crack, and each solidly its colour one
+and two pixels further in, the edge is α_A + α_B − 1 px off the crack (at most
+0.35 px). Each crack's midpoint moves by that, a crack too near a corner to be
+measured takes the nearest measured offset along its own run, and a pixel
+corner between two runs of three or more moves by both, so a bar's square ends
+stay square. On a synthetic rectangle with sides inside pixels, the fitted
+sides land within 0.05 px, with exact corners, where the grid rounded them.
+Only for images saved without loss: on JPEG the blends beside an edge are
+skewed by ringing, and the overlap fixture got worse (0.18% to 0.19% wrong),
+so it applies only when 99% of the pixels inside regions are within 3 levels
+of their colour (PNGs of the fixtures: 99.99%; JPEG q72: 84–97%). On the PNG
+badge, emblem, outline and overlap fixtures wrong pixels fall 0–16% for the
+same nodes; brightness alone gives the blend where the colours differ in it.
+Render-and-score for exact shapes, the other half of #147, is still to do.
+
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
 most one waiting request per channel (trace, optimise), replacing it when a
