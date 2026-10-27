@@ -338,7 +338,7 @@ const distance2 = (a: Rgb, b: Rgb) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + 
 
 const distance = (a: Rgb, b: Rgb) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
 
-const toHex = (rgb: Rgb) => `#${rgb.map((c) => Math.round(c).toString(16).padStart(2, '0')).join('')}`
+export const toHex = (rgb: Rgb) => `#${rgb.map((c) => Math.round(c).toString(16).padStart(2, '0')).join('')}`
 
 /**
  * Pixel art's palette: its colours exactly, most-used first. Pixel art has a
@@ -359,3 +359,6 @@ export function exactPalette(rgba: ArrayLike<number>, maxColors: number): string
     .slice(0, Math.max(1, maxColors))
     .map(([k]) => `#${k.toString(16).padStart(6, '0')}`)
 }
+
+/** '#rrggbb' as [r, g, b]. */
+export const hexToRgb = (hex: string): Rgb => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)]

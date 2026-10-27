@@ -29,7 +29,7 @@
  * another is also completed where it is hidden (layers.ts).
  */
 import { fitChain, isFlat, line, type Cubic, type FitOptions } from './fit'
-import { oklab, type Rgb } from './palette'
+import { hexToRgb, oklab, type Rgb } from './palette'
 import { serializePath, type PathNode, type Pt, type Subpath } from './path'
 import { complete, endDir, sample, SHARP, SMOOTH, startDir, straightEnd, turn } from './layers'
 import { regionWidths, skeletonStrokes } from './skeleton'
@@ -130,10 +130,12 @@ export const attr = (v: string | number) => String(v).replace(/&/g, '&amp;').rep
 /** The trace as an SVG document. */
 export function toSvg(r: InlayResult): string {
   const defs: string[] = []
+  // Ids are named after the drawing, so two traces inlined in one page don't paint with each other's gradients.
+  const tag = r.paths.some((p) => p.gradient) ? fnv(r.paths.map((p) => p.d + (p.gradient ? JSON.stringify(p.gradient) : '')).join('|')) : ''
   const path = (p: InlayPath) => {
     if (p.stroke) return `<path d="${attr(p.d)}" fill="none" stroke="${attr(p.fill)}" stroke-width="${attr(p.stroke)}" stroke-linecap="round" stroke-linejoin="round"/>`
     if (!p.gradient) return `<path d="${attr(p.d)}" fill="${attr(p.fill)}"/>`
-    const id = `g${defs.length}`
+    const id = `g${tag}-${defs.length}`
     defs.push(gradientMarkup(p.gradient, id))
     return `<path d="${attr(p.d)}" fill="url(#${id})"/>`
   }
@@ -143,6 +145,13 @@ export function toSvg(r: InlayResult): string {
 }
 
 const num = (v: number) => String(Math.round(v * 100) / 100)
+
+/** A short hash (FNV-1a, base 36). */
+function fnv(s: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193)
+  return (h >>> 0).toString(36)
+}
 
 /** A gradient element, in the drawing's pixels. */
 function gradientMarkup(g: Gradient, id: string): string {
@@ -896,8 +905,6 @@ export function otsu(lum: Uint8Array, alpha: Uint8Array) {
   }
   return best
 }
-
-const hexToRgb = (hex: string): Rgb => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)]
 
 // ---- 2. Spurs and specks ------------------------------------------------------------
 

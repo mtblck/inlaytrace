@@ -28,6 +28,22 @@ function image(w: number, h: number, paint: (x: number, y: number) => Rgb) {
 const tints = (a: Rgb, b: Rgb, n: number) => Array.from({ length: n }, (_, i) => hex(mix(a, b, (i + 0.5) / n)))
 
 describe('fitting', () => {
+  it('finds a radial change of hue alone', () => {
+    // Red to green at constant R + G + B: no change of brightness for the fit to follow.
+    const xs: number[] = []
+    const ys: number[] = []
+    const cs: Rgb[] = []
+    for (let y = 0; y < 60; y++)
+      for (let x = 0; x < 60; x++) {
+        xs.push(x)
+        ys.push(y)
+        cs.push(mix([220, 20, 60], [20, 220, 60], Math.hypot(x - 30, y - 30) / 42))
+      }
+    const fit = fitShading(xs, ys, cs)!
+    expect(fit.gradient.type).toBe('radial')
+    expect(fit.rms).toBeLessThan(2)
+  })
+
   it('finds a linear gradient', () => {
     const xs: number[] = []
     const ys: number[] = []
@@ -93,10 +109,26 @@ describe('tracing', () => {
 
   it('writes the gradients into the SVG', () => {
     const svg = toSvg(trace(px, W, H, { ...opts, gradients: true }))
-    expect(svg).toMatch(/<defs>\n<(linear|radial)Gradient id="g0" gradientUnits="userSpaceOnUse"/)
-    expect(svg).toContain('fill="url(#g0)"')
-    expect(svg).toContain('fill="url(#g1)"')
+    const ids = [...svg.matchAll(/Gradient id="([^"]+)" gradientUnits="userSpaceOnUse"/g)].map((m) => m[1])
+    expect(ids).toHaveLength(2)
+    for (const id of ids) expect(svg).toContain(`fill="url(#${id})"`)
+    expect(svg).toMatch(/^<svg[^>]*>\n<defs>\n</)
+    // Another drawing names its gradients differently, so both can sit in one page.
+    const other = toSvg(trace(image(W, H, (x, y) => mix(SKY_TOP, SKY_LOW, x / W)), W, H, { ...opts, gradients: true }))
+    const otherIds = [...other.matchAll(/Gradient id="([^"]+)"/g)].map((m) => m[1])
+    expect(otherIds.length).toBeGreaterThan(0)
+    expect(otherIds.some((id) => ids.includes(id))).toBe(false)
     expect(svg).toContain('<stop offset="0%" stop-color="#')
+  })
+
+  it('keeps a flat shape inside a shade', () => {
+    // A flat disc in one of the sky's own tints, from lower down, stays a shape of its own.
+    const DISC = mix(SKY_TOP, SKY_LOW, 150 / H)
+    const disc = (x: number, y: number) => Math.hypot(x - 168, y - 60) < 30
+    const px2 = image(W, H, (x, y) => (disc(x, y) ? DISC : mix(SKY_TOP, SKY_LOW, y / H)))
+    const r = trace(px2, W, H, { ...opts, palette: tints(SKY_TOP, SKY_LOW, 4), gradients: true })
+    expect(r.paths.filter((p) => p.gradient)).toHaveLength(1)
+    expect(r.paths.filter((p) => !p.gradient)).toHaveLength(1)
   })
 
   it('leaves flat art alone', () => {

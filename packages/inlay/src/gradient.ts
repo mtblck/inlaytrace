@@ -18,7 +18,7 @@
  * Along the axis (or the radius), each channel is then piecewise linear
  * between a few evenly spaced stops, as few as fit.
  */
-import type { Rgb } from './palette'
+import { hexToRgb, toHex, type Rgb } from './palette'
 
 export type GradientStop = { offset: number; color: string }
 /** Coordinates in the trace's pixels (gradientUnits="userSpaceOnUse"). */
@@ -46,6 +46,8 @@ const BANDS_SLACK = 1.1
 const RADIAL_GAIN = 0.8
 /** Pixels a shade is fitted on, at most. */
 const SAMPLE = 4000
+/** Weight of the tie between neighbouring stops: next to nothing beside a pixel's weight of 1. */
+const TIE = 1e-3
 /** Most stops along a gradient. */
 const MAX_STOPS = 5
 
@@ -59,7 +61,6 @@ export type Shading = { comps: number[]; gradient: Gradient; mean: string }
 export function shadings(rgba: ArrayLike<number>, w: number, h: number, comp: Int32Array, regions: number, colorOf: (id: number) => Rgb): Shading[] {
   // Soft boundaries: per pair of regions, the image's step across their cracks against their colours' difference.
   const step = new Map<number, number>()
-  const diff = new Map<number, number>()
   const count = new Map<number, number>()
   const rgb = (i: number): Rgb => [rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2]]
   const d3 = (a: Rgb, b: Rgb) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
@@ -72,7 +73,6 @@ export function shadings(rgba: ArrayLike<number>, w: number, h: number, comp: In
     const p = before * 4
     const q = after * 4
     step.set(key, (step.get(key) ?? 0) + Math.hypot(rgba[p] - rgba[q], rgba[p + 1] - rgba[q + 1], rgba[p + 2] - rgba[q + 2]))
-    diff.set(key, (diff.get(key) ?? 0) + d3(colors[ca], colors[cb]))
     count.set(key, (count.get(key) ?? 0) + 1)
   }
   for (let y = 0; y < h; y++)
@@ -84,8 +84,10 @@ export function shadings(rgba: ArrayLike<number>, w: number, h: number, comp: In
   const parent = Array.from({ length: regions }, (_, i) => i)
   const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])))
   for (const [key, n] of count) {
-    if (n < SOFT_MIN || step.get(key)! >= Math.max(SOFT * diff.get(key)!, SOFT_NOISE * n)) continue
-    parent[find(Math.floor(key / regions))] = find(key % regions)
+    const a = Math.floor(key / regions)
+    const b = key % regions
+    if (n < SOFT_MIN || step.get(key)! >= n * Math.max(SOFT * d3(colors[a], colors[b]), SOFT_NOISE)) continue
+    parent[find(a)] = find(b)
   }
   const groups = new Map<number, number[]>()
   for (let id = 0; id < regions; id++) {
@@ -133,12 +135,14 @@ export function shadings(rgba: ArrayLike<number>, w: number, h: number, comp: In
     const flat = rms(() => mean)
     const banded = rms((j) => bands[j])
     if (flat < FLAT_MIN || g.rms > GAIN * flat || g.rms > BANDS_SLACK * banded) continue
-    out.push({ comps: groups.get(r)!, gradient: g.gradient, mean: hex(mean) })
+    out.push({ comps: [...groups.get(r)!], gradient: g.gradient, mean: '' })
   }
 
   // A neighbour the gradient draws at least as well as its own flat colour
   // joins it: a band whose edge with the shade was too short or too noisy to
   // read as soft, or a speck of a lighter tint on the shade's anti-aliased rim.
+  // A flat neighbour (its own colour within FLAT_MIN) only if a speck: a flat
+  // shape in a shade's colours is still a shape.
   const shadeOf = new Int32Array(regions).fill(-1)
   out.forEach((s, k) => s.comps.forEach((id) => (shadeOf[id] = k)))
   const near = new Map<number, Set<number>>()
@@ -156,7 +160,9 @@ export function shadings(rgba: ArrayLike<number>, w: number, h: number, comp: In
       }
   }
   if (near.size) {
+    const ramps = out.map((s) => ramp(s.gradient))
     const flatErr = new Float64Array(regions)
+    const area = new Float64Array(regions)
     const gradErr = new Map<number, Float64Array>()
     for (const id of near.keys()) gradErr.set(id, new Float64Array(out.length))
     for (let i = 0; i < w * h; i++) {
@@ -164,39 +170,59 @@ export function shadings(rgba: ArrayLike<number>, w: number, h: number, comp: In
       const errs = id >= 0 ? gradErr.get(id) : undefined
       if (!errs) continue
       const c = rgb(i)
+      area[id]++
       flatErr[id] += dist2(c, colors[id])
-      for (const k of near.get(id)!) errs[k] += dist2(c, colorAt(out[k].gradient, (i % w) + 0.5, Math.floor(i / w) + 0.5))
+      for (const k of near.get(id)!) errs[k] += dist2(c, ramps[k]((i % w) + 0.5, Math.floor(i / w) + 0.5))
     }
     for (const [id, ks] of near) {
       const errs = gradErr.get(id)!
       const k = [...ks].reduce((a, b) => (errs[b] < errs[a] ? b : a))
-      if (errs[k] <= flatErr[id]) out[k].comps.push(id)
+      const flat = flatErr[id] < FLAT_MIN ** 2 * area[id]
+      if (errs[k] <= flatErr[id] && (!flat || area[id] < MIN_AREA)) {
+        out[k].comps.push(id)
+        shadeOf[id] = k
+      }
     }
   }
+  // Each shade's flat colour, for whatever can't draw a gradient: the average of all its pixels.
+  const sums = out.map(() => [0, 0, 0, 0])
+  for (let i = 0; i < w * h; i++) {
+    const k = comp[i] >= 0 ? shadeOf[comp[i]] : -1
+    if (k < 0) continue
+    const s = sums[k]
+    s[0] += rgba[i * 4]
+    s[1] += rgba[i * 4 + 1]
+    s[2] += rgba[i * 4 + 2]
+    s[3]++
+  }
+  out.forEach((s, k) => (s.mean = toHex([sums[k][0] / sums[k][3], sums[k][1] / sums[k][3], sums[k][2] / sums[k][3]])))
   return out
 }
 
 /** A gradient's colour at a point. */
-export function colorAt(g: Gradient, x: number, y: number): Rgb {
-  let t: number
-  if (g.type === 'linear') {
-    const dx = g.x2 - g.x1
-    const dy = g.y2 - g.y1
-    t = ((x - g.x1) * dx + (y - g.y1) * dy) / (dx * dx + dy * dy || 1)
-  } else t = Math.hypot(x - g.cx, y - g.cy) / g.r
-  const stops = g.stops
-  if (t <= stops[0].offset) return rgbOfHex(stops[0].color)
-  for (let k = 1; k < stops.length; k++)
-    if (t <= stops[k].offset) {
-      const a = rgbOfHex(stops[k - 1].color)
-      const b = rgbOfHex(stops[k].color)
-      const f = (t - stops[k - 1].offset) / (stops[k].offset - stops[k - 1].offset || 1)
-      return [a[0] + f * (b[0] - a[0]), a[1] + f * (b[1] - a[1]), a[2] + f * (b[2] - a[2])]
-    }
-  return rgbOfHex(stops[stops.length - 1].color)
-}
+export const colorAt = (g: Gradient, x: number, y: number): Rgb => ramp(g)(x, y)
 
-const rgbOfHex = (hex: string): Rgb => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)]
+/** A gradient as a function of the point, its stops parsed once. */
+function ramp(g: Gradient): (x: number, y: number) => Rgb {
+  const offsets = g.stops.map((s) => s.offset)
+  const colors = g.stops.map((s) => hexToRgb(s.color))
+  const last = colors.length - 1
+  const dx = g.type === 'linear' ? g.x2 - g.x1 : 0
+  const dy = g.type === 'linear' ? g.y2 - g.y1 : 0
+  const len2 = dx * dx + dy * dy || 1
+  return (x, y) => {
+    const t = g.type === 'linear' ? ((x - g.x1) * dx + (y - g.y1) * dy) / len2 : Math.hypot(x - g.cx, y - g.cy) / g.r
+    if (t <= offsets[0]) return colors[0]
+    for (let k = 1; k <= last; k++)
+      if (t <= offsets[k]) {
+        const a = colors[k - 1]
+        const b = colors[k]
+        const f = (t - offsets[k - 1]) / (offsets[k] - offsets[k - 1] || 1)
+        return [a[0] + f * (b[0] - a[0]), a[1] + f * (b[1] - a[1]), a[2] + f * (b[2] - a[2])]
+      }
+    return colors[last]
+  }
+}
 
 /** The better of a linear and a radial gradient through these pixels, with its RMS error. */
 export function fitShading(xs: number[], ys: number[], cs: Rgb[]): { gradient: Gradient; rms: number } | null {
@@ -327,17 +353,24 @@ function fitRamp(t: number[], cs: Rgb[], from = -Infinity) {
       row[i + 1] = f
       return row
     })
+    // A light tie between neighbouring stops, so a stop no pixel reaches takes its neighbours' colour.
+    const ties = Array.from({ length: m - 1 }, (_, i) => {
+      const row = new Array<number>(m).fill(0)
+      row[i] = TIE
+      row[i + 1] = -TIE
+      return row
+    })
     const chans = [0, 1, 2].map((k) =>
       leastSquares(
-        rows,
-        cs.map((c) => c[k]),
+        [...rows, ...ties],
+        [...cs.map((c) => c[k]), ...ties.map(() => 0)],
       ),
     )
     if (chans.some((c) => !c)) continue
     const colorAt = (row: number[]): Rgb => [0, 1, 2].map((k) => clamp(row.reduce((s, v, i) => s + v * chans[k]![i], 0))) as Rgb
     const stopColors = Array.from({ length: m }, (_, i) => [0, 1, 2].map((k) => clamp(chans[k]![i])) as Rgb)
     const rms = Math.sqrt(rows.reduce((s, row, j) => s + dist2(colorAt(row), cs[j]), 0) / t.length)
-    fits.push({ stops: stopColors.map((c, i) => ({ offset: round(i / (m - 1), 3), color: hex(c) })), rms })
+    fits.push({ stops: stopColors.map((c, i) => ({ offset: round(i / (m - 1), 3), color: toHex(c) })), rms })
   }
   if (!fits.length) return null
   const least = Math.min(...fits.map((f) => f.rms))
@@ -348,7 +381,9 @@ function fitRamp(t: number[], cs: Rgb[], from = -Infinity) {
 function mainAxis(cs: Rgb[], cm: number[]): number[] {
   const cov = [0, 1, 2].map(() => [0, 0, 0])
   for (const c of cs) for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) cov[i][j] += (c[i] - cm[i]) * (c[j] - cm[j])
-  let v = [1, 1, 1]
+  // Starting from the axis of the channel that varies most: [1, 1, 1] is orthogonal to a pure change of hue.
+  let v = [0, 1, 2].map((i) => cov[i][i])
+  v = cov[v.indexOf(Math.max(...v))].slice()
   for (let it = 0; it < 30; it++) {
     const next = cov.map((row) => row[0] * v[0] + row[1] * v[1] + row[2] * v[2])
     const len = Math.hypot(...next) || 1
@@ -368,8 +403,6 @@ function leastSquares(rows: number[][], y: number[]): number[] | null {
       A[a][m] += row[a] * y[j]
     }
   })
-  // A stop no pixel reaches is pinned to its neighbours by a light tie, so the system stays solvable.
-  for (let a = 0; a < m; a++) A[a][a] += 1e-9
   for (let c = 0; c < m; c++) {
     let p = c
     for (let r = c + 1; r < m; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r
@@ -387,4 +420,3 @@ function leastSquares(rows: number[][], y: number[]): number[] | null {
 const clamp = (v: number) => Math.max(0, Math.min(255, v))
 const dist2 = (a: Rgb, b: Rgb) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2
 const round = (v: number, places: number) => Math.round(v * 10 ** places) / 10 ** places
-const hex = (c: Rgb | number[]) => '#' + c.map((v) => Math.round(clamp(v)).toString(16).padStart(2, '0')).join('')
