@@ -7,8 +7,8 @@
  *   cache: hashed files never change, so they're always right.
  * - Pages (navigations) go to the network first, so a new version shows on
  *   the next visit, and fall back to the cached page offline.
- * - The AI models and runtime (about 13 MB) are cached the first time they're
- *   used, not on install, so nobody downloads them who doesn't use them.
+ * - The AI models, runtimes and text fonts (about 27 MB) are cached the first
+ *   time they're used, not on install, so nobody downloads them who doesn't use them.
  * - An old version's caches are deleted once the new one takes over.
  */
 const VERSION = '__VERSION__'
@@ -47,7 +47,7 @@ self.addEventListener('fetch', (event) => {
     )
     return
   }
-  const onUse = /\.(onnx|wasm)$/.test(url.pathname)
+  const onUse = /\.(onnx|wasm)$/.test(url.pathname) || url.pathname.startsWith(`${BASE}models/`)
   event.respondWith(
     caches.match(req).then(
       (hit) =>

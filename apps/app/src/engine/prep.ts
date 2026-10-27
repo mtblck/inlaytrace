@@ -1,24 +1,30 @@
 /// <reference lib="webworker" />
 /**
  * Optional AI steps before tracing, in a worker of their own: background
- * removal (U²-Net small) and 4× upscaling (Real-ESRGAN general v3). Both run
- * here, in the browser, with ONNX Runtime's WebAssembly backend; the image
- * never leaves the device. The runtime (about 3.7 MB compressed) and each
- * model (about 4.5 MB) are fetched from this site the first time a step is
- * used, then cached by the browser.
+ * removal (U²-Net small), 4× upscaling (Real-ESRGAN general v3) and text
+ * recognition (Tesseract, then matching our fonts: text/). The first two run
+ * with ONNX Runtime's WebAssembly backend, the third with Tesseract's; all in
+ * the browser, so the image never leaves the device. The runtimes, models and
+ * fonts are fetched from this site the first time a step is used, then cached
+ * by the browser.
  *
- * Licences: ONNX Runtime MIT; U²-Net Apache 2.0; Real-ESRGAN BSD 3-Clause
- * (public/models/NOTICE.txt).
+ * Licences: ONNX Runtime MIT; U²-Net Apache 2.0; Real-ESRGAN BSD 3-Clause;
+ * Tesseract and its English model Apache 2.0 (public/models/NOTICE.txt); the
+ * fonts OFL, Apache 2.0 or UFL (public/models/fonts/LICENSES.txt).
  */
 import * as ort from 'onnxruntime-web/wasm'
 import wasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url'
 import { maskFrom, u2Input, upscaleTiles } from './prepCore'
+import { loadFonts } from './text/fonts'
+import { matchText, type TextRun } from './text/match'
+import { initOcr, readText } from './text/ocr'
 
-export type PrepRequest = { type: 'prep'; id: number; rgba: ArrayBuffer; width: number; height: number; background: boolean; upscale: boolean }
-export type PrepStage = 'runtime' | 'background' | 'upscale'
+export type PrepRequest = { type: 'prep'; id: number; rgba: ArrayBuffer; width: number; height: number; background: boolean; upscale: boolean; text: boolean }
+export type PrepStage = 'runtime' | 'background' | 'upscale' | 'textData' | 'text'
 export type PrepResponse =
   | { type: 'progress'; id: number; stage: PrepStage; done: number; total: number }
-  | { type: 'prepared'; id: number; rgba: ArrayBuffer; width: number; height: number }
+  /** `text`: the lines to draw as type (and paint out before tracing), in `rgba`'s pixels. */
+  | { type: 'prepared'; id: number; rgba: ArrayBuffer; width: number; height: number; text: TextRun[] }
   | { type: 'error'; id: number; message: string }
 
 declare const self: DedicatedWorkerGlobalScope
@@ -78,11 +84,13 @@ self.onmessage = async (event: MessageEvent<PrepRequest>) => {
       width = up.width
       height = up.height
     }
+    // Before the mask, which can take text for background.
+    const text = req.text ? await recogniseText(rgba, width, height, req.id) : []
     if (mask) {
       const alpha = await resizeGray(mask.data, mask.width, mask.height, width, height)
       for (let i = 0; i < width * height; i++) rgba[i * 4 + 3] = Math.min(rgba[i * 4 + 3], alpha[i])
     }
-    post({ type: 'prepared', id: req.id, rgba: rgba.buffer as ArrayBuffer, width, height }, [rgba.buffer as ArrayBuffer])
+    post({ type: 'prepared', id: req.id, rgba: rgba.buffer as ArrayBuffer, width, height, text }, [rgba.buffer as ArrayBuffer])
   } catch (error) {
     post({ type: 'error', id: req.id, message: error instanceof Error ? error.message : String(error) })
   }
@@ -128,6 +136,22 @@ async function upscale(rgba: Uint8ClampedArray, width: number, height: number, i
   const big = await resizeGray(alpha, width, height, W, H)
   for (let i = 0; i < W * H; i++) out[i * 4 + 3] = big[i]
   return { rgba: out, width: W, height: H }
+}
+
+// ---- Text -------------------------------------------------------------------------
+
+/** The text Tesseract reads, matched to our fonts and outlined (text/match.ts). */
+async function recogniseText(rgba: Uint8ClampedArray, width: number, height: number, id: number) {
+  const parts = { model: [0, 0], fonts: [0, 0] }
+  const progress = (part: keyof typeof parts) => (done: number, total: number) => {
+    // A file served without its length counts as what's arrived so far.
+    parts[part] = [done, Math.max(done, total)]
+    post({ type: 'progress', id, stage: 'textData', done: parts.model[0] + parts.fonts[0], total: parts.model[1] + parts.fonts[1] })
+  }
+  post({ type: 'progress', id, stage: 'textData', done: 0, total: 0 })
+  const [, fonts] = await Promise.all([initOcr(() => fetchBytes(`${MODELS}ocr/eng.traineddata.gz`, progress('model'))), loadFonts(`${MODELS}fonts/`, progress('fonts'))])
+  post({ type: 'progress', id, stage: 'text', done: 0, total: 0 })
+  return matchText(rgba, width, height, await readText(rgba, width, height), fonts)
 }
 
 // ---- Resizing ---------------------------------------------------------------------

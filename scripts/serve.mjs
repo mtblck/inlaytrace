@@ -18,7 +18,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const dist = join(root, 'dist')
 const config = JSON.parse(readFileSync(join(root, 'vercel.json'), 'utf8'))
 const port = Number(process.argv[process.argv.indexOf('--port') + 1]) || 4173
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.json': 'application/json', '.xml': 'application/xml', '.png': 'image/png', '.txt': 'text/plain', '.pf_meta': 'application/octet-stream', '.pf_index': 'application/octet-stream', '.pf_fragment': 'application/octet-stream' }
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.woff': 'font/woff', '.wasm': 'application/wasm', '.json': 'application/json', '.xml': 'application/xml', '.png': 'image/png', '.txt': 'text/plain', '.pf_meta': 'application/octet-stream', '.pf_index': 'application/octet-stream', '.pf_fragment': 'application/octet-stream' }
 
 /** Vercel's sources are path-to-regexp; the ones here are plain regex groups, so anchor them. */
 const matches = (source, path) => new RegExp(`^${source}$`).exec(path)

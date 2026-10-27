@@ -52,13 +52,15 @@ export type Settings = {
   /** AI steps before tracing (prep.ts): about the image, so a preset keeps them. */
   removeBackground: boolean
   aiUpscale: boolean
+  /** Draw text found in the image as type, in the nearest of our fonts, instead of tracing it. */
+  recogniseText: boolean
 }
 
 export type Preset = {
   id: PresetId
   label: string
   hint: string
-  defaults: Omit<Settings, 'preset' | 'merge' | 'removeBackground' | 'aiUpscale'>
+  defaults: Omit<Settings, 'preset' | 'merge' | 'removeBackground' | 'aiUpscale' | 'recogniseText'>
 }
 
 /** Illustration's defaults, which Outline art shares: it differs only in tracing lines as strokes. */
@@ -111,12 +113,15 @@ export const PRESETS: Preset[] = [
 
 export const presetById = (id: PresetId) => PRESETS.find((p) => p.id === id)!
 
-export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {}, removeBackground: false, aiUpscale: false })
+export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {}, removeBackground: false, aiUpscale: false, recogniseText: false })
 
 /** One ink, thresholded: line art and centerline. */
 export const isInk = (id: PresetId) => id === 'lineart' || id === 'centerline'
 
 /** Exact shapes: the flat-art presets (a photo has none, and pixel art keeps its staircase). */
+/** Presets that draw recognised text as type: not strokes (Centerline) or pixel grids. */
+export const canSetText = (id: PresetId) => id !== 'centerline' && id !== 'pixel'
+
 export const hasExactShapes = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline' || id === 'lineart'
 
 /** Merging colours: the flat-art presets, whose palettes are real colours (Poster's are cluster averages). */

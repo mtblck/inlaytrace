@@ -5,10 +5,11 @@ import { BatchDialog } from './components/Batch'
 import { SVGO } from './engine/svgo'
 import { PrepClient } from './engine/prepClient'
 import type { PrepStage } from './engine/prep'
+import { paintOut, type TextRun } from './engine/text/match'
 import type { SizeRun } from './components/Controls'
-import { canMerge, isInk, maxTraceEdge, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
+import { canMerge, canSetText, isInk, maxTraceEdge, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
 import { ACCEPTED, colourAt, hasDarkBackground, loadSource, looksLikePhoto, pixelsOf, UPSCALE_BELOW, type Pixels, type Source } from './lib/image'
-import { formatBytes, normalizeHex, parseTrace, statsOf, type Trace } from './lib/svg'
+import { formatBytes, normalizeHex, parseTrace, statsOf, withText, type Trace } from './lib/svg'
 import {
   buildSvg,
   deletePath,
@@ -59,13 +60,16 @@ import { useTheme } from './lib/theme'
 
 type Status = { kind: 'idle' } | { kind: 'tracing' } | { kind: 'done'; ms: number } | { kind: 'opened' } | { kind: 'error'; message: string }
 
+const NO_TEXT: TextRun[] = []
+
 export default function App() {
   const client = useMemo(() => new TraceClient(), [])
   useEffect(() => () => client.dispose(), [client])
   const prepClient = useMemo(() => new PrepClient(), [])
   useEffect(() => () => prepClient.stop(), [prepClient])
-  const [prepared, setPrepared] = useState<{ key: string; source: Source } | null>(null)
-  const preparedRef = useRef<{ key: string; source: Source } | null>(null)
+  // `text`: lines found in the image, drawn as type (recognise text), in the prepared image's pixels.
+  const [prepared, setPrepared] = useState<{ key: string; source: Source; text: TextRun[] } | null>(null)
+  const preparedRef = useRef<{ key: string; source: Source; text: TextRun[] } | null>(null)
   const [prepStatus, setPrepStatus] = useState<{ stage: PrepStage; done: number; total: number } | null>(null)
   const [prepError, setPrepError] = useState<string | null>(null)
   // Target size runs dozens of traces: on a worker of its own, so tracing stays responsive.
@@ -334,8 +338,11 @@ export default function App() {
   // Background removal and 4× upscaling run before tracing, in a worker of
   // their own, and give a prepared copy of the image that's traced (and
   // compared against) instead. Upscaling only applies to small images.
+  // Recognising text finds lines to draw as type; the tracer gets the image
+  // with them painted out.
   const wantUpscale = settings.aiUpscale && !!source && Math.max(source.bitmap.width, source.bitmap.height) < UPSCALE_BELOW
-  const prepKey = source && (settings.removeBackground || wantUpscale) ? `${source.url}|${settings.removeBackground}|${wantUpscale}` : null
+  const wantText = settings.recogniseText && !!source && !source.svg
+  const prepKey = source && (settings.removeBackground || wantUpscale || wantText) ? `${source.url}|${settings.removeBackground}|${wantUpscale}|${wantText}` : null
   useEffect(() => {
     if (!source || !prepKey) {
       prepClient.stop()
@@ -352,10 +359,10 @@ export default function App() {
     }
     let live = true
     setPrepError(null)
-    setPrepStatus({ stage: settings.removeBackground ? 'background' : 'upscale', done: 0, total: 0 })
+    setPrepStatus({ stage: settings.removeBackground ? 'background' : wantUpscale ? 'upscale' : 'textData', done: 0, total: 0 })
     const native = pixelsOf(source, Infinity, false)
     void prepClient
-      .prepare(native.rgba, native.width, native.height, { background: settings.removeBackground, upscale: wantUpscale }, (stage, done, total) => live && setPrepStatus({ stage, done, total }))
+      .prepare(native.rgba, native.width, native.height, { background: settings.removeBackground, upscale: wantUpscale, text: wantText }, (stage, done, total) => live && setPrepStatus({ stage, done, total }))
       .then(async (r) => {
         if (!live || !r) return
         if (r instanceof Error) {
@@ -369,18 +376,19 @@ export default function App() {
         const [bitmap, blob] = await Promise.all([createImageBitmap(img), canvas.convertToBlob({ type: 'image/png' })])
         if (!live) return
         if (preparedRef.current) URL.revokeObjectURL(preparedRef.current.source.url)
-        preparedRef.current = { key: prepKey, source: { ...source, url: URL.createObjectURL(blob), bitmap } }
+        preparedRef.current = { key: prepKey, source: { ...source, url: URL.createObjectURL(blob), bitmap }, text: r.text }
         setPrepared(preparedRef.current)
         setPrepStatus(null)
       })
     return () => {
       live = false
     }
-    // Settings other than the two steps don't change what's prepared.
+    // Settings other than the steps don't change what's prepared.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, prepKey, prepClient])
   /** What gets traced: the prepared image when a step is on (none until it's ready), else the original. */
   const traceSource = prepKey ? (prepared?.key === prepKey ? prepared.source : null) : source
+  const traceText = prepKey && prepared?.key === prepKey && canSetText(settings.preset) ? prepared.text : NO_TEXT
 
   // ---- Tracing ------------------------------------------------------------
   useEffect(() => {
@@ -403,7 +411,10 @@ export default function App() {
       }
       const { rgba, width, height } = cached.pixels
       setStatus({ kind: 'tracing' })
-      const res = await client.trace(rgba, width, height, toTraceOptions(settings, cached.pixels.upscale))
+      // Text drawn as type is painted out of what's traced, so it isn't drawn twice.
+      let traced = rgba
+      if (traceText.length) paintOut((traced = rgba.slice()), width, height, traceText, width / source.bitmap.width)
+      const res = await client.trace(traced, width, height, toTraceOptions(settings, cached.pixels.upscale))
       if (!res) return // superseded by a newer request
       if (symmetryOf.current !== cached.pixels) {
         // Once per set of pixels, not per trace: settings don't change the answer.
@@ -428,7 +439,7 @@ export default function App() {
       if (res.type === 'error') setStatus({ kind: 'error', message: res.message })
       else if (res.type === 'traced') {
         try {
-          setTrace(parseTrace(res.svg))
+          setTrace(withText(parseTrace(res.svg), traceText, source.bitmap.width))
           setTraceCount((n) => n + 1)
           setStatus({ kind: 'done', ms: res.ms })
           // Once per image, not per retrace as the settings change.
@@ -439,7 +450,7 @@ export default function App() {
       }
     }, 120)
     return () => clearTimeout(timer)
-  }, [client, traceSource, settings])
+  }, [client, traceSource, traceText, settings])
 
   // The trace as a document. New ids per trace, so a selection never points
   // into a stale trace.
@@ -1025,6 +1036,7 @@ export default function App() {
     if (id === settings.preset) next.merge = settings.merge
     next.removeBackground = settings.removeBackground
     next.aiUpscale = settings.aiUpscale
+    next.recogniseText = settings.recogniseText
     if (isInk(id) && source && hasDarkBackground(source)) next.lightInk = true
     changeSettings(next)
   }
@@ -1358,7 +1370,7 @@ export default function App() {
                 onPreset={choosePreset}
                 suggestPoster={suggestPoster}
                 measuredStroke={settings.preset === 'centerline' && settings.strokeWidth === 0 ? (trace?.paths[0]?.stroke ?? null) : null}
-                prep={{ smallImage: !!source && Math.max(source.bitmap.width, source.bitmap.height) < UPSCALE_BELOW, status: prepStatus, error: prepError }}
+                prep={{ smallImage: !!source && Math.max(source.bitmap.width, source.bitmap.height) < UPSCALE_BELOW, textPreset: canSetText(settings.preset), text: wantText && prepared?.key === prepKey ? prepared.text : null, status: prepStatus, error: prepError }}
                 currentBytes={stats?.bytes ?? null}
                 sizeRun={sizeRun}
                 onFindSize={findSize}

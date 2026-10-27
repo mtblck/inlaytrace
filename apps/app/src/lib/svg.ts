@@ -14,6 +14,7 @@
  * into numbers and colours (checkGradient), never copied as markup.
  */
 import type { Gradient as TracedGradient } from 'inlaytrace'
+import { mapPoints, parsePath, serializePath } from './pathdata'
 
 /**
  * A gradient fill, in the drawing's pixels. `transform` (SVG's matrix(a b c d e
@@ -157,4 +158,15 @@ export function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`
+}
+
+/**
+ * The trace with recognised text on top, as shapes in its own colour. `runs`
+ * are in the pixels of an image `imageWidth` wide; the trace may be another size.
+ */
+export function withText(trace: Trace, runs: { d: string; fill: string }[], imageWidth: number): Trace {
+  if (!runs.length) return trace
+  const k = trace.width / imageWidth
+  const text = runs.map((r) => ({ d: serializePath(mapPoints(parsePath(r.d), (p) => ({ x: p.x * k, y: p.y * k }))), fill: normalizeHex(r.fill) ?? r.fill }))
+  return { ...trace, paths: [...trace.paths, ...text] }
 }
