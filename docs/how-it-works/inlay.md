@@ -46,7 +46,10 @@ sliver along its whole length.
   nearest colour among their neighbours, smallest first (on photos, Poster,
   the colour they share most edge with). Lossy compression splits a thin
   stroke into two shades of its ink, and by shared edge each piece joined the
-  paper it mostly touches, so the stroke dissolved.
+  paper it mostly touches, so the stroke dissolved. In flat art a speck at
+  least 0.25 from every colour around it (a letter, a dot) is a shape and
+  stays, from an eighth of the speck size up (at least 6 px), so raising the
+  setting still clears it.
 - **Slivers** (flat art): regions under 2 px wide on average merge into a
   neighbour within 0.12 of their colour in OKLab, so a letter stem dark at its
   edges and lighter down its middle becomes one shape, not a spike-prone

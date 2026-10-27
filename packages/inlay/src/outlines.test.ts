@@ -218,3 +218,41 @@ describe('the edges of those fixes', () => {
     expect(peakPalette(img, 8, { width: 100 })).not.toContain('#808080')
   })
 })
+
+describe('small text on an illustration', () => {
+  // A line of eight letter-sized rings, 1.5 px grey strokes anti-aliased on
+  // white, beside the illustration's blue ink: under Logo's speck size (64 px)
+  // each, with no pixel of their own sure of the grey.
+  const GREY: Rgb = [107, 107, 107]
+  const TW = 200
+  const TH = 40
+  const text = new Uint8Array(TW * TH * 4)
+  for (let y = 0; y < TH; y++)
+    for (let x = 0; x < TW; x++) {
+      let ink = 0
+      let blue = 0
+      for (let sy = 0; sy < 4; sy++)
+        for (let sx = 0; sx < 4; sx++) {
+          const fx = x + (sx + 0.5) / 4
+          const fy = y + (sy + 0.5) / 4
+          const cx = 20 + 14 * Math.round((fx - 20) / 14)
+          if (cx >= 20 && cx <= 118 && Math.abs(Math.hypot(fx - cx, fy - 20) - 3.5) < 0.75) ink++
+          if (fx >= 140 && fx < 180 && fy >= 18 && fy < 21) blue++
+        }
+      const c = [0, 1, 2].map((k) => Math.round(255 + ((GREY[k] - 255) * ink + (INK[k] - 255) * blue) / 16))
+      text.set([...c, 255], (y * TW + x) * 4)
+    }
+  const palette = ['#ffffff', '#568cb6', '#3c6c8c', '#6b6b6b']
+
+  it('keeps every letter, in grey, at the default speck size', () => {
+    const paths = pathsOf(traceInlay(text, TW, TH, { ...LOGO, mode: 'palette', palette }))
+    expect(paths.filter((p) => p.fill === '#6b6b6b')).toHaveLength(8)
+    expect(paths.filter((p) => p.fill === '#568cb6')).toHaveLength(1)
+    expect(paths.filter((p) => p.fill === '#3c6c8c')).toHaveLength(0)
+  })
+
+  it('still clears them when Speckle is raised past their size', () => {
+    const paths = pathsOf(traceInlay(text, TW, TH, { ...LOGO, speckle: 30, mode: 'palette', palette }))
+    expect(paths.filter((p) => p.fill === '#6b6b6b')).toHaveLength(0)
+  })
+})

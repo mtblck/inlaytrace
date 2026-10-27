@@ -12,7 +12,7 @@ Every trace takes the same fitting options and one of two modes.
 | --- | --- | --- |
 | `tolerance` | number, px | How far the fitted outline may stray from the pixels. Higher means fewer nodes and a smaller file. 1 suits most logos. |
 | `cornerAngle` | number, degrees | Turns sharper than this stay sharp corners; gentler ones become curves. |
-| `speckle` | number, px | Regions smaller than `speckle` × `speckle` pixels merge into whatever surrounds them. 0 keeps everything. |
+| `speckle` | number, px | Regions smaller than `speckle` × `speckle` pixels merge into whatever surrounds them. 0 keeps everything. In flat art (no `photo`), a region at least 0.25 (OKLab) from every colour around it, such as a letter, stays from an eighth of that area up (at least 6 px). |
 | `smoothing` | number, px (optional) | Half-window of the smoothing over the pixel staircase. Default 12; it narrows by itself on tight curves. |
 | `shapes` | boolean (optional) | Exact shapes: an outline that has one neighbour all the way round and is a circle, an ellipse, a rectangle, a rounded rectangle or a regular polygon (3–12 sides) is drawn as that shape exactly, rather than as fitted curves. Only outlines that fit within 0.3 px RMS (0.85 px at worst) qualify, so a shape that's nearly round stays as traced. Both sides of the edge get the same shape, so shapes still tile. Default false. |
 | `pixels` | boolean (optional) | Pixel art: no clean-up and no curve fitting; every boundary is its exact pixel staircase. |

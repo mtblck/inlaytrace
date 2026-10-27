@@ -185,6 +185,35 @@ past 24 instead of 96 (a missing pale fill is under 96 from white): Logo went
 from 13.0% to 2.1% of pixels wrong, with the badge, emblems and photos
 unchanged.
 
+**Small text beside an illustration.** The same page's body text (grey
+letters of 1.5 px strokes, 10–40 px each) vanished in Logo and broke apart in
+Illustration, for three reasons, all in flat art only (Poster unchanged):
+
+- *No pixel of a thin letter is sure of its grey.* Each is a mix of grey and
+  white, so each was "unsure" and took a sure neighbour's colour, and the only
+  sure neighbours were white. An unsure pixel next to just one colour isn't
+  an edge between two, so it now keeps its own.
+- *Pale grey read as light blue.* The palette has no light grey, and by plain
+  OKLab distance a letter's pale edge was nearer the light blue ink. An
+  in-between pixel more than 0.05 from every palette colour is now read as a
+  mix of the two whose blend (in sRGB, as a renderer mixes) comes nearest it,
+  and goes to the one it holds more of. (Not nearer than that: a pale blue
+  fill lies on the line from white to the blue ink too, and read as a mix a
+  pale "+" eroded to white.)
+- *Every letter was a speck.* Under Logo's 64 px each one merged into the
+  paper. A speck 0.25 or more from every colour around it (grey on white is
+  0.47) is a shape, not noise, and stays, from an eighth of the speck size up
+  (never under 6 px): a 2 × 2 dot still goes, and raising Speckle still
+  clears text. Rings of a 1.5 px stroke hold at Speckle 8 and go at 30.
+
+A grey fleck inside a blue letter, or the reverse, now folds smallest first,
+so the fleck joins the letter and not the letter the fleck. The ship's text
+is legible at the default settings in both presets, at a cost in size (Logo
+30 → 77 KB, nearly all of it the letters), and the moon's small pale "+"
+and ring come out cleaner too. The outline fixture went from 2.1%
+to 2.0% wrong; the badge and emblems score the same (a few more nodes),
+and the pen drawing is unchanged.
+
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
 most one waiting request per channel (trace, optimise), replacing it when a
