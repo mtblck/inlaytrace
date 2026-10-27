@@ -19,13 +19,29 @@ shapes are known. `scripts/score.mjs`:
    corner hides inside the anti-aliasing; at 4× it counts.
 4. Reports wrong pixels, nodes, paths and size.
 
+Wrong pixels miss two things people notice at once: a pale shape that has gone
+(it differs from white by less than the 96 that counts as wrong) and an outline
+broken into pieces (a few pixels, however bad it looks). So it also reports:
+
+- **Past 24**: wrong pixels again at a summed difference of 24, which a missing
+  pale fill does cross.
+- **Regions**: how many of the clean art's flat areas over 16 px (at 1×) come
+  out mostly in their own colour. Each pixel is labelled with the nearest of the
+  fixture's colours; a region is a connected piece of one colour, counting only
+  pixels well inside it so the anti-aliasing between two colours never makes a
+  sliver of a third. A dropped shape counts here whatever its size.
+- **Lines**: the number of separate pieces the fixture's line colour makes in
+  the trace, against the clean art. More means broken lines, fewer means lines
+  run together. Line art and Centerline draw in black, which is still nearest
+  the line colour, so they count too.
+
 Current results:
 
-| Preset | Tracer | Wrong pixels at 4× | Nodes | Size |
-| --- | --- | --- | --- | --- |
-| Logo | shared edges, exact shapes | 0.54% | 177 | 5.5 KB |
-| Illustration | shared edges, exact shapes | 0.49% | 199 | 6.4 KB |
-| Poster | shared edges, quantized, stacked | 3.19% | 1280 | 44.3 KB |
+| Preset | Tracer | Wrong pixels at 4× | Past 24 | Regions | Nodes | Size |
+| --- | --- | --- | --- | --- | --- | --- |
+| Logo | shared edges, exact shapes | 0.54% | 0.75% | 12/12 | 181 | 5.6 KB |
+| Illustration | shared edges, exact shapes | 0.49% | 0.69% | 12/12 | 203 | 6.6 KB |
+| Poster | shared edges, quantized, stacked | 3.19% | 4.05% | 9/12 | 1280 | 44.3 KB |
 
 Exact shapes (#37) took Logo from 0.70% / 177 nodes and Illustration from
 0.59% / 201: the badge's big disc is now a true circle rather than four fitted
@@ -59,10 +75,10 @@ Last, a pen drawing (`scripts/fixtures/strokes.svg`: six strokes 3 units wide
 on a 200-unit drawing, so 9.6 px at 640 px) traced with Centerline and, for
 comparison, Line art:
 
-| Preset | Wrong pixels at 4× | Strokes | Nodes | Size | Stroke width |
-| --- | --- | --- | --- | --- | --- |
-| Centerline | 0.90% | 6 | 38 | 1.3 KB | 9.7 px (measured) |
-| Line art | 0.38% | (outlines) | 85 | 2.6 KB | |
+| Preset | Wrong pixels at 4× | Lines | Strokes | Nodes | Size | Stroke width |
+| --- | --- | --- | --- | --- | --- | --- |
+| Centerline | 0.90% | 5/5 | 6 | 38 | 1.3 KB | 9.7 px (measured) |
+| Line art | 0.38% | 5/5 | (outlines) | 85 | 2.6 KB | |
 
 Centerline finds one stroke per drawn stroke and the width to within about 1%
 (both now split ink from paper by the drawing's own Otsu threshold, Auto, which
@@ -75,16 +91,44 @@ outlines 1 unit wide, so 3.2 px, on white, shapes filled with pale tints of the
 same blue). A pale fill is under 96 from white, so a missing one would hide in
 the badge's measure; here a pixel is wrong past 24:
 
-| Preset | Wrong pixels at 4× | Nodes | Paths | Size |
-| --- | --- | --- | --- | --- |
-| Logo | 2.12% | 373 | 19 | 11.4 KB |
-| Illustration | 2.11% | 414 | 20 | 12.9 KB |
-| Line art | 13.36% | 136 | 6 | 3.6 KB |
-| Poster | 2.62% | 610 | 53 | 20.0 KB |
+| Preset | Wrong pixels at 4× | Regions | Lines | Nodes | Paths | Size |
+| --- | --- | --- | --- | --- | --- | --- |
+| Logo | 2.02% | 20/20 | 7/7 | 348 | 20 | 9.5 KB |
+| Illustration | 2.01% | 20/20 | 7/7 | 359 | 20 | 9.9 KB |
+| Outline art | 2.06% | 20/20 | 7/7 | 271 | 15 | 6.9 KB |
+| Line art | 13.36% | 13/20 | 6/7 | 136 | 6 | 3.6 KB |
+| Poster | 2.62% | 12/20 | 5/7 | 610 | 53 | 20.0 KB |
 
 Before the outline fixes Logo and Illustration were 13.0% wrong here: the
 fills weren't in the palette and the outlines dissolved into the paper. Line
-art draws only the ink, so the fills count against it.
+art draws only the ink, so the fills count against it, and so do the regions
+it leaves white. Poster loses pale fills and breaks two lines.
+
+Then the same outlines meeting (`scripts/fixtures/junctions.svg`: a T, a Y, an
+X, a box with a cross, a box drawn with a gap, and three dashes, 8 pieces as
+drawn), where *Lines* shows whether junctions stay joined and drawn gaps stay
+open:
+
+| Preset | Wrong pixels at 4× | Regions | Lines | Nodes | Size |
+| --- | --- | --- | --- | --- | --- |
+| Illustration | 2.89% | 12/13 | 8/8 | 170 | 3.0 KB |
+| Outline art | 2.96% | 13/13 | 8/8 | 72 | 1.2 KB |
+| Line art | 3.08% | 13/13 | 8/8 | 108 | 1.8 KB |
+| Centerline | 3.31% | 13/13 | 8/8 | 49 | 0.9 KB |
+
+And flat shapes partly behind others (`scripts/fixtures/overlap.svg`: a pale
+moon and a disc behind a bar, a crescent, and an L-shaped sliver 1.5 units wide):
+
+| Preset | Wrong pixels at 4× | Regions | Nodes | Size |
+| --- | --- | --- | --- | --- |
+| Logo | 0.18% | 8/8 | 86 | 2.1 KB |
+| Illustration | 0.18% | 8/8 | 88 | 2.2 KB |
+| Poster | 1.13% | 8/8 | 283 | 6.3 KB |
+
+These two are baselines for line gap closing (#145), stacked shapes (#146) and
+junction clean-up (#148). Both are JPEG at q72 and come through whole; the
+sinking-ship breaks came from heavier lossy WebP, so a fixture that reproduces
+them is still to add.
 
 Run it before shipping any change to the tracer, the fitter or a preset.
 

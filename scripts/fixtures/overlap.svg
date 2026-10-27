@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- Flat shapes partly behind others, for npm run score (made for this repo, MIT): a pale moon
+       and an orange disc behind a bar, a crescent left by one disc over another, and an L-shaped
+       sliver 1.5 units wide left by one square over another. -->
+  <rect width="200" height="200" fill="#ffffff"/>
+  <circle cx="140" cy="60" r="35" fill="#eef4f9"/>
+  <circle cx="60" cy="140" r="30" fill="#e9a23b"/>
+  <rect x="30" y="50" width="120" height="70" fill="#4f86af"/>
+  <rect x="100" y="130" width="30" height="50" fill="#d9542b"/>
+  <rect x="101.5" y="131.5" width="30" height="50" fill="#1f3b4d"/>
+  <circle cx="160" cy="160" r="22" fill="#d3e5f1"/>
+  <circle cx="164" cy="160" r="21" fill="#2d6a4f"/>
+</svg>
