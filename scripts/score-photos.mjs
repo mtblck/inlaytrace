@@ -108,7 +108,7 @@ const inlay = (over = {}) => {
   const o = { colors: poster.colors, speckle: poster.speckle, tolerance: toleranceFor(poster.smoothing), cornerAngle: poster.corners, stacked: true, blur: 0, ...over }
   return (px, w, h) => {
     const src = blur(px, w, h, o.blur)
-    return traceInlay(src, w, h, { mode: 'palette', palette: quantizePalette(src, o.colors), speckle: o.speckle, tolerance: o.tolerance, cornerAngle: o.cornerAngle, stacked: o.stacked })
+    return traceInlay(src, w, h, { mode: 'palette', palette: quantizePalette(src, o.colors), speckle: o.speckle, tolerance: o.tolerance, cornerAngle: o.cornerAngle, stacked: o.stacked, photo: true })
   }
 }
 const variants = (process.env.VARIANTS ?? 'default').split(',')

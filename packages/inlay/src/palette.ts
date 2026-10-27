@@ -17,6 +17,11 @@
  *     share (a decal, lettering) is still a colour if it isn't a blend of two
  *     colours already accepted (an anti-aliased edge between them).
  *  4. Stop at the requested count.
+ *  5. Given the image's `width`, fill what's left of the count with pale tints:
+ *     light flat colours (pixels that match their four neighbours) too close to a
+ *     picked colour for step 3. A light-blue fill on white is 0.03 from it in
+ *     OKLab and lies on the line from white to the blue ink, so step 3 calls
+ *     it an edge between the two; but an edge is never flat, and a fill is.
  *
  * This is for logos and illustrations. Photos have no peaks (on a photo the
  * peaks raised mean error from 9.9 to 15.3), so they use `quantizePalette`.
@@ -26,9 +31,16 @@ export type Rgb = [number, number, number]
 export function peakPalette(
   rgba: ArrayLike<number>,
   maxColors: number,
-  { minDistance = 0.07, minShare = 0.002, minDetail = 0.0005 }: { minDistance?: number; minShare?: number; minDetail?: number } = {},
+  {
+    minDistance = 0.07,
+    minShare = 0.002,
+    minDetail = 0.0005,
+    width,
+    minTint = 0.02,
+    minFlat = 0.001,
+  }: { minDistance?: number; minShare?: number; minDetail?: number; width?: number; minTint?: number; minFlat?: number } = {},
 ): string[] {
-  const bins = new Map<number, { n: number; r: number; g: number; b: number }>()
+  const bins = new Map<number, Bin>()
   let opaque = 0
   for (let i = 0; i < rgba.length; i += 4) {
     if (rgba[i + 3] < 128) continue
@@ -52,13 +64,80 @@ export function peakPalette(
   // that are each too small: by its own bin alone the walk stopped at the
   // greys, and a photo of a grey ship with red and yellow details got 6
   // colours (black, white, greys and one blue) at any cap.
-  const radius = minDistance / 2
-  const items = [...bins.values()].map((bin) => {
+  const flat = width ? flatBins(rgba, width) : null
+  const items = [...bins].map(([key, bin]) => {
     const rgb: Rgb = [bin.r / bin.n, bin.g / bin.n, bin.b / bin.n]
-    return { n: bin.n, rgb, lab: oklab(rgb), weight: 0, peak: true }
+    return { n: bin.n, flat: flat?.get(key)?.n ?? 0, rgb, lab: oklab(rgb), weight: 0, flatWeight: 0, peak: true }
   })
+  weigh(items, minDistance / 2)
+
+  // Only local peaks are candidates (no nearby bin has more pixels), so a flat
+  // colour is its own bin, not a neighbour that borrowed its weight; heaviest first.
+  const sorted = items.filter((it) => it.peak).sort((a, b) => b.weight - a.weight || b.n - a.n)
+  const picked: { lab: Rgb; rgb: Rgb }[] = []
+  for (const it of sorted) {
+    if (picked.length >= maxColors) break
+    const share = it.weight / opaque
+    if (share < minDetail && picked.length > 0) break
+    if (!picked.every((p) => distance(p.lab, it.lab) >= minDistance)) continue
+    // Below minShare a colour is a detail (a small decal, thin lettering): kept
+    // only if it isn't a blend of two colours already picked, which is what
+    // anti-aliased edges and JPEG ringing between them are made of. Given the
+    // width, a blend that is almost never flat is an edge at any share: thin
+    // blue outlines on white have so much edge that it outweighed minShare.
+    const edge = share < minShare || (flat !== null && share < EDGE_SHARE && it.flatWeight < EDGE_FLAT * it.weight)
+    if (edge && isBlend(it.rgb, it.lab, picked, minDistance)) continue
+    picked.push({ lab: it.lab, rgb: it.rgb })
+  }
+  if (flat && picked.length < maxColors) picked.push(...flatTints(flat, opaque, picked, maxColors - picked.length, minTint, minFlat))
+  return picked.map((p) => toHex(p.rgb))
+}
+
+/** Below this share of flat pixels, a colour is an edge's, not a fill's. */
+const EDGE_FLAT = 0.05
+/**
+ * But only below this share of the image: 1 px grey rules or a dithered fill
+ * are never flat either, and at 8% of a logo they are a colour of their own.
+ */
+const EDGE_SHARE = 0.02
+
+type Bin = { n: number; r: number; g: number; b: number }
+
+/**
+ * The image's flat pixels, binned as peakPalette bins them. A pixel is flat
+ * when its four neighbours are within 8 of it in every channel: inside a fill,
+ * never on an anti-aliased edge or in JPEG ringing.
+ */
+function flatBins(rgba: ArrayLike<number>, w: number) {
+  const h = Math.floor(rgba.length / 4 / w)
+  const bins = new Map<number, Bin>()
+  const near = (i: number, j: number) =>
+    rgba[j + 3] >= 128 && Math.abs(rgba[i] - rgba[j]) <= 8 && Math.abs(rgba[i + 1] - rgba[j + 1]) <= 8 && Math.abs(rgba[i + 2] - rgba[j + 2]) <= 8
+  for (let y = 1; y < h - 1; y++)
+    for (let x = 1; x < w - 1; x++) {
+      const i = (y * w + x) * 4
+      if (rgba[i + 3] < 128 || !near(i, i - 4) || !near(i, i + 4) || !near(i, i - 4 * w) || !near(i, i + 4 * w)) continue
+      const key = ((rgba[i] >> 3) << 10) | ((rgba[i + 1] >> 3) << 5) | (rgba[i + 2] >> 3)
+      const bin = bins.get(key)
+      if (bin) {
+        bin.n++
+        bin.r += rgba[i]
+        bin.g += rgba[i + 1]
+        bin.b += rgba[i + 2]
+      } else bins.set(key, { n: 1, r: rgba[i], g: rgba[i + 1], b: rgba[i + 2] })
+    }
+  return bins
+}
+
+/**
+ * Each item's weight (the pixels of every bin within `radius` of it in OKLab)
+ * and flat weight, and whether it is a local peak (no bin within
+ * `radius` has more). A grid of `radius` cells keeps it near linear.
+ */
+function weigh<T extends { n: number; flat: number; lab: Rgb; weight: number; flatWeight: number; peak: boolean }>(items: T[], radius: number) {
+  radius = Math.max(radius, 1e-3) // a zero radius would make every grid cell infinite
   const cell = (v: number) => Math.floor(v / radius)
-  const grid = new Map<string, typeof items>()
+  const grid = new Map<string, T[]>()
   for (const it of items) {
     const k = `${cell(it.lab[0])},${cell(it.lab[1])},${cell(it.lab[2])}`
     const list = grid.get(k)
@@ -73,26 +152,39 @@ export function peakPalette(
           for (const o of grid.get(`${i},${j},${k}`) ?? [])
             if (distance(o.lab, it.lab) <= radius) {
               it.weight += o.n
+              it.flatWeight += o.flat
               if (o.n > it.n) it.peak = false
             }
   }
+}
 
-  // Only local peaks are candidates (no nearby bin has more pixels), so a flat
-  // colour is its own bin, not a neighbour that borrowed its weight; heaviest first.
-  const sorted = items.filter((it) => it.peak).sort((a, b) => b.weight - a.weight || b.n - a.n)
-  const picked: { lab: Rgb; rgb: Rgb }[] = []
-  for (const it of sorted) {
-    if (picked.length >= maxColors) break
-    const share = it.weight / opaque
-    if (share < minDetail && picked.length > 0) break
-    if (!picked.every((p) => distance(p.lab, it.lab) >= minDistance)) continue
-    // Below minShare a colour is a detail (a small decal, thin lettering): kept
-    // only if it isn't a blend of two colours already picked, which is what
-    // anti-aliased edges and JPEG ringing between them are made of.
-    if (share < minShare && isBlend(it.rgb, it.lab, picked, minDistance)) continue
-    picked.push({ lab: it.lab, rgb: it.rgb })
+/**
+ * Pale tints: flat colours at least `minTint` from every colour picked, each
+ * flat over at least `minFlat` of the image, heaviest first. On a
+ * sinking-ship illustration (blue outlines on white, the ship and moon filled
+ * with pale blues) this found the three fills and nothing else.
+ */
+/**
+ * Tints are pale (OKLab lightness): a photo's smooth sky or skin is flat too,
+ * and its dark shades filled Illustration's 16 colours with near-copies that
+ * doubled the SVG. The fills tints exist for are light washes behind ink.
+ */
+const TINT_LIGHTNESS = 0.85
+
+function flatTints(flat: Map<number, Bin>, opaque: number, picked: { lab: Rgb }[], room: number, minTint: number, minFlat: number) {
+  // As in the main walk, but over flat pixels only, and closer together.
+  const items = [...flat.values()].map((bin) => {
+    const rgb: Rgb = [bin.r / bin.n, bin.g / bin.n, bin.b / bin.n]
+    return { n: bin.n, flat: bin.n, rgb, lab: oklab(rgb), weight: 0, flatWeight: 0, peak: true }
+  })
+  weigh(items, minTint / 2)
+  const out: { lab: Rgb; rgb: Rgb }[] = []
+  const tint = (it: (typeof items)[number]) => it.peak && it.lab[0] >= TINT_LIGHTNESS && it.weight >= minFlat * opaque
+  for (const it of items.filter(tint).sort((a, b) => b.weight - a.weight)) {
+    if (out.length >= room) break
+    if ([...picked, ...out].every((p) => distance(p.lab, it.lab) >= minTint)) out.push({ lab: it.lab, rgb: it.rgb })
   }
-  return picked.map((p) => toHex(p.rgb))
+  return out
 }
 
 /**

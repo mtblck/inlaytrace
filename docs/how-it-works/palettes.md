@@ -55,6 +55,31 @@ unchanged. Weighing alone shifted the badge's colours onto neighbouring bins
 (0.54% → 0.80% of pixels wrong) until candidates were limited to peaks; a flat
 0.05% floor let edge shades in (0.77%) until blends were excluded.
 
+## Pale tints and flat pixels
+
+Peaks missed the fills of an outline illustration: thin blue outlines on
+white, the shapes filled with pale tints of the same blue. A pale fill is 0.03
+from white in OKLab, under the 0.07 that makes a colour distinct, and lies on
+the line from white to the blue, so it read as an edge between them. Meanwhile
+the outlines' own anti-aliasing was plentiful enough (past 0.2%) to take a
+slot as a colour.
+
+What tells a fill from an edge is that a fill is *flat*: its pixels match their
+four neighbours (within 8 per channel), and an anti-aliased edge's never do.
+Given the image's width, `peakPalette` counts flat pixels per bin, then:
+
+- a blend of two picked colours that is almost never flat (under 5% of its
+  pixels) is an edge and is left out, at any share under 2% (above that,
+  1 px rules and dithered fills, never flat either, are colours of their own);
+- spare slots go to flat tints: peaks of flat pixels alone, at least 0.02 from
+  every colour picked, flat over at least 0.1% of the image, and pale (OKLab
+  lightness 0.85 or more). A photo's smooth sky or shadow is flat too, and
+  without the lightness bar its dark shades filled Illustration's 16 colours
+  with near-copies, doubling the SVG.
+
+On the outline fixture in `npm run score` Logo went from 13.0% to 2.1% of
+pixels wrong; the badge's palette is unchanged.
+
 ## Where it doesn't apply
 
 Photos have no peaks. On a photo the same change made things worse (9.9 →

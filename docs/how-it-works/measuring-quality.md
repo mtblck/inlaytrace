@@ -23,9 +23,9 @@ Current results:
 
 | Preset | Tracer | Wrong pixels at 4× | Nodes | Size |
 | --- | --- | --- | --- | --- |
-| Logo | shared edges, exact shapes | 0.54% | 175 | 5.4 KB |
-| Illustration | shared edges, exact shapes | 0.49% | 193 | 6.2 KB |
-| Poster | shared edges, quantized, stacked | 3.25% | 1258 | 43.6 KB |
+| Logo | shared edges, exact shapes | 0.54% | 177 | 5.5 KB |
+| Illustration | shared edges, exact shapes | 0.49% | 199 | 6.4 KB |
+| Poster | shared edges, quantized, stacked | 3.19% | 1280 | 44.3 KB |
 
 Exact shapes (#37) took Logo from 0.70% / 177 nodes and Illustration from
 0.59% / 201: the badge's big disc is now a true circle rather than four fitted
@@ -61,12 +61,30 @@ comparison, Line art:
 
 | Preset | Wrong pixels at 4× | Strokes | Nodes | Size | Stroke width |
 | --- | --- | --- | --- | --- | --- |
-| Centerline | 0.83% | 6 | 35 | 1.1 KB | 9.58 px (measured) |
-| Line art | 0.36% | (outlines) | 86 | 2.7 KB | |
+| Centerline | 0.90% | 6 | 38 | 1.3 KB | 9.7 px (measured) |
+| Line art | 0.38% | (outlines) | 85 | 2.6 KB | |
 
-Centerline finds one stroke per drawn stroke and the width to within 1%. It's
+Centerline finds one stroke per drawn stroke and the width to within about 1%
+(both now split ink from paper by the drawing's own Otsu threshold, Auto, which
+cost a little here against the old fixed 128: 0.83% and 0.36%). It's
 less exact than outlines because a skeleton cuts the inside of a sharp corner
 and stops short of a round end, which is what a plotter's pen fills back in.
+
+Then a flat outline illustration (`scripts/fixtures/outline.svg`: mid-blue
+outlines 1 unit wide, so 3.2 px, on white, shapes filled with pale tints of the
+same blue). A pale fill is under 96 from white, so a missing one would hide in
+the badge's measure; here a pixel is wrong past 24:
+
+| Preset | Wrong pixels at 4× | Nodes | Paths | Size |
+| --- | --- | --- | --- | --- |
+| Logo | 2.12% | 373 | 19 | 11.4 KB |
+| Illustration | 2.11% | 414 | 20 | 12.9 KB |
+| Line art | 13.36% | 136 | 6 | 3.6 KB |
+| Poster | 2.62% | 610 | 53 | 20.0 KB |
+
+Before the outline fixes Logo and Illustration were 13.0% wrong here: the
+fills weren't in the palette and the outlines dissolved into the paper. Line
+art draws only the ink, so the fills count against it.
 
 Run it before shipping any change to the tracer, the fitter or a preset.
 

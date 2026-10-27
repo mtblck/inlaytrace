@@ -51,6 +51,13 @@ export type InlayOptions = FitOptions & {
    * vinyl cutter or a screen printer wants.
    */
   stacked?: boolean
+  /**
+   * Photos: specks join the colour they share the most edge with, and slivers
+   * are left alone. Flat art's clean-up (specks join the nearest colour, and
+   * slivers of one ink's two shades fold together) keeps thin strokes whole,
+   * but on photos it kept so many real regions that files grew by half.
+   */
+  photo?: boolean
 } & (
     /**
      * `merge` folds colours together before any region is built, so the edge
@@ -59,11 +66,14 @@ export type InlayOptions = FitOptions & {
      */
     | { mode: 'palette'; palette: string[]; merge?: Record<string, string> }
     /**
-     * Ink is darker than `threshold` (0–255). When null, each pixel is compared
-     * with its neighbourhood instead, for photos of paper under uneven light.
+     * Ink is darker than `threshold` (0–255). With 'auto', the threshold is
+     * the image's own split between ink and paper (Otsu's), so coloured ink
+     * works as well as black (a page with no clear ink, such as a blank
+     * scan, falls back to 128). When null, each pixel is compared with its
+     * neighbourhood instead, for photos of paper under uneven light.
      * Only ink is drawn.
      */
-    | { mode: 'binary'; threshold: number | null }
+    | { mode: 'binary'; threshold: number | 'auto' | null }
   )
 
 const VOID = -1 // outside the image, transparent pixels, and line art's paper
@@ -90,7 +100,9 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
   if (o.mode === 'palette' && o.merge) mergeLabels(labels, colors, o.merge)
   // A lone pixel in pixel art is deliberate, not a stray.
   if (!o.pixels) despur(labels, w, h)
-  mergeSpecks(labels, w, h, Math.max(0, Math.round(o.speckle)) ** 2)
+  const labs = o.mode === 'palette' && !o.photo ? colors.map((c) => (c ? oklab(hexToRgb(c)) : null)) : undefined
+  mergeSpecks(labels, w, h, Math.max(0, Math.round(o.speckle)) ** 2, labs)
+  if (labs && !o.pixels) mergeSlivers(labels, w, h, labs)
 
   // Final regions: 4-connected components of drawn labels. Everything else is VOID.
   const { comp, compLabel, compArea } = components(labels, w, h, (l) => drawn[l])
@@ -304,7 +316,7 @@ function labelPalette(rgba: ArrayLike<number>, w: number, h: number, palette: st
   return { labels: fixed, colors, drawn }
 }
 
-export function labelBinary(rgba: ArrayLike<number>, w: number, h: number, threshold: number | null) {
+export function labelBinary(rgba: ArrayLike<number>, w: number, h: number, threshold: number | 'auto' | null) {
   const n = w * h
   const lum = new Uint8Array(n)
   const alpha = new Uint8Array(n)
@@ -313,8 +325,13 @@ export function labelBinary(rgba: ArrayLike<number>, w: number, h: number, thres
     alpha[i] = rgba[i * 4 + 3] >= 128 ? 1 : 0
   }
   const labels = new Int32Array(n)
-  if (threshold !== null) for (let i = 0; i < n; i++) labels[i] = alpha[i] && lum[i] < threshold ? 0 : 1
-  else {
+  if (threshold !== null) {
+    // A fixed 128 assumes black ink: a mid-blue line (luminance 122, JPEG
+    // noise either side of it) came out in pieces. The image's own split
+    // falls between the ink and the paper whatever their colours.
+    const t = threshold === 'auto' ? autoThreshold(lum, alpha) : threshold
+    for (let i = 0; i < n; i++) labels[i] = alpha[i] && lum[i] < t ? 0 : 1
+  } else {
     // Ink is clearly darker than its surroundings (a window a sixteenth of the
     // image across) and on the dark side of the image's overall split, so
     // a smudge on blank paper doesn't count.
@@ -347,6 +364,33 @@ function boxMean(v: Uint8Array, w: number, h: number, r: number) {
     }
   }
   return out
+}
+
+/** Below this gap between the two sides' mean luminance, Otsu has split one population. */
+const MIN_INK_CONTRAST = 40
+
+/**
+ * Otsu's split, unless it falls inside a single population: a blank page
+ * photographed with some noise splits down its own middle, and half of it
+ * would trace as ink. Then the fixed 128 it replaced.
+ */
+function autoThreshold(lum: Uint8Array, alpha: Uint8Array) {
+  const t = otsu(lum, alpha)
+  let dark = 0
+  let darkSum = 0
+  let light = 0
+  let lightSum = 0
+  for (let i = 0; i < lum.length; i++) {
+    if (!alpha[i]) continue
+    if (lum[i] < t) {
+      dark++
+      darkSum += lum[i]
+    } else {
+      light++
+      lightSum += lum[i]
+    }
+  }
+  return dark && light && lightSum / light - darkSum / dark >= MIN_INK_CONTRAST ? t : 128
 }
 
 /** Otsu's threshold over opaque pixels: the split that best separates two populations. */
@@ -501,13 +545,13 @@ function components(labels: Int32Array, w: number, h: number, keep: (label: numb
  * label they took and are stranded as a new speck. On photos that left
  * thousands of fragments, and a larger `speckle` left more, not fewer.
  */
-export function mergeSpecks(labels: Int32Array, w: number, h: number, minArea: number) {
+export function mergeSpecks(labels: Int32Array, w: number, h: number, minArea: number, labs?: (Rgb | null)[]) {
   if (minArea <= 1) return
-  for (let pass = 0; pass < 8; pass++) if (!mergeSpecksOnce(labels, w, h, minArea)) return
+  for (let pass = 0; pass < 8; pass++) if (!mergeSpecksOnce(labels, w, h, minArea, labs)) return
 }
 
 /** One pass of mergeSpecks; false when there was nothing left to merge. */
-function mergeSpecksOnce(labels: Int32Array, w: number, h: number, minArea: number) {
+function mergeSpecksOnce(labels: Int32Array, w: number, h: number, minArea: number, labs?: (Rgb | null)[]) {
   const { comp, compArea } = components(labels, w, h, () => true)
   const small = compArea.map((a, id) => ({ a, id })).filter((c) => c.a < minArea)
   if (!small.length) return false
@@ -522,6 +566,7 @@ function mergeSpecksOnce(labels: Int32Array, w: number, h: number, minArea: numb
   for (const { id } of small) {
     const own = labels[pixels[start[id]]]
     const votes = new Map<number, number>()
+    let joined = false
     for (let k = start[id]; k < start[id + 1]; k++) {
       const i = pixels[k]
       const x = i % w
@@ -529,21 +574,95 @@ function mergeSpecksOnce(labels: Int32Array, w: number, h: number, minArea: numb
       const vote = (j: number) => {
         const l = labels[j]
         if (l !== own) votes.set(l, (votes.get(l) ?? 0) + 1)
+        else if (comp[j] !== id) joined = true
       }
       if (x > 0) vote(i - 1)
       if (x < w - 1) vote(i + 1)
       if (y > 0) vote(i - w)
       if (y < h - 1) vote(i + w)
     }
+    // A neighbour merged into this speck's own colour earlier in the pass, so
+    // it is part of a larger region now: the next pass decides whether it's
+    // still small. (Flat art only: on photos waiting kept regions that, merged
+    // a pass early as before, cost nothing visible.)
+    if (joined && labs) continue
     let best = own
     let most = 0
-    for (const [l, v] of votes) if (v > most) (most = v), (best = l)
+    const mine = labs?.[own]
+    if (mine) {
+      // Nearest colour first: a stroke broken into pieces of two shades of
+      // its ink rejoins the ink, rather than the paper it mostly touches.
+      let near = Infinity
+      for (const [l, v] of votes) {
+        const lab = labs![l]
+        const d = lab ? Math.hypot(lab[0] - mine[0], lab[1] - mine[1], lab[2] - mine[2]) : Infinity
+        if (d < near || (d === near && v > most)) (near = d), (most = v), (best = l)
+      }
+    } else for (const [l, v] of votes) if (v > most) (most = v), (best = l)
     if (best !== own) {
       for (let k = start[id]; k < start[id + 1]; k++) labels[pixels[k]] = best
       changed = true
     }
   }
   return changed
+}
+
+/** Regions narrower than this on average (2 × area / perimeter, px) are slivers. */
+const SLIVER_WIDTH = 2
+/** A sliver joins a neighbour only this close in colour (OKLab): two shades of one ink (0.08–0.11 apart), not a grey hairline on white (#d4d4d4 is 0.13 from it). */
+const SLIVER_DISTANCE = 0.12
+
+/**
+ * Fold slivers into a neighbour of nearly the same colour. JPEG and WebP
+ * smear a thin stroke into two shades of its ink (a 3 px letter stem came
+ * out dark at its edges and lighter down the middle), and a one-pixel strip
+ * of one shade inside the other fitted as a spike shooting out of the
+ * letter. A hairline of a colour of its own has no neighbour that close, so
+ * it stays. Within a pass a sliver waits if a neighbour has already moved,
+ * so two side by side don't just swap colours.
+ */
+function mergeSlivers(labels: Int32Array, w: number, h: number, labs: (Rgb | null)[]) {
+  for (let pass = 0; pass < 4; pass++) {
+    const { comp, compArea } = components(labels, w, h, () => true)
+    const m = compArea.length
+    const perimeter = new Int32Array(m)
+    const label = new Int32Array(m)
+    // Each region's neighbouring regions.
+    const around = new Map<number, Set<number>>()
+    const touch = (a: number, b: number) => {
+      const id = comp[a]
+      perimeter[id]++
+      let c = around.get(id)
+      if (!c) around.set(id, (c = new Set()))
+      c.add(comp[b])
+    }
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x
+        label[comp[i]] = labels[i]
+        if (x < w - 1 && comp[i + 1] !== comp[i]) touch(i, i + 1), touch(i + 1, i)
+        if (y < h - 1 && comp[i + w] !== comp[i]) touch(i, i + w), touch(i + w, i)
+      }
+    const to = new Int32Array(m).fill(-1)
+    let changed = false
+    for (const [id, near] of around) {
+      if ((2 * compArea[id]) / perimeter[id] >= SLIVER_WIDTH) continue
+      const mine = labs[label[id]]
+      if (!mine || [...near].some((n) => to[n] >= 0)) continue
+      let best = -1
+      let bd = SLIVER_DISTANCE
+      for (const n of near) {
+        const lab = labs[label[n]]
+        const d = lab ? Math.hypot(lab[0] - mine[0], lab[1] - mine[1], lab[2] - mine[2]) : Infinity
+        if (d < bd) (bd = d), (best = label[n])
+      }
+      if (best < 0) continue
+      to[id] = best
+      changed = true
+    }
+    if (!changed) return
+    for (let i = 0; i < w * h; i++) if (to[comp[i]] >= 0) labels[i] = to[comp[i]]
+  }
 }
 
 // ---- 3. Chains -------------------------------------------------------------------------

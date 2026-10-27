@@ -88,6 +88,42 @@ export function isFlat([p0, c1, c2, p3]: Cubic) {
  * at a corner if there is one.
  */
 export function fitChain(points: Pt[], closed: boolean, o: FitOptions): Cubic[] {
+  const out = fitOnce(points, closed, o, false)
+  if (!closed || !out.length) return out
+  // A thin closed shape can collapse: the ends of a 3 px stem (an i, a dash)
+  // are too narrow to measure as corners, so its two long sides were fitted
+  // between the same two nodes, as one line, and the shape had no area at
+  // all. Then fit it as a smooth loop, and failing that keep its pixel outline.
+  const want = Math.abs(loopArea(points))
+  if (Math.abs(loopArea(sampled(out))) >= want / 2) return out
+  const loop = fitOnce(points, closed, o, true)
+  if (loop.length && Math.abs(loopArea(sampled(loop))) >= want / 2) return loop
+  return polygon(turns(points), true)
+}
+
+/** Shoelace area of a closed polygon (points[0] not repeated). */
+function loopArea(pts: Pt[]) {
+  let a = 0
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i]
+    const q = pts[(i + 1) % pts.length]
+    a += p.x * q.y - q.x * p.y
+  }
+  return a / 2
+}
+
+/** A fitted loop as points, four along each cubic. */
+const sampled = (cubics: Cubic[]) => cubics.flatMap((c) => [0, 0.25, 0.5, 0.75].map((t) => pointAt(c, t)))
+
+/** The points of a closed outline where it changes direction. */
+function turns(pts: Pt[]) {
+  const n = pts.length
+  const dir = (a: Pt, b: Pt) => Math.atan2(b.y - a.y, b.x - a.x)
+  const out = pts.filter((p, i) => Math.abs(dir(pts[(i - 1 + n) % n], p) - dir(p, pts[(i + 1) % n])) > 1e-9)
+  return out.length >= 3 ? out : pts
+}
+
+function fitOnce(points: Pt[], closed: boolean, o: FitOptions, smoothLoop: boolean): Cubic[] {
   const pts = resample(points, closed)
   const n = pts.length
   if (n < 2) return []
@@ -95,7 +131,7 @@ export function fitChain(points: Pt[], closed: boolean, o: FitOptions): Cubic[] 
 
   // An open chain's ends are junctions, already nodes: a corner within
   // MIN_GAP px of one would only add a stub segment beside it.
-  const corners = findCorners(pts, closed, o.cornerAngle).filter((c) => closed || (dist(c.at, pts[0]) >= MIN_GAP && dist(c.at, pts[n - 1]) >= MIN_GAP))
+  const corners = smoothLoop ? [] : findCorners(pts, closed, o.cornerAngle).filter((c) => closed || (dist(c.at, pts[0]) >= MIN_GAP && dist(c.at, pts[n - 1]) >= MIN_GAP))
 
   if (closed && o.shapes) {
     const shape = fitShape(points, corners.map((c) => c.at))
@@ -265,6 +301,11 @@ function findCorners(pts: Pt[], closed: boolean, cornerAngle: number, maxRoundin
     // JPEG error reads as 3 px of rounding), so an outline that passes within
     // 0.75 px of the meeting point is a corner however wide it is.
     if (rounding > maxRounding && d > 0.75) continue
+    // And a narrow point's pixels stop where it is under a pixel wide, at most
+    // 0.5 / tan(θ/2) px short of the tip, plus a pixel of anti-aliasing. The
+    // end of a 3 px stem (two corners too close to measure, sides nearly
+    // parallel) met 13 px past its pixels: a spike under every r and n.
+    if (d > 0.5 / Math.tan(half) + 1) continue
     score[i] = bend
     meet[i] = x
   }
@@ -711,8 +752,12 @@ function generate(pts: Pt[], u: number[], t1: Pt, t2: Pt): Cubic {
   let alpha1 = Math.abs(det) > 1e-12 ? (x0 * c11 - x1 * c01) / det : 0
   let alpha2 = Math.abs(det) > 1e-12 ? (c00 * x1 - c01 * x0) / det : 0
   const seg = dist(p0, p3)
-  // Degenerate or backwards handles: fall back to a third of the chord.
-  if (alpha1 < 1e-6 * seg || alpha2 < 1e-6 * seg) alpha1 = alpha2 = seg / 3
+  // Handles longer than the run itself overshoot it: on a thin letter stem a
+  // least-squares fit put one 100 px out, and the stem grew a 40 px spike.
+  let arc = 0
+  for (let i = 1; i < pts.length; i++) arc += dist(pts[i - 1], pts[i])
+  // Degenerate, backwards or overlong handles: fall back to a third of the chord.
+  if (alpha1 < 1e-6 * seg || alpha2 < 1e-6 * seg || alpha1 > arc || alpha2 > arc) alpha1 = alpha2 = seg / 3
   return [p0, add(p0, mul(t1, alpha1)), add(p3, mul(t2, alpha2)), p3]
 }
 

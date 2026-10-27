@@ -32,8 +32,8 @@ export type Settings = {
   preset: PresetId
   /** Colour modes only. */
   colors: number
-  /** Line art only: 0–255, or adaptive when null. */
-  threshold: number | null
+  /** Line art only: 0–255, the image's own ink/paper split when 'auto', or adaptive when null. */
+  threshold: number | 'auto' | null
   /** Line art only: trace light ink on a dark background (inverts before tracing). */
   lightInk: boolean
   speckle: number
@@ -78,13 +78,13 @@ export const PRESETS: Preset[] = [
     id: 'lineart',
     label: 'Line art',
     hint: 'Ink drawings and scans, one colour',
-    defaults: { colors: 2, threshold: 128, lightInk: false, speckle: 6, smoothing: 1.5, corners: 45, shapes: 'stacked', exact: true, strokeWidth: 0 },
+    defaults: { colors: 2, threshold: 'auto', lightInk: false, speckle: 6, smoothing: 1.5, corners: 45, shapes: 'stacked', exact: true, strokeWidth: 0 },
   },
   {
     id: 'centerline',
     label: 'Centerline',
     hint: 'Single strokes for plotters and engraving',
-    defaults: { colors: 2, threshold: 128, lightInk: false, speckle: 4, smoothing: 1.5, corners: 45, shapes: 'stacked', exact: false, strokeWidth: 0 },
+    defaults: { colors: 2, threshold: 'auto', lightInk: false, speckle: 4, smoothing: 1.5, corners: 45, shapes: 'stacked', exact: false, strokeWidth: 0 },
   },
   {
     id: 'photo',
@@ -136,7 +136,7 @@ export type TraceOptions = {
   /** Centerline mode: the stroke width in px; measured when left out. */
   strokeWidth?: number
   /** Binary and centerline modes. */
-  threshold?: number | null
+  threshold?: number | 'auto' | null
   invert?: boolean
 }
 

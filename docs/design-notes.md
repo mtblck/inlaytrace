@@ -131,9 +131,59 @@ are left alone: the 640 px sample was already at 0.93% wrong pixels natively.
 white logo on black came out as the background with holes. Line art can now
 invert first ("Light on dark"), and starts that way when the image's border is
 dark. On a white-on-black logo that is the whole job in one step: background gone,
-white shapes as black paths, 6.5 KB. Line art also defaults to a fixed
-threshold now; adaptive thresholding closed the thin gaps between the logo's
-shapes, so it stays as an option for photos of paper.
+white shapes as black paths, 6.5 KB. Line art also defaults to one threshold
+for the whole image (a fixed 128 then, the image's own Otsu split since
+"Outline illustrations" below); adaptive thresholding closed the thin gaps
+between the logo's shapes, so it stays as an option ("Uneven light") for
+photos of paper.
+
+**Outline illustrations.** An error-page illustration (a sinking ship: 3 px
+mid-blue outlines on white, the ship and moon filled with pale blues, saved as
+lossy WebP) traced as almost nothing. Six separate causes, each now fixed:
+
+- *Speck clean-up dissolved the strokes.* Lossy compression smears a thin
+  stroke into two shades of its ink (0.08 apart in OKLab, so both made the
+  palette), and each fragment was a speck. A speck joined the label it shared
+  most edge with, which for a piece of a 3 px stroke is the paper; and a speck
+  whose neighbour had just joined its own colour was still judged alone. Specks
+  now join the neighbour nearest in colour, and wait a pass once they've grown.
+  Slivers under 2 px wide fold into a neighbour within 0.12 of their colour
+  (a hairline of a colour of its own has none, so it stays), one at a time so
+  two side by side don't just swap. Poster keeps the old clean-up (the
+  `photo` option): on photos the new one kept so many real regions that files
+  grew by half (203 → 310 KB on `score:photos`, though 22% closer).
+- *Pale fills never made the palette.* A light-blue fill is 0.03 from white,
+  under the 0.07 that makes a colour distinct, and on the line from white to
+  the ink, so it read as an edge. Fills are *flat* (every pixel matches its
+  four neighbours) and edges never are, so `peakPalette` now fills spare slots
+  with flat tints at least 0.02 from the others, and drops a blend that is
+  never flat at any share under 2% (the anti-aliasing of thin outlines on
+  white is plentiful enough to pass `minShare`; above 2%, 1 px rules and
+  dithered fills, never flat either, are real colours).
+- *Line art's fixed 128 sat on the ink.* The blue's luminance is 122, with
+  noise either side. Line art and Centerline now default to the image's own
+  ink/paper split (Otsu, "Auto"); the fixed level is still there as "Manual".
+  On a blank, noisy page Otsu splits the paper itself, so when its two sides'
+  means are under 40 apart Auto falls back to 128. On the pen drawing it cost
+  little (Line art 0.36% → 0.38% wrong, Centerline 0.83% → 0.90%).
+- *A 3 px letter stem collapsed to a line.* Its ends are too narrow to measure
+  as corners, so both long sides were fitted between the same two nodes. A
+  closed outline that loses over half its area is refitted as a smooth loop,
+  or kept as its pixel outline.
+- *Spikes under thin letters.* A stem's nearly parallel sides "met" 13 px past
+  its last pixels, and a least-squares cubic put a handle 100 px out. A
+  narrow corner must now lie within 0.5 / tan(θ/2) + 1 px of its pixels (where
+  a real point thins below a pixel), and handles longer than their run fall
+  back to a third of the chord.
+- *Pixel art took the page for pixel art.* 88% of the image was one exact
+  white, so the exact palette "covered" it; the other 31 colours were
+  near-whites and the drawing traced white. Coverage no longer counts the
+  commonest colour.
+
+`npm run score` has the case as `scripts/fixtures/outline.svg`, scored wrong
+past 24 instead of 96 (a missing pale fill is under 96 from white): Logo went
+from 13.0% to 2.1% of pixels wrong, with the badge, emblems and photos
+unchanged.
 
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
