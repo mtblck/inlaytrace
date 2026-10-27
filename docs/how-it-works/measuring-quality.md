@@ -177,6 +177,19 @@ Illustration and Outline art stack by default; Logo stays cut out. Stacking also
 drops the holes in the paper and in shapes that hold others, which is why it
 uses about half the nodes on the junction fixtures.
 
+And soft shading (`scripts/fixtures/shaded.svg`: a sky and a hill shaded by
+linear gradients, a ball by a radial one, and a flat house). Flat fills band
+each shade into tints, each off by more than 24 across much of its width;
+with `gradients` (#150) each shade is one shape with a gradient again:
+
+| Preset | Wrong pixels at 4× | Regions | Nodes | Paths | Size |
+| --- | --- | --- | --- | --- | --- |
+| Logo | 32.84% | 6/8 | 222 | 13 | 6.6 KB |
+| Illustration | 32.50% | 7/8 | 397 | 20 | 12.3 KB |
+| Illustration, gradients | 0.19% | 8/8 | 61 | 6 | 2.2 KB |
+| Poster | 0.85% | 8/8 | 1540 | 37 | 50.1 KB |
+| Poster, gradients | 0.76% | 8/8 | 93 | 7 | 3.7 KB |
+
 Every drawing above arrives as JPEG. The badge and three fixtures saved as PNG
 instead, the way most logos arrive, show what edges placed between pixels
 (#147) gain when the anti-aliasing isn't masked by compression noise:

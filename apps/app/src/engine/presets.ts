@@ -146,6 +146,8 @@ export type TraceOptions = {
   strokes?: boolean
   /** With strokes: how many times the image was enlarged for tracing, so line widths scale with it. */
   scale?: number
+  /** Palette mode: soft shading as gradient fills. No preset sets it yet: the editor and exports draw flat colours only. */
+  gradients?: boolean
   /** Centerline mode: the stroke width in px; measured when left out. */
   strokeWidth?: number
   /** Binary and centerline modes. */

@@ -38,13 +38,22 @@ function traceInlay(rgba: ArrayLike<number>, width: number, height: number, opti
 
 ```ts
 type InlayResult = { width: number; height: number; paths: InlayPath[] }
-type InlayPath = { d: string; fill: string; stroke?: number } // absolute M/L/C/Z, nonzero fill; largest first. With `strokes`, lines come last: `stroke` is their width, `fill` their colour, unfilled
+type InlayPath = { d: string; fill: string; stroke?: number; gradient?: Gradient } // absolute M/L/C/Z, nonzero fill; largest first. With `strokes`, lines come last: `stroke` is their width, `fill` their colour, unfilled. With `gradients`, a shaded shape has `gradient`, and `fill` is its average colour
+
+// In the trace's pixels (userSpaceOnUse); offsets 0–1, colours #rrggbb, interpolated in sRGB
+type Gradient =
+  | { type: 'linear'; x1: number; y1: number; x2: number; y2: number; stops: GradientStop[] }
+  | { type: 'radial'; cx: number; cy: number; r: number; stops: GradientStop[] }
+type GradientStop = { offset: number; color: string }
 
 type InlayOptions = FitOptions & {
   speckle: number
   pixels?: boolean
   stacked?: boolean
   photo?: boolean
+  strokes?: boolean
+  scale?: number
+  gradients?: boolean
 } & (
     | { mode: 'palette'; palette: string[]; merge?: Record<string, string> }
     | { mode: 'binary'; threshold: number | 'auto' | null }
