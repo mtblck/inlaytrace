@@ -206,8 +206,8 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
             </div>
           )}
 
-          {/* Flat-art presets are cut out (what vinyl and screen print want); only Poster offers stacked, for smaller files. */}
-          {p === 'photo' && (
+          {/* Stacked draws shapes whole, one on another (Poster: smaller files; flat art: shapes behind others completed). Cut out is what vinyl and screen print want. */}
+          {(p === 'photo' || p === 'logo' || p === 'illustration' || p === 'outline') && (
             <div className="space-y-1.5">
               <span className="field-label">Shapes</span>
               <div role="radiogroup" aria-label="Shapes" className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-rule bg-rule">
@@ -225,7 +225,9 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
               </div>
               <p className="field-hint">
                 {settings.shapes === 'stacked'
-                  ? 'Shapes sit on top of each other. Smallest files.'
+                  ? p === 'photo'
+                    ? 'Shapes sit on top of each other. Smallest files.'
+                    : 'Shapes sit on top of each other, each drawn whole, even where another hides it.'
                   : 'No shape overlaps another. Use for vinyl cutting and screen print layers.'}
               </p>
             </div>

@@ -25,11 +25,13 @@
  * separate shapes, and each region is one <path> (its outline plus its holes,
  * wound oppositely so the default nonzero fill rule cuts the holes). With
  * `stacked`, a region keeps only its outline (and any holes onto
- * transparency), and paint order does the rest.
+ * transparency), and paint order does the rest; for flat art, a region behind
+ * another is also completed where it is hidden (layers.ts).
  */
-import { fitChain, isFlat, type Cubic, type FitOptions } from './fit'
+import { fitChain, isFlat, line, type Cubic, type FitOptions } from './fit'
 import { oklab, type Rgb } from './palette'
 import { serializePath, type PathNode, type Pt, type Subpath } from './path'
+import { complete, endDir, sample, SHARP, SMOOTH, startDir, straightEnd, turn } from './layers'
 import { regionWidths, skeletonStrokes } from './skeleton'
 
 export type InlayOptions = FitOptions & {
@@ -50,6 +52,13 @@ export type InlayOptions = FitOptions & {
    * to the photo than without, for about a third more path data). A hole with transparency anywhere inside it, however deep, is
    * kept, so transparency stays transparent. Default: cut out, which is what a
    * vinyl cutter or a screen printer wants.
+   *
+   * For flat art (not `photo`) it means layers instead: shapes in front-to-back
+   * order, each whole. Which of two touching shapes is in front is read from
+   * the junctions where their boundary ends, and a shape behind another is
+   * completed under it (its circle, its corner, or a smooth continuation),
+   * so a moon behind a bar is one disc. Holes that later shapes fill are
+   * dropped, as for photos.
    */
   stacked?: boolean
   /**
@@ -165,7 +174,7 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
         const { chain, cubics, back } = fitted[i]
         const l = chain.left !== VOID && inSet(chain.left)
         const r = chain.right !== VOID && inSet(chain.right)
-        if (l !== r) out.push({ ...chain, cubics: l ? cubics : back, reversed: !l })
+        if (l !== r) out.push({ ...chain, cubics: l ? cubics : back, reversed: !l, i })
       }
     return assemble(out)
   }
@@ -176,6 +185,15 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
       const loops = outline((r) => r === id, [id])
       if (loops.length) shapes.push({ subs: loops.map((l) => l.sub), fill: colors[compLabel[id]], area: compArea[id] })
     }
+  } else if (o.mode === 'palette' && !o.photo && !o.pixels) {
+    // Flat art stacked: in front-to-back order, each shape whole (see layers.ts).
+    const loopsOf = new Map<number, Loop[]>()
+    for (const id of chainsOf.keys()) {
+      const loops = outline((r) => r === id, [id])
+      if (loops.length) loopsOf.set(id, loops)
+    }
+    const layered = layerShapes(loopsOf, comp, w, h, voidSeeds(comp, w, h))
+    layered.forEach(({ id, subs }, k) => shapes.push({ subs, fill: colors[compLabel[id]], area: layered.length - k }))
   } else {
     // Stacked: paint order is by outline area, largest first, so containers come
     // before what they contain. Each shape then also covers every neighbour
@@ -214,6 +232,188 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
   shapes.sort((a, b) => b.area - a.area)
   // Lines on top, over the seams of the shapes that meet under them.
   return { width: w, height: h, paths: [...shapes.map((x) => ({ d: serializePath(x.subs), fill: x.fill })), ...lines] }
+}
+
+/**
+ * Flat art, stacked: each region whole, back to front. Which of two touching
+ * regions is in front is voted at the ends of the boundary between them (the
+ * one whose outline carries straight on is in front), and each run of a back
+ * region's outline that a front one hides is replaced by its continuation
+ * (layers.ts). Then, as for photos, a hole is dropped when the shapes in it
+ * are all painted later and cover it, so a background is one whole shape.
+ */
+function layerShapes(loopsOf: Map<number, Loop[]>, comp: Int32Array, w: number, h: number, voids: Pt[]): { id: number; subs: Subpath[] }[] {
+  // Each region's turn at each end of each of its chains.
+  const turns = new Map<string, number>()
+  const chains = new Map<number, Oriented>()
+  for (const [id, loops] of loopsOf)
+    for (const l of loops) {
+      for (const c of l.chains) chains.set(c.i, c)
+      const n = l.chains.length
+      if (n < 2) continue
+      for (let k = 0; k < n; k++) {
+        const c = l.chains[k]
+        const next = l.chains[(k + 1) % n]
+        const u = endDir(c.cubics)
+        const v = startDir(next.cubics)
+        if (!u || !v) continue
+        const at = c.reversed ? c.from : c.to
+        const t = turn(u, v)
+        turns.set(`${c.i}:${at}:${id}`, t)
+        turns.set(`${next.i}:${at}:${id}`, t)
+      }
+    }
+  // Votes for which side of each boundary is in front.
+  const votes = new Map<string, number>()
+  const vote = (a: number, b: number) => votes.set(`${a}>${b}`, (votes.get(`${a}>${b}`) ?? 0) + 1)
+  for (const c of chains.values()) {
+    if (c.closed || c.left === VOID || c.right === VOID) continue
+    for (const at of [c.from, c.to]) {
+      const tl = turns.get(`${c.i}:${at}:${c.left}`)
+      const tr = turns.get(`${c.i}:${at}:${c.right}`)
+      if (tl === undefined || tr === undefined) continue
+      if (tl < SMOOTH && tr > SHARP) vote(c.left, c.right)
+      else if (tr < SMOOTH && tl > SHARP) vote(c.right, c.left)
+    }
+  }
+  const inFront = (a: number, b: number) => (votes.get(`${a}>${b}`) ?? 0) > 0 && !votes.get(`${b}>${a}`)
+
+  // Paint order: back before front, and otherwise larger first (containers before their contents).
+  const size = new Map([...loopsOf].map(([id, loops]) => [id, Math.max(...loops.map((l) => Math.abs(l.area)))]))
+  const ids = [...loopsOf.keys()].sort((a, b) => size.get(b)! - size.get(a)! || a - b)
+  const behind = new Map<number, number[]>(ids.map((id) => [id, []]))
+  const before = new Map<number, number>(ids.map((id) => [id, 0]))
+  for (const key of votes.keys()) {
+    const [a, b] = key.split('>').map(Number)
+    if (!inFront(a, b) || !behind.has(a) || !behind.has(b)) continue
+    behind.get(b)!.push(a)
+    before.set(a, before.get(a)! + 1)
+  }
+  const order: number[] = []
+  const done = new Set<number>()
+  while (order.length < ids.length) {
+    // The largest shape with nothing left behind it; on a cycle, the largest left.
+    const next = ids.find((id) => !done.has(id) && before.get(id) === 0) ?? ids.find((id) => !done.has(id))!
+    done.add(next)
+    order.push(next)
+    for (const a of behind.get(next)!) before.set(a, before.get(a)! - 1)
+  }
+  const rank = new Map(order.map((id, k) => [id, k]))
+
+  // Is a point under one of these regions? A completion is only hidden by shapes painted after it.
+  const under = (id: number, fronts: Set<number>) => {
+    if ([...fronts].some((f) => rank.get(f)! < rank.get(id)!)) return null
+    const at = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && fronts.has(comp[y * w + x])
+    return {
+      hidden: (p: Pt) => at(Math.floor(p.x), Math.floor(p.y)),
+      // The share of the pixels inside a polygon that are under these regions.
+      covered: (poly: Pt[]) => {
+        let inside = 0
+        let under = 0
+        const y0 = Math.max(0, Math.floor(Math.min(...poly.map((p) => p.y))))
+        const y1 = Math.min(h - 1, Math.ceil(Math.max(...poly.map((p) => p.y))))
+        for (let y = y0; y <= y1; y++) {
+          const cy = y + 0.5
+          const xs: number[] = []
+          for (let i = 0; i < poly.length; i++) {
+            const a = poly[i]
+            const b = poly[(i + 1) % poly.length]
+            if (a.y <= cy !== b.y <= cy) xs.push(a.x + ((cy - a.y) / (b.y - a.y)) * (b.x - a.x))
+          }
+          xs.sort((a, b) => a - b)
+          for (let k = 0; k + 1 < xs.length; k += 2)
+            for (let x = Math.max(0, Math.ceil(xs[k] - 0.5)); x <= Math.min(w - 1, Math.floor(xs[k + 1] - 0.5)); x++) {
+              inside++
+              if (at(x, y)) under++
+            }
+        }
+        return inside ? under / inside : 1
+      },
+    }
+  }
+
+  return order.map((id) => {
+    const loops = loopsOf.get(id)!
+    const outer = loops.reduce((a, b) => (Math.abs(b.area) > Math.abs(a.area) ? b : a))
+    const kept = loops.filter(
+      (l) => l === outer || l.touchesVoid || [...l.across].some((r) => r !== VOID && rank.get(r)! < rank.get(id)!) || voids.some((p) => encloses(l.pts, p)),
+    )
+    return { id, subs: kept.map((l) => (l === outer ? completeLoop(l, id, inFront, under) : l.sub)) }
+  })
+}
+
+/** The share of what a completion adds that must be under the shapes in front. */
+const COVERED = 0.95
+
+/** A loop with each run of chains hidden by a region in front replaced by its continuation. */
+function completeLoop(
+  l: Loop,
+  id: number,
+  inFront: (a: number, b: number) => boolean,
+  under: (id: number, fronts: Set<number>) => { hidden: (p: Pt) => boolean; covered: (poly: Pt[]) => number } | null,
+): Subpath {
+  const cs = l.chains
+  const n = cs.length
+  const hiddenAt = cs.map((c) => across(c) !== VOID && inFront(across(c), id))
+  const start = hiddenAt.indexOf(false)
+  if (start < 0 || !hiddenAt.some(Boolean)) return l.sub
+  const visible = sample(cs.filter((_, k) => !hiddenAt[k]).flatMap((c) => c.cubics))
+  const out: Cubic[] = []
+  // Where a completion meets the visible outline (indices into out).
+  const joins = new Set<number>()
+  let changed = false
+  for (let j = 0; j < n; ) {
+    const k = (start + j) % n
+    if (!hiddenAt[k]) {
+      out.push(...cs[k].cubics)
+      j++
+      continue
+    }
+    // A run of hidden chains, from k to before the next visible one.
+    let e = j
+    while (e < n && hiddenAt[(start + e) % n]) e++
+    const run = Array.from({ length: e - j }, (_, q) => cs[(start + j + q) % n])
+    const prev = cs[(start + j - 1 + n) % n]
+    const next = cs[(start + e) % n]
+    const t0 = endDir(prev.cubics)
+    const t1 = startDir(next.cubics)
+    const p0 = run[0].cubics[0][0]
+    const last = run[run.length - 1].cubics
+    const p1 = last[last.length - 1][3]
+    const front = under(id, new Set(run.map(across)))
+    let fill = t0 && t1 && front ? complete(p0, t0, p1, t1, visible, straightEnd(prev.cubics, true), straightEnd(next.cubics, false), front.hidden) : null
+    // What the completion adds must all be under the shapes in front too: not
+    // another shape it would paint over, nor this one's own pixels.
+    if (fill && front!.covered([...sample(fill), ...sample(run.flatMap((c) => c.cubics)).reverse()]) < COVERED) fill = null
+
+    if (fill) {
+      joins.add(out.length)
+      out.push(...fill)
+      joins.add(out.length)
+      changed = true
+    } else for (const c of run) out.push(...c.cubics)
+    j = e
+  }
+  if (!changed) return l.sub
+  // A side carried straight on under a shape in front is one line, not two.
+  const merged: Cubic[] = []
+  out.forEach((c, k) => {
+    const last = merged[merged.length - 1]
+    if (k > 0 && joins.has(k) && collinear(last, c)) merged[merged.length - 1] = line(last[0], c[3])
+    else merged.push(c)
+  })
+  if (merged.length > 2 && joins.has(out.length) && collinear(merged[merged.length - 1], merged[0])) merged[0] = line(merged.pop()![0], merged[0][3])
+  return toSubpath(merged)
+}
+
+/** Two flat cubics, end to start, along one line (within a degree). */
+function collinear(a: Cubic, b: Cubic) {
+  if (!isFlat(a) || !isFlat(b)) return false
+  const u = { x: a[3].x - a[0].x, y: a[3].y - a[0].y }
+  const v = { x: b[3].x - b[0].x, y: b[3].y - b[0].y }
+  const lu = Math.hypot(u.x, u.y)
+  const lv = Math.hypot(v.x, v.y)
+  return lu > 0 && lv > 0 && (u.x * v.x + u.y * v.y) / (lu * lv) > Math.cos(Math.PI / 180)
 }
 
 /**
@@ -1207,12 +1407,12 @@ function findChains(comp: Int32Array, w: number, h: number): Chain[] {
 
 // ---- 5. Outlines ----------------------------------------------------------------------
 
-type Oriented = Chain & { cubics: Cubic[]; reversed: boolean }
+type Oriented = Chain & { cubics: Cubic[]; reversed: boolean; /** Index in the fitted chains. */ i: number }
 
 const reverse = (cubics: Cubic[]): Cubic[] => cubics.map(([a, b, c, d]) => [d, c, b, a] as Cubic).reverse()
 
 /** A region's closed loop: its fitted subpath, signed area, whether VOID is across any of it, and its exact pixel-crack outline. */
-type Loop = { sub: Subpath; area: number; touchesVoid: boolean; pts: Pt[]; across: Set<number> }
+type Loop = { sub: Subpath; area: number; touchesVoid: boolean; pts: Pt[]; across: Set<number>; chains: Oriented[] }
 /** The region on the far side of a chain, as this region walks it. */
 const across = (c: Oriented) => (c.reversed ? c.left : c.right)
 
@@ -1224,7 +1424,7 @@ function assemble(chains: Oriented[]): Loop[] {
   const subs: Loop[] = []
   const open: Oriented[] = []
   for (const c of chains) {
-    if (c.closed) subs.push(loopOf(c.cubics, across(c) === VOID, c.pts, new Set([across(c)])))
+    if (c.closed) subs.push(loopOf(c.cubics, across(c) === VOID, c.pts, new Set([across(c)]), [c]))
     else open.push(c)
   }
   const start = (c: Oriented) => (c.reversed ? c.to : c.from)
@@ -1245,9 +1445,11 @@ function assemble(chains: Oriented[]): Loop[] {
     const pts: Pt[] = []
     let touchesVoid = false
     const acrossIds = new Set<number>()
+    const seq: Oriented[] = []
     let c: Oriented | undefined = first
     while (c && !used.has(c)) {
       used.add(c)
+      seq.push(c)
       loop.push(...c.cubics)
       pts.push(...(c.reversed ? [...c.pts].reverse() : c.pts))
       if (across(c) === VOID) touchesVoid = true
@@ -1260,16 +1462,16 @@ function assemble(chains: Oriented[]): Loop[] {
         .filter((n) => !used.has(n))
         .sort((a, b) => cross(into, firstDir(a)) - cross(into, firstDir(b)))[0]
     }
-    if (loop.length) subs.push(loopOf(loop, touchesVoid, pts, acrossIds))
+    if (loop.length) subs.push(loopOf(loop, touchesVoid, pts, acrossIds, seq))
   }
   return subs
 }
 
 /** A loop and its signed area (shoelace over its cubics' end points: enough to rank and orient). */
-function loopOf(cubics: Cubic[], touchesVoid: boolean, pts: Pt[], acrossIds: Set<number>): Loop {
+function loopOf(cubics: Cubic[], touchesVoid: boolean, pts: Pt[], acrossIds: Set<number>, chains: Oriented[]): Loop {
   let area = 0
   for (const [a, , , d] of cubics) area += a.x * d.y - d.x * a.y
-  return { sub: toSubpath(cubics), area: area / 2, touchesVoid, pts, across: acrossIds }
+  return { sub: toSubpath(cubics), area: area / 2, touchesVoid, pts, across: acrossIds, chains }
 }
 
 /** One pixel centre from each 4-connected area of VOID (transparent pixels) in the image. */

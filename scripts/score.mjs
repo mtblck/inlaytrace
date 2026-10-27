@@ -295,19 +295,76 @@ for (const [file, title] of [
   }
 }
 
+// How many of a fixture's shapes the trace draws whole: a path of the
+// shape's colour that matches the whole shape, hidden parts included (IoU
+// over 0.95 at 1×). Cut out, a shape partly behind another is only its
+// visible part, so this counts shapes that are fully visible, and stacked
+// shapes completed under the ones in front.
+async function whole(art, svg) {
+  const shapes = [...art.matchAll(/<(circle|rect)\b[^>]*>/g)].map((m) => m[0])
+  const paths = [...svg.matchAll(/<path d="([^"]*)" fill="(#[0-9a-f]{6})"/g)].map((m) => ({ d: m[1], fill: m[2] }))
+  const view = svg.match(/viewBox="([^"]*)"/)[1]
+  return page.evaluate(
+    async ({ shapes, paths, view, size }) => {
+      const mask = async (markup, box) => {
+        const img = new Image()
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}">${markup}</svg>`)
+        await img.decode()
+        const c = new OffscreenCanvas(size, size)
+        c.getContext('2d').drawImage(img, 0, 0, size, size)
+        const d = c.getContext('2d').getImageData(0, 0, size, size).data
+        const m = new Uint8Array(size * size)
+        for (let i = 0; i < m.length; i++) m[i] = d[i * 4 + 3] > 127 ? 1 : 0
+        return m
+      }
+      const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
+      const colours = shapes.map((s) => rgb(s.match(/fill="(#[0-9a-fA-F]{6})"/)[1]))
+      const nearest = (hex) => {
+        const c = rgb(hex)
+        let best = 0
+        colours.forEach((k, i) => {
+          const e = (a) => Math.abs(a[0] - c[0]) + Math.abs(a[1] - c[1]) + Math.abs(a[2] - c[2])
+          if (e(k) < e(colours[best])) best = i
+        })
+        return colours[best].join()
+      }
+      const traced = await Promise.all(paths.map(async (p) => ({ colour: nearest(p.fill), m: await mask(`<path d="${p.d}"/>`, view) })))
+      let n = 0
+      for (let i = 0; i < shapes.length; i++) {
+        const ref = await mask(shapes[i], '0 0 200 200')
+        let best = 0
+        for (const t of traced) {
+          if (t.colour !== colours[i].join()) continue
+          let both = 0
+          let either = 0
+          for (let j = 0; j < ref.length; j++) (both += ref[j] & t.m[j]), (either += ref[j] | t.m[j])
+          best = Math.max(best, either ? both / either : 0)
+        }
+        if (best > 0.95) n++
+      }
+      return `${n}/${shapes.length}`
+    },
+    { shapes, paths, view, size: SIZE },
+  )
+}
+
 // Lines are the fixture's line colour; Line art and Centerline draw them in
 // black, which is still nearest that colour, so they count too.
-const flatArt = async (file, title, line, presets) => {
-  const art = await prepare(readFileSync(join(root, 'scripts/fixtures', file), 'utf8'), line)
+const flatArt = async (file, title, line, presets, { wholes = false } = {}) => {
+  const source = readFileSync(join(root, 'scripts/fixtures', file), 'utf8')
+  const art = await prepare(source, line)
   console.log(`\n  ${title}, ${SIZE} px JPEG q72, wrong past 24\n`)
-  console.log('  Preset         Wrong px  Regions  Lines   Nodes  Paths   Size')
-  for (const id of presets) {
+  console.log(`  ${'Preset'.padEnd(23)} Wrong px  Regions  Lines${wholes ? '  Whole' : ''}   Nodes  Paths   Size`)
+  // A preset name alone is its defaults; with ':stacked' or ':cutout', those shapes.
+  for (const entry of presets) {
+    const [id, shapes] = entry.split(':')
     const t = performance.now()
-    const svg = runTrace(art.slice(), SIZE, SIZE, toTraceOptions(settingsFor(id)))
+    const svg = runTrace(art.slice(), SIZE, SIZE, toTraceOptions({ ...settingsFor(id), ...(shapes ? { shapes } : {}) }))
     const ms = performance.now() - t
     const r = await score(svg, 24)
+    const label = PRESETS.find((p) => p.id === id).label + (shapes ? (shapes === 'stacked' ? ', stacked' : ', cut out') : '')
     console.log(
-      `  ${PRESETS.find((p) => p.id === id).label.padEnd(14)} ${pct(r.wrong)}  ${regions(r)}  ${line ? lines(r) : '    –'}  ${String(r.nodes).padStart(6)} ${String(r.paths).padStart(6)} ${r.kb.toFixed(1).padStart(5)} KB  (${ms.toFixed(0)} ms)`,
+      `  ${label.padEnd(23)} ${pct(r.wrong)}  ${regions(r)}  ${line ? lines(r) : '    –'}${wholes ? `  ${(await whole(source, svg)).padStart(5)}` : ''}  ${String(r.nodes).padStart(6)} ${String(r.paths).padStart(6)} ${r.kb.toFixed(1).padStart(5)} KB  (${ms.toFixed(0)} ms)`,
     )
   }
 }
@@ -326,17 +383,18 @@ await flatArt('junctions.svg', 'Junctions (lines 3.2 px wide)', '#4f86af', ['ill
 // Lines 2.2 px wide, under the width Outline art draws as strokes, where
 // each line's two sides used to meet at its ends and taper it to a point.
 await flatArt('junctions-thin.svg', 'Junctions (lines 2.2 px wide)', '#4f86af', ['logo', 'illustration', 'lineart', 'centerline'])
-// Lines 8 px wide: the skeleton Centerline draws bends toward each junction
-// over about a stroke's width, so a crossing is pinched unless refitted.
 // Lines 1.1 px wide: at a slant, a staircase of pixels that touch only at
 // corners, and paler than the ink, since no pixel is wholly covered.
 await flatArt('junctions-hair.svg', 'Junctions (lines 1.1 px wide)', '#4f86af', ['logo', 'illustration', 'lineart', 'centerline'])
+// Lines 8 px wide: the skeleton Centerline draws bends toward each junction
+// over about a stroke's width, so a crossing is pinched unless refitted.
 await flatArt('junctions-thick.svg', 'Junctions (lines 8 px wide)', '#4f86af', ['lineart', 'centerline'])
 
 // ---- Overlaps ---------------------------------------------------------------
 // Shapes partly behind others, down to a thin crescent: what cut-out shapes
-// reduce to slivers and speck clean-up can lose.
-await flatArt('overlap.svg', 'Overlapping shapes', null, ['logo', 'illustration', 'photo'])
+// reduce to slivers and speck clean-up can lose, and stacked flat art draws
+// whole behind the shapes in front.
+await flatArt('overlap.svg', 'Overlapping shapes', null, ['logo', 'logo:stacked', 'illustration', 'illustration:cutout', 'photo'], { wholes: true })
 
 console.log()
 await browser.close()
