@@ -97,18 +97,23 @@ type Ops = {
  * of linear pieces between the stops.
  */
 export function shadingOf(g: Gradient): string {
-  const stops = [...g.stops].sort((a, b) => a.offset - b.offset)
-  // The function runs over 0–1: the first and last colours hold before and after the stops.
-  if (stops[0].offset > 0) stops.unshift({ offset: 0, color: stops[0].color })
-  if (stops[stops.length - 1].offset < 1) stops.push({ offset: 1, color: stops[stops.length - 1].color })
-  if (stops.length === 1) stops.push({ offset: 1, color: stops[0].color })
+  // Offsets as SVG reads them (each at least the one before), the end colours held out to 0 and 1.
+  const stops: Gradient['stops'] = []
+  for (const s of g.stops) stops.push({ offset: Math.max(stops.length ? stops[stops.length - 1].offset : 0, Math.min(1, Math.max(0, s.offset))), color: s.color })
+  stops.unshift({ offset: 0, color: stops[0].color })
+  stops.push({ offset: 1, color: stops[stops.length - 1].color })
   const arr = (v: number[]) => `[${v.map(fmt).join(' ')}]`
-  const pieces = stops.slice(1).map((s, i) => `<< /FunctionType 2 /Domain [0 1] /C0 ${arr(rgb(stops[i].color))} /C1 ${arr(rgb(s.color))} /N 1 >>`)
-  const bounds = stops.slice(1, -1).map((s) => s.offset)
-  const fn = `<< /FunctionType 3 /Domain [0 1] /Functions [${pieces.join(' ')}] /Bounds ${arr(bounds)} /Encode ${arr(pieces.flatMap(() => [0, 1]))} >>`
+  // One linear piece per gap between stops; two stops at one offset are a step, with no piece between them.
+  const pieces: { from: number; c0: string; c1: string }[] = []
+  for (let i = 1; i < stops.length; i++) if (stops[i].offset > stops[i - 1].offset) pieces.push({ from: stops[i - 1].offset, c0: stops[i - 1].color, c1: stops[i].color })
+  const fns = pieces.map((p) => `<< /FunctionType 2 /Domain [0 1] /C0 ${arr(rgb(p.c0))} /C1 ${arr(rgb(p.c1))} /N 1 >>`)
+  const fn = `<< /FunctionType 3 /Domain [0 1] /Functions [${fns.join(' ')}] /Bounds ${arr(pieces.slice(1).map((p) => p.from))} /Encode ${arr(pieces.flatMap(() => [0, 1]))} >>`
   const coords = g.type === 'linear' ? [g.x1, g.y1, g.x2, g.y2] : [g.cx, g.cy, 0, g.cx, g.cy, g.r]
   return `<< /ShadingType ${g.type === 'linear' ? 2 : 3} /ColorSpace /DeviceRGB /Coords ${arr(coords)} /Function ${fn} /Extend [true true] >>`
 }
+
+/** A shape squashed flat has a singular gradient matrix, which PostScript can't invert: it is drawn flat. */
+const invertible = (t?: number[]) => !t || Math.abs(t[0] * t[3] - t[1] * t[2]) > 1e-9
 
 function body(drawing: Drawable, wPt: number, hPt: number, ops: Ops) {
   const sx = wPt / drawing.width
@@ -121,7 +126,7 @@ function body(drawing: Drawable, wPt: number, hPt: number, ops: Ops) {
     if (!geometry) continue
     // A stroke's width scales with the drawing (the mean of the two scales, for a stretched export).
     if (path.stroke) parts.push(`${ops.strokeStyle(rgb(path.fill), (path.stroke * (sx + sy)) / 2)}\n${geometry}\n${ops.stroke}`)
-    else if (path.gradient) {
+    else if (path.gradient && invertible(path.gradient.transform)) {
       // Gradient space → drawing pixels (its transform) → points (map).
       const [a, b, c, d, e, f] = path.gradient.transform ?? [1, 0, 0, 1, 0, 0]
       parts.push(ops.shade(geometry, [sx * a, -sy * b, sx * c, -sy * d, sx * e, hPt - sy * f], shadingOf(path.gradient)))
@@ -212,7 +217,7 @@ export function buildEps(drawing: Drawable, size: ExportSize, title = 'Inlay'): 
     `%%Title: ${title.replace(/[\r\n]/g, ' ')}`,
     '%%Creator: Inlay, an image-to-SVG tracer',
     // Gradients need PostScript 3's shfill.
-    ...(drawing.paths.some((p) => p.gradient && !p.stroke) ? ['%%LanguageLevel: 3'] : []),
+    ...(drawing.paths.some((p) => p.gradient) ? ['%%LanguageLevel: 3'] : []),
     '%%Pages: 1',
     '%%EndComments',
     'gsave',

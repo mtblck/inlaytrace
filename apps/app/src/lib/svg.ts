@@ -65,9 +65,11 @@ export function parseTrace(raw: string): Trace {
   return { width, height, paths }
 }
 
-/** A gradient element as Inlay writes it (userSpaceOnUse, no transform), or null. */
+/** A gradient element as Inlay writes it (userSpaceOnUse, padded, no transform or reference), or null. */
 function readGradient(el: Element): Gradient | null {
   if (el.getAttribute('gradientUnits') !== 'userSpaceOnUse') return null
+  if (['gradientTransform', 'href', 'xlink:href', 'fx', 'fy', 'fr'].some((a) => el.hasAttribute(a))) return null
+  if ((el.getAttribute('spreadMethod') ?? 'pad') !== 'pad') return null
   const n = (name: string) => Number(el.getAttribute(name))
   const stops = Array.from(el.getElementsByTagName('stop')).map((s) => {
     const o = (s.getAttribute('offset') ?? '').trim()
@@ -90,15 +92,30 @@ export function checkGradient(x: unknown): Gradient | null {
     const st = s as Record<string, unknown> | null
     const color = typeof st?.color === 'string' ? normalizeHex(st.color) : null
     if (!st || !finite(st.offset) || !color) return null
-    stops.push({ offset: Math.min(1, Math.max(0, st.offset)), color })
+    // As SVG reads them: within 0–1, and never before the stop ahead.
+    stops.push({ offset: Math.max(stops.length ? stops[stops.length - 1].offset : 0, Math.min(1, Math.max(0, st.offset))), color })
   }
   const t = g.transform
   const transform = t === undefined ? undefined : Array.isArray(t) && t.length === 6 && t.every(finite) ? (t as Gradient['transform']) : null
   if (transform === null) return null
   const extra = transform ? { transform } : {}
-  if (g.type === 'linear' && [g.x1, g.y1, g.x2, g.y2].every(finite)) return { type: 'linear', x1: g.x1 as number, y1: g.y1 as number, x2: g.x2 as number, y2: g.y2 as number, stops, ...extra }
+  // A linear gradient needs a length: SVG paints a point one flat, PDF and EPS not at all.
+  if (g.type === 'linear' && [g.x1, g.y1, g.x2, g.y2].every(finite) && (g.x1 !== g.x2 || g.y1 !== g.y2)) return { type: 'linear', x1: g.x1 as number, y1: g.y1 as number, x2: g.x2 as number, y2: g.y2 as number, stops, ...extra }
   if (g.type === 'radial' && [g.cx, g.cy, g.r].every(finite) && (g.r as number) > 0) return { type: 'radial', cx: g.cx as number, cy: g.cy as number, r: g.r as number, stops, ...extra }
   return null
+}
+
+type Matrix = [number, number, number, number, number, number]
+
+/** A gradient carried along with its shape by an affine move (SVG's matrix(a b c d e f)). */
+export function moveGradient(g: Gradient, m: Matrix | null): Gradient {
+  if (!m) return g
+  const t = g.transform
+  if (!t) return { ...g, transform: m }
+  const [a, b, c, d, e, f] = m
+  const [A, B, C, D, E, F] = t
+  // m after t: the shape's earlier moves first.
+  return { ...g, transform: [a * A + c * B, b * A + d * B, a * C + c * D, b * C + d * D, a * E + c * F + e, b * E + d * F + f] }
 }
 
 /** The stops' average colour: a fill for a gradient that came without one. */

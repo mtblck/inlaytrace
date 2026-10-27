@@ -46,6 +46,22 @@ describe('the trace', () => {
     expect(inksOf(docFromTrace(t)).map((i) => i.hex)).toContain(sky.fill)
   })
 
+  it('reads only gradients drawn as written: no transform, no reference, padded, with a length', () => {
+    const one = (attrs: string) =>
+      parseTrace(`<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><defs><linearGradient id="a" gradientUnits="userSpaceOnUse" ${attrs}><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#ffffff"/></linearGradient></defs><path d="M0 0L10 0L10 10Z" fill="url(#a) #808080"/></svg>`).paths[0]
+    expect(one('x1="0" y1="0" x2="10" y2="0"').gradient).toBeDefined()
+    expect(one('x1="0" y1="0" x2="10" y2="0" gradientTransform="rotate(45)"').gradient).toBeUndefined()
+    expect(one('x1="0" y1="0" x2="10" y2="0" spreadMethod="reflect"').gradient).toBeUndefined()
+    expect(one('x1="5" y1="5" x2="5" y2="5"').gradient).toBeUndefined()
+    expect(one('x1="5" y1="5" x2="5" y2="5"').fill).toBe('#808080')
+  })
+
+  it('lists a shaded shape under its average colour, which cannot be merged', () => {
+    const inks = inksOf(docFromTrace(parseTrace(traced('illustration'))))
+    expect(inks.filter((i) => i.shaded)).toHaveLength(1)
+    expect(inks.filter((i) => !i.shaded)).toHaveLength(1)
+  })
+
   it('ignores a gradient it cannot trust', () => {
     const raw = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">
 <defs><linearGradient id="a" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000"/></linearGradient>
@@ -123,6 +139,18 @@ describe('exports', () => {
   it('DXF puts the shape on its average colour’s layer', () => {
     const sky = doc.paths.find((p) => p.gradient)!
     expect(buildDxf(drawing, size)).toContain(`INK_${sky.fill.slice(1).toUpperCase()}`)
+  })
+
+  it('two stops at one offset are a step, not an empty piece', () => {
+    const s = shadingOf({ type: 'linear', x1: 0, y1: 0, x2: 10, y2: 0, stops: [{ offset: 0, color: '#000000' }, { offset: 0.5, color: '#ff0000' }, { offset: 0.5, color: '#00ff00' }, { offset: 1, color: '#0000ff' }] })
+    expect(s).toContain('/Bounds [0.5]')
+    expect(s).toContain('/C0 [0 1 0] /C1 [0 0 1]')
+  })
+
+  it('a shape squashed flat is drawn flat, not with a matrix PostScript cannot invert', () => {
+    const sky = drawing.paths.find((p) => p.gradient)!
+    const flat = { ...drawing, paths: [{ ...sky, gradient: { ...sky.gradient!, transform: [0, 0, 0, 1, 0, 0] as [number, number, number, number, number, number] } }] }
+    expect(buildEps(flat, size)).not.toContain('shfill')
   })
 
   it('a shading holds its end colours before the first stop and after the last', () => {

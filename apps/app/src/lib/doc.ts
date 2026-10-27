@@ -14,7 +14,7 @@
  * attached state shows the latest trace, not the one that was current when
  * the snapshot was taken.
  */
-import { checkGradient, gradientMarkup, normalizeHex, type Gradient, type Trace } from './svg'
+import { checkGradient, gradientMarkup, moveGradient, normalizeHex, type Gradient, type Trace } from './svg'
 import { mapPoints, parsePath, serializePath, type Pt } from './pathdata'
 
 /**
@@ -26,7 +26,7 @@ import { mapPoints, parsePath, serializePath, type Pt } from './pathdata'
  */
 export type DocPath = { id: string; d: string; fill: string; stroke?: number; group?: string; gradient?: Gradient }
 /** A path as drawn, its colour resolved. */
-export type ShownPath = { id: string; d: string; fill: string; stroke?: number; group?: string; gradient?: Gradient }
+export type ShownPath = DocPath
 export type Doc = { width: number; height: number; paths: DocPath[] }
 export type InkEdits = { recolor: Record<string, string>; removed: string[] }
 /**
@@ -35,7 +35,8 @@ export type InkEdits = { recolor: Record<string, string>; removed: string[] }
  * shows where shapes are removed or a colour is deleted.
  */
 export type Edits = { inks: InkEdits; doc: Doc | null; background: string | null }
-export type Ink = { hex: string; count: number }
+/** `shaded`: every shape in it has a gradient, so its colour is an average, not one the tracer can merge. */
+export type Ink = { hex: string; count: number; shaded?: boolean }
 
 export const NO_INKS: InkEdits = { recolor: {}, removed: [] }
 export const NO_EDITS: Edits = { inks: NO_INKS, doc: null, background: null }
@@ -96,10 +97,16 @@ export function docFromTrace(trace: Trace): Doc {
 export const docOf = (edits: Edits, traced: Doc) => edits.doc ?? traced
 
 /** Distinct fills, most-used first. Keyed by the traced colour, not the shown one. */
-export function inksOf(doc: { paths: { fill: string }[] }): Ink[] {
+export function inksOf(doc: { paths: { fill: string; gradient?: Gradient }[] }): Ink[] {
   const counts = new Map<string, number>()
-  for (const p of doc.paths) counts.set(p.fill, (counts.get(p.fill) ?? 0) + 1)
-  return [...counts].map(([hex, count]) => ({ hex, count })).sort((a, b) => b.count - a.count || a.hex.localeCompare(b.hex))
+  const flat = new Set<string>()
+  for (const p of doc.paths) {
+    counts.set(p.fill, (counts.get(p.fill) ?? 0) + 1)
+    if (!p.gradient) flat.add(p.fill)
+  }
+  return [...counts]
+    .map(([hex, count]) => ({ hex, count, ...(flat.has(hex) ? {} : { shaded: true }) }))
+    .sort((a, b) => b.count - a.count || a.hex.localeCompare(b.hex))
 }
 
 /** The colour a path is drawn in, or null when its ink has been removed. */
@@ -130,11 +137,6 @@ export function visiblePaths(doc: Doc, inks: InkEdits, only?: string) {
   return out
 }
 
-/** A gradient carried along with its shape by an affine move (SVG's matrix order). */
-export function moveGradient(g: Gradient, m: Matrix | null): Gradient {
-  if (!m) return g
-  return { ...g, transform: g.transform ? multiply(m, g.transform) : m }
-}
 
 /**
  * The SVG to export. Nothing is drawn behind the paths unless a background is

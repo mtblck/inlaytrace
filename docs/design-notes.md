@@ -521,8 +521,11 @@ flat is what someone replacing a colour usually wants). The gradient is read
 into numbers and colours and written back from them, never copied as
 markup. Moving, scaling or turning a shape composes the transform into the
 gradient's own `gradientTransform`, so the gradient goes with it exactly,
-even under a stretch; a node edit leaves it where it is, and so does Mirror,
-whose mirrored half carries the same gradient on. PDF clips a shading
+even under a stretch; a node edit leaves it where it is. Mirror can't join a
+shaded shape to its copy, as one path has one gradient, so it keeps the two
+halves (or the turned copies) as shapes of their own, each copy's gradient
+mirrored or turned with it. A shaded ink can't be merged: its colour is an
+average no pixel is labelled with. PDF clips a shading
 (`sh`, axial or radial, its colour a stitching of linear pieces, extended
 past both ends as SVG pads) to the path; EPS does the same with
 PostScript 3's `shfill`; DXF has no fills. Stacked Illustration and Outline

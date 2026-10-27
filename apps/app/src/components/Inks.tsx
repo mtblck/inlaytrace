@@ -138,7 +138,7 @@ export function Inks({ inks, edits, selectedInk, onReplace, onReplaceDone, onRem
                 </button>
               ) : (
                 <div className="flex gap-2">
-                  {merged && inks.length > 1 && (
+                  {merged && !ink.shaded && inks.filter((o) => !o.shaded).length > 1 && (
                     <button
                       className="text-[12.5px] text-ink-muted hover:text-ink"
                       onClick={() => setMerging((m) => (m === ink.hex ? null : ink.hex))}
@@ -158,7 +158,7 @@ export function Inks({ inks, edits, selectedInk, onReplace, onReplaceDone, onRem
                 <div className="mt-1.5 mb-1 flex flex-wrap items-center gap-1.5 pl-1" role="group" aria-label={`Merge ${ink.hex} into`}>
                   <span className="text-[12px] text-ink-muted">Into:</span>
                   {inks
-                    .filter((o) => o.hex !== ink.hex && !removed.has(o.hex))
+                    .filter((o) => o.hex !== ink.hex && !removed.has(o.hex) && !o.shaded)
                     .map((o) => (
                       <button
                         key={o.hex}

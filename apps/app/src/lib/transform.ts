@@ -6,8 +6,7 @@
  * same space as the path data, so nothing here knows about zoom.
  */
 import { mapPoints, parsePath, serializePath, type NodeRef, type PathNode, type Pt, type Subpath } from './pathdata'
-import { moveGradient } from './doc'
-import type { Gradient } from './svg'
+import { moveGradient, type Gradient } from './svg'
 
 export type Box = { x: number; y: number; w: number; h: number }
 /** x' = a·x + c·y + e, y' = b·x + d·y + f: SVG's matrix(a b c d e f). */
