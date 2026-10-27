@@ -8,6 +8,13 @@
  * makes wobbly edges and rounded corners count; at 1× they hide inside the
  * anti-aliasing. Also reports nodes (path segments) and size.
  *
+ * Two more measures see what wrong pixels can't. *Regions* is how many of the
+ * clean art's flat areas (over 16 px at 1×) the trace covers mostly in their
+ * own colour: a dropped background shape counts however pale or small it is.
+ * *Lines* is how many separate pieces a fixture's line colour makes in the
+ * trace against the clean art: a broken outline is more pieces, though it
+ * costs few pixels.
+ *
  * Then two symmetric marks (scripts/fixtures/emblem.svg, pinwheel.svg) traced
  * with Logo, and again after the Mirror tool enforces what detectSymmetry finds:
  * asymmetry is the share of the drawing that differs from its own reflection.
@@ -39,10 +46,58 @@ const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath
 const page = await browser.newPage()
 await page.goto('about:blank')
 
+// The colours a fixture is drawn in (plus white, which a missing shape shows),
+// the palette every pixel of the reference and the traces is labelled with.
+const paletteOf = (art) => [...new Set(['#ffffff', ...(art.match(/#[0-9a-fA-F]{6}\b/g) ?? []).map((c) => c.toLowerCase())])]
+
+// In the page: label each pixel with its nearest palette colour, and count the
+// 8-connected pieces of one label (or of every label) over a minimum area.
+await page.evaluate(() => {
+  window.__labels = (d, pal) => {
+    const out = new Uint8Array(d.length / 4)
+    for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+      let best = 0
+      let bestD = Infinity
+      for (let j = 0; j < pal.length; j++) {
+        const e = Math.abs(d[i] - pal[j][0]) + Math.abs(d[i + 1] - pal[j][1]) + Math.abs(d[i + 2] - pal[j][2])
+        if (e < bestD) (bestD = e), (best = j)
+      }
+      out[p] = best
+    }
+    return out
+  }
+  // Pieces of the pixels `keep` accepts, as lists of pixel indices.
+  window.__pieces = (keep, n, w, minArea) => {
+    const seen = new Uint8Array(n)
+    const pieces = []
+    const stack = []
+    for (let s = 0; s < n; s++) {
+      if (seen[s] || !keep(s)) continue
+      const piece = []
+      seen[s] = 1
+      stack.push(s)
+      while (stack.length) {
+        const i = stack.pop()
+        piece.push(i)
+        const x = i % w
+        for (let dy = -w; dy <= w; dy += w)
+          for (let dx = -1; dx <= 1; dx++) {
+            const j = i + dy + dx
+            if (j < 0 || j >= n || (dx === -1 && x === 0) || (dx === 1 && x === w - 1) || seen[j] || !keep(j) || keep.same?.(i, j) === false) continue
+            seen[j] = 1
+            stack.push(j)
+          }
+      }
+      if (piece.length >= minArea) pieces.push(piece)
+    }
+    return pieces
+  }
+})
+
 // The input (JPEG, as the app's sample) and the reference (clean, at 4×, kept in the page).
-const prepare = async (art) => {
+const prepare = async (art, line) => {
   const b64 = await page.evaluate(
-  async ({ art, size, k }) => {
+  async ({ art, size, k, pal, line }) => {
     const img = new Image()
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(art)
     await img.decode()
@@ -55,18 +110,36 @@ const prepare = async (art) => {
     const r = new OffscreenCanvas(size * k, size * k)
     r.getContext('2d').drawImage(img, 0, 0, size * k, size * k)
     window.__ref = r.getContext('2d').getImageData(0, 0, size * k, size * k).data
+    // Regions: pieces of one colour, counting only pixels that are that colour
+    // (within 24) with all four neighbours labelled the same, so the
+    // anti-aliased band between two colours never makes a sliver region of a third.
+    const n = size * k
+    window.__pal = pal
+    const lab = window.__labels(window.__ref, pal)
+    const solid = (i) => {
+      const c = pal[lab[i]]
+      const d = window.__ref
+      if (Math.abs(d[4 * i] - c[0]) + Math.abs(d[4 * i + 1] - c[1]) + Math.abs(d[4 * i + 2] - c[2]) > 24) return false
+      const x = i % n
+      return x > 0 && x < n - 1 && i >= n && i < n * n - n && lab[i - 1] === lab[i] && lab[i + 1] === lab[i] && lab[i - n] === lab[i] && lab[i + n] === lab[i]
+    }
+    solid.same = (i, j) => lab[i] === lab[j]
+    window.__regions = window.__pieces(solid, n * n, n, 16 * k * k).map((piece) => ({ label: lab[piece[0]], piece }))
+    window.__line = line == null ? -1 : pal.findIndex((c) => c.join() === line.join())
+    window.__refLines = window.__line < 0 ? 0 : window.__pieces((i) => lab[i] === window.__line, n * n, n, k * k * 4).length
     let s = ''
     for (let i = 0; i < px.length; i += 0x8000) s += String.fromCharCode(...px.subarray(i, i + 0x8000))
     return btoa(s)
   },
-  { art, size: SIZE, k: K },
+  { art, size: SIZE, k: K, pal: paletteOf(art).map(rgbOf), line: line ? rgbOf(line) : null },
   )
   return new Uint8Array(Buffer.from(b64, 'base64'))
 }
+const rgbOf = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
 const pixels = await prepare(ART)
 
 async function score(svg, tolerance = 96) {
-  const wrong = await page.evaluate(
+  const m = await page.evaluate(
     async ({ svg, size, k, tolerance }) => {
       const img = new Image()
       img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
@@ -79,18 +152,32 @@ async function score(svg, tolerance = 96) {
       const d = x.getImageData(0, 0, size * k, size * k).data
       const ref = window.__ref
       let bad = 0
-      for (let i = 0; i < d.length; i += 4)
-        if (Math.abs(d[i] - ref[i]) + Math.abs(d[i + 1] - ref[i + 1]) + Math.abs(d[i + 2] - ref[i + 2]) > tolerance) bad++
-      return (bad / (d.length / 4)) * 100
+      let pale = 0
+      for (let i = 0; i < d.length; i += 4) {
+        const e = Math.abs(d[i] - ref[i]) + Math.abs(d[i + 1] - ref[i + 1]) + Math.abs(d[i + 2] - ref[i + 2])
+        if (e > tolerance) bad++
+        if (e > 24) pale++
+      }
+      // A region is found when over half its pixels come out nearest its colour.
+      const n = size * k
+      const lab = window.__labels(d, window.__pal)
+      const found = window.__regions.filter(({ label, piece }) => piece.reduce((s, i) => s + (lab[i] === label), 0) > piece.length / 2).length
+      const lines = window.__line < 0 ? 0 : window.__pieces((i) => lab[i] === window.__line, n * n, n, k * k * 4).length
+      const px = d.length / 4
+      return { wrong: (bad / px) * 100, pale: (pale / px) * 100, found, regions: window.__regions.length, lines, refLines: window.__refLines }
     },
     { svg, size: SIZE, k: K, tolerance },
   )
   const nodes = [...svg.matchAll(/\bd="([^"]*)"/g)].reduce((n, m) => n + (m[1].match(/[MLCQSTHVAmlcqsthva]/g) ?? []).length, 0)
-  return { wrong, nodes, paths: (svg.match(/<path\b/g) ?? []).length, kb: svg.length / 1024 }
+  return { ...m, nodes, paths: (svg.match(/<path\b/g) ?? []).length, kb: svg.length / 1024 }
 }
 
+const pct = (v) => `${v.toFixed(2).padStart(6)}%`
+const regions = (r) => `${r.found}/${r.regions}`.padStart(7)
+const lines = (r) => `${r.lines}/${r.refLines}`.padStart(5)
+
 console.log(`\n  Sample badge, ${SIZE} px JPEG q72, scored at ${K}× against the clean art\n`)
-console.log('  Preset         Tracer     Wrong px   Nodes  Paths   Size')
+console.log('  Preset         Tracer     Wrong px  Past 24  Regions   Nodes  Paths   Size')
 for (const p of PRESETS) {
   if (p.id === 'lineart' || p.id === 'pixel') continue // one colour / no smoothing: not comparable on a colour badge
   const t = performance.now()
@@ -98,7 +185,7 @@ for (const p of PRESETS) {
   const ms = performance.now() - t
   const r = await score(svg)
   console.log(
-    `  ${p.label.padEnd(14)} ${'Inlay'.padEnd(10)} ${r.wrong.toFixed(2).padStart(7)}%  ${String(r.nodes).padStart(6)} ${String(r.paths).padStart(6)} ${r.kb.toFixed(1).padStart(5)} KB  (${ms.toFixed(0)} ms)`,
+    `  ${p.label.padEnd(14)} ${'Inlay'.padEnd(10)} ${r.wrong.toFixed(2).padStart(7)}%  ${pct(r.pale)}  ${regions(r)}  ${String(r.nodes).padStart(6)} ${String(r.paths).padStart(6)} ${r.kb.toFixed(1).padStart(5)} KB  (${ms.toFixed(0)} ms)`,
   )
 }
 
@@ -192,9 +279,9 @@ for (const [file, title] of [
 // A pen drawing: Centerline's single strokes against Line art's outlines, both
 // scored against the clean drawing. Strokes are where a plotter lifts its pen.
 {
-  const art = await prepare(readFileSync(join(root, 'scripts/fixtures/strokes.svg'), 'utf8'))
+  const art = await prepare(readFileSync(join(root, 'scripts/fixtures/strokes.svg'), 'utf8'), '#1a1a1a')
   console.log(`\n  Pen drawing (strokes ${(3 * SIZE) / 200} px wide), ${SIZE} px JPEG q72\n`)
-  console.log('  Preset         Wrong px   Strokes  Nodes   Size   Stroke width')
+  console.log('  Preset         Wrong px   Lines  Strokes  Nodes   Size   Stroke width')
   for (const id of ['centerline', 'lineart']) {
     const t = performance.now()
     const svg = runTrace(art.slice(), SIZE, SIZE, toTraceOptions(settingsFor(id)))
@@ -203,28 +290,45 @@ for (const [file, title] of [
     const subpaths = (svg.match(/M/g) ?? []).length
     const width = svg.match(/stroke-width="([\d.]+)"/)?.[1]
     console.log(
-      `  ${PRESETS.find((p) => p.id === id).label.padEnd(14)} ${r.wrong.toFixed(2).padStart(6)}%  ${String(id === 'centerline' ? subpaths : '–').padStart(7)} ${String(r.nodes).padStart(6)} ${r.kb.toFixed(1).padStart(5)} KB  ${width ? `${width} px` : '–'}  (${ms.toFixed(0)} ms)`,
+      `  ${PRESETS.find((p) => p.id === id).label.padEnd(14)} ${r.wrong.toFixed(2).padStart(6)}%   ${lines(r)}  ${String(id === 'centerline' ? subpaths : '–').padStart(7)} ${String(r.nodes).padStart(6)} ${r.kb.toFixed(1).padStart(5)} KB  ${width ? `${width} px` : '–'}  (${ms.toFixed(0)} ms)`,
     )
   }
 }
-// ---- Outline illustration ---------------------------------------------------
-// Thin mid-blue outlines on white with pale tinted fills. A pale fill differs
-// from white by under 96, so this counts a pixel wrong past 24 instead: a
-// missing fill is wrong here, where on the badge it would hide.
-{
-  const art = await prepare(readFileSync(join(root, 'scripts/fixtures/outline.svg'), 'utf8'))
-  console.log(`\n  Outline illustration (outlines ${(1 * SIZE) / 200} px wide, pale fills), ${SIZE} px JPEG q72, wrong past 24\n`)
-  console.log('  Preset         Wrong px   Nodes  Paths   Size')
-  for (const id of ['logo', 'illustration', 'outline', 'lineart', 'photo']) {
+
+// Lines are the fixture's line colour; Line art and Centerline draw them in
+// black, which is still nearest that colour, so they count too.
+const flatArt = async (file, title, line, presets) => {
+  const art = await prepare(readFileSync(join(root, 'scripts/fixtures', file), 'utf8'), line)
+  console.log(`\n  ${title}, ${SIZE} px JPEG q72, wrong past 24\n`)
+  console.log('  Preset         Wrong px  Regions  Lines   Nodes  Paths   Size')
+  for (const id of presets) {
     const t = performance.now()
     const svg = runTrace(art.slice(), SIZE, SIZE, toTraceOptions(settingsFor(id)))
     const ms = performance.now() - t
     const r = await score(svg, 24)
     console.log(
-      `  ${PRESETS.find((p) => p.id === id).label.padEnd(14)} ${r.wrong.toFixed(2).padStart(6)}%  ${String(r.nodes).padStart(6)} ${String(r.paths).padStart(6)} ${r.kb.toFixed(1).padStart(5)} KB  (${ms.toFixed(0)} ms)`,
+      `  ${PRESETS.find((p) => p.id === id).label.padEnd(14)} ${pct(r.wrong)}  ${regions(r)}  ${line ? lines(r) : '    –'}  ${String(r.nodes).padStart(6)} ${String(r.paths).padStart(6)} ${r.kb.toFixed(1).padStart(5)} KB  (${ms.toFixed(0)} ms)`,
     )
   }
 }
+
+// ---- Outline illustration ---------------------------------------------------
+// Thin mid-blue outlines on white with pale tinted fills. A pale fill differs
+// from white by under 96, so this counts a pixel wrong past 24 instead: a
+// missing fill is wrong here, where on the badge it would hide.
+await flatArt('outline.svg', `Outline illustration (outlines ${(1 * SIZE) / 200} px wide, pale fills)`, '#4f86af', ['logo', 'illustration', 'outline', 'lineart', 'photo'])
+
+// ---- Junctions --------------------------------------------------------------
+// The same outlines meeting as T, Y, X and corners, and a box with a gap a
+// line width wide that is drawn, not broken. Every junction joined and the gap
+// kept is 8 pieces.
+await flatArt('junctions.svg', 'Junctions (lines 3.2 px wide)', '#4f86af', ['illustration', 'outline', 'lineart', 'centerline'])
+
+// ---- Overlaps ---------------------------------------------------------------
+// Shapes partly behind others, down to a thin crescent: what cut-out shapes
+// reduce to slivers and speck clean-up can lose.
+await flatArt('overlap.svg', 'Overlapping shapes', null, ['logo', 'illustration', 'photo'])
+
 console.log()
 await browser.close()
 await vite.close()
