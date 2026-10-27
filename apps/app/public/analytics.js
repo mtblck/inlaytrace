@@ -30,10 +30,8 @@
     var body = { project: 'inlay', event: 'pageview' }
     if (arrival) {
       arrival = false
-      var ref = ''
-      try {
-        ref = document.referrer ? new URL(document.referrer).hostname : ''
-      } catch (e) {}
+      // document.referrer is empty or a whole URL, so this never throws.
+      var ref = document.referrer ? new URL(document.referrer).hostname : ''
       if (ref !== location.hostname) {
         body.visit = true
         body.ref = ref
