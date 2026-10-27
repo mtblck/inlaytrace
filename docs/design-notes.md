@@ -338,6 +338,23 @@ badge, emblem, outline and overlap fixtures wrong pixels fall 2–16% for the
 same nodes; brightness alone gives the blend where the colours differ in it.
 Render-and-score for exact shapes, the other half of #147, is still to do.
 
+**Nearly straight lines snap to 0°, 45° and 90°.** People draw those with a
+snap, but a fit to the pixels leaves them a fraction of a degree off, more
+after JPEG: on the outline and junction fixtures about a third of the long
+lines were under 1° from square (a 191 px edge 1.15 px out of level). A line at
+least 8 px long and within 1° of horizontal, vertical or 45° is made exactly
+that (`snapLines` in fit.ts), turned about its middle or about an open chain's
+end, which stays fixed so the edge is still shared exactly; neighbouring lines
+in one direction become one line, and each node moves to where its snapped
+lines meet (at most 1.5 px, else the line is left). Lines either side of a
+junction that both snap pass through it, so they come out collinear too. The
+badge's 43° and 47° sides are 1.7° and 2.3° from 45° and stay as drawn, which is
+what set 1°. Wrong pixels and nodes are unchanged within ±0.02 points
+(`score`, `score:photos`); files grow about 2%, since a snapped line through
+the mean of its nodes rarely lands on a whole pixel. Near-parallel lines that
+are not square are left alone for now. Comparing corners against PolyFit (#149)
+needs its C++ code built and run here, which has not been done yet.
+
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
 most one waiting request per channel (trace, optimise), replacing it when a

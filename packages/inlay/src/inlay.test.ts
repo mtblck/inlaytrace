@@ -4,7 +4,7 @@
  * as single lines with sharp corners, and round things stay round.
  */
 import { describe, expect, it } from 'vitest'
-import { fitChain, pointAt, type Cubic } from './fit'
+import { fitChain, line, pointAt, snapLines, type Cubic } from './fit'
 import { parsePath, type Pt } from './path'
 import { gunzipSync } from 'fflate'
 import { SAMPLE_CAPS } from './fixtures/sample-caps'
@@ -95,6 +95,35 @@ describe('fitting', () => {
     expect(cubics[0][0]).toEqual(pts[0])
     expect(cubics[cubics.length - 1][3]).toEqual(pts[39])
     expect(cubics).toHaveLength(1) // and a straight run is one segment
+  })
+})
+
+describe('snapping lines', () => {
+  const P = (x: number, y: number): Pt => ({ x, y })
+  const loop = (pts: Pt[]) => pts.map((p, i) => line(p, pts[(i + 1) % pts.length]))
+
+  it('makes a rectangle fitted half a degree off square exactly square', () => {
+    const out = snapLines(loop([P(10, 10), P(60, 10.4), P(59.6, 40), P(10.3, 39.8)]), true)
+    for (const [a, , , b] of out) expect(Math.min(Math.abs(a.x - b.x), Math.abs(a.y - b.y))).toBeLessThan(1e-9)
+    expect(out[0][0].y).toBeCloseTo(10.2)
+    expect(out[1][0].x).toBeCloseTo(59.8)
+  })
+
+  it('turns a line about the end of an open chain, which stays where it was', () => {
+    const out = snapLines([line(P(0, 0), P(40, 0.3)), line(P(40, 0.3), P(40.2, 40))], false)
+    expect(out.map((c) => [c[0], c[3]])).toEqual([
+      [P(0, 0), P(40.2, 0)],
+      [P(40.2, 0), P(40.2, 40)],
+    ])
+  })
+
+  it('leaves a line drawn at a slant, a curve, and a line pinned at both ends', () => {
+    const slant = loop([P(10, 10), P(60, 12), P(35, 40)])
+    expect(snapLines(slant, true)).toEqual(slant)
+    const pinned = [line(P(0, 0), P(40, 0.3))]
+    expect(snapLines(pinned, false)).toEqual(pinned)
+    const curve: Cubic[] = [[P(0, 0), P(10, 5), P(30, 5), P(40, 0.2)]]
+    expect(snapLines(curve, false)).toEqual(curve)
   })
 })
 
