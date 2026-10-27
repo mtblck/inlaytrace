@@ -329,8 +329,12 @@ sides land within 0.05 px, with exact corners, where the grid rounded them.
 Only for images saved without loss: on JPEG the blends beside an edge are
 skewed by ringing, and the overlap fixture got worse (0.18% to 0.19% wrong),
 so it applies only when 99% of the pixels inside regions are within 3 levels
-of their colour (PNGs of the fixtures: 99.99%; JPEG q72: 84–97%). On the PNG
-badge, emblem, outline and overlap fixtures wrong pixels fall 0–16% for the
+of their colour (PNGs of the fixtures: 99.99%; JPEG q72: 84–97%). That is judged
+from the pixels before merged inks or lines relabel any, so a lossless WebP or
+a very clean JPEG counts too, and a small image the app enlarges (with a blur)
+passes but finds no solid pixels beside its edges, so traces the same. Poster
+never uses it. On the PNG
+badge, emblem, outline and overlap fixtures wrong pixels fall 2–16% for the
 same nodes; brightness alone gives the blend where the colours differ in it.
 Render-and-score for exact shapes, the other half of #147, is still to do.
 

@@ -86,8 +86,8 @@ export function isFlat([p0, c1, c2, p3]: Cubic) {
  * Fit a chain. Open: from points[0] to the last point, which stay fixed.
  * Closed: points[0] is not repeated at the end; the result is a loop that starts
  * at a corner if there is one. `fine`, if given, is the same chain placed more
- * exactly (between pixels) and is what gets fitted; `points` stays the pixel
- * outline that exact shapes and the area check measure.
+ * exactly (between pixels) and is what gets fitted, exact shapes included;
+ * `points` stays the pixel outline that the area check measures.
  */
 export function fitChain(points: Pt[], closed: boolean, o: FitOptions, fine?: Pt[]): Cubic[] {
   const out = fitOnce(points, closed, o, false, fine)
@@ -136,7 +136,7 @@ function fitOnce(points: Pt[], closed: boolean, o: FitOptions, smoothLoop: boole
   const corners = smoothLoop ? [] : findCorners(pts, closed, o.cornerAngle).filter((c) => closed || (dist(c.at, pts[0]) >= MIN_GAP && dist(c.at, pts[n - 1]) >= MIN_GAP))
 
   if (closed && o.shapes) {
-    const shape = fitShape(points, corners.map((c) => c.at))
+    const shape = fitShape(fine ?? points, corners.map((c) => c.at))
     if (shape) return shape.cubics
   }
 

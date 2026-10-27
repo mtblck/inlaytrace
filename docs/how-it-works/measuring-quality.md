@@ -183,12 +183,12 @@ instead, the way most logos arrive, show what edges placed between pixels
 
 | Drawing | Preset | Wrong pixels at 4× | Nodes | Size | Before #147 |
 | --- | --- | --- | --- | --- | --- |
-| Badge | Logo | 0.49% | 162 | 4.8 KB | 0.51%, 162 nodes |
-| Badge | Illustration | 0.46% | 176 | 5.5 KB | 0.50%, 173 nodes |
+| Badge | Logo | 0.48% | 162 | 4.8 KB | 0.51%, 162 nodes |
+| Badge | Illustration | 0.45% | 176 | 5.5 KB | 0.50%, 173 nodes |
 | Emblem | Logo | 0.28% | 59 | 2.0 KB | 0.32%, 61 nodes |
 | Emblem | Illustration | 0.25% | 39 | 1.3 KB | 0.26%, 42 nodes |
-| Outline | Logo | 0.44% | 314 | 8.8 KB | 0.44%, 311 nodes |
-| Outline | Illustration | 0.41% | 164 | 4.9 KB | 0.44%, 163 nodes |
+| Outline | Logo | 0.43% | 310 | 8.7 KB | 0.44%, 311 nodes |
+| Outline | Illustration | 0.39% | 163 | 4.9 KB | 0.44%, 163 nodes |
 | Overlap | Logo | 0.17% | 78 | 1.9 KB | 0.20%, 78 nodes |
 | Overlap | Illustration | 0.16% | 49 | 1.4 KB | 0.19%, 50 nodes |
 

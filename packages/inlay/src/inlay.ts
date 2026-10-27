@@ -136,6 +136,9 @@ export const traceInlay = (rgba: ArrayLike<number>, w: number, h: number, o: Inl
  */
 export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOptions): InlayResult {
   const { labels, colors, drawn } = o.mode === 'palette' ? labelPalette(rgba, w, h, o.palette, !o.photo) : labelBinary(rgba, w, h, o.threshold)
+  // Edges placed between pixels, from their anti-aliasing: only in an image saved without loss
+  // (judged before merged inks and lines relabel pixels), and not for photos.
+  const clean = o.mode === 'palette' && !o.pixels && !o.photo && lossless(rgba, labels, w, h, colors)
   if (o.mode === 'palette' && o.merge) mergeLabels(labels, colors, o.merge)
   // A lone pixel in pixel art is deliberate, not a stray.
   if (!o.pixels) despur(labels, w, h)
@@ -149,8 +152,7 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
   // Final regions: 4-connected components of drawn labels. Everything else is VOID.
   const { comp, compLabel, compArea } = components(labels, w, h, (l) => drawn[l])
   const chains = findChains(comp, w, h)
-  // Edges placed between pixels, from their anti-aliasing: only in an image saved without loss.
-  const rgbOf = o.mode === 'palette' && !o.pixels && lossless(rgba, labels, w, h, colors) ? (id: number) => hexToRgb(colors[compLabel[id]]) : null
+  const rgbOf = clean ? (id: number) => hexToRgb(colors[compLabel[id]]) : null
   // Each chain is fitted once, then shared by every shape it bounds.
   const fitted: { chain: Chain; cubics: Cubic[]; back: Cubic[] }[] = []
   const chainsOf = new Map<number, number[]>()
@@ -505,9 +507,9 @@ function edgePoints(c: Chain, comp: Int32Array, w: number, rgba: ArrayLike<numbe
       // Across a line a few pixels wide neither side is (JPEG lightens its
       // ink), and moving both its edges, and its pixel corners at each end,
       // tapered it and broke it.
-      const solid = (k: number, id: number, C: Rgb) => {
-        const x = Math.floor(mx + (nx * k) / 2)
-        const y = Math.floor(my + (ny * k) / 2)
+      const solid = (depth: number, id: number, C: Rgb) => {
+        const x = Math.floor(mx + (nx * depth) / 2)
+        const y = Math.floor(my + (ny * depth) / 2)
         if (x < 0 || y < 0 || x >= w || y >= comp.length / w) return false
         const i = (y * w + x) * 4
         return comp[i / 4] === id && Math.abs(rgba[i] - C[0]) <= SOLID && Math.abs(rgba[i + 1] - C[1]) <= SOLID && Math.abs(rgba[i + 2] - C[2]) <= SOLID
@@ -521,10 +523,11 @@ function edgePoints(c: Chain, comp: Int32Array, w: number, rgba: ArrayLike<numbe
     // run, and the run reaches the corner where it would. Left on the pixel
     // grid, it bent the run's end by a third of a pixel and rounded the corner.
     const run = cracks.slice(cracks.length - L)
+    const measured = run.map((q) => q.e)
     run.forEach((q, s) => {
       if (!Number.isNaN(q.e)) return
       let best = NaN
-      for (let d = 1; d <= 3 && Number.isNaN(best); d++) best = [run[s - d]?.e, run[s + d]?.e].find((e) => e !== undefined && !Number.isNaN(e)) ?? NaN
+      for (let step = 1; step < L && Number.isNaN(best); step++) best = [measured[s - step], measured[s + step]].find((e) => e !== undefined && !Number.isNaN(e)) ?? NaN
       q.e = Number.isNaN(best) ? 0 : best
     })
   }
