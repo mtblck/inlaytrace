@@ -72,7 +72,7 @@ them. A 2048 px drawing with thick ink traces in about 1.5 s.
 into their surroundings. Raise it for noisy scans or JPEG speckle. In Logo and
 Illustration, small shapes that stand out from everything around them (letters,
 dots) are kept from an eighth of that size up, so small text survives the
-default; raise it further to clear them too.
+default; raise it further to clear them too, or for dark dust on a scan.
 
 **Smoothing** (0–3): how loosely the outline is followed. It sets the fitting
 tolerance: 0.25 + 0.5 × smoothing px, so the Logo default of 1.5 is 1 px, and

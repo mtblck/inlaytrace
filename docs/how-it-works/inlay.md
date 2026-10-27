@@ -37,6 +37,13 @@ takes the closest colour **among its neighbours** rather than the closest
 overall. Otherwise an edge between red and blue grows a one-pixel purple
 sliver along its whole length.
 
+Two exceptions in flat art (not Poster). A pixel far from every palette colour
+(over 0.05) is first read as a mix of the two colours whose blend explains it,
+so a grey letter's pale edge counts as grey and white, not as a light blue. And
+a pixel whose neighbours are all one colour isn't an edge between two: it's a
+stroke too thin to have sure pixels of its own (1.5 px text), and keeps its
+colour rather than taking the paper's.
+
 ### 2. Clean the map
 
 - **Spurs:** a pixel whose eight neighbours are at least seven of one other

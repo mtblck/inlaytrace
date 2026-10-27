@@ -255,26 +255,48 @@ export function mergeLabels(labels: Int32Array, colors: string[], merge: Record<
  */
 const MIX_FAR = 0.05
 
-function mixOf(rgb: Rgb, lab: Rgb, pal: Rgb[], solid: number): number | undefined {
-  let best: number | undefined
-  let bd = solid
+type Pair = { i: number; j: number; a: Rgb; d: Rgb; len: number; span: number }
+
+/** Every pair of palette colours, with what mixOf needs of each. */
+function pairsOf(pal: Rgb[], labs: Rgb[]): Pair[] {
+  const pairs: Pair[] = []
   for (let i = 0; i < pal.length; i++)
     for (let j = i + 1; j < pal.length; j++) {
       const a = pal[i]
-      const b = pal[j]
-      const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
+      const d: Rgb = [pal[j][0] - a[0], pal[j][1] - a[1], pal[j][2] - a[2]]
       const len = d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
-      if (!len) continue
-      const t = Math.min(1, Math.max(0, ((rgb[0] - a[0]) * d[0] + (rgb[1] - a[1]) * d[1] + (rgb[2] - a[2]) * d[2]) / len))
-      const m = oklab([a[0] + t * d[0], a[1] + t * d[1], a[2] + t * d[2]])
-      const e = Math.hypot(m[0] - lab[0], m[1] - lab[1], m[2] - lab[2])
-      if (e < bd) (bd = e), (best = t < 0.5 ? i : j)
+      const span = Math.hypot(labs[i][0] - labs[j][0], labs[i][1] - labs[j][1], labs[i][2] - labs[j][2])
+      if (len) pairs.push({ i, j, a, d, len, span })
     }
+  return pairs
+}
+
+function mixOf(rgb: Rgb, lab: Rgb, pairs: Pair[], labs: Rgb[], solid: number): number | undefined {
+  let best: number | undefined
+  let bd = solid
+  let bspan = Infinity
+  for (const { i, j, a, d, len, span } of pairs) {
+    const t = Math.min(1, Math.max(0, ((rgb[0] - a[0]) * d[0] + (rgb[1] - a[1]) * d[1] + (rgb[2] - a[2]) * d[2]) / len))
+    const m = oklab([a[0] + t * d[0], a[1] + t * d[1], a[2] + t * d[2]])
+    const e = Math.hypot(m[0] - lab[0], m[1] - lab[1], m[2] - lab[2])
+    // Equally good fits: the closer pair. A grey is a mix of black and white,
+    // and of red and cyan too, but only the first is likely in an image.
+    if (e < bd - 1e-3 || (best !== undefined && e < bd + 1e-3 && span < bspan)) {
+      bd = Math.min(bd, e)
+      bspan = span
+      // Exactly halfway: the endpoint nearer in OKLab, not the later one.
+      const di = Math.hypot(lab[0] - labs[i][0], lab[1] - labs[i][1], lab[2] - labs[i][2])
+      const dj = Math.hypot(lab[0] - labs[j][0], lab[1] - labs[j][1], lab[2] - labs[j][2])
+      best = t < 0.5 ? i : t > 0.5 ? j : di <= dj ? i : j
+    }
+  }
   return best
 }
+
 function labelPalette(rgba: ArrayLike<number>, w: number, h: number, palette: string[], flat: boolean) {
   const pal = palette.map(hexToRgb)
   const labs = pal.map(oklab)
+  const pairs = flat ? pairsOf(pal, labs) : null
   const n = w * h
   const labels = new Int32Array(n)
   // Pixels sitting between two palette colours (anti-aliasing, JPEG ringing):
@@ -307,7 +329,7 @@ function labelPalette(rgba: ArrayLike<number>, w: number, h: number, palette: st
       })
       // Clearly nearer one colour than any other: sure. Otherwise between two.
       const between = d2 < Infinity && d1 > 0.4 * d2
-      if (between && flat && d1 > MIX_FAR) best = mixOf([r, g, b], lab, pal, d1) ?? best
+      if (between && pairs && d1 > MIX_FAR) best = mixOf([r, g, b], lab, pairs, labs, d1) ?? best
       hit = best | (between ? 0x100 : 0)
       cache.set(key, hit)
     }
@@ -617,10 +639,10 @@ function mergeSpecksOnce(labels: Int32Array, w: number, h: number, minArea: numb
   for (const { id } of small) {
     const begin = start[id]
     const end = start[id + 1]
-    const own = labels[pixels[start[id]]]
+    const own = labels[pixels[begin]]
     const votes = new Map<number, number>()
     let joined = false
-    for (let k = start[id]; k < start[id + 1]; k++) {
+    for (let k = begin; k < end; k++) {
       const i = pixels[k]
       const x = i % w
       const y = (i - x) / w
@@ -652,10 +674,11 @@ function mergeSpecksOnce(labels: Int32Array, w: number, h: number, minArea: numb
         if (d < near || (d === near && v > most)) (near = d), (most = v), (best = l)
       }
       // Nothing around it is anywhere near its colour: a letter, not noise.
-      if (near > SPECK_CONTRAST && end - begin >= Math.max(SPECK_MIN, minArea * SPECK_SHAPE)) continue
+      // (Not one with only transparency around it: that's dust on nothing.)
+      if (near > SPECK_CONTRAST && near < Infinity && end - begin >= Math.max(SPECK_MIN, minArea * SPECK_SHAPE)) continue
     } else for (const [l, v] of votes) if (v > most) (most = v), (best = l)
     if (best !== own) {
-      for (let k = start[id]; k < start[id + 1]; k++) labels[pixels[k]] = best
+      for (let k = begin; k < end; k++) labels[pixels[k]] = best
       changed = true
     }
   }

@@ -251,6 +251,12 @@ describe('small text on an illustration', () => {
     expect(paths.filter((p) => p.fill === '#3c6c8c')).toHaveLength(0)
   })
 
+  it('clears a blob with only transparency around it, however it contrasts', () => {
+    const blob = new Uint8Array(40 * 40 * 4)
+    for (let y = 18; y < 21; y++) for (let x = 18; x < 22; x++) blob.set([60, 108, 140, 255], (y * 40 + x) * 4)
+    expect(pathsOf(traceInlay(blob, 40, 40, { ...LOGO, mode: 'palette', palette: ['#3c6c8c'] }))).toHaveLength(0)
+  })
+
   it('still clears them when Speckle is raised past their size', () => {
     const paths = pathsOf(traceInlay(text, TW, TH, { ...LOGO, speckle: 30, mode: 'palette', palette }))
     expect(paths.filter((p) => p.fill === '#6b6b6b')).toHaveLength(0)
