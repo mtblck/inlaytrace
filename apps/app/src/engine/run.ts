@@ -5,8 +5,6 @@
 import { exactPalette, peakPalette, quantizePalette, traceCenterline, traceInlay } from 'inlaytrace'
 import type { TraceOptions } from './presets'
 
-const PALETTES = { exact: exactPalette, quantize: quantizePalette }
-
 /** Below this share of opaque pixels in its exact colours, an image isn't treated as pixel art. */
 const EXACT_COVERAGE = 0.9
 
@@ -44,11 +42,12 @@ export function runTrace(pixels: Uint8Array, width: number, height: number, o: T
   if (o.mode === 'centerline') return traceCenterline(pixels, width, height, { threshold: o.threshold ?? null, speckle: o.speckle, tolerance: o.tolerance, cornerAngle: o.cornerAngle, strokeWidth: o.strokeWidth })
   if (o.mode === 'binary') return traceInlay(pixels, width, height, { ...fit, mode: 'binary', threshold: o.threshold ?? null })
   // Peaks are told the width so they can find pale tints by their flatness.
-  let palette = o.palette && o.palette !== 'peak' ? PALETTES[o.palette](pixels, o.colors ?? 8) : peakPalette(pixels, o.colors ?? 8, { width })
+  const colors = o.colors ?? 8
+  let palette = o.palette === 'exact' ? exactPalette(pixels, colors) : o.palette === 'quantize' ? quantizePalette(pixels, colors) : peakPalette(pixels, colors, { width })
   // Pixel art is its exact colours, which cover all of it. When they cover
   // little (a photo, or art saved as JPEG), the most common exact colours are
   // near-copies of the commonest one: a photo's 32 were all black and grey.
   // Then cluster instead, as Poster does; the edges stay pixel-exact.
-  if (o.palette === 'exact' && coverage(pixels, palette) < EXACT_COVERAGE) palette = quantizePalette(pixels, o.colors ?? 8)
+  if (o.palette === 'exact' && coverage(pixels, palette) < EXACT_COVERAGE) palette = quantizePalette(pixels, colors)
   return traceInlay(pixels, width, height, { ...fit, mode: 'palette', palette, merge: o.merge })
 }
