@@ -103,12 +103,18 @@ export type InlayPath = { d: string; fill: string; stroke?: number }
 /** A trace: the drawing's size in pixels and its shapes, largest first (paint order). */
 export type InlayResult = { width: number; height: number; paths: InlayPath[] }
 
+/**
+ * A value made safe inside a double-quoted attribute. Colours come from the
+ * caller's palette as given, so a stray quote mustn't end the attribute.
+ */
+export const attr = (v: string | number) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+
 /** The trace as an SVG document. */
 export function toSvg(r: InlayResult): string {
   const path = (p: InlayPath) =>
     p.stroke
-      ? `<path d="${p.d}" fill="none" stroke="${p.fill}" stroke-width="${p.stroke}" stroke-linecap="round" stroke-linejoin="round"/>`
-      : `<path d="${p.d}" fill="${p.fill}"/>`
+      ? `<path d="${attr(p.d)}" fill="none" stroke="${attr(p.fill)}" stroke-width="${attr(p.stroke)}" stroke-linecap="round" stroke-linejoin="round"/>`
+      : `<path d="${attr(p.d)}" fill="${attr(p.fill)}"/>`
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${r.width}" height="${r.height}" viewBox="0 0 ${r.width} ${r.height}">\n${r.paths.map(path).join('\n')}\n</svg>\n`
 }
 

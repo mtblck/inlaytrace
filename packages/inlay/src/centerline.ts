@@ -19,7 +19,7 @@
  * Everything here is written for this project (MIT); no GPL tracer is used.
  */
 import { serializePath } from './path'
-import { labelBinary, mergeSpecks } from './inlay'
+import { attr, labelBinary, mergeSpecks } from './inlay'
 import { skeletonStrokes } from './skeleton'
 
 export type CenterlineOptions = {
@@ -51,7 +51,7 @@ export type CenterlineResult = {
 export const traceCenterline = (rgba: ArrayLike<number>, w: number, h: number, o: CenterlineOptions): string => centerlineToSvg(centerline(rgba, w, h, o))
 
 export function centerlineToSvg(r: CenterlineResult): string {
-  const paths = r.paths.map((p) => `<path d="${p.d}" fill="none" stroke="${p.stroke}" stroke-width="${round(p.strokeWidth)}" stroke-linecap="round" stroke-linejoin="round"/>`)
+  const paths = r.paths.map((p) => `<path d="${attr(p.d)}" fill="none" stroke="${attr(p.stroke)}" stroke-width="${attr(round(p.strokeWidth))}" stroke-linecap="round" stroke-linejoin="round"/>`)
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${r.width}" height="${r.height}" viewBox="0 0 ${r.width} ${r.height}">\n${paths.join('\n')}\n</svg>\n`
 }
 
