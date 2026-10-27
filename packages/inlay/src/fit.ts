@@ -557,7 +557,11 @@ function fitMixed(s: Smoothed, tolerance: number, t1: Pt, t2: Pt, skipEnds: numb
     // along the outline (points ≈ 1 px apart), so a hairpin like a round end,
     // whose ends are close but whose outline is long, never counts.
     const isStub = (p: number, q: number) => dist(curve[p], curve[q]) < MIN_GAP && Math.abs(q - p) < 3 * MIN_GAP
-    const short = i > from && isStub(from, i)
+    // Except where the outline turns back on itself: the end of a line a
+    // pixel or two wide. Joined there, its two sides met at a point and the
+    // line tapered to nothing at each end, so a thin outline read as broken.
+    const back = dot(tFrom, norm(sub(curve[j], curve[i]))) < 0
+    const short = i > from && isStub(from, i) && !back
     const a = short ? fromAt : curve[i]
     const b = curve[j]
     const dir = norm(sub(b, a))

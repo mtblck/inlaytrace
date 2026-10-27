@@ -181,6 +181,33 @@ describe('the edges of those fixes', () => {
     expect(area(d)).toBeGreaterThan(0.75 * 3 * 17)
   })
 
+  it('keeps the ends of 2 px lines full width, not tapered to a point', () => {
+    // A T of 2.2 px lines. Its one corner is under the bar, so each arm's end
+    // is a 2 px turn inside one long run, and joining the sides across it made
+    // each arm a wedge, within a pixel of the outline but looking broken:
+    // under half the T's area.
+    const [w, h, half] = [100, 90, 1.1]
+    const arms = [
+      [10, 20, 90, 20],
+      [50, 20, 50, 80],
+    ]
+    const img = new Uint8Array(w * h * 4)
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        let cov = 0
+        for (let s = 0; s < 16; s++) {
+          const X = x + ((s % 4) + 0.5) / 4
+          const Y = y + (Math.floor(s / 4) + 0.5) / 4
+          if (arms.some(([ax, ay, bx, by]) => (ay === by ? X >= ax && X <= bx && Math.abs(Y - ay) <= half : Y >= ay && Y <= by && Math.abs(X - ax) <= half))) cov++
+        }
+        const t = cov / 16
+        img.set([255 - t * 176, 255 - t * 121, 255 - t * 80, 255], (y * w + x) * 4)
+      }
+    const paths = pathsOf(traceInlay(img, w, h, { mode: 'binary', threshold: 'auto', speckle: 4, tolerance: 0.75, cornerAngle: 60 }))
+    expect(paths).toHaveLength(1)
+    expect(area(paths[0].d)).toBeGreaterThan(0.85 * 2 * half * (80 + 60))
+  })
+
   it('grows no spikes on noisy letter stems', () => {
     // 2.6–3.6 px stems, anti-aliased at sub-pixel offsets, their ink noisy as lossy compression leaves it.
     // Their nearly parallel sides "met" far past the pixels, and least-squares handles shot out: 95 px.
