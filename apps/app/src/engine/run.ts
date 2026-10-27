@@ -50,5 +50,5 @@ export function runTrace(pixels: Uint8Array, width: number, height: number, o: T
   // Then cluster instead, as Poster does; the edges stay pixel-exact.
   if (o.palette === 'exact' && coverage(pixels, palette) < EXACT_COVERAGE) palette = quantizePalette(pixels, colors)
   // Poster's clusters get a photo's clean-up; flat art's real colours get flat art's.
-  return traceInlay(pixels, width, height, { ...fit, mode: 'palette', palette, merge: o.merge, photo: o.palette === 'quantize', strokes: !!o.strokes, scale: o.scale })
+  return traceInlay(pixels, width, height, { ...fit, mode: 'palette', palette, merge: o.merge, photo: o.palette === 'quantize', strokes: !!o.strokes, scale: o.scale, ...(o.gradients ? { gradients: true } : {}) })
 }

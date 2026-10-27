@@ -33,6 +33,7 @@ import { oklab, type Rgb } from './palette'
 import { serializePath, type PathNode, type Pt, type Subpath } from './path'
 import { complete, endDir, sample, SHARP, SMOOTH, startDir, straightEnd, turn } from './layers'
 import { regionWidths, skeletonStrokes } from './skeleton'
+import { shadings, type Gradient } from './gradient'
 
 export type InlayOptions = FitOptions & {
   /** Regions smaller than speckle × speckle pixels are merged into their surroundings. */
@@ -83,6 +84,13 @@ export type InlayOptions = FitOptions & {
    * `strokes` takes as lines (2.5–8 px) grow with it. Default 1.
    */
   scale?: number
+  /**
+   * Soft shading as gradients: neighbouring tints that are bands of one
+   * smooth shade become one shape with a linear or radial gradient, when it
+   * fits much better than a flat colour (gradient.ts). Palette mode only, not
+   * pixel art. Off by default: a cutter or a plotter can't draw a gradient.
+   */
+  gradients?: boolean
 } & (
     /**
      * `merge` folds colours together before any region is built, so the edge
@@ -106,9 +114,10 @@ const VOID = -1 // outside the image, transparent pixels, and line art's paper
 /**
  * One filled shape: path data (M/L/C/Z, absolute, nonzero fill) and its
  * colour. With `stroke` (a width in px), a line drawn in that colour instead,
- * with round caps and joins.
+ * with round caps and joins. With `gradient`, the shape is filled with it, and
+ * `fill` is its average colour, for anything that can only draw flat colour.
  */
-export type InlayPath = { d: string; fill: string; stroke?: number }
+export type InlayPath = { d: string; fill: string; stroke?: number; gradient?: Gradient }
 /** A trace: the drawing's size in pixels and its shapes, largest first (paint order). */
 export type InlayResult = { width: number; height: number; paths: InlayPath[] }
 
@@ -120,11 +129,27 @@ export const attr = (v: string | number) => String(v).replace(/&/g, '&amp;').rep
 
 /** The trace as an SVG document. */
 export function toSvg(r: InlayResult): string {
-  const path = (p: InlayPath) =>
-    p.stroke
-      ? `<path d="${attr(p.d)}" fill="none" stroke="${attr(p.fill)}" stroke-width="${attr(p.stroke)}" stroke-linecap="round" stroke-linejoin="round"/>`
-      : `<path d="${attr(p.d)}" fill="${attr(p.fill)}"/>`
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${r.width}" height="${r.height}" viewBox="0 0 ${r.width} ${r.height}">\n${r.paths.map(path).join('\n')}\n</svg>\n`
+  const defs: string[] = []
+  const path = (p: InlayPath) => {
+    if (p.stroke) return `<path d="${attr(p.d)}" fill="none" stroke="${attr(p.fill)}" stroke-width="${attr(p.stroke)}" stroke-linecap="round" stroke-linejoin="round"/>`
+    if (!p.gradient) return `<path d="${attr(p.d)}" fill="${attr(p.fill)}"/>`
+    const id = `g${defs.length}`
+    defs.push(gradientMarkup(p.gradient, id))
+    return `<path d="${attr(p.d)}" fill="url(#${id})"/>`
+  }
+  const body = r.paths.map(path).join('\n')
+  const head = defs.length ? `<defs>\n${defs.join('\n')}\n</defs>\n` : ''
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${r.width}" height="${r.height}" viewBox="0 0 ${r.width} ${r.height}">\n${head}${body}\n</svg>\n`
+}
+
+const num = (v: number) => String(Math.round(v * 100) / 100)
+
+/** A gradient element, in the drawing's pixels. */
+function gradientMarkup(g: Gradient, id: string): string {
+  const stops = g.stops.map((s) => `<stop offset="${num(s.offset * 100)}%" stop-color="${attr(s.color)}"/>`).join('')
+  return g.type === 'linear'
+    ? `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${num(g.x1)}" y1="${num(g.y1)}" x2="${num(g.x2)}" y2="${num(g.y2)}">${stops}</linearGradient>`
+    : `<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${num(g.cx)}" cy="${num(g.cy)}" r="${num(g.r)}">${stops}</radialGradient>`
 }
 
 /** Trace to an SVG string; `trace` gives the shapes as data. */
@@ -150,14 +175,33 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
   const lines = o.mode === 'palette' && o.strokes && labs && !o.pixels ? strokesOf(rgba, labels, w, h, colors, labs, drawn, o) : []
 
   // Final regions: 4-connected components of drawn labels. Everything else is VOID.
-  const { comp, compLabel, compArea } = components(labels, w, h, (l) => drawn[l])
+  let { comp, compLabel, compArea } = components(labels, w, h, (l) => drawn[l])
+  // Soft shading: each run of bands that one gradient draws becomes one region, with a label of its own.
+  const gradientOf = new Map<number, Gradient>()
+  if (o.gradients && o.mode === 'palette' && !o.pixels) {
+    const found = shadings(rgba, w, h, comp, compLabel.length, (id) => hexToRgb(colors[compLabel[id]]))
+    if (found.length) {
+      const relabel = new Int32Array(compLabel.length).fill(-1)
+      for (const s of found) {
+        const l = colors.length
+        colors.push(s.mean)
+        drawn.push(true)
+        gradientOf.set(l, s.gradient)
+        for (const id of s.comps) relabel[id] = l
+      }
+      for (let i = 0; i < labels.length; i++) if (comp[i] !== VOID && relabel[comp[i]] >= 0) labels[i] = relabel[comp[i]]
+      ;({ comp, compLabel, compArea } = components(labels, w, h, (l) => drawn[l]))
+    }
+  }
   const chains = findChains(comp, w, h)
+  // Sub-pixel edges read a blend of two flat colours, so not beside a gradient.
   const rgbOf = clean ? (id: number) => hexToRgb(colors[compLabel[id]]) : null
+  const flatSides = (c: Chain) => !gradientOf.has(compLabel[c.left]) && !gradientOf.has(compLabel[c.right])
   // Each chain is fitted once, then shared by every shape it bounds.
   const fitted: { chain: Chain; cubics: Cubic[]; back: Cubic[] }[] = []
   const chainsOf = new Map<number, number[]>()
   for (const c of chains) {
-    const cubics = o.pixels ? staircase(c.pts, c.closed) : fitChain(c.pts, c.closed, o, rgbOf ? edgePoints(c, comp, w, rgba, rgbOf) : undefined)
+    const cubics = o.pixels ? staircase(c.pts, c.closed) : fitChain(c.pts, c.closed, o, rgbOf && flatSides(c) ? edgePoints(c, comp, w, rgba, rgbOf) : undefined)
     if (!cubics.length) continue
     const i = fitted.push({ chain: c, cubics, back: reverse(cubics) }) - 1
     for (const id of new Set([c.left, c.right]))
@@ -183,11 +227,12 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
     return assemble(out)
   }
 
-  const shapes: { subs: Subpath[]; fill: string; area: number }[] = []
+  const shapes: { subs: Subpath[]; fill: string; area: number; gradient?: Gradient }[] = []
+  const paint = (id: number) => ({ fill: colors[compLabel[id]], ...(gradientOf.has(compLabel[id]) ? { gradient: gradientOf.get(compLabel[id]) } : {}) })
   if (!o.stacked) {
     for (const id of chainsOf.keys()) {
       const loops = outline((r) => r === id, [id])
-      if (loops.length) shapes.push({ subs: loops.map((l) => l.sub), fill: colors[compLabel[id]], area: compArea[id] })
+      if (loops.length) shapes.push({ subs: loops.map((l) => l.sub), ...paint(id), area: compArea[id] })
     }
   } else if (o.mode === 'palette' && !o.photo && !o.pixels) {
     // Flat art stacked: in front-to-back order, each shape whole (see layers.ts).
@@ -197,7 +242,7 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
       if (loops.length) loopsOf.set(id, loops)
     }
     const layered = layerShapes(loopsOf, comp, w, h, voidSeeds(comp, w, h))
-    layered.forEach(({ id, subs }, k) => shapes.push({ subs, fill: colors[compLabel[id]], area: layered.length - k }))
+    layered.forEach(({ id, subs }, k) => shapes.push({ subs, ...paint(id), area: layered.length - k }))
   } else {
     // Stacked: paint order is by outline area, largest first, so containers come
     // before what they contain. Each shape then also covers every neighbour
@@ -229,13 +274,13 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
       const kept = loops.filter(
         (l) => l === outer || l.touchesVoid || [...l.across].some((r) => r !== VOID && rank.get(r)! < rank.get(id)!) || voids.some((p) => encloses(l.pts, p)),
       )
-      shapes.push({ subs: kept.map((l) => l.sub), fill: colors[compLabel[id]], area: own.get(id)! })
+      shapes.push({ subs: kept.map((l) => l.sub), ...paint(id), area: own.get(id)! })
     }
   }
   // Largest first: for stacked shapes that is containers before what they contain.
   shapes.sort((a, b) => b.area - a.area)
   // Lines on top, over the seams of the shapes that meet under them.
-  return { width: w, height: h, paths: [...shapes.map((x) => ({ d: serializePath(x.subs), fill: x.fill })), ...lines] }
+  return { width: w, height: h, paths: [...shapes.map((x) => ({ d: serializePath(x.subs), fill: x.fill, ...(x.gradient ? { gradient: x.gradient } : {}) })), ...lines] }
 }
 
 /**

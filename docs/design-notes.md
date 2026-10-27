@@ -381,6 +381,30 @@ rounds them, since a corner's sides are measured 3 to 9 px out and a leaf at
 from PolyFit is ported, and it stays out of `score`, as it needs a patched
 C++ build.
 
+**Soft shading becomes gradients again (#150).** A palette splits a smooth
+shade into bands of flat tints: on a test drawing with two linear gradients
+and a radial one (`shaded.svg`), Illustration drew 20 shapes and got 32.5% of
+pixels wrong, since a band's one colour is off by more than the score allows
+across most of its width. With `gradients`, two regions are one shade when
+their boundary is soft: across it, over three pixels, the image changes by
+under 0.4 of the difference between their colours (a hard edge, even
+anti-aliased, changes by all of it), or by under 10 levels, as JPEG blocks
+alone make bands of close tints in a photo palette look hard. Each shade is
+then fitted in closed form, in sRGB as SVG draws it: each channel as a plane
+for a linear gradient (the planes' main direction is its axis), and the
+colour's main component as a + bx + cy + d(x² + y²) for a radial one, whose
+vertex is the centre, refined by Gauss–Newton; then up to five evenly
+spaced stops along the axis or the radius, as few as come within a level of
+the best. It is kept when it at least halves a flat colour's error and is no
+more than 10% worse than the bands; a neighbouring region the gradient draws
+at least as well as its own colour then joins (a band whose edge was too
+short to judge, or a lighter speck on the shade's anti-aliased rim). On the
+test drawing Illustration then draws 6 shapes with 0.19% wrong and 61 nodes
+(from 397), and Poster 7 shapes for 1,540 nodes down to 93; every other
+fixture traces the same with it on. On the three photos Poster's error is
+unchanged (10.41 to 10.43), with 3% fewer shapes and 70% more time, so it is
+an option, off by default. A cutter can only cut flat colour.
+
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
 most one waiting request per channel (trace, optimise), replacing it when a

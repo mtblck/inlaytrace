@@ -117,6 +117,7 @@ const tracers = [
   ['VTracer (Poster before #53)', (px, w, h) => vtracer(px, w, h, { mode: 'spline', filterSpeckle: poster.speckle, hierarchical: poster.shapes, cornerThreshold: poster.corners, simplify: poster.smoothing, maxColors: poster.colors })],
   ['Inlay (Poster now)', (px, w, h) => runTrace(px, w, h, toTraceOptions(poster))],
   ['Inlay, cut out', inlay({ stacked: false })],
+  ['Inlay (Poster), gradients', (px, w, h) => runTrace(px, w, h, { ...toTraceOptions(poster), gradients: true })],
   ...(variants.includes('more')
     ? [
         ['Inlay, stacked, 32 colours', inlay({ colors: 32 })],

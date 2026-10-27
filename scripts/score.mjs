@@ -355,14 +355,15 @@ const flatArt = async (file, title, line, presets, { wholes = false } = {}) => {
   const art = await prepare(source, line)
   console.log(`\n  ${title}, ${SIZE} px JPEG q72, wrong past 24\n`)
   console.log(`  ${'Preset'.padEnd(23)} Wrong px  Regions  Lines${wholes ? '  Whole' : ''}   Nodes  Paths   Size`)
-  // A preset name alone is its defaults; with ':stacked' or ':cutout', those shapes.
+  // A preset name alone is its defaults; with ':stacked' or ':cutout', those shapes; with ':gradients', gradient fills.
   for (const entry of presets) {
-    const [id, shapes] = entry.split(':')
+    const [id, mod] = entry.split(':')
+    const shapes = mod === 'gradients' ? undefined : mod
     const t = performance.now()
-    const svg = runTrace(art.slice(), SIZE, SIZE, toTraceOptions({ ...settingsFor(id), ...(shapes ? { shapes } : {}) }))
+    const svg = runTrace(art.slice(), SIZE, SIZE, { ...toTraceOptions({ ...settingsFor(id), ...(shapes ? { shapes } : {}) }), ...(mod === 'gradients' ? { gradients: true } : {}) })
     const ms = performance.now() - t
     const r = await score(svg, 24)
-    const label = PRESETS.find((p) => p.id === id).label + (shapes ? (shapes === 'stacked' ? ', stacked' : ', cut out') : '')
+    const label = PRESETS.find((p) => p.id === id).label + (mod ? { stacked: ', stacked', cutout: ', cut out', gradients: ', gradients' }[mod] : '')
     console.log(
       `  ${label.padEnd(23)} ${pct(r.wrong)}  ${regions(r)}  ${line ? lines(r) : '    –'}${wholes ? `  ${(await whole(source, svg)).padStart(5)}` : ''}  ${String(r.nodes).padStart(6)} ${String(r.paths).padStart(6)} ${r.kb.toFixed(1).padStart(5)} KB  (${ms.toFixed(0)} ms)`,
     )
@@ -395,6 +396,12 @@ await flatArt('junctions-thick.svg', 'Junctions (lines 8 px wide)', '#4f86af', [
 // reduce to slivers and speck clean-up can lose, and stacked flat art draws
 // whole behind the shapes in front.
 await flatArt('overlap.svg', 'Overlapping shapes', null, ['logo', 'logo:stacked', 'illustration', 'illustration:cutout', 'photo'], { wholes: true })
+
+// ---- Soft shading -----------------------------------------------------------
+// A sky, a ball and a hill shaded with gradients, beside flat shapes. Flat
+// fills turn shading into bands of tints: more shapes, and steps where the art
+// is smooth.
+await flatArt('shaded.svg', 'Soft shading (two linear gradients, one radial, flat shapes)', null, ['logo', 'illustration', 'illustration:gradients', 'photo', 'photo:gradients'])
 
 // ---- Lossless --------------------------------------------------------------
 // The same drawings saved as PNG, the way most logos arrive. Without JPEG's
