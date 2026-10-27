@@ -124,6 +124,15 @@ describe('recognising text', () => {
     expect(run.boxes).toHaveLength(3)
   })
 
+  it('keeps words whose apostrophe, comma or bracket is too faint to bound them, in small grey text', () => {
+    // From a 404 page's small print, which once lost "we're", "you" and "see)" from its line.
+    const img = blank(700, 60, () => [255, 255, 255])
+    const line = draw(img, style('Montserrat-400'), ['Sorry,', "we're", 'having', 'technical', 'issues', '(as', 'you', 'see)'], 14, 10, 35, [110, 110, 110])
+    const [run] = matchText(img.rgba, img.width, img.height, [line], CANDIDATES)
+    expect(run.text).toBe("Sorry, we're having technical issues (as you see)")
+    expect(Math.abs(run.size - 14) / 14).toBeLessThan(0.05)
+  })
+
   it('takes the background again after it is removed, so painting out leaves it transparent', () => {
     const img = blank(560, 120, () => [255, 255, 255])
     const line = draw(img, style('Montserrat-700'), ['Fresh', 'coffee'], 36, 20, 70, [29, 53, 87])

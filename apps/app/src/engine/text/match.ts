@@ -53,6 +53,8 @@ const SHORTLIST = 30
 const ASPECT_SLACK = 0.15
 /** Scale nudges tried around the ink-box fit in the second pass. */
 const NUDGES = [0.96, 0.98, 1, 1.02, 1.04]
+/** Sideways shifts (compared pixels) tried for each word at its line's size: its ink box can miss a faint end. */
+const SLIDES = [-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2]
 
 /**
  * Tesseract's TSV output as lines of words. Columns: level, page, block,
@@ -237,7 +239,12 @@ function fit(style: FontStyle, word: Measured, nudge: number) {
   const s = ((word.ink.y1 - word.ink.y0) / (box.y1 - box.y0)) * nudge
   const dx = (word.ink.x0 + word.ink.x1) / 2 - ((box.x0 + box.x1) / 2) * s
   const dy = (word.ink.y0 + word.ink.y1) / 2 - ((box.y0 + box.y1) / 2) * s
-  const drawn = rasterize(moved(commands, s, dx, dy), word.w, word.h)
+  return { s, dx, dy, iou: overlap(word, moved(commands, s, dx, dy)) }
+}
+
+/** Soft IoU of `commands`, drawn at compared size, with the word's ink. */
+function overlap(word: Measured, commands: PathCommand[]) {
+  const drawn = rasterize(commands, word.w, word.h)
   let both = 0
   let either = 0
   for (let i = 0; i < drawn.length; i++) {
@@ -246,7 +253,7 @@ function fit(style: FontStyle, word: Measured, nudge: number) {
     both += a < b ? a : b
     either += a > b ? a : b
   }
-  return { s, dx, dy, iou: either ? both / either : 0 }
+  return either ? both / either : 0
 }
 
 /** Each style's ink overlap with `words` (weighted by their ink), best first. */
@@ -322,20 +329,34 @@ function bestFit(style: FontStyle, word: Measured) {
   return NUDGES.map((n) => fit(style, word, n)).reduce((a, b) => (b.iou > a.iou ? b : a))
 }
 
+type Fit = { word: Measured; s: number; dx: number; dy: number; iou: number }
+
 /**
- * One line in its block's font: one size (the median of its words' fits) and one
- * baseline (the median of theirs), each word centred across its own ink.
- * Coordinates go back to the image's pixels.
+ * A line's words in `style` at one size and on one baseline (the medians of
+ * the words' own fits), each slid across to where it overlaps best. A word's
+ * own fit scales it to its ink box, which a faint apostrophe, comma or bracket
+ * (under half coverage in small, light text) leaves short, so the word is
+ * drawn too small and looks like a bad match; the line's consensus isn't fooled.
  */
-function outline(style: FontStyle, line: { word: Measured; s: number }[]) {
-  // In image pixels: the line's scale, then the baseline each word implies at it.
-  const size = median(line.map(({ word, s }) => s * word.k))
-  const centre = (w: Measured, lo: number, hi: number, at: number) => at + ((lo + hi) / 2) * w.k
+function lineFits(style: FontStyle, words: Measured[]): Fit[] {
+  const own = words.map((word) => ({ word, ...bestFit(style, word) }))
+  // In image pixels: the line's scale (per layout unit), and its baseline.
+  const size = median(own.map(({ word, s }) => s * word.k))
+  const baseline = median(own.map(({ word, dy }) => word.y + dy * word.k))
+  return own.map(({ word }) => {
+    const { commands, box } = layout(style, word.text)
+    const s = size / word.k
+    const dy = (baseline - word.y) / word.k
+    const centre = (word.ink.x0 + word.ink.x1) / 2 - ((box.x0 + box.x1) / 2) * s
+    return SLIDES.map((d) => ({ word, s, dx: centre + d, dy, iou: overlap(word, moved(commands, s, centre + d, dy)) })).reduce((a, b) => (b.iou > a.iou ? b : a))
+  })
+}
+
+/** One line's outlines, placed as fitted, in the image's pixels. */
+function outline(style: FontStyle, line: Fit[]) {
   const commands: PathCommand[] = []
-  const placed = line.map(({ word }) => ({ word, ...layout(style, word.text) }))
-  const baseline = median(placed.map(({ word, box }) => centre(word, word.ink.y0, word.ink.y1, word.y) - ((box.y0 + box.y1) / 2) * size))
-  for (const { word, commands: glyphs, box } of placed) commands.push(...moved(glyphs, size, centre(word, word.ink.x0, word.ink.x1, word.x) - ((box.x0 + box.x1) / 2) * size, baseline))
-  return { size: size * 1000, d: pathData(commands) }
+  for (const { word, s, dx, dy } of line) commands.push(...moved(layout(style, word.text).commands, s * word.k, word.x + dx * word.k, word.y + dy * word.k))
+  return { size: line[0].s * line[0].word.k * 1000, d: pathData(commands) }
 }
 
 /**
@@ -350,11 +371,16 @@ export function matchText(rgba: ArrayLike<number>, width: number, height: number
   const runs: TextRun[] = []
   for (const block of blocks(measured)) {
     const best = bestFont(styles, block.lines.flat())
-    if (!best || best.score < MIN_SCORE) continue
+    if (!best) continue
     const { style } = best
-    const kept = block.lines
-      .map((l) => l.filter((w) => w.flat && covers(style, w.text)).map((word) => ({ word, ...bestFit(style, word) })).filter((f) => f.iou >= MIN_SCORE))
-      .filter((l) => l.length)
+    const fitted = block.lines.map((l) => l.filter((w) => covers(style, w.text))).map((l) => (l.length ? lineFits(style, l) : []))
+    // The font's match, judged both ways: small, soft text can fail the words' own fits
+    // (which the font was picked by) and still match well at its lines' size.
+    const all = fitted.flat()
+    const area = all.reduce((s, f) => s + f.word.area, 0)
+    const score = Math.max(best.score, area ? all.reduce((s, f) => s + f.iou * f.word.area, 0) / area : 0)
+    if (score < MIN_SCORE) continue
+    const kept = fitted.map((l) => l.filter((f) => f.word.flat && f.iou >= MIN_SCORE)).filter((l) => l.length)
     if (!kept.length) continue
     const fill = hex([0, 1, 2].map((c) => median(kept.flat().map((f) => f.word.colour[c]))))
     for (const fits of kept) {
@@ -367,7 +393,7 @@ export function matchText(rgba: ArrayLike<number>, width: number, height: number
         size: Math.round(size * 10) / 10,
         fill,
         d,
-        score: Math.round(best.score * 1000) / 1000,
+        score: Math.round(score * 1000) / 1000,
         boxes: line.map((w) => ({ ...w.crop, bg: w.bg })),
       })
     }
