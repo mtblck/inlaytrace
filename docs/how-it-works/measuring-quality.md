@@ -40,7 +40,7 @@ Current results:
 | Preset | Tracer | Wrong pixels at 4× | Past 24 | Regions | Nodes | Size |
 | --- | --- | --- | --- | --- | --- | --- |
 | Logo | shared edges, exact shapes | 0.54% | 0.75% | 12/12 | 181 | 5.6 KB |
-| Illustration | shared edges, exact shapes | 0.49% | 0.69% | 12/12 | 203 | 6.6 KB |
+| Illustration | shared edges, exact shapes, stacked | 0.49% | 0.70% | 12/12 | 195 | 6.4 KB |
 | Poster | shared edges, quantized, stacked | 3.19% | 4.05% | 9/12 | 1280 | 44.3 KB |
 
 Exact shapes (#37) took Logo from 0.70% / 177 nodes and Illustration from
@@ -94,8 +94,8 @@ the badge's measure; here a pixel is wrong past 24:
 | Preset | Wrong pixels at 4× | Regions | Lines | Nodes | Paths | Size |
 | --- | --- | --- | --- | --- | --- | --- |
 | Logo | 2.02% | 20/20 | 7/7 | 330 | 20 | 9.7 KB |
-| Illustration | 2.02% | 20/20 | 7/7 | 342 | 21 | 9.9 KB |
-| Outline art | 2.07% | 20/20 | 7/7 | 246 | 15 | 7.1 KB |
+| Illustration | 2.03% | 20/20 | 7/7 | 216 | 21 | 6.3 KB |
+| Outline art | 2.07% | 20/20 | 7/7 | 195 | 15 | 5.9 KB |
 | Line art | 13.36% | 13/20 | 6/7 | 128 | 6 | 3.7 KB |
 | Poster | 2.62% | 12/20 | 5/7 | 614 | 53 | 20.2 KB |
 
@@ -111,8 +111,8 @@ open:
 
 | Preset | Wrong pixels at 4× | Regions | Lines | Nodes | Size |
 | --- | --- | --- | --- | --- | --- |
-| Illustration | 2.90% | 13/13 | 8/8 | 190 | 3.7 KB |
-| Outline art | 2.95% | 13/13 | 8/8 | 66 | 1.1 KB |
+| Illustration | 2.90% | 13/13 | 8/8 | 96 | 2.1 KB |
+| Outline art | 2.95% | 13/13 | 8/8 | 54 | 1.0 KB |
 | Line art | 3.11% | 13/13 | 8/8 | 113 | 2.0 KB |
 | Centerline | 3.29% | 13/13 | 8/8 | 41 | 0.8 KB |
 
@@ -122,7 +122,7 @@ The same drawing with lines 0.7 units wide (`junctions-thin.svg`, 2.2 px at
 | Preset | Wrong pixels at 4× | Regions | Lines | Nodes | Size |
 | --- | --- | --- | --- | --- | --- |
 | Logo | 2.05% | 13/13 | 8/8 | 168 | 3.0 KB |
-| Illustration | 2.05% | 13/13 | 8/8 | 168 | 3.0 KB |
+| Illustration | 2.05% | 13/13 | 8/8 | 86 | 1.8 KB |
 | Line art | 2.04% | 13/13 | 8/8 | 94 | 1.9 KB |
 | Centerline | 2.15% | 13/13 | 8/8 | 36 | 0.7 KB |
 
@@ -148,7 +148,7 @@ their corners:
 | Preset | Wrong pixels at 4× | Regions | Lines | Nodes | Size |
 | --- | --- | --- | --- | --- | --- |
 | Logo | 1.51% | 13/13 | 8/8 | 176 | 3.3 KB |
-| Illustration | 1.52% | 13/13 | 8/8 | 205 | 3.8 KB |
+| Illustration | 1.49% | 13/13 | 8/8 | 188 | 3.7 KB |
 | Line art | 1.58% | 13/13 | 8/8 | 90 | 1.8 KB |
 | Centerline | 1.74% | 13/13 | 8/8 | 37 | 0.7 KB |
 
@@ -157,18 +157,25 @@ with Logo (for 1126 nodes), 16 with Line art, 10 with Illustration and
 Centerline, and Illustration lost two of the regions.
 
 And flat shapes partly behind others (`scripts/fixtures/overlap.svg`: a pale
-moon and a disc behind a bar, a crescent, and an L-shaped sliver 1.5 units wide):
+moon and a disc behind a bar, a crescent, and an L-shaped sliver 1.5 units wide).
+*Whole* counts the drawing's shapes the trace draws whole, hidden parts
+included: a path of the shape's colour matching all of it (over 0.95 of the
+union, at 1×):
 
-| Preset | Wrong pixels at 4× | Regions | Nodes | Size |
-| --- | --- | --- | --- | --- |
-| Logo | 0.18% | 8/8 | 86 | 2.1 KB |
-| Illustration | 0.18% | 8/8 | 88 | 2.2 KB |
-| Poster | 1.13% | 8/8 | 288 | 6.4 KB |
+| Preset | Wrong pixels at 4× | Regions | Whole | Nodes | Size |
+| --- | --- | --- | --- | --- | --- |
+| Logo (cut out) | 0.18% | 8/8 | 3/8 | 86 | 2.1 KB |
+| Logo, stacked | 0.18% | 8/8 | 8/8 | 52 | 1.5 KB |
+| Illustration (stacked) | 0.18% | 8/8 | 8/8 | 53 | 1.5 KB |
+| Illustration, cut out | 0.18% | 8/8 | 3/8 | 88 | 2.2 KB |
+| Poster | 1.13% | 8/8 | 2/8 | 288 | 6.4 KB |
 
-These are baselines for line gap closing (#145), stacked shapes (#146) and
-junction clean-up (#148). Saving them as heavy lossy WebP (quality 0.3) instead
-changes little now; lines thinner still (about 1 px) break into pieces in every
-preset (Centerline least), because their pixels are lost before any fitting.
+Cut out, only the three shapes nothing covers are whole. Stacked flat art
+(#146) completes the moon, the disc, the crescent's disc, the square under the
+other square and the paper behind everything, and the drawing looks the same.
+Illustration and Outline art stack by default; Logo stays cut out. Stacking also
+drops the holes in the paper and in shapes that hold others, which is why it
+uses about half the nodes on the junction fixtures.
 
 Run it before shipping any change to the tracer, the fitter or a preset.
 

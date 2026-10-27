@@ -77,9 +77,9 @@ function picture() {
 const palette = ['#f5f0e6', '#1e3c8c', '#d23228', '#ebaa28', '#288c46']
 const options = { mode: 'palette' as const, palette, speckle: 2, tolerance: 0.5, cornerAngle: 45 }
 
-describe('stacked shapes', () => {
-  const cut = trace(picture(), W, H, options)
-  const stacked = trace(picture(), W, H, { ...options, stacked: true })
+describe('stacked shapes (photos)', () => {
+  const cut = trace(picture(), W, H, { ...options, photo: true })
+  const stacked = trace(picture(), W, H, { ...options, photo: true, stacked: true })
 
   it('paint the same picture as cut-out shapes', () => {
     const a = render(cut)
@@ -215,5 +215,67 @@ describe('quantizePalette', () => {
     const px = new Uint8ClampedArray(8 * 4)
     for (let i = 0; i < 8; i++) px.set(i < 4 ? [10, 200, 30, 255] : [250, 0, 250, 0], i * 4)
     expect(quantizePalette(px, 4)).toEqual(['#0ac81e'])
+  })
+})
+
+describe('stacked flat art', () => {
+  const area = (d: string) =>
+    polygons(d).reduce((s, poly) => s + poly.reduce((a, p, i) => a + p.x * poly[(i + 1) % poly.length].y - poly[(i + 1) % poly.length].x * p.y, 0) / 2, 0)
+  // Anti-aliased, as a renderer leaves flat art: each pixel's share of each shape, painted in order.
+  const draw = (w: number, h: number, shapes: { inside: (x: number, y: number) => boolean; rgb: number[] }[]) => {
+    const px = new Uint8ClampedArray(w * h * 4)
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        let c = [245, 240, 230]
+        for (const s of shapes) {
+          let cov = 0
+          for (let k = 0; k < 16; k++) if (s.inside(x + ((k % 4) + 0.5) / 4, y + (Math.floor(k / 4) + 0.5) / 4)) cov++
+          c = c.map((v, i) => v + ((s.rgb[i] - v) * cov) / 16)
+        }
+        px.set([...c, 255], (y * w + x) * 4)
+      }
+    return px
+  }
+  const opts = { mode: 'palette' as const, palette: ['#f5f0e6', '#1e3c8c', '#ebaa28'], speckle: 2, tolerance: 0.75, cornerAngle: 60 }
+
+  it('draw a disc partly behind a bar whole, behind it', () => {
+    // A disc of radius 20 at (60, 28), half of it under a bar.
+    const px = draw(100, 70, [
+      { inside: (x, y) => Math.hypot(x - 60, y - 28) < 20, rgb: [235, 170, 40] },
+      { inside: (x, y) => x >= 10 && x < 70 && y >= 20 && y < 50, rgb: [30, 60, 140] },
+    ])
+    const cut = trace(px, 100, 70, opts)
+    const stacked = trace(px, 100, 70, { ...opts, stacked: true })
+    const disc = stacked.paths.find((p) => p.fill === '#ebaa28')!
+    expect(Math.abs(area(disc.d))).toBeGreaterThan(0.97 * Math.PI * 400)
+    expect(Math.abs(area(disc.d))).toBeLessThan(1.03 * Math.PI * 400)
+    // Behind: painted before the bar, so the picture is unchanged.
+    const order = stacked.paths.map((p) => p.fill)
+    expect(order.indexOf('#ebaa28')).toBeLessThan(order.indexOf('#1e3c8c'))
+    const a = render(cut)
+    const b = render(stacked)
+    expect(a.filter((c, i) => c !== b[i]).length / a.length).toBeLessThan(0.002)
+  })
+
+  it('complete a square behind another at its hidden corner', () => {
+    const px = draw(80, 80, [
+      { inside: (x, y) => x >= 10 && x < 50 && y >= 10 && y < 50, rgb: [235, 170, 40] },
+      { inside: (x, y) => x >= 30 && x < 70 && y >= 30 && y < 70, rgb: [30, 60, 140] },
+    ])
+    const stacked = trace(px, 80, 80, { ...opts, stacked: true })
+    const back = stacked.paths.find((p) => p.fill === '#ebaa28')!
+    expect(Math.abs(area(back.d))).toBeGreaterThan(0.98 * 1600)
+    expect(Math.abs(area(back.d))).toBeLessThan(1.02 * 1600)
+    expect(parsePath(back.d)[0].nodes.length).toBe(4)
+  })
+
+  it('paint the same picture as cut-out shapes, containers first', () => {
+    const cut = render(trace(picture(), W, H, options))
+    const result = trace(picture(), W, H, { ...options, stacked: true })
+    const stacked = render(result)
+    expect(cut.filter((c, i) => c !== stacked[i]).length / cut.length).toBeLessThan(0.002)
+    const order = result.paths.map((p) => p.fill)
+    expect(order.indexOf('#1e3c8c')).toBeLessThan(order.indexOf('#d23228'))
+    expect(order.indexOf('#d23228')).toBeLessThan(order.indexOf('#ebaa28'))
   })
 })

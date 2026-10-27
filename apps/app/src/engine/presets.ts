@@ -173,7 +173,7 @@ export function toTraceOptions(s: Settings, scale = 1): TraceOptions {
   if (s.preset === 'photo') return { ...fit, mode: 'palette', colors: s.colors, palette: 'quantize', stacked: s.shapes === 'stacked' }
   // Logo, Illustration and Outline art: flat art's real colours are the histogram's peaks.
   // Outline art traces its thin outlines as stroked lines, the fills meeting beneath them.
-  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', ...merge, ...(s.preset === 'outline' ? { strokes: true, ...(scale > 1 ? { scale } : {}) } : {}) }
+  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', stacked: s.shapes === 'stacked', ...merge, ...(s.preset === 'outline' ? { strokes: true, ...(scale > 1 ? { scale } : {}) } : {}) }
 }
 
 /** Pixel art keeps every source pixel; everything else is traced at this size at most. */

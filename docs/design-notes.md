@@ -293,6 +293,28 @@ photos it cut error 2% for 5% more size, so Poster doesn't join. Gap closing
 proper (pairing the ends of lines that really are broken, as Fourey et al.
 2018 do) waits for a fixture where it is needed.
 
+**Stacked flat art is layers, each shape whole.** Cut out, a shape partly
+behind another is only its visible pixels: on the overlap fixture a moon behind
+a bar came out as an odd sliver, and only 3 of its 8 shapes were whole. The
+layered-vectorization papers (LIVE 2022 onward) find layers by optimising on a
+GPU; flat art shows the old cue instead, good continuation at T-junctions.
+Where the boundary between two shapes ends, the shape whose outline carries
+straight on (under 20°) is in front if the other turns sharply there (over 40°),
+and votes over both ends of every shared boundary decide, with no vote against.
+Paint order is back to front, otherwise largest first. Each hidden run of a back
+shape's outline is then replaced by the circle its visible outline lies on
+(within 0.5 px RMS, over at least a quarter turn), the corner where its
+straight sides meet, or a curve along its tangents, whichever comes first and
+stays under the shapes in front. Both the new edge and the whole area it adds
+must be under shapes painted later: the badge's lower ring once took a
+straight edge across the hill that also covered a navy sliver, and lost it.
+All 8 overlap shapes now come out whole, the badge scores the same, and with
+holes that later shapes fill dropped (the paper is one rectangle) Illustration
+uses about half the nodes on the junction fixtures. Photos keep their own
+stacking, which reaches under every later neighbour so no seam shows; flat art
+keeps cut-out seams, as before. Illustration and Outline art stack by default;
+Logo stays cut out, for vinyl.
+
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
 most one waiting request per channel (trace, optimise), replacing it when a
