@@ -8,9 +8,11 @@
  *  2. Measure the stroke width: the ink's area over the skeleton's length.
  *  3. Prune spurs: short branches that thinning grows from bumps in the
  *     outline, anything shorter than the stroke is wide.
- *  4. Walk the skeleton into chains between ends and junctions. Where strokes
- *     cross or branch, chains that carry on in the same direction are joined,
- *     so a plotter lifts its pen less.
+ *  4. Walk the skeleton into chains between ends and junctions. Thinning bends
+ *     the skeleton toward each junction, so within a stroke width of one the
+ *     arms are dropped and drawn straight on to where their own lines meet.
+ *     Where strokes cross or branch, chains that carry on in the same
+ *     direction are joined, so a plotter lifts its pen less.
  *  5. Fit each chain with the same curve fitter as outlines.
  */
 import { fitChain, isFlat, type Cubic } from './fit'
@@ -22,7 +24,7 @@ export function skeletonStrokes(ink: Uint8Array, w: number, h: number, o: { tole
   const measured = strokeWidthOf(skel, ink, w)
   prune(skel, w, h, Math.max(3, Math.round(measured)))
   const subs: Subpath[] = []
-  for (const c of joinStraight(walk(skel, w, h))) {
+  for (const c of joinStraight(refitJunctions(walk(skel, w, h), measured))) {
     if (c.pts.length < 2) continue
     const cubics = c.pts.length < 4 ? polyline(c.pts) : fitChain(c.pts, c.closed, { tolerance: o.tolerance, cornerAngle: o.cornerAngle, smoothing: 6 })
     if (cubics.length) subs.push(toSubpath(cubics, c.closed))
@@ -351,6 +353,104 @@ function walk(skel: Uint8Array, w: number, h: number): Chain[] {
     chains.push({ pts, closed: pts.length > 2 })
   }
   return chains
+}
+
+/**
+ * Thinning pulls the skeleton toward a junction: a T's stem bends to meet the
+ * bar, and an X's two strokes run together for a stroke's width at the
+ * crossing. Within `width` of a junction the skeleton is the junction's shape,
+ * not the strokes', so each arm is cut back there, its direction measured just
+ * outside, and all the arms are drawn straight on to the point nearest every
+ * arm's line (least squares), which is where the strokes really meet. If the
+ * arms are near parallel, or that point is further than `width` from the
+ * junction, the junction's centre stays.
+ */
+function refitJunctions(chains: Chain[], width: number): Chain[] {
+  const key = (p: Pt) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`
+  type End = { chain: Chain; atStart: boolean }
+  const ends = new Map<string, End[]>()
+  for (const c of chains)
+    if (!c.closed)
+      for (const atStart of [true, false]) {
+        const k = key(atStart ? c.pts[0] : c.pts[c.pts.length - 1])
+        ends.set(k, [...(ends.get(k) ?? []), { chain: c, atStart }])
+      }
+  const cut = Math.max(2, width)
+  const reach = Math.max(6, width)
+  // Where each end is cut back to: an index into its chain, counted from that end.
+  const cuts = new Map<Chain, { start?: number; end?: number; startAt?: Pt; endAt?: Pt }>()
+  for (const [, list] of ends) {
+    if (list.length < 3) continue
+    const at = list[0].atStart ? list[0].chain.pts[0] : list[0].chain.pts[list[0].chain.pts.length - 1]
+    const arms: { end: End; from: number; a: Pt; d: Pt }[] = []
+    for (const e of list) {
+      const pts = e.atStart ? e.chain.pts : [...e.chain.pts].reverse()
+      // An arm too short to measure, or one that comes back to this junction, keeps its shape.
+      if (e.chain.pts[0] === e.chain.pts[e.chain.pts.length - 1] || key(e.chain.pts[0]) === key(e.chain.pts[e.chain.pts.length - 1])) continue
+      const from = pts.findIndex((p) => Math.hypot(p.x - at.x, p.y - at.y) >= cut)
+      const to = pts.findIndex((p) => Math.hypot(p.x - at.x, p.y - at.y) >= cut + reach)
+      if (from < 0 || to < 0 || to >= pts.length - 1) continue
+      const a = pts[from]
+      const b = pts[to]
+      const l = Math.hypot(b.x - a.x, b.y - a.y) || 1
+      arms.push({ end: e, from, a, d: { x: (b.x - a.x) / l, y: (b.y - a.y) / l } })
+    }
+    if (arms.length < 2) continue
+    // The point nearest every arm's line: Σ(I − ddᵀ) p = Σ(I − ddᵀ) a.
+    let [m00, m01, m11, v0, v1] = [0, 0, 0, 0, 0]
+    for (const { a, d } of arms) {
+      const [p00, p01, p11] = [1 - d.x * d.x, -d.x * d.y, 1 - d.y * d.y]
+      m00 += p00
+      m01 += p01
+      m11 += p11
+      v0 += p00 * a.x + p01 * a.y
+      v1 += p01 * a.x + p11 * a.y
+    }
+    const det = m00 * m11 - m01 * m01
+    let meet = at
+    if (det > 0.05 * arms.length * arms.length) {
+      const p = { x: (m11 * v0 - m01 * v1) / det, y: (m00 * v1 - m01 * v0) / det }
+      if (Math.hypot(p.x - at.x, p.y - at.y) <= cut) meet = p
+    }
+    for (const { end, from } of arms) {
+      const c = cuts.get(end.chain) ?? {}
+      if (end.atStart) {
+        c.start = from
+        c.startAt = meet
+      } else {
+        c.end = from
+        c.endAt = meet
+      }
+      cuts.set(end.chain, c)
+    }
+    // Arms left alone still end at the meeting point, so every end here stays joined.
+    for (const e of list)
+      if (!arms.some((x) => x.end === e)) {
+        const c = cuts.get(e.chain) ?? {}
+        if (e.atStart) {
+          c.start ??= 0
+          c.startAt = meet
+        } else {
+          c.end ??= 0
+          c.endAt = meet
+        }
+        cuts.set(e.chain, c)
+      }
+  }
+  return chains.map((c) => {
+    const k = cuts.get(c)
+    if (!k) return c
+    const n = c.pts.length
+    const s = k.start ?? 0
+    const e = n - 1 - (k.end ?? 0)
+    // Cut back from both ends past each other: a short link between two junctions keeps its points.
+    const pts = e > s ? c.pts.slice(s, e + 1) : [...c.pts]
+    const cutStart = e > s && s > 0
+    const cutEnd = e > s && e < n - 1
+    if (k.startAt) cutStart ? pts.unshift(k.startAt) : (pts[0] = k.startAt)
+    if (k.endAt) cutEnd ? pts.push(k.endAt) : (pts[pts.length - 1] = k.endAt)
+    return { pts, closed: false }
+  })
 }
 
 /** The direction a chain leaves its start, measured a few pixels along it. */

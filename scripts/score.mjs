@@ -326,6 +326,9 @@ await flatArt('junctions.svg', 'Junctions (lines 3.2 px wide)', '#4f86af', ['ill
 // Lines 2.2 px wide, under the width Outline art draws as strokes, where
 // each line's two sides used to meet at its ends and taper it to a point.
 await flatArt('junctions-thin.svg', 'Junctions (lines 2.2 px wide)', '#4f86af', ['logo', 'illustration', 'lineart', 'centerline'])
+// Lines 8 px wide: the skeleton Centerline draws bends toward each junction
+// over about a stroke's width, so a crossing is pinched unless refitted.
+await flatArt('junctions-thick.svg', 'Junctions (lines 8 px wide)', '#4f86af', ['lineart', 'centerline'])
 
 // ---- Overlaps ---------------------------------------------------------------
 // Shapes partly behind others, down to a thin crescent: what cut-out shapes

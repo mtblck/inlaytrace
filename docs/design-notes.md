@@ -265,6 +265,19 @@ of a line, not a stub, and is now fitted as a little cap. All 8 pieces come
 through in every preset (2.25% → 2.05% wrong); nothing else in the score moves
 beyond a node or two.
 
+**Strokes run straight through junctions.** Zhang-Suen thinning, which
+Centerline and Outline art's lines start from, pulls the skeleton toward each
+junction: on a copy of the junction fixture with 8 px lines, Centerline's X
+pinched at its crossing, the two strokes bending 2.5 px off their lines to
+run together for a stroke's width. The line-drawing papers (Noris et al. 2013
+and later) re-trace each arm from outside the junction. Here, within a stroke
+width of a junction, each arm's skeleton is dropped, its direction is measured
+just outside, and the arms are drawn straight on to the point nearest all
+their lines (least squares; the junction's centre if the arms are near
+parallel or that point is more than a stroke width away). The X now stays
+within a pixel of straight, and Centerline uses 43 nodes there instead of 55;
+the other fixtures lose a few nodes and score the same.
+
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
 most one waiting request per channel (trace, optimise), replacing it when a
