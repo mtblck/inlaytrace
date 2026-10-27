@@ -104,7 +104,6 @@ export function checkSettings(x: unknown): Settings {
   if (x.threshold === null || x.threshold === 'auto' || typeof x.threshold === 'number') out.threshold = x.threshold as Settings['threshold']
   if (typeof x.lightInk === 'boolean') out.lightInk = x.lightInk
   if (typeof x.exact === 'boolean') out.exact = x.exact
-  if (typeof x.lines === 'boolean') out.lines = x.lines
   if (typeof x.removeBackground === 'boolean') out.removeBackground = x.removeBackground
   if (typeof x.aiUpscale === 'boolean') out.aiUpscale = x.aiUpscale
   if (typeof x.strokeWidth === 'number' && Number.isFinite(x.strokeWidth) && x.strokeWidth >= 0) out.strokeWidth = x.strokeWidth

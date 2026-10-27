@@ -1,6 +1,6 @@
 import { useId, useState, type ReactNode } from 'react'
 import type { PrepStage } from '../engine/prep'
-import { PRESETS, canStrokeLines, hasExactShapes, isInk, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
+import { PRESETS, hasExactShapes, isInk, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
 import type { Candidate, SizeSearch } from '../engine/targetSize'
 import { formatBytes } from '../lib/svg'
 
@@ -202,30 +202,6 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
                 {settings.exact
                   ? 'Circles, ellipses, rectangles and regular polygons are drawn as true shapes.'
                   : 'Every outline is fitted as traced, even where it is nearly a circle or a square.'}
-              </p>
-            </div>
-          )}
-
-          {canStrokeLines(p) && (
-            <div className="space-y-1.5">
-              <span className="field-label">Lines as strokes</span>
-              <div role="radiogroup" aria-label="Lines as strokes" className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-rule bg-rule">
-                {([true, false] as const).map((v) => (
-                  <button
-                    key={String(v)}
-                    role="radio"
-                    aria-checked={settings.lines === v}
-                    onClick={() => set('lines', v)}
-                    className={`py-1.5 text-[13px] ${settings.lines === v ? 'bg-paper font-medium text-accent' : 'bg-paper-sunk text-ink hover:bg-paper'}`}
-                  >
-                    {v ? 'On' : 'Off'}
-                  </button>
-                ))}
-              </div>
-              <p className="field-hint">
-                {settings.lines
-                  ? 'Thin outlines become single lines of even width, and the fills meet beneath them. Text too small to follow stays as shapes.'
-                  : 'Outlines are traced as shapes, like everything else.'}
               </p>
             </div>
           )}

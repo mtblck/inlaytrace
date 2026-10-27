@@ -44,8 +44,6 @@ export type Settings = {
   exact: boolean
   /** Centerline only: the stroke width in px, or 0 to use the width measured from the ink. */
   strokeWidth: number
-  /** Flat-art colour presets: trace thin outlines as stroked lines, with the fills meeting beneath them. */
-  lines: boolean
   /**
    * Colours folded into others before tracing (Logo and Illustration), traced
    * hex → traced hex. A new preset starts with none.
@@ -68,43 +66,43 @@ export const PRESETS: Preset[] = [
     id: 'logo',
     label: 'Logo',
     hint: 'Few flat colours, crisp corners',
-    defaults: { colors: 8, threshold: null, lightInk: false, speckle: 8, smoothing: 1.5, corners: 45, shapes: 'cutout', exact: true, strokeWidth: 0, lines: false },
+    defaults: { colors: 8, threshold: null, lightInk: false, speckle: 8, smoothing: 1.5, corners: 45, shapes: 'cutout', exact: true, strokeWidth: 0 },
   },
   {
     id: 'illustration',
     label: 'Illustration',
     hint: 'More colours, smooth curves',
-    defaults: { colors: 16, threshold: null, lightInk: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked', exact: true, strokeWidth: 0, lines: false },
+    defaults: { colors: 16, threshold: null, lightInk: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked', exact: true, strokeWidth: 0 },
   },
   {
     id: 'outline',
     label: 'Outline art',
     hint: 'Drawn outlines kept as editable lines',
-    defaults: { colors: 16, threshold: null, lightInk: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked', exact: true, strokeWidth: 0, lines: true },
+    defaults: { colors: 16, threshold: null, lightInk: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked', exact: true, strokeWidth: 0 },
   },
   {
     id: 'lineart',
     label: 'Line art',
     hint: 'Ink drawings and scans, one colour',
-    defaults: { colors: 2, threshold: 'auto', lightInk: false, speckle: 6, smoothing: 1.5, corners: 45, shapes: 'stacked', exact: true, strokeWidth: 0, lines: false },
+    defaults: { colors: 2, threshold: 'auto', lightInk: false, speckle: 6, smoothing: 1.5, corners: 45, shapes: 'stacked', exact: true, strokeWidth: 0 },
   },
   {
     id: 'centerline',
     label: 'Centerline',
     hint: 'Single strokes for plotters and engraving',
-    defaults: { colors: 2, threshold: 'auto', lightInk: false, speckle: 4, smoothing: 1.5, corners: 45, shapes: 'stacked', exact: false, strokeWidth: 0, lines: false },
+    defaults: { colors: 2, threshold: 'auto', lightInk: false, speckle: 4, smoothing: 1.5, corners: 45, shapes: 'stacked', exact: false, strokeWidth: 0 },
   },
   {
     id: 'photo',
     label: 'Poster',
     hint: 'Photos flattened into colour bands',
-    defaults: { colors: 24, threshold: null, lightInk: false, speckle: 8, smoothing: 1, corners: 90, shapes: 'stacked', exact: false, strokeWidth: 0, lines: false },
+    defaults: { colors: 24, threshold: null, lightInk: false, speckle: 8, smoothing: 1, corners: 90, shapes: 'stacked', exact: false, strokeWidth: 0 },
   },
   {
     id: 'pixel',
     label: 'Pixel art',
     hint: 'Hard edges, nothing smoothed',
-    defaults: { colors: 32, threshold: null, lightInk: false, speckle: 0, smoothing: 0, corners: 0, shapes: 'stacked', exact: false, strokeWidth: 0, lines: false },
+    defaults: { colors: 32, threshold: null, lightInk: false, speckle: 0, smoothing: 0, corners: 0, shapes: 'stacked', exact: false, strokeWidth: 0 },
   },
 ]
 
@@ -120,9 +118,6 @@ export const hasExactShapes = (id: PresetId) => id === 'logo' || id === 'illustr
 
 /** Merging colours: the flat-art presets, whose palettes are real colours (Poster's are cluster averages). */
 export const canMerge = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline' || id === 'pixel'
-
-/** Lines as strokes: the flat-art colour presets (Outline art has it on). */
-export const canStrokeLines = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline'
 
 /**
  * Smoothing 0–3 → fitting tolerance in px. The Logo default (1.5) lands on
@@ -169,7 +164,8 @@ export function toTraceOptions(s: Settings): TraceOptions {
   // Poster: photos have no histogram peaks, so the palette is quantized (k-means in OKLab), and shapes stack by default.
   if (s.preset === 'photo') return { ...fit, mode: 'palette', colors: s.colors, palette: 'quantize', stacked: s.shapes === 'stacked' }
   // Logo, Illustration and Outline art: flat art's real colours are the histogram's peaks.
-  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', ...merge, ...(s.lines && canStrokeLines(s.preset) ? { strokes: true } : {}) }
+  // Outline art traces its thin outlines as stroked lines, the fills meeting beneath them.
+  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', ...merge, ...(s.preset === 'outline' ? { strokes: true } : {}) }
 }
 
 /** Pixel art keeps every source pixel; everything else is traced at this size at most. */

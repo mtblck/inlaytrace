@@ -217,8 +217,7 @@ and the pen drawing is unchanged.
 **Outline art: lines as strokes.** Even traced well, an outline drawn as a
 3 px line comes out as a thin filled ring whose two edges are fitted apart, so
 it wobbles in width, and it can't be thinned, recoloured as one line or moved
-off the fill. With `strokes` (the Outline art preset, or *Lines as strokes* on
-Logo and Illustration) the colours that are mostly thin, long regions are
+off the fill. With `strokes` (the Outline art preset) the colours that are mostly thin, long regions are
 traced as Centerline traces ink, down the middle, sharing its skeleton code
 (`skeleton.ts`), and the shapes either side grow into the line's pixels a step
 at a time so they meet under its middle. What it took on the sinking ship:

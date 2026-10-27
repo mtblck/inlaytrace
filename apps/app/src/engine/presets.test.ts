@@ -120,14 +120,9 @@ describe('exact shapes setting', () => {
   })
 })
 
-describe('lines as strokes setting', () => {
-  it('is on for Outline art, offered on Logo and Illustration, and only reaches the tracer there', () => {
-    for (const p of PRESETS) {
-      const offered = p.id === 'logo' || p.id === 'illustration' || p.id === 'outline'
-      expect(settingsFor(p.id).lines).toBe(p.id === 'outline')
-      expect(!!toTraceOptions({ ...settingsFor(p.id), lines: true }).strokes).toBe(offered)
-      expect(toTraceOptions({ ...settingsFor(p.id), lines: false }).strokes).toBeUndefined()
-    }
+describe('Outline art', () => {
+  it('is the only preset that traces lines as strokes', () => {
+    for (const p of PRESETS) expect(!!toTraceOptions(settingsFor(p.id)).strokes).toBe(p.id === 'outline')
   })
 
   it('traces an outlined card with a stroked line, the fills meeting beneath it', () => {
@@ -149,11 +144,5 @@ describe('lines as strokes setting', () => {
     expect(t.paths.filter((p) => !p.stroke && p.fill === lines[0].fill)).toHaveLength(0)
     // Illustration, the same but shapes: the outline is a filled ring.
     expect(trace(px, w, h, toTraceOptions(settingsFor('illustration'))).paths.some((p) => p.stroke)).toBe(false)
-  })
-
-  it('survives a saved session, and a session from before it gets the default', () => {
-    expect(checkSettings({ ...settingsFor('logo'), lines: true }).lines).toBe(true)
-    const { lines: _, ...old } = settingsFor('outline')
-    expect(checkSettings(old).lines).toBe(true)
   })
 })

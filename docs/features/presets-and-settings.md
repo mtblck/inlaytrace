@@ -14,7 +14,7 @@ re-traces within about 120 ms of the last change.
 | --- | --- | --- | --- |
 | **Logo** | Few flat colours, crisp corners | Inlay | 8 colours, specks 8 px, smoothing 1.5, corners 45° |
 | **Illustration** | More colours, smooth curves | Inlay | 16 colours, specks 4 px, smoothing 1, corners 60° |
-| **Outline art** | Drawn outlines kept as editable lines | Inlay, lines as strokes | 16 colours, specks 4 px, smoothing 1, corners 60°, lines as strokes |
+| **Outline art** | Drawn outlines kept as editable lines | Inlay, with lines as strokes | 16 colours, specks 4 px, smoothing 1, corners 60° |
 | **Line art** | Ink drawings and scans, one colour | Inlay | Threshold Auto, specks 6 px, smoothing 1.5, corners 45° |
 | **Centerline** | Single strokes for plotters and engraving | Inlay (skeleton) | Threshold Auto, specks 4 px, smoothing 1.5, corners 45°, stroke width measured |
 | **Poster** | Photos flattened into colour bands | Inlay (quantized palette) | 24 colours, specks 8 px, smoothing 1, corners 90°, stacked |
@@ -92,7 +92,7 @@ closely all the way round count, and only those with a single colour round
 them (a circle overlapping another shape stays fitted). Turn it off to keep
 every outline as traced.
 
-**Lines as strokes** (Logo, Illustration, Outline art; on in Outline art): the
+**Outline art's lines**: Outline art is Illustration, except that the
 outlines of a flat illustration become single lines of even width down their
 middle (stroked paths with round ends), instead of thin filled rings, and the
 fills either side meet under each line's middle, so nothing shows through if
