@@ -28,7 +28,7 @@
  * transparency), and paint order does the rest; for flat art, a region behind
  * another is also completed where it is hidden (layers.ts).
  */
-import { fitChain, isFlat, line, type Cubic, type FitOptions } from './fit'
+import { fitChain, isFlat, line, pointAt, type Cubic, type FitOptions } from './fit'
 import { hexToRgb, oklab, type Rgb } from './palette'
 import { serializePath, type PathNode, type Pt, type Subpath } from './path'
 import { complete, endDir, sample, SHARP, SMOOTH, startDir, straightEnd, turn } from './layers'
@@ -1383,6 +1383,12 @@ function strokesOf(rgba: ArrayLike<number>, labels: Int32Array, w: number, h: nu
     for (let i = 0; i < n; i++) if (ink[i] && !fits(pieces.comp[i])) ink[i] = skel[i] = 0
     const { subs, measured } = skeletonStrokes(ink, w, h, o, skel)
     if (!subs.length) continue
+    // Ink past a line's end that the stroke doesn't reach stays a shape of the
+    // line's colour: a dot drawn on the end, like a flagpole's knob.
+    for (const i of beyondStroke(ink, w, h, subs, measured)) {
+      ink[i] = 0
+      labels[i] = l
+    }
     out.push({ d: serializePath(subs), fill: colors[l], stroke: Math.round(measured * 100) / 100 })
     for (let i = 0; i < n; i++) if (ink[i]) line[i] = 1
   }
@@ -1423,6 +1429,76 @@ function strokesOf(rgba: ArrayLike<number>, labels: Int32Array, w: number, h: nu
       if (x < w - 1) push(i + 1, next)
       if (i >= w) push(i - w, next)
       if (i + w < n) push(i + w, next)
+    }
+    front = next
+  }
+  return out
+}
+
+/** Ink past a stroke's edge (px) before it counts as ink the stroke misses: anti-aliasing and fitting stay within it. */
+const BEYOND = 0.75
+/** A piece of missed ink is kept only if this many pixels or more; less is the edge's noise. */
+const BEYOND_AREA = 6
+
+/**
+ * The ink a stroke of `width` along `subs` doesn't cover at the stroke's open
+ * ends, in pieces of at least BEYOND_AREA pixels, each with the ink within
+ * half the width of it so it comes out solid: a dot drawn on a line's end.
+ * Missed ink elsewhere (the tip of a sharp corner, which a centreline turns
+ * inside) is left to the line: as a shape it reads as a blob, not a point.
+ */
+function beyondStroke(ink: Uint8Array, w: number, h: number, subs: Subpath[], width: number): number[] {
+  const n = w * h
+  const covered = new Uint8Array(n)
+  const r = width / 2 + BEYOND
+  const stamp = (p: Pt) => {
+    for (let y = Math.max(0, Math.floor(p.y - r)); y <= Math.min(h - 1, Math.ceil(p.y + r)); y++)
+      for (let x = Math.max(0, Math.floor(p.x - r)); x <= Math.min(w - 1, Math.ceil(p.x + r)); x++)
+        if ((x + 0.5 - p.x) ** 2 + (y + 0.5 - p.y) ** 2 <= r * r) covered[y * w + x] = 1
+  }
+  for (const sp of subs) {
+    const m = sp.nodes.length
+    if (m === 1) stamp(sp.nodes[0])
+    for (let i = 0; i < (sp.closed ? m : m - 1); i++) {
+      const a = sp.nodes[i]
+      const b = sp.nodes[(i + 1) % m]
+      const c: Cubic = [a, a.out ?? a, b.in ?? b, b]
+      const steps = Math.max(2, Math.ceil(2 * (Math.hypot(c[1].x - c[0].x, c[1].y - c[0].y) + Math.hypot(c[2].x - c[1].x, c[2].y - c[1].y) + Math.hypot(c[3].x - c[2].x, c[3].y - c[2].y))))
+      for (let k = 0; k <= steps; k++) stamp(pointAt(c, k / steps))
+    }
+  }
+  const missed = new Int32Array(n)
+  for (let i = 0; i < n; i++) missed[i] = ink[i] && !covered[i] ? 1 : 0
+  const pieces = components(missed, w, h, (v) => v === 1)
+  // Pieces touching a disc round an open end.
+  const ends: Pt[] = subs.filter((sp) => !sp.closed && sp.nodes.length > 1).flatMap((sp) => [sp.nodes[0], sp.nodes[sp.nodes.length - 1]])
+  const atEnd = new Uint8Array(pieces.compArea.length)
+  const near = width + 1
+  for (let i = 0; i < n; i++)
+    if (missed[i] && !atEnd[pieces.comp[i]]) {
+      const x = (i % w) + 0.5
+      const y = Math.floor(i / w) + 0.5
+      if (ends.some((e) => (e.x - x) ** 2 + (e.y - y) ** 2 <= near * near)) atEnd[pieces.comp[i]] = 1
+    }
+  const out: number[] = []
+  const taken = new Uint8Array(n)
+  for (let i = 0; i < n; i++)
+    if (missed[i] && atEnd[pieces.comp[i]] && pieces.compArea[pieces.comp[i]] >= BEYOND_AREA) {
+      taken[i] = 1
+      out.push(i)
+    }
+  // Solid: the ink within half the width of what was missed, a step at a time.
+  let front = out.slice()
+  for (let step = 0; step < Math.round(width / 2) && front.length; step++) {
+    const next: number[] = []
+    for (const i of front) {
+      const x = i % w
+      for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w])
+        if (j >= 0 && j < n && ink[j] && !taken[j]) {
+          taken[j] = 1
+          next.push(j)
+          out.push(j)
+        }
     }
     front = next
   }
