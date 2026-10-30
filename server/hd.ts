@@ -97,6 +97,7 @@ export function cleanSettings(raw: unknown): Settings | null {
     removeBackground: false,
     aiUpscale: false,
     fineDetail: false,
+    smoothShading: s.smoothShading === true,
     recogniseText: false,
   }
 }

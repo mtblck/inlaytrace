@@ -129,6 +129,14 @@ describe('Outline art', () => {
     for (const id of ['logo', 'illustration', 'outline'] as const) expect(toTraceOptions(settingsFor(id)).stacked).toBe(id !== 'logo')
   })
 
+  it('smooths painted shading only when asked, and only for the peak-palette presets', () => {
+    for (const id of ['logo', 'illustration', 'outline'] as const) {
+      expect(toTraceOptions(settingsFor(id)).smooth).toBeUndefined()
+      expect(toTraceOptions({ ...settingsFor(id), smoothShading: true }).smooth).toBe(true)
+    }
+    for (const id of ['photo', 'pixel', 'lineart', 'centerline'] as const) expect(toTraceOptions({ ...settingsFor(id), smoothShading: true }).smooth).toBeUndefined()
+  })
+
   it('passes on how far the image was enlarged, for its line widths', () => {
     expect(toTraceOptions(settingsFor('outline'), 2.5).scale).toBe(2.5)
     expect(toTraceOptions(settingsFor('outline')).scale).toBeUndefined()

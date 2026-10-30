@@ -28,7 +28,7 @@ it doesn't come back.
 
 ## Prepare
 
-Three optional AI steps run before tracing, in your browser:
+Optional steps run before tracing, in your browser:
 
 - **Remove the background**: U²-Net finds the subject and everything else
   becomes transparent, so it isn't traced. Best on photos and product shots;
@@ -41,6 +41,14 @@ Three optional AI steps run before tracing, in your browser:
   lines and small features survive, like the eyes and mouths on a painted
   poster. Not AI. Slower (about 2.5× on an 820 × 1162 poster), and the file is
   bigger (about 3×).
+- **Smooth painted shading** (Logo, Illustration, Outline art): before the
+  colours are picked, each pixel is averaged with nearby pixels of a similar
+  colour only (a bilateral filter), so brush and JPEG noise inside a shadow
+  evens out while the edges between colours stay sharp. Without it, a painted
+  shadow traces as flecks of the two nearest colours. On a painted film poster
+  at 2× it made the arm and neck shadows whole shapes, kept the face lines, and
+  cut the file from 3.3 MB to 2.1 MB, for about 4 s more. Not AI. Off by default:
+  flat art has no noise to remove, and it can soften the finest lines.
 - **Recognise text** (experimental): Tesseract finds and reads the text, then
   each block of text is matched to the closest of 108 Google Fonts
   families (467 styles) by drawing the same words in every one and keeping the

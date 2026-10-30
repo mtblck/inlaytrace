@@ -8,7 +8,7 @@ import type { PrepStage } from './engine/prep'
 import { paintOut, type TextRun } from './engine/text/match'
 import type { Candidate } from './engine/targetSize'
 import type { SizeRun } from './components/Controls'
-import { canMerge, canSetText, isInk, maxTraceEdge, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
+import { canMerge, canSetText, canSmooth, isInk, maxTraceEdge, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
 import { ACCEPTED, canTraceFiner, colourAt, hasDarkBackground, loadSource, looksLikePhoto, pixelsOf, UPSCALE_BELOW, type Pixels, type Source } from './lib/image'
 import { formatBytes, normalizeHex, parseTrace, statsOf, withText, type Trace } from './lib/svg'
 import {
@@ -1055,6 +1055,7 @@ export default function App() {
     next.removeBackground = settings.removeBackground
     next.aiUpscale = settings.aiUpscale
     next.fineDetail = settings.fineDetail
+    next.smoothShading = settings.smoothShading
     next.recogniseText = settings.recogniseText
     if (isInk(id) && source && hasDarkBackground(source)) next.lightInk = true
     changeSettings(next)
@@ -1397,7 +1398,7 @@ export default function App() {
                 onPreset={choosePreset}
                 suggestPoster={suggestPoster}
                 measuredStroke={settings.preset === 'centerline' && settings.strokeWidth === 0 ? (trace?.paths[0]?.stroke ?? null) : null}
-                prep={{ smallImage: !!source && Math.max(source.bitmap.width, source.bitmap.height) < UPSCALE_BELOW, finer: !!source && settings.preset !== 'pixel' && canTraceFiner(source, maxTraceEdge(settings.preset)), textPreset: canSetText(settings.preset), text: wantText && prepared?.key === prepKey ? prepared.text : null, status: prepStatus, error: prepError }}
+                prep={{ smallImage: !!source && Math.max(source.bitmap.width, source.bitmap.height) < UPSCALE_BELOW, finer: !!source && settings.preset !== 'pixel' && canTraceFiner(source, maxTraceEdge(settings.preset)), textPreset: canSetText(settings.preset), smoothable: canSmooth(settings.preset), text: wantText && prepared?.key === prepKey ? prepared.text : null, status: prepStatus, error: prepError }}
                 currentBytes={stats?.bytes ?? null}
                 sizeRun={sizeRun}
                 onFindSize={findSize}
