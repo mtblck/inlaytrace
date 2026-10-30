@@ -373,6 +373,14 @@ describe('shared-edge tracer', () => {
     const fills = pathsOf(traceInlay(px, w, h, { ...o, lines })).map((p) => p.fill)
     expect(fills.filter((f) => f === '#141314')).toHaveLength(2)
     expect(fills.filter((f) => f !== '#141314')).toHaveLength(1)
+    // Nor into a piece in the colour of the sides it parts: a near-black line
+    // between two dark grey sides, continued below (between paler sides) in
+    // that dark grey, would carry the grey across and join the sides.
+    const tall = 41
+    const sided = raster(w, tall, (x, y) => (x >= 29 && x < 30 ? (y < 20 ? [3, 2, 1] : [20, 19, 20]) : y < 20 ? [20, 19, 20] : [60, 58, 60]))
+    const mid = new Uint8Array(w * tall).map((_, i) => (i % w === 29 ? 1 : 0))
+    const parted = pathsOf(traceInlay(sided, w, tall, { ...o, palette: ['#030201', '#141314', '#3c3a3c'], lines: mid })).map((p) => p.fill)
+    expect(parted).toContain('#030201')
     // Marked but only 10 px long: too short to part anything, so it folds in.
     const short = raster(w, h, (x, y) => (x >= 29 && x < 30 && y >= 15 && y < 25 ? [3, 2, 1] : [20, 19, 20]))
     const mark = new Uint8Array(w * h).map((_, i) => (i % w === 29 && i >= 15 * w && i < 25 * w ? 1 : 0))

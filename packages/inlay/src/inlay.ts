@@ -1185,7 +1185,7 @@ function mergeSlivers(labels: Int32Array, w: number, h: number, labs: (Rgb | nul
     const perimeter = new Int32Array(m)
     const label = new Int32Array(m)
     const onLine = new Int32Array(m)
-    // Each region's bounding box, for a line piece's span.
+    // Each region's bounding box on the lines, for a line piece's span.
     const x0 = new Int32Array(m).fill(w)
     const x1 = new Int32Array(m).fill(-1)
     const y0 = new Int32Array(m).fill(h)
@@ -1204,11 +1204,13 @@ function mergeSlivers(labels: Int32Array, w: number, h: number, labs: (Rgb | nul
         const i = y * w + x
         const c = comp[i]
         label[c] = labels[i]
-        if (lines?.[i]) onLine[c]++
-        if (x < x0[c]) x0[c] = x
-        if (x > x1[c]) x1[c] = x
-        if (y < y0[c]) y0[c] = y
-        if (y > y1[c]) y1[c] = y
+        if (lines?.[i]) {
+          onLine[c]++
+          if (x < x0[c]) x0[c] = x
+          if (x > x1[c]) x1[c] = x
+          if (y < y0[c]) y0[c] = y
+          if (y > y1[c]) y1[c] = y
+        }
         if (x < w - 1 && comp[i + 1] !== comp[i]) touch(i, i + 1), touch(i + 1, i)
         if (y < h - 1 && comp[i + w] !== comp[i]) touch(i, i + w), touch(i + w, i)
       }
@@ -1234,7 +1236,10 @@ function mergeSlivers(labels: Int32Array, w: number, h: number, labs: (Rgb | nul
         }
         return best
       }
-      let best = nearest(line ? onALine : () => true)
+      // A line piece joins another piece of line, but never one in the colour
+      // of a shape it touches: that would join the shapes it parts.
+      const sides = new Set([...near].filter((n) => !onALine(n)).map((n) => label[n]))
+      let best = nearest(line ? (n) => onALine(n) && !sides.has(label[n]) : () => true)
       if (best < 0 && line && sliver && Math.hypot(x1[id] - x0[id], y1[id] - y0[id]) < LINE_PIECE_SPAN) best = nearest(() => true)
       if (best < 0) continue
       to[id] = best
