@@ -54,9 +54,10 @@ Optional steps run before tracing, in your browser:
   filter) are darkened, so a faint painted line labels apart from what it
   parts. Only lines that run a while: short dark marks are texture. On the
   painted poster at 2× it brought back the mouth, eyes, brows and jaw lines,
-  for 45% more paths. It can't separate two areas of one colour whose line is
-  only a few levels deep (the poster's dark trousers on a dark background):
-  that takes an edge detector. Not AI. Off by default.
+  for twice the paths (2.1 to 3.6 MB with smoothing). The lines it finds are kept through smoothing and the
+  clean-up after labelling, so a dark outline between two dark areas (the
+  poster's trousers on a dark background) stays and keeps them apart. Not AI.
+  Off by default.
 - **Recognise text** (experimental): Tesseract finds and reads the text, then
   each block of text is matched to the closest of 108 Google Fonts
   families (467 styles) by drawing the same words in every one and keeping the

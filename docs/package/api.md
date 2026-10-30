@@ -54,6 +54,7 @@ type InlayOptions = FitOptions & {
   strokes?: boolean
   scale?: number
   gradients?: boolean
+  lines?: ArrayLike<number> // painted lines, one entry per pixel (from boostLines): a sliver mostly on them isn't folded into a neighbour
 } & (
     | { mode: 'palette'; palette: string[]; merge?: Record<string, string> }
     | { mode: 'binary'; threshold: number | 'auto' | null }
@@ -115,23 +116,24 @@ function oklab(rgb: [number, number, number]): [number, number, number]
 sRGB (0–255) to OKLab, the perceptual colour space the palettes and labelling
 use.
 
-### `smoothShading(rgba, width, height)`
+### `smoothShading(rgba, width, height, keep?)`
 
 ```ts
-function smoothShading(rgba: ArrayLike<number>, width: number, height: number): Uint8ClampedArray
+function smoothShading(rgba: ArrayLike<number>, width: number, height: number, keep?: ArrayLike<number>): Uint8ClampedArray
 ```
 
 A smoothed copy of the image for tracing painted art: a bilateral filter
 (radius 4 px, three passes) that averages each pixel only with neighbours of
 a similar colour. Brush and JPEG noise inside a shadow evens out, so the shadow
 labels as one colour instead of flecks of two; edges between colours stay put.
-Transparent pixels are left alone and never averaged in. Run it before picking
-the palette and pass the result to `trace`.
+Transparent pixels, and any non-zero in `keep` (one entry per pixel), are left
+alone and never averaged in. Run it before picking the palette and pass the
+result to `trace`.
 
-### `boostLines(rgba, width, height, radius?)`
+### `boostLines(rgba, width, height, radius?, lines?)`
 
 ```ts
-function boostLines(rgba: ArrayLike<number>, width: number, height: number, radius?: number): Uint8ClampedArray
+function boostLines(rgba: ArrayLike<number>, width: number, height: number, radius?: number, lines?: Uint8Array): Uint8ClampedArray
 ```
 
 A copy of the image with faint painted outlines darkened, so they label apart
@@ -139,7 +141,11 @@ from the colours on either side: a black-hat filter over `radius` px (default
 2; 3 for an image enlarged 2×) finds lines up to about twice that wide that are
 darker than both sides, and each is darkened by twice its depth, at most 30
 levels, keeping its colour. Lines shorter than four times the radius are left
-alone as texture. Run it before `smoothShading`.
+alone as texture. Each pixel darkened is set to 1 in `lines` when it's given
+(one entry per pixel): pass that to `smoothShading` as `keep` and to `trace`
+as `lines`, or smoothing blurs a dark line back into its sides and the
+clean-up after labelling folds it into a near-black neighbour. Run it before
+`smoothShading`.
 
 ## Centerline
 
