@@ -74,7 +74,7 @@ Given the image's width, `peakPalette` counts flat pixels per bin, then:
 - spare slots go to flat tints: peaks of flat pixels alone, at least 0.02 from
   every colour picked, flat over at least 0.1% of the image, and pale (OKLab
   lightness 0.85 or more). A photo's smooth sky or shadow is flat too, and
-  without the lightness bar its dark shades filled Illustration's 16 colours
+  without the lightness bar its dark shades filled Illustration's colours
   with near-copies, doubling the SVG.
 
 On the outline fixture in `npm run score` Logo went from 13.0% to 2.1% of

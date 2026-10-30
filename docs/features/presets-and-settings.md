@@ -13,8 +13,8 @@ re-traces within about 120 ms of the last change.
 | Preset | For | Tracer | Defaults |
 | --- | --- | --- | --- |
 | **Logo** | Few flat colours, crisp corners | Inlay | 8 colours, specks 8 px, smoothing 1.5, corners 45° |
-| **Illustration** | More colours, smooth curves | Inlay | 16 colours, specks 4 px, smoothing 1, corners 60° |
-| **Outline art** | Drawn outlines kept as editable lines | Inlay, with lines as strokes | 16 colours, specks 4 px, smoothing 1, corners 60° |
+| **Illustration** | More colours, smooth curves | Inlay | 24 colours, specks 4 px, smoothing 1, corners 60° |
+| **Outline art** | Drawn outlines kept as editable lines | Inlay, with lines as strokes | 24 colours, specks 4 px, smoothing 1, corners 60° |
 | **Line art** | Ink drawings and scans, one colour | Inlay | Threshold Auto, specks 6 px, smoothing 1.5, corners 45° |
 | **Centerline** | Single strokes for plotters and engraving | Inlay (skeleton) | Threshold Auto, specks 4 px, smoothing 1.5, corners 45°, stroke width measured |
 | **Poster** | Photos flattened into colour bands | Inlay (quantized palette) | 24 colours, specks 8 px, smoothing 1, corners 90°, stacked |
@@ -68,6 +68,11 @@ when you change preset.
 **Colours** (2–64): the cap on palette colours. Fewer means a smaller file. Set
 it a little *above* the number of colours you see: anti-aliased edge shades
 compete for slots, and with too low a cap two real colours merge into one.
+Flat art stops at the colours it has, so the cap only matters on painted art,
+where a background with more shades than the cap takes every slot: at 16 on a
+painted film poster, skin had no colour of its own and split between the white
+shirt and a dark tan, in ragged patches. Illustration's 24 gave it skin and its
+shadow (about 6% more file).
 
 **Ink is** (Line art, Centerline): *Dark on light* or *Light on dark*. Line art keeps one
 side and makes the rest transparent; *Light on dark* inverts first. It's chosen

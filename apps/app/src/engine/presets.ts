@@ -66,7 +66,7 @@ export type Preset = {
 }
 
 /** Illustration's defaults, which Outline art shares: it differs only in tracing lines as strokes. */
-const ILLUSTRATION: Preset['defaults'] = { colors: 16, threshold: null, lightInk: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked', exact: true, strokeWidth: 0 }
+const ILLUSTRATION: Preset['defaults'] = { colors: 24, threshold: null, lightInk: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked', exact: true, strokeWidth: 0 }
 
 export const PRESETS: Preset[] = [
   {
