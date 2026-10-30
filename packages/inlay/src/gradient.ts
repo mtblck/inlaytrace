@@ -214,7 +214,6 @@ export function shadings(rgba: ArrayLike<number>, w: number, h: number, comp: In
 /** A gradient's colour at a point. */
 export const colorAt = (g: Gradient, x: number, y: number): Rgb => ramp(g)(x, y)
 
-/** A gradient as a function of the point, its stops parsed once. */
 /**
  * Whether the gradient draws any one band of the shade worse than the band's
  * own flat colour did: a gradient that suits the whole on average can still
@@ -234,6 +233,7 @@ function worseOnABand(g: Gradient, xs: number[], ys: number[], cs: Rgb[], bands:
   return false
 }
 
+/** A gradient as a function of the point, its stops parsed once. */
 function ramp(g: Gradient): (x: number, y: number) => Rgb {
   const offsets = g.stops.map((s) => s.offset)
   const colors = g.stops.map((s) => hexToRgb(s.color))
