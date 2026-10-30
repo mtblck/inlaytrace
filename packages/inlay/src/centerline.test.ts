@@ -73,6 +73,25 @@ describe('centerline', () => {
     expect(worst).toBeLessThan(1)
   })
 
+  it('draws a sharp corner sharp, as far out as the ink goes', () => {
+    // A 4 px stroke turning 140° (a swallowtail's point): thinning turns
+    // inside the corner, short of the point by about 4 px.
+    const arms: [number, number, number, number][] = [
+      [10, 30, 70, 50],
+      [70, 50, 25, 75],
+    ]
+    const v = (x: number, y: number) => arms.some(([ax, ay, bx, by]) => seg(x, y, ax, ay, bx, by) < 2)
+    const pts = samples(centerline(paint(v), 100, 100, options).paths[0].d)
+    const reach = Math.max(...pts.map((p) => p.x))
+    expect(reach).toBeGreaterThan(68.5)
+    expect(Math.min(...pts.map((p) => Math.hypot(p.x - 70, p.y - 50)))).toBeLessThan(1)
+  })
+
+  it('keeps a small ring round, without corners', () => {
+    const ring = (x: number, y: number) => Math.abs(Math.hypot(x - 50, y - 50) - 8) < 1.75
+    for (const p of samples(centerline(paint(ring), 100, 100, options).paths[0].d)) expect(Math.abs(Math.hypot(p.x - 50, p.y - 50) - 8)).toBeLessThan(1)
+  })
+
   it('traces a ring as one closed loop', () => {
     const subs = parsePath(centerline(paint((x, y) => Math.abs(Math.hypot(x - 50, y - 50) - 30) < 2), 100, 100, options).paths[0].d)
     expect(subs).toHaveLength(1)

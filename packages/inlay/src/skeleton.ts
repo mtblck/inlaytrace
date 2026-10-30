@@ -12,7 +12,9 @@
  *     the skeleton toward each junction, so within a stroke width of one the
  *     arms are dropped and drawn straight on to where their own lines meet.
  *     Where strokes cross or branch, chains that carry on in the same
- *     direction are joined, so a plotter lifts its pen less.
+ *     direction are joined, so a plotter lifts its pen less. Thinning also
+ *     rounds a sharp corner off, turning inside it, so a corner's arms are
+ *     drawn straight on to where they meet.
  *  5. Fit each chain with the same curve fitter as outlines.
  */
 import { fitChain, isFlat, type Cubic } from './fit'
@@ -24,7 +26,7 @@ export function skeletonStrokes(ink: Uint8Array, w: number, h: number, o: { tole
   const measured = strokeWidthOf(skel, ink, w)
   prune(skel, w, h, Math.max(3, Math.round(measured)))
   const subs: Subpath[] = []
-  for (const c of joinStraight(refitJunctions(walk(skel, w, h), measured))) {
+  for (const c of joinStraight(refitJunctions(walk(skel, w, h), measured)).map((c) => refitCorners(c, measured, ink, w, h))) {
     if (c.pts.length < 2) continue
     const cubics = c.pts.length < 4 ? polyline(c.pts) : fitChain(c.pts, c.closed, { tolerance: o.tolerance, cornerAngle: o.cornerAngle, smoothing: 6 })
     if (cubics.length) subs.push(toSubpath(cubics, c.closed))
@@ -451,6 +453,88 @@ function refitJunctions(chains: Chain[], width: number): Chain[] {
     if (k.endAt) cutEnd ? pts.push(k.endAt) : (pts[pts.length - 1] = k.endAt)
     return { pts, closed: false }
   })
+}
+
+/** A chain turns this much (radians) across a corner before it's redrawn as one: 60°. */
+const CORNER_TURN = Math.PI / 3
+
+/**
+ * Sharp corners drawn sharp. Thinning a stroke that turns sharply cuts the
+ * corner: the skeleton turns inside it, short of the point by up to a few
+ * stroke widths (a flag's swallowtail comes out rounded). Where the chain's
+ * direction just before a point and just after it (measured outside a stroke
+ * width of it, as at junctions) differs by more than CORNER_TURN, the points
+ * within a stroke width are replaced by where the two arms' lines meet, if
+ * the ink runs on toward that point past where the stroke's edge would be.
+ * A rounded corner or a small ring turns as much, but its ink stops half a
+ * width out, so it keeps its shape.
+ */
+function refitCorners(c: Chain, width: number, ink: Uint8Array, w: number, h: number): Chain {
+  const pts = c.pts
+  const n = pts.length
+  const cut = Math.max(2, width)
+  const reach = Math.max(6, width)
+  if (n < 4) return c
+  const s = [0]
+  for (let i = 1; i < n; i++) s.push(s[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y))
+  const at = (t: number): Pt => {
+    let j = 1
+    while (j < n - 1 && s[j] < t) j++
+    const f = s[j] > s[j - 1] ? (t - s[j - 1]) / (s[j] - s[j - 1]) : 0
+    return { x: pts[j - 1].x + f * (pts[j].x - pts[j - 1].x), y: pts[j - 1].y + f * (pts[j].y - pts[j - 1].y) }
+  }
+  const unit = (a: Pt, b: Pt): Pt => {
+    const l = Math.hypot(b.x - a.x, b.y - a.y) || 1
+    return { x: (b.x - a.x) / l, y: (b.y - a.y) / l }
+  }
+  const isInk = (p: Pt) => {
+    const x = Math.floor(p.x)
+    const y = Math.floor(p.y)
+    return x >= 0 && y >= 0 && x < w && y < h && ink[y * w + x] === 1
+  }
+  type Corner = { i: number; turn: number; apex: Pt }
+  const found: Corner[] = []
+  for (let i = 1; i < n - 1; i++) {
+    if (s[i] - cut - reach < 0 || s[i] + cut + reach > s[n - 1]) continue
+    const pa = at(s[i] - cut)
+    const d1 = unit(at(s[i] - cut - reach), pa)
+    const qa = at(s[i] + cut)
+    const d2 = unit(qa, at(s[i] + cut + reach))
+    const turn = Math.acos(Math.max(-1, Math.min(1, d1.x * d2.x + d1.y * d2.y)))
+    if (turn < CORNER_TURN) continue
+    // Where pa + u·d1 meets qa − v·d2.
+    const det = d1.x * -d2.y - d1.y * -d2.x
+    if (Math.abs(det) < 1e-6) continue
+    const u = ((qa.x - pa.x) * -d2.y - (qa.y - pa.y) * -d2.x) / det
+    if (u < 0) continue
+    const apex = { x: pa.x + u * d1.x, y: pa.y + u * d1.y }
+    const off = Math.hypot(apex.x - pts[i].x, apex.y - pts[i].y)
+    if (off < 0.5 || off > 3 * width || !isInk(apex)) continue
+    // The ink runs on past the stroke's edge toward the point: a rounded
+    // corner (or a small ring) ends half a width out, a cut-off point doesn't.
+    const past = width / 2 + 1.5
+    if (!isInk({ x: pts[i].x + ((apex.x - pts[i].x) / off) * past, y: pts[i].y + ((apex.y - pts[i].y) / off) * past })) continue
+    const last = found[found.length - 1]
+    if (last && s[i] - s[last.i] < 2 * cut) {
+      if (turn > last.turn) found[found.length - 1] = { i, turn, apex }
+    } else found.push({ i, turn, apex })
+  }
+  if (!found.length) return c
+  const out: Pt[] = []
+  let k = 0
+  for (let i = 0; i < n; i++) {
+    const f = found[k]
+    if (f && s[i] > s[f.i] - cut) {
+      if (s[i] < s[f.i] + cut) continue
+      out.push(f.apex)
+      k++
+      i--
+      continue
+    }
+    out.push(pts[i])
+  }
+  for (; k < found.length; k++) out.push(found[k].apex)
+  return { ...c, pts: out }
 }
 
 /** The direction a chain leaves its start, measured a few pixels along it. */

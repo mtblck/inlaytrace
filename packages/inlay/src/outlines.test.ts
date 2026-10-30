@@ -445,4 +445,21 @@ describe('lines as strokes', () => {
     expect(lines).toHaveLength(1)
     expect(lines[0].width).toBeGreaterThan(9)
   })
+
+  it('keeps a dot on a line\'s end, like a flagpole\'s knob', () => {
+    // A 3 px pole inside the card, ending in a dot 7 px across.
+    const seg = (x: number, y: number) => {
+      const t = Math.max(0, Math.min(1, (x - 50) / 55))
+      return Math.hypot(x - 50 - 55 * t, y - 75 + 30 * t)
+    }
+    const pole = (x: number, y: number) => (seg(x, y) < 1.5 || Math.hypot(x - 108, y - 43) < 3.5 ? BLACK : null)
+    const svg = traceIt(paint(160, 120, (x, y) => card(x, y, pole), [255, 255, 255]), ['#ffffff', '#141414'])
+    expect(strokesOf(svg)).toHaveLength(1)
+    const dots = pathsOf(svg).filter((p) => p.fill === '#141414')
+    expect(dots).toHaveLength(1)
+    const pts = parsePath(dots[0].d).flatMap((sp) => sp.nodes)
+    const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length
+    const cy = pts.reduce((a, p) => a + p.y, 0) / pts.length
+    expect(Math.hypot(cx - 108, cy - 43)).toBeLessThan(2)
+  })
 })
