@@ -141,3 +141,17 @@ describe('tracing', () => {
     expect(trace(px, W, H, opts).paths.some((p) => p.gradient)).toBe(false)
   })
 })
+
+describe('painted art', () => {
+  it("doesn't smear a face into the shadow beside it", () => {
+    // Skin with a shadow along one side, drawn with a softened edge, and a palette
+    // whose shadow colour is far off (as 16 peaks often are on a painted poster).
+    const W = 160
+    const H = 120
+    const SKIN: Rgb = [240, 214, 172]
+    const SHADOW: Rgb = [176, 150, 120]
+    const px = image(W, H, (x, y) => mix(SKIN, SHADOW, (x - 110 + 3 * Math.sin(y / 9)) / 6))
+    const r = trace(px, W, H, { mode: 'palette', palette: ['#f0d6ac', '#6c635c'], speckle: 2, tolerance: 0.75, cornerAngle: 60, gradients: true })
+    expect(r.paths.some((p) => p.gradient)).toBe(false)
+  })
+})
