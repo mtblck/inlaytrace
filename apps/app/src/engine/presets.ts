@@ -52,6 +52,8 @@ export type Settings = {
   /** AI steps before tracing (prep.ts): about the image, so a preset keeps them. */
   removeBackground: boolean
   aiUpscale: boolean
+  /** Trace an image of 512 px or more at up to twice its size, so 1 px lines and small features survive. */
+  fineDetail: boolean
   /** Draw text found in the image as type, in the nearest of our fonts, instead of tracing it. */
   recogniseText: boolean
 }
@@ -60,7 +62,7 @@ export type Preset = {
   id: PresetId
   label: string
   hint: string
-  defaults: Omit<Settings, 'preset' | 'merge' | 'removeBackground' | 'aiUpscale' | 'recogniseText'>
+  defaults: Omit<Settings, 'preset' | 'merge' | 'removeBackground' | 'aiUpscale' | 'fineDetail' | 'recogniseText'>
 }
 
 /** Illustration's defaults, which Outline art shares: it differs only in tracing lines as strokes. */
@@ -113,7 +115,7 @@ export const PRESETS: Preset[] = [
 
 export const presetById = (id: PresetId) => PRESETS.find((p) => p.id === id)!
 
-export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {}, removeBackground: false, aiUpscale: false, recogniseText: false })
+export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {}, removeBackground: false, aiUpscale: false, fineDetail: false, recogniseText: false })
 
 /** One ink, thresholded: line art and centerline. */
 export const isInk = (id: PresetId) => id === 'lineart' || id === 'centerline'

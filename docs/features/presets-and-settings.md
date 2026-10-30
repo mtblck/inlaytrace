@@ -36,6 +36,11 @@ Three optional AI steps run before tracing, in your browser:
   Edit → Colours is exact).
 - **Upscale 4× with AI** (images under 512 px): Real-ESRGAN rebuilds a small,
   blurry image at four times the size, with sharper edges, before tracing.
+- **Trace at 2× for fine detail** (images 512 px and up, below 2048 px): the
+  image is enlarged up to twice its size, with no blur, before tracing, so 1 px
+  lines and small features survive, like the eyes and mouths on a painted
+  poster. Not AI. Slower (about 2.5× on an 820 × 1162 poster), and the file is
+  bigger (about 3×).
 - **Recognise text** (experimental): Tesseract finds and reads the text, then
   each block of text is matched to the closest of 108 Google Fonts
   families (467 styles) by drawing the same words in every one and keeping the
@@ -165,7 +170,8 @@ it found.
 ## Small and large images
 
 Images under 512 px are upscaled to 1024 px before tracing, and images over
-2048 px are traced at 2048 px. The panel says when it happens. See
+2048 px are traced at 2048 px. In between, *Trace at 2× for fine detail*
+enlarges them up to 2×, capped at 2048 px. The panel says when it happens. See
 [The pipeline](../how-it-works/pipeline.md).
 
 ## Changing settings after editing

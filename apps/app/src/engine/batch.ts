@@ -42,7 +42,7 @@ export async function runBatch(files: File[], settings: Settings, client: TraceC
       const source = await loadSource(file, file.name)
       let pixels
       try {
-        pixels = pixelsOf(source, maxTraceEdge(settings.preset), settings.preset !== 'pixel')
+        pixels = pixelsOf(source, maxTraceEdge(settings.preset), settings.preset !== 'pixel', settings.fineDetail)
       } finally {
         source.bitmap.close()
         URL.revokeObjectURL(source.url)

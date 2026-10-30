@@ -16,7 +16,7 @@ BMP all work; transparency is kept. Nothing leaves the browser.
 | Image | What happens | Why |
 | --- | --- | --- |
 | Long edge under 512 px | Upscaled to 1024 px (at most 8×) with smoothing and a blur of half the scale factor | A 146×156 logo has details 2–3 px wide. Traced as-is, every pixel step became a wobble and the anti-aliasing became an extra grey colour. Upscaled and softened, the same logo traces to clean curves. |
-| 512 px to 2048 px | Traced at its own size | The 640 px sample already traced accurately. |
+| 512 px to 2048 px | Traced at its own size, or up to 2× (capped at 2048 px, no blur) with *Trace at 2× for fine detail* | The 640 px sample already traced accurately. On a painted 820 × 1162 poster, faces' 1 px lines were lost as specks at its own size and kept at 2×, for about 2.5× the time and 3× the file. |
 | Long edge over 2048 px | Downscaled to 2048 px | Keeps traces around a second. Pixel art allows 4096 px. |
 
 The panel says when either happens ("upscaled 6.6× to trace", "traced at

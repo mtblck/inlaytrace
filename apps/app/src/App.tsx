@@ -9,7 +9,7 @@ import { paintOut, type TextRun } from './engine/text/match'
 import type { Candidate } from './engine/targetSize'
 import type { SizeRun } from './components/Controls'
 import { canMerge, canSetText, isInk, maxTraceEdge, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
-import { ACCEPTED, colourAt, hasDarkBackground, loadSource, looksLikePhoto, pixelsOf, UPSCALE_BELOW, type Pixels, type Source } from './lib/image'
+import { ACCEPTED, canTraceFiner, colourAt, hasDarkBackground, loadSource, looksLikePhoto, pixelsOf, UPSCALE_BELOW, type Pixels, type Source } from './lib/image'
 import { formatBytes, normalizeHex, parseTrace, statsOf, withText, type Trace } from './lib/svg'
 import {
   buildSvg,
@@ -161,7 +161,7 @@ export default function App() {
   const [exportSize, setExportSize] = useState<{ width: number; unit: ExportSize['unit'] } | null>(null)
   const [pngError, setPngError] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
-  const pixelCache = useRef<{ source: Source; maxEdge: number; upscale: boolean; pixels: Pixels } | null>(null)
+  const pixelCache = useRef<{ source: Source; maxEdge: number; upscale: boolean; fine: boolean; pixels: Pixels } | null>(null)
 
   // ---- Loading ------------------------------------------------------------
   /** The original file, kept so the session can be saved on this device. */
@@ -406,8 +406,9 @@ export default function App() {
       const maxEdge = maxTraceEdge(settings.preset)
       const upscale = settings.preset !== 'pixel'
       let cached = pixelCache.current
-      if (!cached || cached.source !== source || cached.maxEdge !== maxEdge || cached.upscale !== upscale) {
-        cached = { source, maxEdge, upscale, pixels: pixelsOf(source, maxEdge, upscale) }
+      const fine = settings.fineDetail
+      if (!cached || cached.source !== source || cached.maxEdge !== maxEdge || cached.upscale !== upscale || cached.fine !== fine) {
+        cached = { source, maxEdge, upscale, fine, pixels: pixelsOf(source, maxEdge, upscale, fine) }
         pixelCache.current = cached
       }
       const { rgba, width, height } = cached.pixels
@@ -949,7 +950,7 @@ export default function App() {
     if (!traceSource) return
     const maxEdge = maxTraceEdge(settings.preset)
     const upscale = settings.preset !== 'pixel'
-    const { rgba, width, height, upscale: scale } = pixelsOf(traceSource, maxEdge, upscale)
+    const { rgba, width, height, upscale: scale } = pixelsOf(traceSource, maxEdge, upscale, settings.fineDetail)
     // Recognised text is the same whatever the settings: it's painted out of what
     // the search traces, and its markup counts against the target.
     if (traceText.length) paintOut(rgba, width, height, traceText, width / traceSource.bitmap.width)
@@ -1045,6 +1046,7 @@ export default function App() {
     if (id === settings.preset) next.merge = settings.merge
     next.removeBackground = settings.removeBackground
     next.aiUpscale = settings.aiUpscale
+    next.fineDetail = settings.fineDetail
     next.recogniseText = settings.recogniseText
     if (isInk(id) && source && hasDarkBackground(source)) next.lightInk = true
     changeSettings(next)
@@ -1379,7 +1381,7 @@ export default function App() {
                 onPreset={choosePreset}
                 suggestPoster={suggestPoster}
                 measuredStroke={settings.preset === 'centerline' && settings.strokeWidth === 0 ? (trace?.paths[0]?.stroke ?? null) : null}
-                prep={{ smallImage: !!source && Math.max(source.bitmap.width, source.bitmap.height) < UPSCALE_BELOW, textPreset: canSetText(settings.preset), text: wantText && prepared?.key === prepKey ? prepared.text : null, status: prepStatus, error: prepError }}
+                prep={{ smallImage: !!source && Math.max(source.bitmap.width, source.bitmap.height) < UPSCALE_BELOW, finer: !!source && settings.preset !== 'pixel' && canTraceFiner(source, maxTraceEdge(settings.preset)), textPreset: canSetText(settings.preset), text: wantText && prepared?.key === prepKey ? prepared.text : null, status: prepStatus, error: prepError }}
                 currentBytes={stats?.bytes ?? null}
                 sizeRun={sizeRun}
                 onFindSize={findSize}
