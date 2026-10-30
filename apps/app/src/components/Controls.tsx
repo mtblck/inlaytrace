@@ -393,7 +393,7 @@ function Slider(props: {
 /** Smoothing shows the fitting tolerance it sets: Inlay always fits within one (±0.25 px at the bottom of the scale). */
 export const smoothingLabel = (v: number) => `±${toleranceFor(v).toFixed(2)} px`
 
-const STAGE: Record<PrepStage, string> = { runtime: 'Loading the AI runtime', background: 'Removing the background', upscale: 'Upscaling', textData: 'Loading text recognition', text: 'Reading text' }
+export const STAGE: Record<PrepStage, string> = { runtime: 'Loading the AI runtime', background: 'Removing the background', upscale: 'Upscaling', textData: 'Loading text recognition', text: 'Reading text' }
 
 const WEIGHT: Record<number, string> = { 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'SemiBold', 700: 'Bold', 800: 'ExtraBold' }
 

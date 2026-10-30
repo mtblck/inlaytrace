@@ -55,7 +55,7 @@ import { buildDxf, buildEps, buildPdf, pngPixels, withSize, type ExportSize } fr
 import { IconButton, KeyboardIcon, MoonIcon, SunIcon } from './components/IconButton'
 import { EditPanel } from './components/EditPanel'
 import { AccountNav } from './components/AccountNav'
-import { Controls } from './components/Controls'
+import { Controls, STAGE } from './components/Controls'
 import { Inks } from './components/Inks'
 import { useTheme } from './lib/theme'
 
@@ -145,7 +145,7 @@ export default function App() {
     nodeColor: '#2f6fd6',
   })
   const dragSeq = useRef(0)
-  const [optimized, setOptimized] = useState<{ from: string; svg: string } | null>(null)
+  const [optimized, setOptimized] = useState<{ from: string; svg: string; trace: Trace } | null>(null)
   const [mode, setMode] = useState<ViewMode>('split')
   /** Screen px per original px, or null to fit; see lib/zoom. */
   const [zoom, setZoom] = useState<Zoom>(null)
@@ -857,15 +857,23 @@ export default function App() {
 
   // Optimise in the background so the numbers shown are the numbers exported.
   useEffect(() => {
-    if (!svg) return
+    if (!svg || !trace) return
     const timer = setTimeout(async () => {
       const res = await client.optimize(svg)
-      if (res?.type === 'optimized') setOptimized({ from: svg, svg: res.svg })
+      if (res?.type === 'optimized') setOptimized({ from: svg, svg: res.svg, trace })
     }, 300)
     return () => clearTimeout(timer)
-  }, [client, svg])
+  }, [client, svg, trace])
 
   const fresh = optimized?.from === svg ? optimized.svg : null
+  /** What the canvas is waiting on, if anything. Optimising counts once per trace, not after every edit. */
+  const busy = prepStatus
+    ? STAGE[prepStatus.stage]
+    : status.kind === 'tracing'
+      ? 'Tracing'
+      : (status.kind === 'done' || status.kind === 'opened') && !fresh && optimized?.trace !== trace
+        ? 'Optimising'
+        : null
   // Numbers come only from the optimised file. While a drag or a sweep keeps
   // changing the SVG, the last optimised numbers stay up rather than measuring
   // every intermediate state (20 ms a move on a busy trace).
@@ -1159,6 +1167,14 @@ export default function App() {
                   onPick={onPick}
                   onAxis={moveAxis}
                 />
+                {busy && (
+                  <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
+                    <div key={busy} role="status" className="busy flex items-center gap-2.5 rounded-full border border-rule bg-paper px-4 py-2 text-[13.5px] font-medium shadow-md" data-busy={busy}>
+                      <span className="spinner" aria-hidden="true" />
+                      {busy}…
+                    </div>
+                  </div>
+                )}
               </div>
               {/* One row, the same height as the sidebar's footer beside it (lg). The hint shows where there's room for it
                   (each view's button carries it as a tooltip too) and shortens rather than wrapping. */}
@@ -1237,11 +1253,11 @@ export default function App() {
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-1.5">
-                  <button className="btn" onClick={() => fileInput.current?.click()}>
-                    Replace
-                  </button>
                   <button className="btn" onClick={startOver} title="Clear this image and your edits, here and from this browser’s storage">
                     Start over
+                  </button>
+                  <button className="btn btn-primary" onClick={() => fileInput.current?.click()}>
+                    Replace
                   </button>
                 </div>
               </div>
