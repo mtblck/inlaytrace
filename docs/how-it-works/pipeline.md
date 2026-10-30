@@ -39,7 +39,8 @@ which the unit tests also call, so the tests and the app can't drift apart:
   painted shadow's noise doesn't break it into flecks of two colours. With
   *Keep painted outlines*, `boostLines` (same file) darkens faint drawn lines
   before that, so they don't label as the colours on either side, and marks
-  them so smoothing and the sliver clean-up leave them be.
+  them so smoothing leaves them be and the sliver clean-up folds a piece of
+  a line only into another piece of a line.
 - **Pixel art** → Inlay with the image's exact colours, keeping every pixel.
 - **Poster** → Inlay with a [quantized palette](palettes.md) and stacked shapes.
 

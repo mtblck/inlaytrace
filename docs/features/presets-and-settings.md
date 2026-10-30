@@ -56,8 +56,10 @@ Optional steps run before tracing, in your browser:
   painted poster at 2× it brought back the mouth, eyes, brows and jaw lines,
   for twice the paths (2.1 to 3.6 MB with smoothing). The lines it finds are kept through smoothing and the
   clean-up after labelling, so a dark outline between two dark areas (the
-  poster's trousers on a dark background) stays and keeps them apart. Not AI.
-  Off by default.
+  poster's trousers on a dark background) stays and keeps them apart. One line
+  often labels as a few dark shades along its length; its pieces join each
+  other (never what the line parts), which took 9–15% off the file on crops of
+  the poster, at 1× and 2×. Not AI. Off by default.
 - **Recognise text** (experimental): Tesseract finds and reads the text, then
   each block of text is matched to the closest of 108 Google Fonts
   families (467 styles) by drawing the same words in every one and keeping the
