@@ -115,6 +115,19 @@ function oklab(rgb: [number, number, number]): [number, number, number]
 sRGB (0–255) to OKLab, the perceptual colour space the palettes and labelling
 use.
 
+### `smoothShading(rgba, width, height)`
+
+```ts
+function smoothShading(rgba: ArrayLike<number>, width: number, height: number): Uint8ClampedArray
+```
+
+A smoothed copy of the image for tracing painted art: a bilateral filter
+(radius 4 px, three passes) that averages each pixel only with neighbours of
+a similar colour. Brush and JPEG noise inside a shadow evens out, so the shadow
+labels as one colour instead of flecks of two; edges between colours stay put.
+Transparent pixels are left alone and never averaged in. Run it before picking
+the palette and pass the result to `trace`.
+
 ## Centerline
 
 ### `centerline(rgba, width, height, options)`

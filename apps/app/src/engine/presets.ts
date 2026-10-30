@@ -54,6 +54,8 @@ export type Settings = {
   aiUpscale: boolean
   /** Trace an image of 512 px or more at up to twice its size, so 1 px lines and small features survive. */
   fineDetail: boolean
+  /** Flat-art presets: even out painted shading before tracing, so it doesn't break into flecks. */
+  smoothShading: boolean
   /** Draw text found in the image as type, in the nearest of our fonts, instead of tracing it. */
   recogniseText: boolean
 }
@@ -62,7 +64,7 @@ export type Preset = {
   id: PresetId
   label: string
   hint: string
-  defaults: Omit<Settings, 'preset' | 'merge' | 'removeBackground' | 'aiUpscale' | 'fineDetail' | 'recogniseText'>
+  defaults: Omit<Settings, 'preset' | 'merge' | 'removeBackground' | 'aiUpscale' | 'fineDetail' | 'smoothShading' | 'recogniseText'>
 }
 
 /** Illustration's defaults, which Outline art shares: it differs only in tracing lines as strokes. */
@@ -115,7 +117,7 @@ export const PRESETS: Preset[] = [
 
 export const presetById = (id: PresetId) => PRESETS.find((p) => p.id === id)!
 
-export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {}, removeBackground: false, aiUpscale: false, fineDetail: false, recogniseText: false })
+export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {}, removeBackground: false, aiUpscale: false, fineDetail: false, smoothShading: false, recogniseText: false })
 
 /** One ink, thresholded: line art and centerline. */
 export const isInk = (id: PresetId) => id === 'lineart' || id === 'centerline'
@@ -129,6 +131,9 @@ export const isInk = (id: PresetId) => id === 'lineart' || id === 'centerline'
 export const canSetText = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline' || id === 'photo'
 
 export const hasExactShapes = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline' || id === 'lineart'
+
+/** Evening out painted shading: the presets whose palettes are histogram peaks. */
+export const canSmooth = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline'
 
 /** Merging colours: the flat-art presets, whose palettes are real colours (Poster's are cluster averages). */
 export const canMerge = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline' || id === 'pixel'
@@ -159,6 +164,8 @@ export type TraceOptions = {
   scale?: number
   /** Palette mode: soft shading as gradient fills (Illustration and Outline art, stacked). */
   gradients?: boolean
+  /** Palette mode: even out painted shading (edge-preserving smoothing) before picking colours. */
+  smooth?: boolean
   /** Centerline mode: the stroke width in px; measured when left out. */
   strokeWidth?: number
   /** Binary and centerline modes. */
@@ -188,7 +195,7 @@ export function toTraceOptions(s: Settings, scale = 1): TraceOptions {
   // Outline art traces its thin outlines as stroked lines, the fills meeting beneath them.
   // Illustration and Outline art, stacked, draw soft shading as gradients; cut out is for cutters, which can't.
   const gradients = s.shapes === 'stacked' && (s.preset === 'illustration' || s.preset === 'outline') ? { gradients: true } : {}
-  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', stacked: s.shapes === 'stacked', ...merge, ...gradients, ...(s.preset === 'outline' ? { strokes: true, ...(scale > 1 ? { scale } : {}) } : {}) }
+  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', stacked: s.shapes === 'stacked', ...merge, ...gradients, ...(s.smoothShading ? { smooth: true } : {}), ...(s.preset === 'outline' ? { strokes: true, ...(scale > 1 ? { scale } : {}) } : {}) }
 }
 
 /** Pixel art keeps every source pixel; everything else is traced at this size at most. */
