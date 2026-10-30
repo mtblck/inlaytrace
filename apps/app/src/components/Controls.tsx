@@ -34,7 +34,7 @@ type Props = {
   /** Centerline: the stroke width the last trace measured from the ink, for the Auto label. */
   measuredStroke?: number | null
   /** The AI steps: whether the image is small enough to upscale, and what's running. */
-  prep?: { smallImage: boolean; textPreset: boolean; text: { family: string; weight: number; size: number }[] | null; status: { stage: PrepStage; done: number; total: number } | null; error: string | null }
+  prep?: { smallImage: boolean; finer: boolean; textPreset: boolean; text: { family: string; weight: number; size: number }[] | null; status: { stage: PrepStage; done: number; total: number } | null; error: string | null }
   /** The optimised SVG's size now, and the target-size search. */
   currentBytes?: number | null
   sizeRun?: SizeRun | null
@@ -408,8 +408,9 @@ export function fontsUsed(text: { family: string; weight: number; size: number }
 }
 
 /**
- * Optional AI steps before tracing. All run in this browser; the models are
- * fetched from this site the first time, which the hints say plainly.
+ * Optional steps before tracing: the AI ones, and tracing a larger image at
+ * 2× for fine detail. All run in this browser; the models are fetched from
+ * this site the first time, which the hints say plainly.
  */
 function Prepare({ settings, set, prep }: { settings: Settings; set: <K extends keyof Settings>(key: K, value: Settings[K]) => void; prep: NonNullable<Props['prep']> }) {
   const s = prep.status
@@ -430,6 +431,15 @@ function Prepare({ settings, set, prep }: { settings: Settings; set: <K extends 
             Upscale 4× with AI
             <span className="field-hint block">
               {prep.smallImage ? 'For small, blurry logos: Real-ESRGAN (4.9 MB) sharpens edges before tracing. Takes a few seconds.' : 'For images under 512 px; this one is big enough already.'}
+            </span>
+          </span>
+        </label>
+        <label className={`flex items-start gap-2 text-[13px] ${prep.finer ? '' : 'opacity-60'}`}>
+          <input type="checkbox" className="mt-0.5 accent-[var(--c-accent)]" checked={settings.fineDetail} disabled={!prep.finer} onChange={(e) => set('fineDetail', e.target.checked)} />
+          <span>
+            Trace at 2× for fine detail
+            <span className="field-hint block">
+              {prep.finer ? 'Keeps thin lines and small features, like faces on a poster. Slower, and the file is bigger.' : prep.smallImage ? 'Small images are already traced enlarged.' : 'This image is already traced at the largest size.'}
             </span>
           </span>
         </label>

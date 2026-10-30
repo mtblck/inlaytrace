@@ -34,6 +34,19 @@ export type Pixels = { rgba: Uint8ClampedArray; width: number; height: number; u
 export const UPSCALE_BELOW = 512
 const UPSCALE_TO = 1024
 const MAX_UPSCALE = 8
+/**
+ * Fine detail: larger images traced at up to this many times their size. On a
+ * painted 820 × 1162 poster, eyes, brows and mouths are 1 px lines that the
+ * tracer drops as specks at native size and keeps at 2×, for about 2.5× the
+ * time and 3× the file.
+ */
+const FINE_SCALE = 2
+
+/** Whether fine detail would enlarge this image: 512 px or more, with room under the trace's size cap. */
+export const canTraceFiner = (source: Source, maxEdge: number) => {
+  const long = Math.max(source.bitmap.width, source.bitmap.height)
+  return long >= UPSCALE_BELOW && long < maxEdge
+}
 
 export const ACCEPTED = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/bmp', 'image/svg+xml']
 
@@ -86,10 +99,12 @@ async function loadSvg(file: Blob, name: string): Promise<Source> {
   return { name: baseName(name), url, originalWidth: width, originalHeight: height, bitmap: await createImageBitmap(canvas), svg }
 }
 
-export function pixelsOf(source: Source, maxEdge: number, allowUpscale = true): Pixels {
+export function pixelsOf(source: Source, maxEdge: number, allowUpscale = true, fineDetail = false): Pixels {
   const long = Math.max(source.bitmap.width, source.bitmap.height)
   let scale = Math.min(1, maxEdge / long)
-  if (allowUpscale && long < UPSCALE_BELOW) scale = Math.min(MAX_UPSCALE, UPSCALE_TO / long)
+  const small = allowUpscale && long < UPSCALE_BELOW
+  if (small) scale = Math.min(MAX_UPSCALE, UPSCALE_TO / long)
+  else if (allowUpscale && fineDetail && long < maxEdge) scale = Math.min(FINE_SCALE, maxEdge / long)
   const width = Math.max(1, Math.round(source.bitmap.width * scale))
   const height = Math.max(1, Math.round(source.bitmap.height * scale))
   const canvas = new OffscreenCanvas(width, height)
@@ -100,7 +115,8 @@ export function pixelsOf(source: Source, maxEdge: number, allowUpscale = true): 
   // When upscaling, a blur of half the scale factor melts the stair-steps that
   // smoothing alone leaves on diagonal edges. Browsers without canvas filters
   // ignore this and still get the smoothed upscale.
-  if (scale > 1) ctx.filter = `blur(${(scale / 2).toFixed(1)}px)`
+  // Fine detail skips the blur: it's there to keep the 1 px lines it would soften.
+  if (small && scale > 1) ctx.filter = `blur(${(scale / 2).toFixed(1)}px)`
   ctx.drawImage(source.bitmap, 0, 0, width, height)
   return { rgba: ctx.getImageData(0, 0, width, height).data, width, height, upscale: scale > 1 ? scale : 1 }
 }

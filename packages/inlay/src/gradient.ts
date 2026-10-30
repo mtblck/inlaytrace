@@ -42,6 +42,15 @@ const FLAT_MIN = 6
 const GAIN = 0.5
 /** …and come within this of the bands' own error. */
 const BANDS_SLACK = 1.1
+/**
+ * …and stay this close to the image (RMS, RGB levels). Soft shading fits to
+ * within noise; a fit this far off is smearing distinct shapes together (a
+ * face and the hair beside it on a painted poster, whose palette is far off
+ * both, so the bands' error is no guide).
+ */
+const MAX_RMS = 20
+/** A band with at least this many sampled pixels must be drawn no worse by the gradient than by its own colour. */
+const BAND_MIN = 16
 /** A radial fit replaces the linear one only when this much closer. */
 const RADIAL_GAIN = 0.8
 /** Pixels a shade is fitted on, at most. */
@@ -120,12 +129,14 @@ export function shadings(rgba: ArrayLike<number>, w: number, h: number, comp: In
     const ys: number[] = []
     const cs: Rgb[] = []
     const bands: Rgb[] = []
+    const ids: number[] = []
     for (let k = 0; k < all.length; k += stride) {
       const i = all[k]
       xs.push((i % w) + 0.5)
       ys.push(Math.floor(i / w) + 0.5)
       cs.push(rgb(i))
       bands.push(colors[comp[i]])
+      ids.push(comp[i])
     }
     const g = fitShading(xs, ys, cs)
     if (!g) continue
@@ -134,7 +145,8 @@ export function shadings(rgba: ArrayLike<number>, w: number, h: number, comp: In
     const rms = (f: (j: number) => Rgb) => Math.sqrt(cs.reduce((s, c, j) => s + d3(c, f(j)) ** 2, 0) / n)
     const flat = rms(() => mean)
     const banded = rms((j) => bands[j])
-    if (flat < FLAT_MIN || g.rms > GAIN * flat || g.rms > BANDS_SLACK * banded) continue
+    if (flat < FLAT_MIN || g.rms > MAX_RMS || g.rms > GAIN * flat || g.rms > BANDS_SLACK * banded) continue
+    if (worseOnABand(g.gradient, xs, ys, cs, bands, ids)) continue
     out.push({ comps: [...groups.get(r)!], gradient: g.gradient, mean: '' })
   }
 
@@ -201,6 +213,25 @@ export function shadings(rgba: ArrayLike<number>, w: number, h: number, comp: In
 
 /** A gradient's colour at a point. */
 export const colorAt = (g: Gradient, x: number, y: number): Rgb => ramp(g)(x, y)
+
+/**
+ * Whether the gradient draws any one band of the shade worse than the band's
+ * own flat colour did: a gradient that suits the whole on average can still
+ * paint one member (a shirt's fold shadow, a strand of hair) the wrong colour.
+ */
+function worseOnABand(g: Gradient, xs: number[], ys: number[], cs: Rgb[], bands: Rgb[], ids: number[]): boolean {
+  const at = ramp(g)
+  const err = new Map<number, [number, number, number]>()
+  cs.forEach((c, j) => {
+    const e = err.get(ids[j]) ?? [0, 0, 0]
+    e[0] += dist2(c, at(xs[j], ys[j]))
+    e[1] += dist2(c, bands[j])
+    e[2]++
+    err.set(ids[j], e)
+  })
+  for (const [grad, band, n] of err.values()) if (n >= BAND_MIN && grad > BANDS_SLACK ** 2 * band) return true
+  return false
+}
 
 /** A gradient as a function of the point, its stops parsed once. */
 function ramp(g: Gradient): (x: number, y: number) => Rgb {
