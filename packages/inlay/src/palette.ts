@@ -217,10 +217,6 @@ function isBlend(rgb: Rgb, lab: Rgb, picked: { rgb: Rgb }[], tolerance: number) 
 }
 
 export function oklab([r, g, b]: Rgb): Rgb {
-  const lin = (c: number) => {
-    c /= 255
-    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-  }
   const [lr, lg, lb] = [lin(r), lin(g), lin(b)]
   const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb)
   const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb)
@@ -230,6 +226,26 @@ export function oklab([r, g, b]: Rgb): Rgb {
     1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
     0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
   ]
+}
+
+const linear = (c: number) => {
+  c /= 255
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+}
+
+/**
+ * sRGB to linear light, from a table at 1/16 steps: labelling reads hundreds of
+ * mixes per in-between colour (every pair of a 24-colour palette), and the
+ * power was half its time. Interpolated, it is within 1e-7 of the formula.
+ */
+const LIN_STEPS = 16
+const LIN = Float64Array.from({ length: 255 * LIN_STEPS + 2 }, (_, i) => linear(i / LIN_STEPS))
+function lin(c: number) {
+  if (!(c > 0)) return 0
+  if (c >= 255) return linear(c)
+  const x = c * LIN_STEPS
+  const i = Math.floor(x)
+  return LIN[i] + (LIN[i + 1] - LIN[i]) * (x - i)
 }
 
 /**
