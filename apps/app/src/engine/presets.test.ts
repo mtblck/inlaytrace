@@ -137,6 +137,14 @@ describe('Outline art', () => {
     for (const id of ['photo', 'pixel', 'lineart', 'centerline'] as const) expect(toTraceOptions({ ...settingsFor(id), smoothShading: true }).smooth).toBeUndefined()
   })
 
+  it('keeps painted outlines only when asked, looking wider on an enlarged image', () => {
+    expect(toTraceOptions(settingsFor('illustration')).outlines).toBeUndefined()
+    expect(toTraceOptions({ ...settingsFor('illustration'), keepOutlines: true }).outlines).toBe(2)
+    expect(toTraceOptions({ ...settingsFor('illustration'), keepOutlines: true }, 2).outlines).toBe(3)
+    expect(toTraceOptions({ ...settingsFor('illustration'), keepOutlines: true }, 8).outlines).toBe(4)
+    expect(toTraceOptions({ ...settingsFor('photo'), keepOutlines: true }).outlines).toBeUndefined()
+  })
+
   it('passes on how far the image was enlarged, for its line widths', () => {
     expect(toTraceOptions(settingsFor('outline'), 2.5).scale).toBe(2.5)
     expect(toTraceOptions(settingsFor('outline')).scale).toBeUndefined()

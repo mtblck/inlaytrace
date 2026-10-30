@@ -8,7 +8,7 @@
 export { trace, traceInlay, toSvg, type InlayOptions, type InlayPath, type InlayResult } from './inlay'
 export { colorAt, type Gradient, type GradientStop } from './gradient'
 export { peakPalette, exactPalette, quantizePalette, oklab, type Rgb } from './palette'
-export { smoothShading } from './smooth'
+export { boostLines, smoothShading } from './smooth'
 export { centerline, traceCenterline, centerlineToSvg, type CenterlineOptions, type CenterlinePath, type CenterlineResult } from './centerline'
 export { detectSymmetry, type Symmetry, type MirrorSymmetry, type RotationalSymmetry, type SymmetryOptions } from './symmetry'
 export { fitChain, isFlat, pointAt, type Cubic, type FitOptions } from './fit'

@@ -2,7 +2,7 @@
  * One trace, from options to SVG markup: the worker calls this, and so do the
  * tests, so the two can't drift apart. Every preset is Inlay (packages/inlay).
  */
-import { exactPalette, peakPalette, quantizePalette, smoothShading, traceCenterline, traceInlay } from 'inlaytrace'
+import { boostLines, exactPalette, peakPalette, quantizePalette, smoothShading, traceCenterline, traceInlay } from 'inlaytrace'
 import type { TraceOptions } from './presets'
 
 /** Below this share of opaque pixels in its exact colours, an image isn't treated as pixel art. */
@@ -41,6 +41,8 @@ export function runTrace(pixels: Uint8Array, width: number, height: number, o: T
   const fit = { speckle: o.speckle, tolerance: o.tolerance, cornerAngle: o.cornerAngle, pixels: !!o.pixels, stacked: !!o.stacked, shapes: !!o.shapes }
   if (o.mode === 'centerline') return traceCenterline(pixels, width, height, { threshold: o.threshold ?? null, speckle: o.speckle, tolerance: o.tolerance, cornerAngle: o.cornerAngle, strokeWidth: o.strokeWidth })
   if (o.mode === 'binary') return traceInlay(pixels, width, height, { ...fit, mode: 'binary', threshold: o.threshold ?? null })
+  // Painted outlines made plain first, before smoothing could soften them.
+  if (o.outlines) pixels = new Uint8Array(boostLines(pixels, width, height, o.outlines).buffer)
   // Painted shading evened out first, so its noise doesn't fleck it with the neighbouring colour.
   if (o.smooth) pixels = new Uint8Array(smoothShading(pixels, width, height).buffer)
   // Peaks are told the width so they can find pale tints by their flatness.

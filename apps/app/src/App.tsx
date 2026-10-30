@@ -1056,6 +1056,7 @@ export default function App() {
     next.aiUpscale = settings.aiUpscale
     next.fineDetail = settings.fineDetail
     next.smoothShading = settings.smoothShading
+    next.keepOutlines = settings.keepOutlines
     next.recogniseText = settings.recogniseText
     if (isInk(id) && source && hasDarkBackground(source)) next.lightInk = true
     changeSettings(next)

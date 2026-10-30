@@ -36,7 +36,9 @@ which the unit tests also call, so the tests and the app can't drift apart:
   shape is drawn whole, with the parts hidden behind another completed.
   With *Smooth painted shading*, the pixels first go through an edge-preserving
   (bilateral) filter, `smoothShading` in `packages/inlay/src/smooth.ts`, so a
-  painted shadow's noise doesn't break it into flecks of two colours.
+  painted shadow's noise doesn't break it into flecks of two colours. With
+  *Keep painted outlines*, `boostLines` (same file) darkens faint drawn lines
+  before that, so they don't label as the colours on either side.
 - **Pixel art** → Inlay with the image's exact colours, keeping every pixel.
 - **Poster** → Inlay with a [quantized palette](palettes.md) and stacked shapes.
 

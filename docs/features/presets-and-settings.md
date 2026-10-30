@@ -49,6 +49,14 @@ Optional steps run before tracing, in your browser:
   at 2× it made the arm and neck shadows whole shapes, kept the face lines, and
   cut the file from 3.3 MB to 2.1 MB, for about 4 s more. Not AI. Off by default:
   flat art has no noise to remove, and it can soften the finest lines.
+- **Keep painted outlines** (Logo, Illustration, Outline art): before smoothing
+  and picking colours, thin lines darker than both their sides (a black-hat
+  filter) are darkened, so a faint painted line labels apart from what it
+  parts. Only lines that run a while: short dark marks are texture. On the
+  painted poster at 2× it brought back the mouth, eyes, brows and jaw lines,
+  for 45% more paths. It can't separate two areas of one colour whose line is
+  only a few levels deep (the poster's dark trousers on a dark background):
+  that takes an edge detector. Not AI. Off by default.
 - **Recognise text** (experimental): Tesseract finds and reads the text, then
   each block of text is matched to the closest of 108 Google Fonts
   families (467 styles) by drawing the same words in every one and keeping the

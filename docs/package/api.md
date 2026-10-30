@@ -128,6 +128,19 @@ labels as one colour instead of flecks of two; edges between colours stay put.
 Transparent pixels are left alone and never averaged in. Run it before picking
 the palette and pass the result to `trace`.
 
+### `boostLines(rgba, width, height, radius?)`
+
+```ts
+function boostLines(rgba: ArrayLike<number>, width: number, height: number, radius?: number): Uint8ClampedArray
+```
+
+A copy of the image with faint painted outlines darkened, so they label apart
+from the colours on either side: a black-hat filter over `radius` px (default
+2; 3 for an image enlarged 2×) finds lines up to about twice that wide that are
+darker than both sides, and each is darkened by twice its depth, at most 30
+levels, keeping its colour. Lines shorter than four times the radius are left
+alone as texture. Run it before `smoothShading`.
+
 ## Centerline
 
 ### `centerline(rgba, width, height, options)`

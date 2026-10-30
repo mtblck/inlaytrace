@@ -98,6 +98,7 @@ export function cleanSettings(raw: unknown): Settings | null {
     aiUpscale: false,
     fineDetail: false,
     smoothShading: s.smoothShading === true,
+    keepOutlines: s.keepOutlines === true,
     recogniseText: false,
   }
 }
