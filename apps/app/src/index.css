@@ -202,6 +202,20 @@
     border-color: var(--c-mark-hover);
   }
 
+  /* Over the canvas while it's tracing or optimising. Fades in after a beat, so a quick
+     re-trace doesn't flash it; it never takes the pointer, so work carries on underneath. */
+  .busy {
+    animation: busy-in 160ms ease-out 250ms both;
+  }
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--c-rule);
+    border-top-color: var(--c-mark);
+    border-radius: 50%;
+    animation: spin 700ms linear infinite;
+  }
+
   /* Range inputs drawn to match the rules and accent rather than the
      platform's blue. */
   .range {
@@ -270,6 +284,17 @@
     label:has(> input[type='checkbox']) {
       min-height: 2.75rem;
     }
+  }
+}
+
+@keyframes busy-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
   }
 }
 
