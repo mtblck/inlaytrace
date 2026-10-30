@@ -408,7 +408,10 @@ await flatArt('shaded.svg', 'Soft shading (two linear gradients, one radial, fla
 // Legs on a dark, brush-textured background, each leg's lit side within a few
 // levels of the background and parted from it only by a faint outline, and a
 // face whose mouth is near its shadow's colour. Colour alone merges the lit
-// sides into the background; Keep painted outlines darkens the lines first.
+// sides into the background; Keep painted outlines darkens the lines first and
+// keeps them, so each lit side is a shape of its own. They come out near-black,
+// nearer the legs' colour than the outline's, so Lines counts none: judge the
+// lit sides by eye.
 await flatArt('painted.svg', 'Painted figure (faint outlines on a dark, textured background)', '#141317', ['illustration', 'illustration:smooth', 'illustration:outlines', 'photo'])
 
 // ---- Lossless --------------------------------------------------------------

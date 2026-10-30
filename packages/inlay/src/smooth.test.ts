@@ -51,6 +51,15 @@ describe('smoothShading', () => {
     const smoothed = smoothShading(cut, 10, 10)
     expect([...smoothed]).toEqual([...cut])
   })
+
+  it('leaves kept pixels alone and out of the average', () => {
+    // A dark line down the skin, marked to keep: smoothing would blur it into the skin.
+    const lined = image(w, h, (x, y) => (x === 10 ? [0, 0, 0] : src.slice((y * w + x) * 4, (y * w + x) * 4 + 3) as unknown as [number, number, number]))
+    const keep = new Uint8Array(w * h).map((_, i) => (i % w === 10 ? 1 : 0))
+    const kept = smoothShading(lined, w, h, keep)
+    for (let y = 0; y < h; y++) expect(kept[(y * w + 10) * 4]).toBe(0)
+    expect(kept[(15 * w + 9) * 4]).toBeGreaterThan(200)
+  })
 })
 
 describe('boostLines', () => {
@@ -73,6 +82,12 @@ describe('boostLines', () => {
 
   it('leaves short dark marks alone: texture, not lines', () => {
     expect(out[(10 * w + 10) * 4]).toBe(32)
+  })
+
+  it('marks the pixels it darkens', () => {
+    const lines = new Uint8Array(w * h)
+    boostLines(src, w, h, 2, lines)
+    expect([lines[20 * w + 29], lines[20 * w + 30], lines[20 * w + 20], lines[10 * w + 10]]).toEqual([1, 1, 0, 0])
   })
 
   it('darkens a strong line only a little, so it keeps its colour', () => {

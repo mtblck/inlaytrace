@@ -91,6 +91,13 @@ export type InlayOptions = FitOptions & {
    * pixel art. Off by default: a cutter or a plotter can't draw a gradient.
    */
   gradients?: boolean
+  /**
+   * Painted lines (one entry per pixel, non-zero on a line), as `boostLines`
+   * marks them. A sliver mostly on them is a drawn line, not one ink's two
+   * shades, so it isn't folded into a neighbour: a dark outline between two
+   * dark shapes is nearly their colour, and folding it in joined them.
+   */
+  lines?: ArrayLike<number>
 } & (
     /**
      * `merge` folds colours together before any region is built, so the edge
@@ -181,7 +188,7 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
   if (!o.pixels && !(o.mode === 'palette' && o.photo)) joinDiagonals(labels, w, h, rgba, drawn)
   const labs = o.mode === 'palette' && !o.photo ? colors.map((c) => (c ? oklab(hexToRgb(c)) : null)) : undefined
   mergeSpecks(labels, w, h, Math.max(0, Math.round(o.speckle)) ** 2, labs)
-  if (labs && !o.pixels) mergeSlivers(labels, w, h, labs)
+  if (labs && !o.pixels) mergeSlivers(labels, w, h, labs, o.lines)
   const lines = o.mode === 'palette' && o.strokes && labs && !o.pixels ? strokesOf(rgba, labels, w, h, colors, labs, drawn, o) : []
 
   // Final regions: 4-connected components of drawn labels. Everything else is VOID.
@@ -1158,15 +1165,17 @@ const SLIVER_DISTANCE = 0.12
  * out dark at its edges and lighter down the middle), and a one-pixel strip
  * of one shade inside the other fitted as a spike shooting out of the
  * letter. A hairline of a colour of its own has no neighbour that close, so
- * it stays. Within a pass a sliver waits if a neighbour has already moved,
- * so two side by side don't just swap colours.
+ * it stays, and so does a painted line marked in `lines`. Within a pass a
+ * sliver waits if a neighbour has already moved, so two side by side don't
+ * just swap colours.
  */
-function mergeSlivers(labels: Int32Array, w: number, h: number, labs: (Rgb | null)[]) {
+function mergeSlivers(labels: Int32Array, w: number, h: number, labs: (Rgb | null)[], lines?: ArrayLike<number>) {
   for (let pass = 0; pass < 4; pass++) {
     const { comp, compArea } = components(labels, w, h, () => true)
     const m = compArea.length
     const perimeter = new Int32Array(m)
     const label = new Int32Array(m)
+    const onLine = new Int32Array(m)
     // Each region's neighbouring regions.
     const around = new Map<number, Set<number>>()
     const touch = (a: number, b: number) => {
@@ -1180,6 +1189,7 @@ function mergeSlivers(labels: Int32Array, w: number, h: number, labs: (Rgb | nul
       for (let x = 0; x < w; x++) {
         const i = y * w + x
         label[comp[i]] = labels[i]
+        if (lines?.[i]) onLine[comp[i]]++
         if (x < w - 1 && comp[i + 1] !== comp[i]) touch(i, i + 1), touch(i + 1, i)
         if (y < h - 1 && comp[i + w] !== comp[i]) touch(i, i + w), touch(i + w, i)
       }
@@ -1188,7 +1198,7 @@ function mergeSlivers(labels: Int32Array, w: number, h: number, labs: (Rgb | nul
     // Smallest first, so a fleck of one shade inside a letter joins the
     // letter, not the letter the fleck.
     for (const [id, near] of [...around].sort((a, b) => compArea[a[0]] - compArea[b[0]])) {
-      if ((2 * compArea[id]) / perimeter[id] >= SLIVER_WIDTH) continue
+      if ((2 * compArea[id]) / perimeter[id] >= SLIVER_WIDTH || 2 * onLine[id] > compArea[id]) continue
       const mine = labs[label[id]]
       if (!mine || [...near].some((n) => to[n] >= 0)) continue
       let best = -1

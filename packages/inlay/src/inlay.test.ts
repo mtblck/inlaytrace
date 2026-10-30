@@ -350,6 +350,18 @@ describe('shared-edge tracer', () => {
     }
   })
 
+  it('keeps a painted line between two dark shapes when it is marked', () => {
+    // Dark grey on both sides of a near-black line 1 px wide: close enough in
+    // colour that, unmarked, the line folds in as a sliver and the sides join.
+    const w = 60
+    const h = 40
+    const px = raster(w, h, (x) => (x >= 29 && x < 30 ? [3, 2, 1] : [20, 19, 20]))
+    const lines = new Uint8Array(w * h).map((_, i) => (i % w === 29 ? 1 : 0))
+    const o = { ...opts, mode: 'palette' as const, palette: ['#030201', '#141314'] }
+    expect(pathsOf(traceInlay(px, w, h, o)).map((p) => p.fill)).toEqual(['#141314'])
+    expect(pathsOf(traceInlay(px, w, h, { ...o, lines })).map((p) => p.fill).sort()).toEqual(['#030201', '#141314', '#141314'])
+  })
+
   it('Otsu splits two populations between them', () => {
     const lum = new Uint8Array([...Array(50).fill(30), ...Array(50).fill(220)])
     const t = otsu(lum, new Uint8Array(100).fill(1))

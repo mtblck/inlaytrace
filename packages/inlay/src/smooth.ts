@@ -23,10 +23,11 @@ const SIGMA_COLOR = 30
 const PASSES = 3
 
 /**
- * A smoothed copy of `rgba` (`width` × `height`, RGBA). Transparent pixels are
- * left as they are and never averaged into their neighbours.
+ * A smoothed copy of `rgba` (`width` × `height`, RGBA). Transparent pixels, and
+ * any marked in `keep` (one entry per pixel, non-zero to keep), are left as
+ * they are and never averaged into their neighbours.
  */
-export function smoothShading(rgba: ArrayLike<number>, width: number, height: number): Uint8ClampedArray {
+export function smoothShading(rgba: ArrayLike<number>, width: number, height: number, keep?: ArrayLike<number>): Uint8ClampedArray {
   const dxs: number[] = []
   const dys: number[] = []
   const ws: number[] = []
@@ -43,6 +44,14 @@ export function smoothShading(rgba: ArrayLike<number>, width: number, height: nu
   // Indexed by squared RGB distance.
   const near = Float32Array.from({ length: 3 * 255 * 255 + 1 }, (_, d2) => Math.exp(-d2 / (2 * SIGMA_COLOR ** 2)))
   let src = Uint8ClampedArray.from(rgba)
+  // Kept pixels are made transparent while smoothing, so they are skipped, then put back.
+  const kept: number[] = []
+  if (keep)
+    for (let p = 0; p < width * height; p++)
+      if (keep[p] && src[p * 4 + 3] >= 128) {
+        kept.push(p, src[p * 4 + 3])
+        src[p * 4 + 3] = 0
+      }
   for (let pass = 0; pass < PASSES; pass++) {
     const out = new Uint8ClampedArray(src)
     for (let y = 0; y < height; y++)
@@ -81,6 +90,7 @@ export function smoothShading(rgba: ArrayLike<number>, width: number, height: nu
       }
     src = out
   }
+  for (let k = 0; k < kept.length; k += 2) src[kept[k] * 4 + 3] = kept[k + 1]
   return src
 }
 
@@ -102,14 +112,19 @@ const LINE_SPAN = 4
  * that wide that are darker than both sides; each is darkened by twice its
  * depth, at most LINE_MAX, colour kept, so it labels apart from both sides.
  * Only lines that run a while are kept: brick, foliage and brush texture are
- * dark too, but short.
+ * dark too, but short. When `lines` (one entry per pixel) is given, each
+ * pixel darkened is marked in it with 1, for `smoothShading`'s `keep` and
+ * the tracer's `lines`, which leave them be.
  *
- * On a painted film poster at 2× (radius 3) this brought back the mouth, eyes,
- * brows and jaw lines Illustration lost, for 45% more paths (2.1 to 2.6 MB).
- * The trousers there still merged: their outline is about 10 levels deep and
- * the lit side matches the background, which takes an edge detector.
+ * On a painted film poster at 2× (radius 3), with smoothing, this brought back
+ * the mouth, eyes, brows and jaw lines Illustration lost, and the outline
+ * parting dark trousers from a dark background, for twice the paths (2.1 to
+ * 3.6 MB). The trousers merged with the background until the lines were marked:
+ * the outline was found, but smoothing blurred it back into its sides, and,
+ * left unsmoothed, it labelled as the near-black of the trousers, close
+ * enough to the dark grey on either side to be folded in as a sliver.
  */
-export function boostLines(rgba: ArrayLike<number>, width: number, height: number, radius = 2): Uint8ClampedArray {
+export function boostLines(rgba: ArrayLike<number>, width: number, height: number, radius = 2, lines?: Uint8Array): Uint8ClampedArray {
   const n = width * height
   const out = Uint8ClampedArray.from(rgba)
   const lum = new Float32Array(n)
@@ -177,6 +192,7 @@ export function boostLines(rgba: ArrayLike<number>, width: number, height: numbe
       out[i * 4] *= f
       out[i * 4 + 1] *= f
       out[i * 4 + 2] *= f
+      if (lines) lines[i] = 1
     }
   }
   return out

@@ -41,10 +41,11 @@ export function runTrace(pixels: Uint8Array, width: number, height: number, o: T
   const fit = { speckle: o.speckle, tolerance: o.tolerance, cornerAngle: o.cornerAngle, pixels: !!o.pixels, stacked: !!o.stacked, shapes: !!o.shapes }
   if (o.mode === 'centerline') return traceCenterline(pixels, width, height, { threshold: o.threshold ?? null, speckle: o.speckle, tolerance: o.tolerance, cornerAngle: o.cornerAngle, strokeWidth: o.strokeWidth })
   if (o.mode === 'binary') return traceInlay(pixels, width, height, { ...fit, mode: 'binary', threshold: o.threshold ?? null })
-  // Painted outlines made plain first, before smoothing could soften them.
-  if (o.outlines) pixels = new Uint8Array(boostLines(pixels, width, height, o.outlines).buffer)
+  // Painted outlines made plain first, and marked, so neither smoothing nor the clean-up after labelling takes them away.
+  const lines = o.outlines ? new Uint8Array(width * height) : undefined
+  if (o.outlines) pixels = new Uint8Array(boostLines(pixels, width, height, o.outlines, lines).buffer)
   // Painted shading evened out first, so its noise doesn't fleck it with the neighbouring colour.
-  if (o.smooth) pixels = new Uint8Array(smoothShading(pixels, width, height).buffer)
+  if (o.smooth) pixels = new Uint8Array(smoothShading(pixels, width, height, lines).buffer)
   // Peaks are told the width so they can find pale tints by their flatness.
   const colors = o.colors ?? 8
   let palette = o.palette === 'exact' ? exactPalette(pixels, colors) : o.palette === 'quantize' ? quantizePalette(pixels, colors) : peakPalette(pixels, colors, { width })
@@ -54,5 +55,5 @@ export function runTrace(pixels: Uint8Array, width: number, height: number, o: T
   // Then cluster instead, as Poster does; the edges stay pixel-exact.
   if (o.palette === 'exact' && coverage(pixels, palette) < EXACT_COVERAGE) palette = quantizePalette(pixels, colors)
   // Poster's clusters get a photo's clean-up; flat art's real colours get flat art's.
-  return traceInlay(pixels, width, height, { ...fit, mode: 'palette', palette, merge: o.merge, photo: o.palette === 'quantize', strokes: !!o.strokes, scale: o.scale, gradients: !!o.gradients })
+  return traceInlay(pixels, width, height, { ...fit, mode: 'palette', palette, merge: o.merge, photo: o.palette === 'quantize', strokes: !!o.strokes, scale: o.scale, gradients: !!o.gradients, lines })
 }
