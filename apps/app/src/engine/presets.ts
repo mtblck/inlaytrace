@@ -56,6 +56,8 @@ export type Settings = {
   fineDetail: boolean
   /** Flat-art presets: even out painted shading before tracing, so it doesn't break into flecks. */
   smoothShading: boolean
+  /** Flat-art presets: darken faint painted outlines before tracing, so the shapes they part don't merge. */
+  keepOutlines: boolean
   /** Draw text found in the image as type, in the nearest of our fonts, instead of tracing it. */
   recogniseText: boolean
 }
@@ -64,7 +66,7 @@ export type Preset = {
   id: PresetId
   label: string
   hint: string
-  defaults: Omit<Settings, 'preset' | 'merge' | 'removeBackground' | 'aiUpscale' | 'fineDetail' | 'smoothShading' | 'recogniseText'>
+  defaults: Omit<Settings, 'preset' | 'merge' | 'removeBackground' | 'aiUpscale' | 'fineDetail' | 'smoothShading' | 'keepOutlines' | 'recogniseText'>
 }
 
 /** Illustration's defaults, which Outline art shares: it differs only in tracing lines as strokes. */
@@ -117,7 +119,7 @@ export const PRESETS: Preset[] = [
 
 export const presetById = (id: PresetId) => PRESETS.find((p) => p.id === id)!
 
-export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {}, removeBackground: false, aiUpscale: false, fineDetail: false, smoothShading: false, recogniseText: false })
+export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {}, removeBackground: false, aiUpscale: false, fineDetail: false, smoothShading: false, keepOutlines: false, recogniseText: false })
 
 /** One ink, thresholded: line art and centerline. */
 export const isInk = (id: PresetId) => id === 'lineart' || id === 'centerline'
@@ -131,6 +133,12 @@ export const isInk = (id: PresetId) => id === 'lineart' || id === 'centerline'
 export const canSetText = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline' || id === 'photo'
 
 export const hasExactShapes = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline' || id === 'lineart'
+
+/**
+ * How wide a painted outline is looked for, by how many times the image was
+ * enlarged: 2 px at its own size (lines up to about 4 px wide), 3 px at 2×.
+ */
+export const outlineRadius = (scale: number) => Math.min(4, Math.max(2, Math.round(1.5 * scale)))
 
 /** Evening out painted shading: the presets whose palettes are histogram peaks. */
 export const canSmooth = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline'
@@ -166,6 +174,8 @@ export type TraceOptions = {
   gradients?: boolean
   /** Palette mode: even out painted shading (edge-preserving smoothing) before picking colours. */
   smooth?: boolean
+  /** Palette mode: darken faint painted outlines up to about twice this many px wide, first. */
+  outlines?: number
   /** Centerline mode: the stroke width in px; measured when left out. */
   strokeWidth?: number
   /** Binary and centerline modes. */
@@ -195,7 +205,7 @@ export function toTraceOptions(s: Settings, scale = 1): TraceOptions {
   // Outline art traces its thin outlines as stroked lines, the fills meeting beneath them.
   // Illustration and Outline art, stacked, draw soft shading as gradients; cut out is for cutters, which can't.
   const gradients = s.shapes === 'stacked' && (s.preset === 'illustration' || s.preset === 'outline') ? { gradients: true } : {}
-  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', stacked: s.shapes === 'stacked', ...merge, ...gradients, ...(s.smoothShading ? { smooth: true } : {}), ...(s.preset === 'outline' ? { strokes: true, ...(scale > 1 ? { scale } : {}) } : {}) }
+  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', stacked: s.shapes === 'stacked', ...merge, ...gradients, ...(s.smoothShading ? { smooth: true } : {}), ...(s.keepOutlines ? { outlines: outlineRadius(scale) } : {}), ...(s.preset === 'outline' ? { strokes: true, ...(scale > 1 ? { scale } : {}) } : {}) }
 }
 
 /** Pixel art keeps every source pixel; everything else is traced at this size at most. */

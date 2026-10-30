@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { smoothShading } from './smooth'
+import { boostLines, smoothShading } from './smooth'
 
 /** A w × h image, each pixel's colour from `f`. */
 function image(w: number, h: number, f: (x: number, y: number) => [number, number, number, number?]) {
@@ -50,5 +50,35 @@ describe('smoothShading', () => {
     const cut = image(10, 10, (x) => (x < 5 ? [200, 100, 50] : [0, 0, 0, 0]))
     const smoothed = smoothShading(cut, 10, 10)
     expect([...smoothed]).toEqual([...cut])
+  })
+})
+
+describe('boostLines', () => {
+  // A dark scene: two near-equal greys (40 and 44) parted by a faint line 2 px wide at 32,
+  // with a lone dark speck of the same depth in the left grey.
+  const w = 60
+  const h = 40
+  const src = image(w, h, (x, y) => {
+    const v = x === 29 || x === 30 ? 32 : x < 29 ? 40 : 44
+    const speck = x >= 10 && x <= 11 && y >= 10 && y <= 11
+    return speck ? [32, 32, 32] : [v, v, v]
+  })
+  const out = boostLines(src, w, h, 2)
+
+  it('darkens a faint line that runs a long way, keeping its sides', () => {
+    expect(out[(20 * w + 29) * 4]).toBeLessThan(20)
+    expect(out[(20 * w + 20) * 4]).toBe(40)
+    expect(out[(20 * w + 40) * 4]).toBe(44)
+  })
+
+  it('leaves short dark marks alone: texture, not lines', () => {
+    expect(out[(10 * w + 10) * 4]).toBe(32)
+  })
+
+  it('darkens a strong line only a little, so it keeps its colour', () => {
+    const brow = image(w, h, (x) => (x === 29 || x === 30 ? [140, 90, 58] : [243, 214, 164]))
+    const r = boostLines(brow, w, h, 2)[(20 * w + 29) * 4]
+    expect(r).toBeGreaterThan(90)
+    expect(r).toBeLessThan(140)
   })
 })

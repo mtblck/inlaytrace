@@ -83,3 +83,101 @@ export function smoothShading(rgba: ArrayLike<number>, width: number, height: nu
   }
   return src
 }
+
+/** A line pixel is this much darker than its closing (0–255 lightness) at least. */
+const LINE_DEPTH = 6
+/** And darkened by this many times that depth, */
+const LINE_GAIN = 2
+/** but by no more than this: a line already well apart from its sides (brows on skin) keeps its colour. */
+const LINE_MAX = 30
+/** A line is kept only when it spans this many times the radius (bounding-box diagonal): texture is short. */
+const LINE_SPAN = 4
+
+/**
+ * Painted outlines made plain, before the palette is picked. A painter's line
+ * between two near-equal colours (a mouth on a shadowed face, dark trousers
+ * against a dark background) is only a few levels darker than either side, so
+ * it labels as one of them and is lost. A black-hat filter (the image's
+ * closing minus the image, over `radius` px) finds lines up to about twice
+ * that wide that are darker than both sides; each is darkened by twice its
+ * depth, at most LINE_MAX, colour kept, so it labels apart from both sides.
+ * Only lines that run a while are kept: brick, foliage and brush texture are
+ * dark too, but short.
+ *
+ * On a painted film poster at 2× (radius 3) this brought back the mouth, eyes,
+ * brows and jaw lines Illustration lost, for 45% more paths (2.1 to 2.6 MB).
+ * The trousers there still merged: their outline is about 10 levels deep and
+ * the lit side matches the background, which takes an edge detector.
+ */
+export function boostLines(rgba: ArrayLike<number>, width: number, height: number, radius = 2): Uint8ClampedArray {
+  const n = width * height
+  const out = Uint8ClampedArray.from(rgba)
+  const lum = new Float32Array(n)
+  for (let i = 0; i < n; i++) lum[i] = 0.299 * out[i * 4] + 0.587 * out[i * 4 + 1] + 0.114 * out[i * 4 + 2]
+  // Closing: the brightest over a square, then the darkest over it, each separable.
+  const sweep = (src: Float32Array, max: boolean) => {
+    const across = new Float32Array(n)
+    const down = new Float32Array(n)
+    for (let y = 0; y < height; y++)
+      for (let x = 0; x < width; x++) {
+        let v = src[y * width + x]
+        for (let k = Math.max(0, x - radius); k <= Math.min(width - 1, x + radius); k++) v = max ? Math.max(v, src[y * width + k]) : Math.min(v, src[y * width + k])
+        across[y * width + x] = v
+      }
+    for (let y = 0; y < height; y++)
+      for (let x = 0; x < width; x++) {
+        let v = across[y * width + x]
+        for (let k = Math.max(0, y - radius); k <= Math.min(height - 1, y + radius); k++) v = max ? Math.max(v, across[k * width + x]) : Math.min(v, across[k * width + x])
+        down[y * width + x] = v
+      }
+    return down
+  }
+  const closed = sweep(sweep(lum, true), false)
+  const depth = new Float32Array(n)
+  for (let i = 0; i < n; i++) if (out[i * 4 + 3] >= 128 && closed[i] - lum[i] > LINE_DEPTH) depth[i] = closed[i] - lum[i]
+  // Each 8-connected line, kept when its extent is long enough.
+  const seen = new Uint8Array(n)
+  const stack: number[] = []
+  const piece: number[] = []
+  const span = LINE_SPAN * radius
+  for (let s = 0; s < n; s++) {
+    if (!depth[s] || seen[s]) continue
+    seen[s] = 1
+    stack.push(s)
+    piece.length = 0
+    let x0 = width
+    let x1 = 0
+    let y0 = height
+    let y1 = 0
+    while (stack.length) {
+      const i = stack.pop()!
+      piece.push(i)
+      const x = i % width
+      const y = (i - x) / width
+      x0 = Math.min(x0, x)
+      x1 = Math.max(x1, x)
+      y0 = Math.min(y0, y)
+      y1 = Math.max(y1, y)
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx
+          const ny = y + dy
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+          const j = ny * width + nx
+          if (depth[j] && !seen[j]) {
+            seen[j] = 1
+            stack.push(j)
+          }
+        }
+    }
+    if (Math.hypot(x1 - x0, y1 - y0) < span) continue
+    for (const i of piece) {
+      const target = Math.max(0, lum[i] - Math.min(LINE_MAX, LINE_GAIN * depth[i]))
+      const f = lum[i] > 0 ? target / lum[i] : 0
+      out[i * 4] *= f
+      out[i * 4 + 1] *= f
+      out[i * 4 + 2] *= f
+    }
+  }
+  return out
+}

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- Painted figure for npm run score (made for this repo, MIT): legs on a dark textured
+       background, each leg's lit side nearly the background's colour and parted from it only
+       by a faint outline, and a face whose mouth is about the colour of its shadow. -->
+  <defs>
+    <filter id="brush" x="0" y="0" width="1" height="1">
+      <feTurbulence type="fractalNoise" baseFrequency="0.35" numOctaves="2" seed="4"/>
+      <feColorMatrix values="0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0.05 0"/>
+      <feComposite in2="SourceGraphic" operator="in"/>
+      <feBlend in2="SourceGraphic" mode="overlay"/>
+    </filter>
+  </defs>
+  <g filter="url(#brush)">
+    <rect width="200" height="200" fill="#24222b"/>
+    <!-- Two legs: a dark core and a lit side, outlined faintly. -->
+    <path d="M30 70 L58 70 L56 200 L34 200 Z" fill="#0a0a0c"/>
+    <path d="M58 70 L68 70 L64 200 L56 200 Z" fill="#2b2c31"/>
+    <path d="M30 70 L68 70 L64 200 L34 200 Z" fill="none" stroke="#141317" stroke-width="1.1"/>
+    <path d="M82 70 L110 70 L108 200 L86 200 Z" fill="#0a0a0c"/>
+    <path d="M110 70 L120 70 L116 200 L108 200 Z" fill="#2b2c31"/>
+    <path d="M82 70 L120 70 L116 200 L86 200 Z" fill="none" stroke="#141317" stroke-width="1.1"/>
+    <!-- A face: skin, a shadow down one side, eyes, brows and a mouth near the shadow's colour. -->
+    <circle cx="156" cy="56" r="30" fill="#f3d6a4"/>
+    <path d="M168 28 A30 30 0 0 1 168 84 A34 34 0 0 0 168 28 Z" fill="#c99c66"/>
+    <circle cx="145" cy="50" r="3.2" fill="#2b1d18"/>
+    <circle cx="163" cy="50" r="3.2" fill="#2b1d18"/>
+    <path d="M139 42 L150 41 M158 41 L169 42" stroke="#8a5a3a" stroke-width="1.2" fill="none"/>
+    <path d="M148 70 Q154 72 160 70" stroke="#b5814f" stroke-width="1.4" fill="none"/>
+  </g>
+</svg>

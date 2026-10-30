@@ -452,6 +452,15 @@ function Prepare({ settings, set, prep }: { settings: Settings; set: <K extends 
             </span>
           </span>
         </label>
+        <label className={`flex items-start gap-2 text-[13px] ${prep.smoothable ? '' : 'opacity-60'}`}>
+          <input type="checkbox" className="mt-0.5 accent-[var(--c-accent)]" checked={settings.keepOutlines} disabled={!prep.smoothable} onChange={(e) => set('keepOutlines', e.target.checked)} />
+          <span>
+            Keep painted outlines
+            <span className="field-hint block">
+              {prep.smoothable ? 'Darkens faint drawn lines, like a mouth or the edge of dark clothes on a dark background, so they stay in the trace. Adds paths on textured backgrounds.' : 'For Logo, Illustration and Outline art.'}
+            </span>
+          </span>
+        </label>
         <label className={`flex items-start gap-2 text-[13px] ${prep.textPreset ? '' : 'opacity-60'}`}>
           <input type="checkbox" className="mt-0.5 accent-[var(--c-accent)]" checked={settings.recogniseText} disabled={!prep.textPreset} onChange={(e) => set('recogniseText', e.target.checked)} />
           <span>

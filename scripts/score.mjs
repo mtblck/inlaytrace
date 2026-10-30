@@ -358,12 +358,13 @@ const flatArt = async (file, title, line, presets, { wholes = false } = {}) => {
   // A preset name alone is its defaults; with ':stacked' or ':cutout', those shapes; with ':gradients', gradient fills.
   for (const entry of presets) {
     const [id, mod] = entry.split(':')
-    const shapes = mod === 'gradients' ? undefined : mod
+    const shapes = mod === 'stacked' || mod === 'cutout' ? mod : undefined
+    const prep = mod === 'smooth' ? { smoothShading: true } : mod === 'outlines' ? { smoothShading: true, keepOutlines: true } : {}
     const t = performance.now()
-    const svg = runTrace(art.slice(), SIZE, SIZE, { ...toTraceOptions({ ...settingsFor(id), ...(shapes ? { shapes } : {}) }), ...(mod === 'gradients' ? { gradients: true } : {}) })
+    const svg = runTrace(art.slice(), SIZE, SIZE, { ...toTraceOptions({ ...settingsFor(id), ...(shapes ? { shapes } : {}), ...prep }), ...(mod === 'gradients' ? { gradients: true } : {}) })
     const ms = performance.now() - t
     const r = await score(svg, 24)
-    const label = PRESETS.find((p) => p.id === id).label + (mod ? { stacked: ', stacked', cutout: ', cut out', gradients: ', gradients' }[mod] : '')
+    const label = PRESETS.find((p) => p.id === id).label + (mod ? { stacked: ', stacked', cutout: ', cut out', gradients: ', gradients', smooth: ', smoothed', outlines: ', outlines' }[mod] : '')
     console.log(
       `  ${label.padEnd(23)} ${pct(r.wrong)}  ${regions(r)}  ${line ? lines(r) : '    –'}${wholes ? `  ${(await whole(source, svg)).padStart(5)}` : ''}  ${String(r.nodes).padStart(6)} ${String(r.paths).padStart(6)} ${r.kb.toFixed(1).padStart(5)} KB  (${ms.toFixed(0)} ms)`,
     )
@@ -402,6 +403,13 @@ await flatArt('overlap.svg', 'Overlapping shapes', null, ['logo', 'logo:stacked'
 // fills turn shading into bands of tints: more shapes, and steps where the art
 // is smooth.
 await flatArt('shaded.svg', 'Soft shading (two linear gradients, one radial, flat shapes)', null, ['logo', 'illustration', 'illustration:cutout', 'photo', 'photo:gradients'])
+
+// ---- Painted ----------------------------------------------------------------
+// Legs on a dark, brush-textured background, each leg's lit side within a few
+// levels of the background and parted from it only by a faint outline, and a
+// face whose mouth is near its shadow's colour. Colour alone merges the lit
+// sides into the background; Keep painted outlines darkens the lines first.
+await flatArt('painted.svg', 'Painted figure (faint outlines on a dark, textured background)', '#141317', ['illustration', 'illustration:smooth', 'illustration:outlines', 'photo'])
 
 // ---- Lossless --------------------------------------------------------------
 // The same drawings saved as PNG, the way most logos arrive. Without JPEG's
