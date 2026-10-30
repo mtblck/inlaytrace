@@ -477,9 +477,16 @@ function refitCorners(c: Chain, width: number, ink: Uint8Array, w: number, h: nu
   if (n < 4) return c
   const s = [0]
   for (let i = 1; i < n; i++) s.push(s[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y))
+  // The point t along the chain: the first j with s[j] ≥ t, by bisection, so long chains stay linear.
   const at = (t: number): Pt => {
-    let j = 1
-    while (j < n - 1 && s[j] < t) j++
+    let lo = 1
+    let hi = n - 1
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (s[mid] < t) lo = mid + 1
+      else hi = mid
+    }
+    const j = lo
     const f = s[j] > s[j - 1] ? (t - s[j - 1]) / (s[j] - s[j - 1]) : 0
     return { x: pts[j - 1].x + f * (pts[j].x - pts[j - 1].x), y: pts[j - 1].y + f * (pts[j].y - pts[j - 1].y) }
   }
