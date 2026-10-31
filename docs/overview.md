@@ -50,6 +50,7 @@ Worker so the page stays responsive.
 - [What we do differently](how-it-differs.md): how this compares with other
   image-to-SVG tools.
 - [Roadmap](roadmap.md): suggested improvements, in priority order.
+- [Changelog](changelog.md): what changed in each release of the package.
 - [Research](research.md): the survey of tracers, AI models and hosted APIs
   done before any code was written.
 - [Contributing](https://github.com/mtblck/inlaytrace/blob/main/CONTRIBUTING.md):
