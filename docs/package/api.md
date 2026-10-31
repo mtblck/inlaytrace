@@ -54,7 +54,7 @@ type InlayOptions = FitOptions & {
   strokes?: boolean
   scale?: number
   gradients?: boolean
-  lines?: ArrayLike<number> // painted lines, one entry per pixel (from boostLines): a sliver mostly on them isn't folded into a neighbour
+  lines?: ArrayLike<number> // painted lines, one entry per pixel (from boostLines): a region mostly on them folds only into another such region (not one in the colour of a shape it touches), unless it is a sliver under 16 px across
 } & (
     | { mode: 'palette'; palette: string[]; merge?: Record<string, string> }
     | { mode: 'binary'; threshold: number | 'auto' | null }

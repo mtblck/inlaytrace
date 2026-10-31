@@ -93,9 +93,10 @@ export type InlayOptions = FitOptions & {
   gradients?: boolean
   /**
    * Painted lines (one entry per pixel, non-zero on a line), as `boostLines`
-   * marks them. A sliver mostly on them is a drawn line, not one ink's two
-   * shades, so it isn't folded into a neighbour: a dark outline between two
-   * dark shapes is nearly their colour, and folding it in joined them.
+   * marks them. A region mostly on them is a drawn line, not one ink's two
+   * shades, so it folds only into another piece of line: a dark outline
+   * between two dark shapes is nearly their colour, and folding it in joined
+   * them.
    */
   lines?: ArrayLike<number>
 } & (
@@ -1158,6 +1159,8 @@ function mergeSpecksOnce(labels: Int32Array, w: number, h: number, minArea: numb
 const SLIVER_WIDTH = 2
 /** A sliver joins a neighbour only this close in colour (OKLab): two shades of one ink (0.08–0.11 apart), not a grey hairline on white (#d4d4d4 is 0.13 from it). */
 const SLIVER_DISTANCE = 0.12
+/** A painted line's piece spans this many px (bounding-box diagonal) before it is kept from folding into a shape. */
+const LINE_PIECE_SPAN = 16
 
 /**
  * Fold slivers into a neighbour of nearly the same colour. JPEG and WebP
@@ -1165,9 +1168,15 @@ const SLIVER_DISTANCE = 0.12
  * out dark at its edges and lighter down the middle), and a one-pixel strip
  * of one shade inside the other fitted as a spike shooting out of the
  * letter. A hairline of a colour of its own has no neighbour that close, so
- * it stays, and so does a painted line marked in `lines`. Within a pass a
- * sliver waits if a neighbour has already moved, so two side by side don't
- * just swap colours.
+ * it stays. Within a pass a sliver waits if a neighbour has already moved, so
+ * two side by side don't just swap colours.
+ *
+ * A region mostly on a painted line marked in `lines` folds only into another
+ * such region, sliver or not: a dark outline between two dark shapes is
+ * nearly their colour, and folding it in joined them, but one line labels as
+ * several dark shades along its length, and keeping each piece apart cost a
+ * painted film poster a third of its shapes. A line piece shorter than
+ * LINE_PIECE_SPAN is too short to part anything, and folds as any sliver.
  */
 function mergeSlivers(labels: Int32Array, w: number, h: number, labs: (Rgb | null)[], lines?: ArrayLike<number>) {
   for (let pass = 0; pass < 4; pass++) {
@@ -1176,6 +1185,11 @@ function mergeSlivers(labels: Int32Array, w: number, h: number, labs: (Rgb | nul
     const perimeter = new Int32Array(m)
     const label = new Int32Array(m)
     const onLine = new Int32Array(m)
+    // Each region's bounding box on the lines, for a line piece's span.
+    const x0 = new Int32Array(m).fill(w)
+    const x1 = new Int32Array(m).fill(-1)
+    const y0 = new Int32Array(m).fill(h)
+    const y1 = new Int32Array(m).fill(-1)
     // Each region's neighbouring regions.
     const around = new Map<number, Set<number>>()
     const touch = (a: number, b: number) => {
@@ -1188,8 +1202,15 @@ function mergeSlivers(labels: Int32Array, w: number, h: number, labs: (Rgb | nul
     for (let y = 0; y < h; y++)
       for (let x = 0; x < w; x++) {
         const i = y * w + x
-        label[comp[i]] = labels[i]
-        if (lines?.[i]) onLine[comp[i]]++
+        const c = comp[i]
+        label[c] = labels[i]
+        if (lines?.[i]) {
+          onLine[c]++
+          if (x < x0[c]) x0[c] = x
+          if (x > x1[c]) x1[c] = x
+          if (y < y0[c]) y0[c] = y
+          if (y > y1[c]) y1[c] = y
+        }
         if (x < w - 1 && comp[i + 1] !== comp[i]) touch(i, i + 1), touch(i + 1, i)
         if (y < h - 1 && comp[i + w] !== comp[i]) touch(i, i + w), touch(i + w, i)
       }
@@ -1197,17 +1218,29 @@ function mergeSlivers(labels: Int32Array, w: number, h: number, labs: (Rgb | nul
     let changed = false
     // Smallest first, so a fleck of one shade inside a letter joins the
     // letter, not the letter the fleck.
+    const onALine = (id: number) => 2 * onLine[id] > compArea[id]
     for (const [id, near] of [...around].sort((a, b) => compArea[a[0]] - compArea[b[0]])) {
-      if ((2 * compArea[id]) / perimeter[id] >= SLIVER_WIDTH || 2 * onLine[id] > compArea[id]) continue
+      const sliver = (2 * compArea[id]) / perimeter[id] < SLIVER_WIDTH
+      const line = onALine(id)
+      if (!sliver && !line) continue
       const mine = labs[label[id]]
       if (!mine || [...near].some((n) => to[n] >= 0)) continue
-      let best = -1
-      let bd = SLIVER_DISTANCE
-      for (const n of near) {
-        const lab = labs[label[n]]
-        const d = lab ? Math.hypot(lab[0] - mine[0], lab[1] - mine[1], lab[2] - mine[2]) : Infinity
-        if (d < bd) (bd = d), (best = label[n])
+      // The neighbour of nearest colour that `ok` accepts, within SLIVER_DISTANCE.
+      const nearest = (ok: (n: number) => boolean) => {
+        let best = -1
+        let bd = SLIVER_DISTANCE
+        for (const n of near) {
+          const lab = labs[label[n]]
+          const d = lab && ok(n) ? Math.hypot(lab[0] - mine[0], lab[1] - mine[1], lab[2] - mine[2]) : Infinity
+          if (d < bd) (bd = d), (best = label[n])
+        }
+        return best
       }
+      // A line piece joins another piece of line, but never one in the colour
+      // of a shape it touches: that would join the shapes it parts.
+      const sides = new Set([...near].filter((n) => !onALine(n)).map((n) => label[n]))
+      let best = nearest(line ? (n) => onALine(n) && !sides.has(label[n]) : () => true)
+      if (best < 0 && line && sliver && Math.hypot(x1[id] - x0[id], y1[id] - y0[id]) < LINE_PIECE_SPAN) best = nearest(() => true)
       if (best < 0) continue
       to[id] = best
       changed = true

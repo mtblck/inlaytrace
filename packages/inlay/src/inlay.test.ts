@@ -362,6 +362,31 @@ describe('shared-edge tracer', () => {
     expect(pathsOf(traceInlay(px, w, h, { ...o, lines })).map((p) => p.fill).sort()).toEqual(['#030201', '#141314', '#141314'])
   })
 
+  it('joins the pieces of one marked line, and folds a short one', () => {
+    // A line labelled as two dark shades along its length: the lower one is
+    // nearer the sides than the upper, but joins the line, not a side.
+    const w = 60
+    const h = 40
+    const px = raster(w, h, (x, y) => (x >= 29 && x < 30 ? (y < 20 ? [3, 2, 1] : [11, 9, 8]) : [20, 19, 20]))
+    const lines = new Uint8Array(w * h).map((_, i) => (i % w === 29 ? 1 : 0))
+    const o = { ...opts, mode: 'palette' as const, palette: ['#030201', '#0b0908', '#141314'] }
+    const fills = pathsOf(traceInlay(px, w, h, { ...o, lines })).map((p) => p.fill)
+    expect(fills.filter((f) => f === '#141314')).toHaveLength(2)
+    expect(fills.filter((f) => f !== '#141314')).toHaveLength(1)
+    // Nor into a piece in the colour of the sides it parts: a near-black line
+    // between two dark grey sides, continued below (between paler sides) in
+    // that dark grey, would carry the grey across and join the sides.
+    const tall = 41
+    const sided = raster(w, tall, (x, y) => (x >= 29 && x < 30 ? (y < 20 ? [3, 2, 1] : [20, 19, 20]) : y < 20 ? [20, 19, 20] : [60, 58, 60]))
+    const mid = new Uint8Array(w * tall).map((_, i) => (i % w === 29 ? 1 : 0))
+    const parted = pathsOf(traceInlay(sided, w, tall, { ...o, palette: ['#030201', '#141314', '#3c3a3c'], lines: mid })).map((p) => p.fill)
+    expect(parted).toContain('#030201')
+    // Marked but only 10 px long: too short to part anything, so it folds in.
+    const short = raster(w, h, (x, y) => (x >= 29 && x < 30 && y >= 15 && y < 25 ? [3, 2, 1] : [20, 19, 20]))
+    const mark = new Uint8Array(w * h).map((_, i) => (i % w === 29 && i >= 15 * w && i < 25 * w ? 1 : 0))
+    expect(pathsOf(traceInlay(short, w, h, { ...o, palette: ['#030201', '#141314'], lines: mark })).map((p) => p.fill)).toEqual(['#141314'])
+  })
+
   it('Otsu splits two populations between them', () => {
     const lum = new Uint8Array([...Array(50).fill(30), ...Array(50).fill(220)])
     const t = otsu(lum, new Uint8Array(100).fill(1))
