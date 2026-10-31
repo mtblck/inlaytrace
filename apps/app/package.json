@@ -7,7 +7,7 @@
   "description": "Inlay: image to SVG, in your browser. The app at inlaytrace.com/app.",
   "dependencies": {
     "fflate": "0.8.3",
-    "inlaytrace": "0.2.0",
+    "inlaytrace": "0.3.0",
     "onnxruntime-web": "1.30.0",
     "opentype.js": "2.0.0",
     "paper": "0.14.0",

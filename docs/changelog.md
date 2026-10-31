@@ -12,6 +12,22 @@ the next release are in [`.changeset/`](../.changeset/); the
 
 <!-- Written by scripts/changelog.mjs from packages/inlay/CHANGELOG.md: edit that (or the changesets), not this. -->
 
+## 0.3.0
+
+### Minor Changes
+
+- Painted lines stay through smoothing and clean-up: `boostLines` can mark the pixels it darkens (a `lines` array), `smoothShading` takes a `keep` mask it leaves alone, and the tracer's new `lines` option stops a marked line from being folded into a neighbour as a sliver. A dark outline between two dark areas (trousers against a night background) now keeps them apart.
+- New `boostLines(rgba, width, height, radius?)`: darkens faint painted outlines (thin lines darker than both their sides, found with a black-hat filter) before the palette is picked, so a mouth on a shadowed face or a line between two near-equal colours labels apart from them instead of being lost. Short dark marks are left alone as texture.
+- New `smoothShading(rgba, width, height)`: an edge-preserving (bilateral) filter for painted art, run before picking the palette. Brush and JPEG noise inside a shadow evens out, so the shadow traces as one shape instead of flecks of its two nearest colours, while the edges between colours stay sharp.
+
+### Patch Changes
+
+- `centerlineToSvg` escapes the drawing's width and height like every other value it writes.
+- Faster colour labelling: converting colours to OKLab reads linear light from a table instead of a power per channel, which cut a 24-colour trace of an 820 × 1162 painted poster from 20 s to 11 s with the same output.
+- Gradient fills no longer smear one shape into its neighbour on painted art (a face into the hair or shadow beside it): a gradient must stay within 20 RGB levels of the image, and must draw each of the bands it replaces no worse than that band's own colour did.
+- Smaller files with Keep painted outlines: with the tracer's `lines` option, the pieces one painted line labels as (a few dark shades along its length) now join each other instead of each staying a shape, and a marked piece too short to part anything folds into its neighbour like any sliver. 9–15% smaller on a painted film poster, with its outlines kept.
+- Strokes keep sharp corners sharp (a flag's swallowtail no longer comes out rounded), and in outline art a dot drawn on a line's end (a flagpole's knob) stays a shape instead of being lost under the stroke.
+
 ## 0.2.0
 
 ### Minor Changes
