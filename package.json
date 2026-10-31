@@ -37,7 +37,7 @@
     "playwright": "1.64.1",
     "tailwindcss": "4.3.3",
     "typescript": "7.0.2",
-    "vite": "8.3.4",
+    "vite": "8.3.5",
     "vitest": "5.0.5"
   },
   "engines": {
@@ -51,7 +51,7 @@
     "@vercel/blob": "2.8.2",
     "fast-png": "8.0.0",
     "jpeg-js": "0.4.4",
-    "onnxruntime-node": "1.30.0"
+    "onnxruntime-node": "1.31.1"
   },
   "overrides": {
     "postcss-nested": "^7.0.2"
