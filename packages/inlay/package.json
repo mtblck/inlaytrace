@@ -50,6 +50,6 @@
     "@arethetypeswrong/cli": "0.18.5",
     "fflate": "0.8.3",
     "publint": "0.3.25",
-    "tsdown": "0.23.1"
+    "tsdown": "0.23.3"
   }
 }
