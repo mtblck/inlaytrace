@@ -12,7 +12,8 @@ name: Release
 # with two-factor authentication (`npx npm@11.21.1 stage list inlaytrace`, then
 # `npx npm@11.21.1 stage approve <id>`). After approving, run this workflow from
 # the Actions tab: it finds the version on npm, publishes nothing, tags it and
-# makes the GitHub release from the version's CHANGELOG section.
+# makes the GitHub release from the version's CHANGELOG section (and any
+# missing for older tags).
 on:
   push:
     branches: [main]
@@ -84,18 +85,23 @@ jobs:
             git tag "$tag"
             git push origin "$tag"
           fi
-      # The GitHub release for that tag, its notes this version's section of
+      # A GitHub release for each tagged version that lacks one (this run's,
+      # and any older one), its notes that version's section of
       # packages/inlay/CHANGELOG.md. Like the tag, made on any run that finds it missing.
-      - name: GitHub release
+      - name: GitHub releases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          v="${{ steps.version.outputs.version }}"
-          tag="inlaytrace@$v"
-          if ! git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then exit 0; fi
-          if gh release view "$tag" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            echo "$tag already has a release."
-          else
+          current="${{ steps.version.outputs.version }}"
+          for v in $(sed -n 's/^## \([0-9][^ ]*\)$/\1/p' packages/inlay/CHANGELOG.md | tac); do
+            tag="inlaytrace@$v"
+            if ! git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then continue; fi
+            if gh release view "$tag" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+              echo "$tag already has a release."
+              continue
+            fi
+            # Only this run's version may become "Latest"; older ones are backfill.
+            latest=false; [ "$v" = "$current" ] && latest=true
             node scripts/changelog.mjs --notes "$v" > notes.md
-            gh release create "$tag" -R "$GITHUB_REPOSITORY" --title "inlaytrace $v" --notes-file notes.md --verify-tag
-          fi
+            gh release create "$tag" -R "$GITHUB_REPOSITORY" --title "inlaytrace $v" --notes-file notes.md --verify-tag --latest=$latest
+          done
