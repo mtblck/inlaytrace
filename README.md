@@ -73,7 +73,7 @@ Vector Magic, Illustrator, Inkscape and SVGcode.
 - [The app](docs/features.md): every feature and how it works
 - [Design notes](docs/design-notes.md): why things are the way they are, with
   the measurements
-- [Roadmap](docs/roadmap.md) · [Research](docs/research.md)
+- [Roadmap](docs/roadmap.md) · [Changelog](docs/changelog.md) · [Research](docs/research.md)
 
 ## This repo
 

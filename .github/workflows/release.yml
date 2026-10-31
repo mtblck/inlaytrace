@@ -11,7 +11,8 @@ name: Release
 # publisher may only *stage*: nothing is public until a maintainer approves it
 # with two-factor authentication (`npx npm@11.21.1 stage list inlaytrace`, then
 # `npx npm@11.21.1 stage approve <id>`). After approving, run this workflow from
-# the Actions tab: it finds the version on npm, publishes nothing, and tags it.
+# the Actions tab: it finds the version on npm, publishes nothing, tags it and
+# makes the GitHub release from the version's CHANGELOG section.
 on:
   push:
     branches: [main]
@@ -70,7 +71,7 @@ jobs:
         working-directory: packages/inlay
         run: |
           npm stage publish --access public --provenance
-          echo "::notice::inlaytrace@${{ steps.version.outputs.version }} is staged. Approve it with 'npx npm@11.21.1 stage list inlaytrace' and 'npx npm@11.21.1 stage approve <id>', then re-run this workflow to tag it."
+          echo "::notice::inlaytrace@${{ steps.version.outputs.version }} is staged. Approve it with 'npx npm@11.21.1 stage list inlaytrace' and 'npx npm@11.21.1 stage approve <id>', then re-run this workflow to tag it and make the GitHub release."
       # Every run, not only publishing ones: if a publish succeeded but its tag
       # push failed, a re-run (which publishes nothing) still makes the tag.
       - name: Tag the release
@@ -82,4 +83,19 @@ jobs:
           else
             git tag "$tag"
             git push origin "$tag"
+          fi
+      # The GitHub release for that tag, its notes this version's section of
+      # packages/inlay/CHANGELOG.md. Like the tag, made on any run that finds it missing.
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ steps.version.outputs.version }}"
+          tag="inlaytrace@$v"
+          if ! git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then exit 0; fi
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "$tag already has a release."
+          else
+            node scripts/changelog.mjs --notes "$v" > notes.md
+            gh release create "$tag" -R "$GITHUB_REPOSITORY" --title "inlaytrace $v" --notes-file notes.md --verify-tag
           fi

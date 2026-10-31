@@ -7,7 +7,7 @@
   "scripts": {
     "fonts": "node scripts/build-fonts.mjs",
     "dev": "vite -c apps/app/vite.config.ts",
-    "build": "npm run hosting:check && npm run lint && npm run build -w packages/inlay && npm run site:build && vite build -c apps/app/vite.config.ts && node scripts/check-hosting.mjs --dist",
+    "build": "npm run hosting:check && node scripts/changelog.mjs --check && npm run lint && npm run build -w packages/inlay && npm run site:build && vite build -c apps/app/vite.config.ts && node scripts/check-hosting.mjs --dist",
     "preview": "node scripts/serve.mjs",
     "test": "vitest run",
     "coverage": "vitest run --coverage --coverage.reporter=lcov --coverage.reporter=json-summary --coverage.reporter=text-summary",
@@ -19,7 +19,7 @@
     "site:build": "npm run site:sync && astro build --root apps/site",
     "site:dev": "npm run site:sync && astro dev --root apps/site",
     "site:assets": "node scripts/site-assets.mjs",
-    "version-packages": "changeset version && npm install --package-lock-only",
+    "version-packages": "changeset version && node scripts/changelog.mjs && npm install --package-lock-only",
     "score:photos": "node scripts/score-photos.mjs"
   },
   "devDependencies": {
