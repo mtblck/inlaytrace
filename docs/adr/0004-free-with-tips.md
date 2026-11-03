@@ -31,17 +31,20 @@ floating on the site's own pages (tucked away while the footer, with its own
 support link, is on screen).
 
 The server side (`server/`, `api/`, `supabase/migrations/`, the keep-alive cron)
-stays in the repo, unreachable from the UI, so HD can come back without
-rebuilding it. The privacy notice and terms say paid features may come later,
-opt-in, and set out before launch; the terms offer refunds of unused credits to
-anyone who bought during the beta.
+stays in the repo so HD can come back without rebuilding it, but switched off:
+unless the `PAID_FEATURES` environment variable is `on`, every API route except
+the keep-alive and Paddle's webhook (so refunds of beta purchases still reach the
+ledger) answers 410, so nobody can sign in, buy or run HD by calling it directly. The privacy notice and terms say paid features may come later,
+opt-in, and set out before launch. The privacy notice also covers accounts left
+from the beta (Supabase, Paddle), and the terms offer refunds of unused credits
+to anyone who bought during it.
 
 ## Consequences
 
 - The app makes no request to `/api` at all, and no page allows Paddle;
   `hosting:check` fails if a Paddle host reappears in any header or the old
   paid addresses stop redirecting.
-- Bringing HD back means restoring the client pages from git history (the
+- Bringing HD back means setting `PAID_FEATURES=on` in Vercel, restoring the client pages from git history (the
   commit that made this ADR), a new ADR superseding this one, and the privacy
   and terms sections rewritten before launch.
 - The dormant server code still runs in tests and builds. If HD stays shelved

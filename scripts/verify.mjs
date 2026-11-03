@@ -599,6 +599,9 @@ console.log(`\n  verify ${url}\n`)
 
 // ---- Desktop, sample image ------------------------------------------------
 const page = await newPage({ width: 1440, height: 900 })
+// Inlay is free (ADR 0004): the app has no reason to call its API.
+const apiRequests = []
+page.on('request', (r) => new URL(r.url()).pathname.startsWith('/api/') && apiRequests.push(new URL(r.url()).pathname))
 const response = await page.goto(url)
 check(response?.ok(), `page loads (${response?.status()})`)
 const csp = response?.headers()['content-security-policy'] ?? ''
@@ -816,7 +819,7 @@ check(
   (await tip.count()) === 1 && (await tip.getAttribute('href')) === 'https://ko-fi.com/mtblck' && (await tip.getAttribute('target')) === '_blank' && (await tip.innerText()).includes('Support'),
   'the header has a Support button linking to Ko-fi in a new tab',
 )
-check((await page.locator('[data-account], [data-balance], [data-hd]').count()) === 0, 'the app shows no sign-in, credits or HD')
+check(apiRequests.length === 0, `the app never calls /api: no sign-in, credits or HD (${apiRequests.join(', ') || 'no calls'})`)
 
 // Header icons: the keyboard opens the same panel; the tooltip shows on keyboard focus; sun/moon switches theme.
 const kb = page.getByRole('button', { name: 'Keyboard shortcuts' })
@@ -1329,10 +1332,13 @@ if (siteOrigin) {
   const privacy = await landing.request.get(new URL('privacy/', siteOrigin).href)
   check(privacy.ok() && (await privacy.text()).includes('images never leave your device'), 'the privacy page loads')
   // Inlay is free: the terms and privacy notice keep room for paid features later, and the paid pages are gone.
-  for (const [path, must] of [['terms/', 'Inlay has no paid features today'], ['privacy/', 'If we add paid features']]) {
+  // Privacy still names Paddle and Supabase, for accounts left from the HD beta; the terms don't sell anything.
+  for (const [path, must] of [['terms/', 'Inlay has no paid features today'], ['privacy/', 'If we add paid features'], ['privacy/', 'If you joined the HD beta']]) {
     const r = await landing.request.get(new URL(path, siteOrigin).href)
-    check(r.ok() && !(await r.text()).includes('Paddle') && (await r.text()).includes(must), `/${path} loads, says “${must}” and doesn't mention Paddle`)
+    check(r.ok() && (await r.text()).includes(must), `/${path} loads and says “${must}”`)
   }
+  const terms = await (await landing.request.get(new URL('terms/', siteOrigin).href)).text()
+  check(!terms.includes('Paddle') && !terms.includes('Merchant of Record'), "the terms don't mention Paddle")
   for (const path of ['pricing/', 'refunds', 'app/buy/', 'app/account']) {
     const r = await landing.request.get(new URL(path, siteOrigin).href, { maxRedirects: 0 })
     const to = path.startsWith('app/') ? '/app/' : '/'

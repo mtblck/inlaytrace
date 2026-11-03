@@ -7,6 +7,7 @@ const ORIGIN = 'https://inlaytrace.com'
 const SECRET = 'pdl_ntfset_test'
 const USER = { id: '11111111-1111-1111-1111-111111111111', email: 'ada@example.com' }
 const env = {
+  PAID_FEATURES: 'on',
   SUPABASE_URL: 'https://proj.supabase.co',
   SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_test',
   PADDLE_API_KEY: 'pdl_sdbx_apikey_test',

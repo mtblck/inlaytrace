@@ -58,7 +58,8 @@ Marking it ready also triggers the Claude review workflow.
   lazy-loaded for mirror only; keep it out of the main chunk.
 - **Free, with a tip button (ADR 0004).** No accounts, pricing or paid UI anywhere; the `tipjar` package (Matt's, on npm) links
   to Ko-fi from the app's header (`components/Support.tsx`) and floats on the site's pages (`Page.astro`).
-- **HD mode (paid, shelved Nov 2026, `docs/hd-mode.md`):** the server side is dormant, unreachable from the UI. Supabase project `hjmhsrxagrquqgtfzyfx` holds accounts and the
+- **HD mode (paid, shelved Nov 2026, `docs/hd-mode.md`):** the server side is dormant: `server/api.ts` answers 410 to everything but
+  keepalive and the Paddle webhook unless `PAID_FEATURES=on`. Supabase project `hjmhsrxagrquqgtfzyfx` holds accounts and the
   credit ledger (`supabase/migrations/`), reached only from `/api` with the service-role key; Paddle sells credit packs.
   The free app stays account-free and local, and its CSP stays `connect-src 'self'`. `server/api.ts` is web-standard
   Request → Response: `api/server.ts` (Vercel, behind the `/api/(.*)` rewrite) and `server/node.ts` (vite dev, `serve.mjs`)

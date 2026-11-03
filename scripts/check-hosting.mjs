@@ -22,8 +22,8 @@
  *  - The API (dormant HD and accounts; the app no longer calls it) not reaching its function: /api/* must
  *    rewrite to api/server.ts before the app's fallback, and the daily cron that
  *    keeps the free Supabase project awake must point at it.
- *  - The app reaching another origin: it talks only to its own /api, so its CSP
- *    keeps connect-src 'self' and no Supabase or Paddle script loads in it.
+ *  - The app reaching another origin: it talks only to its own site (counts),
+ *    so its CSP keeps connect-src 'self' and no third-party script loads in it.
  *  - cleanUrls / trailingSlash / routes. In mb-portfolio, those keys made
  *    Vercel silently stop applying the rewrite while headers still worked.
  */
@@ -77,7 +77,7 @@ const appCsp = cspOf(APP_SOURCE)
 if (directive(appCsp, 'script-src').includes("'wasm-unsafe-eval'")) problems.push("The app's CSP allows 'wasm-unsafe-eval'; only the AI worker (its own block) should.")
 if (!/worker-src[^;]*'self'/.test(appCsp ?? '')) problems.push("The app's CSP worker-src must allow 'self' for the tracing worker.")
 // The app only talks to itself.
-if (directive(appCsp, 'connect-src') !== "connect-src 'self'") problems.push("The app's CSP connect-src must stay 'self': it talks only to its own /api.")
+if (directive(appCsp, 'connect-src') !== "connect-src 'self'") problems.push("The app's CSP connect-src must stay 'self': it talks only to its own site.")
 // Inlay is free: nothing may load Paddle's checkout, and the paid pages' old addresses lead somewhere real.
 for (const b of config.headers ?? []) for (const h of b.headers) if (h.value.includes('paddle.com')) problems.push(`${b.source}'s ${h.key} mentions paddle.com; Inlay sells nothing, so no page loads Paddle.`)
 const movedTo = (source) => (config.redirects ?? []).find((r) => r.source === source)?.destination
