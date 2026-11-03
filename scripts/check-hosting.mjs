@@ -14,15 +14,16 @@
  *    script-src 'self' plus each script's sha256; --dist hashes every inline
  *    script in the built pages and fails on any that isn't listed, so a
  *    Starlight update that changes one fails the build instead of the docs.
- *  - Paddle's checkout reaching further than the buy page: only /app/buy/ may
- *    load cdn.paddle.com and frame Paddle's checkout; the app and site never.
- *  - The two CSPs overlapping: Vercel applies every matching header block, so
+ *  - Paid pages coming back by accident: Inlay is free, so no CSP allows
+ *    Paddle, and the old account, buy, pricing and refund addresses redirect
+ *    to the app or the landing page.
+ *  - The CSPs overlapping: Vercel applies every matching header block, so
  *    the site's must exclude the app's path.
- *  - The API (accounts for HD credits) not reaching its function: /api/* must
+ *  - The API (dormant HD and accounts; the app no longer calls it) not reaching its function: /api/* must
  *    rewrite to api/server.ts before the app's fallback, and the daily cron that
  *    keeps the free Supabase project awake must point at it.
- *  - The app reaching another origin: it talks only to its own /api, so its CSP
- *    keeps connect-src 'self' and no Supabase or Paddle script loads in it.
+ *  - The app reaching another origin: it talks only to its own site (counts),
+ *    so its CSP keeps connect-src 'self' and no third-party script loads in it.
  *  - cleanUrls / trailingSlash / routes. In mb-portfolio, those keys made
  *    Vercel silently stop applying the rewrite while headers still worked.
  */
@@ -35,13 +36,9 @@ const APP = '/app'
 /** The app's address before inlaytrace.com; links to it are out there, so it must keep redirecting. */
 const OLD = '/tools/img-to-svg'
 const SITE_SOURCE = `/((?!${APP.slice(1)}/).*)`
-/** The app's CSP covers everything under it except the AI worker and the buy page, which get their own. */
-const APP_SOURCE = `${APP}/((?!assets/prep-|buy/).*)`
+/** The app's CSP covers everything under it except the AI worker, which gets its own. */
+const APP_SOURCE = `${APP}/((?!assets/prep-).*)`
 const PREP_SOURCE = `${APP}/assets/prep-(.*)`
-/** The buy page: the only page that may load Paddle's checkout. */
-const BUY_SOURCE = `${APP}/buy/(.*)`
-const PADDLE_SCRIPT = 'https://cdn.paddle.com'
-const PADDLE_FRAMES = ['https://buy.paddle.com', 'https://sandbox-buy.paddle.com']
 const problems = []
 
 if (config.outputDirectory !== 'dist') problems.push('outputDirectory must be "dist" (the site and the app both build into it).')
@@ -72,22 +69,20 @@ if (!(config.crons ?? []).some((c) => c.path === '/api/keepalive')) problems.pus
 const cspOf = (source) => (config.headers ?? []).find((b) => b.source === source)?.headers.find((h) => h.key === 'Content-Security-Policy')?.value
 const directive = (csp, name) => (csp ?? '').split(';').map((d) => d.trim()).find((d) => d.startsWith(`${name} `)) ?? ''
 const blocksWithCsp = (config.headers ?? []).filter((b) => b.headers.some((h) => h.key === 'Content-Security-Policy')).map((b) => b.source)
-if (blocksWithCsp.sort().join() !== [SITE_SOURCE, APP_SOURCE, PREP_SOURCE, BUY_SOURCE].sort().join())
-  problems.push(`CSP must be set by exactly four blocks, "${SITE_SOURCE}" (site), "${APP_SOURCE}" (app), "${PREP_SOURCE}" (the AI worker) and "${BUY_SOURCE}" (the buy page), so they never stack. Found: ${blocksWithCsp.join(', ')}`)
+if (blocksWithCsp.sort().join() !== [SITE_SOURCE, APP_SOURCE, PREP_SOURCE].sort().join())
+  problems.push(`CSP must be set by exactly three blocks, "${SITE_SOURCE}" (site), "${APP_SOURCE}" (app) and "${PREP_SOURCE}" (the AI worker), so they never stack. Found: ${blocksWithCsp.join(', ')}`)
 
 const appCsp = cspOf(APP_SOURCE)
 // Tracing is plain JavaScript; only the AI worker compiles WebAssembly, under its own CSP.
 if (directive(appCsp, 'script-src').includes("'wasm-unsafe-eval'")) problems.push("The app's CSP allows 'wasm-unsafe-eval'; only the AI worker (its own block) should.")
 if (!/worker-src[^;]*'self'/.test(appCsp ?? '')) problems.push("The app's CSP worker-src must allow 'self' for the tracing worker.")
-// The app only talks to itself; Supabase and Paddle are reached through /api or a page of their own.
-if (directive(appCsp, 'connect-src') !== "connect-src 'self'") problems.push("The app's CSP connect-src must stay 'self': it talks only to its own /api.")
-// Paddle reaches only the buy page, and only Paddle's own hosts.
-for (const [name, csp] of [['app', appCsp], ['site', cspOf(SITE_SOURCE)]]) if ((csp ?? '').includes('paddle.com')) problems.push(`The ${name}'s CSP mentions paddle.com; only the buy page (${BUY_SOURCE}) may load Paddle.`)
-const buyCsp = cspOf(BUY_SOURCE)
-if (directive(buyCsp, 'script-src') !== `script-src 'self' ${PADDLE_SCRIPT}`) problems.push(`The buy page's script-src must be exactly 'self' ${PADDLE_SCRIPT} (no inline scripts, no WebAssembly).`)
-if (directive(buyCsp, 'frame-src') !== `frame-src ${PADDLE_FRAMES.join(' ')}`) problems.push(`The buy page's frame-src must be exactly Paddle's checkout (${PADDLE_FRAMES.join(' ')}).`)
-if (!/frame-ancestors 'none'/.test(buyCsp ?? '')) problems.push("The buy page's CSP must keep frame-ancestors 'none'.")
-for (const page of ['account', 'buy']) if (redirectTo(`${APP}/${page}`) !== `${APP}/${page}/`) problems.push(`${APP}/${page} must redirect to ${APP}/${page}/ (without the slash it would fall under the app's CSP, or miss its page).`)
+// The app only talks to itself.
+if (directive(appCsp, 'connect-src') !== "connect-src 'self'") problems.push("The app's CSP connect-src must stay 'self': it talks only to its own site.")
+// Inlay is free: nothing may load Paddle's checkout, and the paid pages' old addresses lead somewhere real.
+for (const b of config.headers ?? []) for (const h of b.headers) if (/paddle\.com/i.test(h.value)) problems.push(`${b.source}'s ${h.key} mentions paddle.com; Inlay sells nothing, so no page loads Paddle.`)
+const movedTo = (source) => (config.redirects ?? []).find((r) => r.source === source)?.destination
+for (const s of [`${APP}/(account|buy)`, `${APP}/(account|buy)/(.*)`]) if (movedTo(s) !== `${APP}/`) problems.push(`${s} must redirect to ${APP}/ (the account and buy pages are gone).`)
+for (const s of ['/(pricing|refunds)', '/(pricing|refunds)/']) if (movedTo(s) !== '/') problems.push(`${s} must redirect to / (the pricing and refund pages are gone).`)
 const prepCsp = cspOf(PREP_SOURCE)
 // The worker's CSP is the app's plus WebAssembly, nothing else.
 if (prepCsp !== appCsp?.replace("script-src 'self';", "script-src 'self' 'wasm-unsafe-eval';"))
@@ -101,8 +96,6 @@ if (process.argv.includes('--dist')) {
   const dist = new URL('../dist/', import.meta.url).pathname
   if (!existsSync(join(dist, 'index.html'))) problems.push('dist/index.html is missing: the landing page did not build.')
   if (!existsSync(join(dist, APP.slice(1), 'index.html'))) problems.push(`dist${APP}/index.html is missing: the app did not build.`)
-  if (!existsSync(join(dist, APP.slice(1), 'account', 'index.html'))) problems.push(`dist${APP}/account/index.html is missing: the account page did not build (sign-in links land there).`)
-  if (!existsSync(join(dist, APP.slice(1), 'buy', 'index.html'))) problems.push(`dist${APP}/buy/index.html is missing: the buy page did not build.`)
   // The AI worker's CSP is matched by file name: if the chunk is renamed, it would load under the app's and fail.
   const assets = existsSync(join(dist, APP.slice(1), 'assets')) ? readdirSync(join(dist, APP.slice(1), 'assets')) : []
   if (!assets.some((f) => /^prep-.*\.js$/.test(f))) problems.push(`No dist${APP}/assets/prep-*.js: the AI worker chunk was renamed, so ${PREP_SOURCE}'s CSP no longer reaches it.`)

@@ -57,7 +57,7 @@ See [Editing shapes](features/editing-shapes.md), [Colours and background](featu
 
 | Item | Why | Ticket |
 | --- | --- | --- |
-| **HD mode** | A paid, opt-in server-side trace, clearly marked as leaving the device, paid for with credit packs through Paddle; buying needs an account (Supabase). The free app is unchanged. [Plan](hd-mode.md). | [#46](https://github.com/mtblck/inlaytrace/issues/46) |
+| **HD mode** (shelved) | A paid, opt-in server-side trace, clearly marked as leaving the device. Built as a beta, then taken out of the app in November 2026 so Inlay stays free ([ADR 0004](adr/0004-free-with-tips.md)); the server code is dormant. [Plan](hd-mode.md). | [#46](https://github.com/mtblck/inlaytrace/issues/46) |
 
 ## Not planned
 

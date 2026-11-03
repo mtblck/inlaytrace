@@ -14,11 +14,9 @@ your images), and sends page views, visits and finished traces and downloads to
 mattblack.space's shared counter as daily totals (ADR 0002); the
 [privacy policy](https://inlaytrace.com/privacy/) lists what each records.
 
-The one exception is [HD](hd.md), which is paid, in beta, and
-happens only when you confirm it for an image: that image is uploaded, traced
-at full size on Inlay's server, and deleted as soon as the result is back. The
-app sends nothing to the server before you confirm, and talks only to its own
-site even then.
+There are no accounts and nothing to buy. The *Support* button in the header
+is a plain link to Ko-fi, for anyone who wants to leave a tip; it opens in a
+new tab and the app sends nothing with it.
 
 The optional AI steps (*Remove the background*, *Upscale 4× with AI*,
 *Recognise text*) run in the browser too. Their runtimes (ONNX Runtime, about

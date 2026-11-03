@@ -1,15 +1,15 @@
 ---
 /**
- * Terms of service. Written plainly; covers what Paddle's review requires: the
- * seller's legal name, the Merchant of Record disclosure, acceptable use, rights
- * in what you upload and get back (media editing and AI tools), a takedown
- * route, no guarantee of service, suspension, and contact.
+ * Terms of service, written plainly: who runs Inlay, acceptable use, rights in
+ * what you open and get back (media editing and AI tools), a takedown route,
+ * tips, no guarantee of service, and contact. Inlay is free; the paid HD mode is
+ * shelved (docs/hd-mode.md), and "Paid features" keeps room for it returning.
  */
 import Page from '../layouts/Page.astro'
-import { CONTACT, REFUND_DAYS, SELLER, SELLER_KIND, UPDATED } from '../data/legal'
+import { CONTACT, SELLER, SELLER_KIND, SUPPORT, UPDATED } from '../data/legal'
 ---
 
-<Page title="Terms · Inlay" description="The terms for using Inlay, its free app and its paid HD mode.">
+<Page title="Terms · Inlay" description="The terms for using Inlay, its free app and its open-source tracer.">
   <article class="prose" aria-labelledby="terms-title">
     <h1 id="terms-title">Terms</h1>
     <p class="lede">The rules for using Inlay, in plain words.</p>
@@ -17,41 +17,37 @@ import { CONTACT, REFUND_DAYS, SELLER, SELLER_KIND, UPDATED } from '../data/lega
     <h2>Who we are</h2>
     <p>
       Inlay (inlaytrace.com) is operated by {SELLER}, {SELLER_KIND} ("we", "us"). You can reach us at{' '}
-      <a href={`mailto:${CONTACT}`}>{CONTACT}</a>. By using the site, the app or HD mode, you agree to these terms. If you don't agree,
+      <a href={`mailto:${CONTACT}`}>{CONTACT}</a>. By using the site or the app, you agree to these terms. If you don't agree,
       please don't use them.
     </p>
 
     <h2>What Inlay is</h2>
     <p>
-      Inlay turns images into vector graphics. The app is free: it runs in your browser and your images stay on your device. HD mode is an
-      optional, paid service that processes an image on our servers, paid for with credits (see <a href="/pricing/">pricing</a>). The
+      Inlay turns images into vector graphics. The app is free: it runs in your browser and your images stay on your device. The
       tracer's source code is open source under the MIT licence; that licence, not these terms, covers the code itself.
     </p>
 
-    <h2>Payments</h2>
+    <h2>Tips</h2>
     <p>
-      Our order process is conducted by our online reseller Paddle.com. Paddle.com is the Merchant of Record for all our orders. Paddle
-      provides all customer service inquiries and handles returns. Paddle's <a href="https://www.paddle.com/legal/checkout-buyer-terms"
-        >buyer terms</a> apply to your purchase.
-    </p>
-    <p>
-      Credits are sold in packs, never expire, have no cash value and can't be transferred to another account. An HD run uses the credits
-      the app shows before you start it; a run that fails gives them back. You can get a full refund within {REFUND_DAYS} days under our{' '}
-      <a href="/refunds/">refund policy</a>.
+      You can support Inlay with a tip through <a href={SUPPORT}>Ko-fi</a>. Tips are voluntary gifts: they don't buy a feature, a service or
+      priority, and Ko-fi's own terms cover the payment. Ask Ko-fi or email us if a tip was a mistake.
     </p>
 
-    <h2>Accounts</h2>
+    <h2>Paid features</h2>
     <p>
-      You need an account to buy and use credits, and not for anything else. Keep access to your email address safe: anyone who can open
-      the sign-in links we send can use your credits. You can delete your account at any time from the account page; unused credits are
-      lost when you do.
+      Inlay has no paid features today. We may add optional ones in the future, such as processing an image on our servers. If we do, their
+      price, how payment and refunds work, and any account they need will be set out here before they launch, and the free app will stay
+      free.
+    </p>
+    <p>
+      HD mode, a paid beta, has been withdrawn. If you bought HD credits during the beta, email <a href={`mailto:${CONTACT}`}>{CONTACT}</a>
+      and we'll refund the ones you haven't used.
     </p>
 
     <h2>Your images and results</h2>
     <p>
-      You keep all rights in the images you open and the results you make. When you use HD mode, you give us permission to process that
-      image only to produce your result; we delete it as soon as the result is back, and we don't use it for anything else, including
-      training.
+      You keep all rights in the images you open and the results you make. The app processes them on your device; we never receive them,
+      and we never use them for anything, including training.
     </p>
     <p>
       You're responsible for having the right to use the images you process and for how you use the results. Results are produced
@@ -64,26 +60,19 @@ import { CONTACT, REFUND_DAYS, SELLER, SELLER_KIND, UPDATED } from '../data/lega
       <li>Break the law, or process images you don't have the right to use, including anything that infringes someone's copyright or trademark.</li>
       <li>Process sexual images of real people without their consent, any sexual content involving minors, or images meant to harass, threaten, deceive or expose someone (including their private information).</li>
       <li>Use Inlay for fraud, spam or malware.</li>
-      <li>Attack, probe, overload or scrape the service, or try to get around its limits, payments or safeguards.</li>
+      <li>Attack, probe, overload or scrape the service, or try to get around its limits or safeguards.</li>
     </ul>
 
     <h2>Reporting infringing material</h2>
     <p>
       If you believe Inlay is being used to infringe your rights, email <a href={`mailto:${CONTACT}`}>{CONTACT}</a> with what you believe is
-      infringed and where. We'll look into it promptly and act where it's justified. We'll close the accounts of people who repeatedly
-      infringe others' rights.
-    </p>
-
-    <h2>Suspension and ending</h2>
-    <p>
-      We may suspend or close an account that seriously or repeatedly breaks these terms, puts the service or other people at risk, or is used
-      for fraud, including chargebacks made in bad faith. Where we close an account without good cause, we'll refund unused credits.
+      infringed and where. We'll look into it promptly and act where it's justified.
     </p>
 
     <h2>The service</h2>
     <p>
       We work to keep Inlay running and correct, but we can't promise it will always be available or free of errors, and we may change or stop
-      features. If we ever stop HD mode, we'll refund unused credits from packs bought in the 12 months before.
+      features.
     </p>
     <p>
       Inlay, the Inlay name and its logo belong to us. As far as the law allows, Inlay is provided as is, and our total liability to you is

@@ -21,6 +21,10 @@
  *   GET  keepalive                 Vercel cron: one query a day so the free
  *                                  Supabase project never pauses
  *
+ * Switched off while Inlay is free (ADR 0004): unless PAID_FEATURES is "on", every
+ * route but keepalive and the Paddle webhook (so refunds of beta purchases still
+ * reach the ledger) answers 410, so nobody can sign in, buy or run HD.
+ *
  * Sessions are HttpOnly cookies scoped to /api, so page scripts can't read
  * them. Every POST must come from this origin with a JSON body: SameSite=Lax
  * already keeps the cookies off cross-site posts, and a cross-site form can't
@@ -30,7 +34,13 @@ import { cleanup, resultPart, runJob, startRun, uploadPart, type HdEnv } from '.
 import { creditsFor, fromPaddle, packs, paddle, paddleEnvironment, PaddleError, verifySignature, type PaddleEnv } from './paddle.js'
 import { isSecretKey, supabase, SupabaseError, type Env as SupabaseEnv, type Session, type Supabase, type User } from './supabase.js'
 
-export type Env = SupabaseEnv & PaddleEnv & HdEnv
+export type Env = SupabaseEnv & PaddleEnv & HdEnv & {
+  /** "on" turns accounts, checkout and HD back on; anything else keeps them off. */
+  PAID_FEATURES?: string
+}
+
+/** Routes that answer while paid features are off. */
+const ALWAYS_ON = new Set(['keepalive', 'paddle/webhook'])
 
 const AT = 'inlay_at'
 const RT = 'inlay_rt'
@@ -41,6 +51,7 @@ export const ACCOUNT_PAGE = '/app/account/'
 
 export async function handle(req: Request, route: string, env: Env, fetchImpl: typeof fetch = fetch): Promise<Response> {
   try {
+    if (env.PAID_FEATURES !== 'on' && !ALWAYS_ON.has(route)) return json({ error: 'Inlay is free: accounts, credits and HD are switched off.' }, 410)
     if (route === 'keepalive' && req.method === 'GET') return await keepalive(req, env, fetchImpl)
     const db = supabase(env, fetchImpl)
     if (!db) {

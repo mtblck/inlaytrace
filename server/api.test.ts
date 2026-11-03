@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { challenge, handle } from './api'
 
 const ORIGIN = 'https://inlaytrace.com'
-const env = { SUPABASE_URL: 'https://proj.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_test', CRON_SECRET: 'cron-secret' }
+const env = { PAID_FEATURES: 'on', SUPABASE_URL: 'https://proj.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_test', CRON_SECRET: 'cron-secret' }
 const USER = { id: '11111111-1111-1111-1111-111111111111', email: 'ada@example.com' }
 
 /** A fake Supabase: records every call and answers like Auth and PostgREST. */
@@ -37,6 +37,22 @@ const post = (route: string, body: unknown, cookie = '', headers: Record<string,
 const get = (route: string, cookie = '', headers: Record<string, string> = {}) => new Request(`${ORIGIN}/api/${route}`, { headers: { cookie, ...headers } })
 const setCookies = (r: Response) => r.headers.getSetCookie()
 const cookieValue = (r: Response, name: string) => setCookies(r).find((c) => c.startsWith(`${name}=`))?.split(';')[0].slice(name.length + 1)
+
+describe('paid features switched off (ADR 0004)', () => {
+  const off = { ...env, PAID_FEATURES: undefined }
+  it('answers 410 to sign-in, accounts, checkout and HD without calling Supabase', async () => {
+    const f = fakeSupabase()
+    for (const req of [post('auth/start', { email: 'ada@example.com' }), get('account'), get('account/summary'), post('checkout', { priceId: 'x' }), post('hd/start', {})]) {
+      expect((await handle(req, new URL(req.url).pathname.slice(5), off, f.fetchImpl)).status).toBe(410)
+    }
+    expect(f.calls).toEqual([])
+  })
+  it('keeps the keep-alive cron and the Paddle webhook answering', async () => {
+    const f = fakeSupabase()
+    expect((await handle(get('keepalive'), 'keepalive', off, f.fetchImpl)).status).not.toBe(410)
+    expect((await handle(post('paddle/webhook', {}), 'paddle/webhook', off, f.fetchImpl)).status).not.toBe(410)
+  })
+})
 
 describe('sign in by email link', () => {
   it('emails a link back to the account page, with a PKCE challenge, and keeps the verifier in an HttpOnly cookie', async () => {
@@ -115,7 +131,7 @@ describe('account', () => {
   })
 
   it('summary is signed out, not an error, on a server without accounts', async () => {
-    const r = await handle(get('account/summary'), 'account/summary', {}, fakeSupabase().fetchImpl)
+    const r = await handle(get('account/summary'), 'account/summary', { PAID_FEATURES: 'on' }, fakeSupabase().fetchImpl)
     expect(r.status).toBe(200)
     expect(await r.json()).toEqual({ signedIn: false })
   })
@@ -187,7 +203,7 @@ describe('guards', () => {
   })
 
   it('is 503 without Supabase settings, and 404 for unknown routes', async () => {
-    expect((await handle(get('account'), 'account', {}, fakeSupabase().fetchImpl)).status).toBe(503)
+    expect((await handle(get('account'), 'account', { PAID_FEATURES: 'on' }, fakeSupabase().fetchImpl)).status).toBe(503)
     expect((await handle(get('nope'), 'nope', env, fakeSupabase().fetchImpl)).status).toBe(404)
   })
 

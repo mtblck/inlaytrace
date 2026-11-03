@@ -27,14 +27,24 @@
       "permanent": true
     },
     {
-      "source": "/app/account",
-      "destination": "/app/account/",
-      "permanent": true
+      "source": "/app/(account|buy)",
+      "destination": "/app/",
+      "permanent": false
     },
     {
-      "source": "/app/buy",
-      "destination": "/app/buy/",
-      "permanent": true
+      "source": "/app/(account|buy)/(.*)",
+      "destination": "/app/",
+      "permanent": false
+    },
+    {
+      "source": "/(pricing|refunds)",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/(pricing|refunds)/",
+      "destination": "/",
+      "permanent": false
     },
     {
       "source": "/tools/img-to-svg",
@@ -112,7 +122,7 @@
       ]
     },
     {
-      "source": "/app/((?!assets/prep-|buy/).*)",
+      "source": "/app/((?!assets/prep-).*)",
       "headers": [
         {
           "key": "Content-Security-Policy",
@@ -126,15 +136,6 @@
         {
           "key": "Content-Security-Policy",
           "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
-        }
-      ]
-    },
-    {
-      "source": "/app/buy/(.*)",
-      "headers": [
-        {
-          "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' https://cdn.paddle.com; style-src 'self' 'unsafe-inline' https://cdn.paddle.com; font-src 'self' https://cdn.paddle.com; img-src 'self' data: https://*.paddle.com; connect-src 'self' https://*.paddle.com; frame-src https://buy.paddle.com https://sandbox-buy.paddle.com; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         }
       ]
     },
