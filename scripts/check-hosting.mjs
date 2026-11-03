@@ -79,7 +79,7 @@ if (!/worker-src[^;]*'self'/.test(appCsp ?? '')) problems.push("The app's CSP wo
 // The app only talks to itself.
 if (directive(appCsp, 'connect-src') !== "connect-src 'self'") problems.push("The app's CSP connect-src must stay 'self': it talks only to its own site.")
 // Inlay is free: nothing may load Paddle's checkout, and the paid pages' old addresses lead somewhere real.
-for (const b of config.headers ?? []) for (const h of b.headers) if (h.value.includes('paddle.com')) problems.push(`${b.source}'s ${h.key} mentions paddle.com; Inlay sells nothing, so no page loads Paddle.`)
+for (const b of config.headers ?? []) for (const h of b.headers) if (/paddle\.com/i.test(h.value)) problems.push(`${b.source}'s ${h.key} mentions paddle.com; Inlay sells nothing, so no page loads Paddle.`)
 const movedTo = (source) => (config.redirects ?? []).find((r) => r.source === source)?.destination
 for (const s of [`${APP}/(account|buy)`, `${APP}/(account|buy)/(.*)`]) if (movedTo(s) !== `${APP}/`) problems.push(`${s} must redirect to ${APP}/ (the account and buy pages are gone).`)
 for (const s of ['/(pricing|refunds)', '/(pricing|refunds)/']) if (movedTo(s) !== '/') problems.push(`${s} must redirect to / (the pricing and refund pages are gone).`)
