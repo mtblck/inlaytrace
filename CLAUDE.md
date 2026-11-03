@@ -20,8 +20,7 @@ Marking it ready also triggers the Claude review workflow.
 
 ## Load-bearing decisions
 
-- **Client-only.** Tracing runs in a Web Worker (`apps/app/src/engine/`). Images never leave the device, except
-  for HD (paid, opt-in per image, `server/hd.ts`), which traces the same image at full size on the server.
+- **Client-only.** Tracing runs in a Web Worker (`apps/app/src/engine/`). Images never leave the device.
 - **Counts only.** Vercel Web Analytics plus page views to mattblack.space's shared counter (`/_mb/events`), same-origin, via `apps/app/public/analytics.js` and
   `apps/site/public/analytics.js` (keep identical; skipped on localhost). No cookies; the privacy page lists what it records (ADRs 0001, 0002).
 - **Layout:** `apps/app` (Vite root; its config sets `root`, so scripts run it from the repo root with
@@ -50,19 +49,20 @@ Marking it ready also triggers the Claude review workflow.
   `/app/` (Vite `base`, built to the root's `dist/app`). The old `/tools/img-to-svg/(.*)` must keep
   redirecting (308, absolute) to `https://inlaytrace.com/app/$1`; `hosting:check` guards it, and
   mb-portfolio redirects mattblack.space's copy of that path the same way.
-- **Four CSPs** in `vercel.json`, scoped not to overlap: the app's needs `worker-src 'self'` and must *not* allow
+- **Three CSPs** in `vercel.json`, scoped not to overlap: the app's needs `worker-src 'self'` and must *not* allow
   `'wasm-unsafe-eval'`; the AI worker (`/app/assets/prep-*.js`, ONNX Runtime) gets the app's plus `'wasm-unsafe-eval'`;
-  the buy page (`/app/buy/`) is the only one allowing Paddle's checkout (`cdn.paddle.com`, its frames);
-  the site's allows it for Pagefind and lists a sha256 per Starlight inline script. `hosting:check` guards all four, and the build's
+  the site's allows it for Pagefind and lists a sha256 per Starlight inline script. No page allows Paddle. `hosting:check` guards all three, and the build's
   `--dist` pass names any new hash to add. `npm run preview` is `scripts/serve.mjs`, which mimics Vercel.
 - **Edits = `{ inks, doc }`** (`apps/app/src/lib/doc.ts`): ink edits keyed by traced hex; `doc` null
   until a geometric edit detaches it, then settings changes must confirm. paper.js is
   lazy-loaded for mirror only; keep it out of the main chunk.
-- **HD mode (paid, in progress, `docs/hd-mode.md`):** Supabase project `hjmhsrxagrquqgtfzyfx` holds accounts and the
+- **Free, with a tip button (ADR 0004).** No accounts, pricing or paid UI anywhere; the `tipjar` package (Matt's, on npm) links
+  to Ko-fi from the app's header (`components/Support.tsx`) and floats on the site's pages (`Page.astro`).
+- **HD mode (paid, shelved Nov 2026, `docs/hd-mode.md`):** the server side is dormant, unreachable from the UI. Supabase project `hjmhsrxagrquqgtfzyfx` holds accounts and the
   credit ledger (`supabase/migrations/`), reached only from `/api` with the service-role key; Paddle sells credit packs.
   The free app stays account-free and local, and its CSP stays `connect-src 'self'`. `server/api.ts` is web-standard
   Request → Response: `api/server.ts` (Vercel, behind the `/api/(.*)` rewrite) and `server/node.ts` (vite dev, `serve.mjs`)
-  both call it; keep logic out of the wrappers. The account and buy pages are Vite pages of their own (`apps/app/account/`, `apps/app/buy/`).
+  both call it; keep logic out of the wrappers. The account and buy pages were removed with the paid UI; restore them from git history to revive HD.
 - **Claude commits for Matt as `mtblck <105079242+mtblck@users.noreply.github.com>`.** Vercel blocks
   deploys whose author email isn't linked to Matt's account (seen on mb-portfolio).
 

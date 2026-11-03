@@ -4,6 +4,9 @@ order: 8
 
 # HD (beta)
 
+> **Withdrawn (November 2026).** HD isn't in the app while Inlay is free, and
+> this page is left off the site. See [ADR 0004](../adr/0004-free-with-tips.md).
+
 The app traces at most 2048 px on the long edge (4096 for pixel art), so a big
 image loses some fine detail. **HD trace** traces the same image at its full
 size on Inlay's server, with the same settings, and is paid for with

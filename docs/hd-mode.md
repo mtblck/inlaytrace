@@ -4,6 +4,9 @@ order: 46
 
 # HD mode: plan
 
+> **Shelved (November 2026).** Inlay is free for now and HD is out of the app and
+> the site; the server code stays dormant. See [ADR 0004](adr/0004-free-with-tips.md).
+
 A paid, opt-in trace that runs on a server, paid for with credits. Ticket
 [#46](https://github.com/mtblck/inlaytrace/issues/46). Planning notes: this page
 is left off the public site (`INTERNAL` in `scripts/sync-docs.mjs`).

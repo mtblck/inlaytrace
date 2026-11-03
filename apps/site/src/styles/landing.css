@@ -536,3 +536,13 @@ pre {
 .foot-cols a:focus-visible {
   text-decoration: underline;
 }
+
+/* ---- Tip button (the tipjar package, in Page.astro) ------------------------ */
+/* Ink on the page in either theme, following data-theme as well as the system setting. */
+:root {
+  --tipjar-bg: var(--text);
+  --tipjar-label: var(--page);
+  --tipjar-ring: var(--page);
+  --tipjar-focus: var(--focus);
+  --tipjar-font: inherit;
+}

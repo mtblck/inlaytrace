@@ -1,28 +1,31 @@
 ---
 /**
- * The shell shared by the site's own pages (the landing page, Pricing, Privacy,
- * Terms and Refunds):
- * head, header and footer. The docs are Starlight's and have their own.
+ * The shell shared by the site's own pages (the landing page, Privacy and
+ * Terms): head, header, footer and the floating tip button. The docs are
+ * Starlight's and have their own.
  */
+import { tipjar } from 'tipjar'
+import 'tipjar/style.css'
 import '../styles/fonts.css'
 import '../styles/landing.css'
-import { CONTACT } from '../data/legal'
+import { CONTACT, SUPPORT } from '../data/legal'
 
 interface Props {
   title: string
   description: string
 }
 const { title, description } = Astro.props
+/** Inlay is free; this floating button asks for a tip. It tucks away when the footer, with its own support link, is on screen. */
+const tip = tipjar({ href: SUPPORT, label: 'Support Inlay', description: 'on Ko-fi', icon: 'heart', newTab: true })
 /** The app (apps/app), served beside this site. */
 const APP = '/app/'
-/** The footer's columns. Every page Paddle's review looks for (pricing, terms, refunds, privacy) must stay in here. */
+/** The footer's columns. */
 const FOOTER = [
   {
     title: 'Inlay',
     links: [
       { label: 'Open the app', href: APP },
-      { label: 'Pricing', href: '/pricing/' },
-      { label: 'Support Inlay', href: 'https://ko-fi.com/mtblck' },
+      { label: 'Support Inlay', href: SUPPORT },
     ],
   },
   {
@@ -46,7 +49,6 @@ const FOOTER = [
     links: [
       { label: 'Privacy', href: '/privacy/' },
       { label: 'Terms', href: '/terms/' },
-      { label: 'Refunds', href: '/refunds/' },
       { label: 'Contact', href: `mailto:${CONTACT}` },
     ],
   },
@@ -77,7 +79,6 @@ const FOOTER = [
       <a class="wordmark" href="/" aria-label="Inlay, home">Inlay</a>
       <nav aria-label="Site">
         <a href="/docs/package/getting-started/">Docs</a>
-        <a href="/pricing/">Pricing</a>
         <a class="button small" href={APP}>Open the app</a>
       </nav>
     </header>
@@ -109,6 +110,14 @@ const FOOTER = [
         }
       </nav>
     </footer>
+
+    <Fragment set:html={tip} />
+    <script>
+      import { tuck } from 'tipjar'
+
+      const button = document.querySelector<HTMLElement>('.tipjar')
+      if (button) tuck(button, 'footer.foot')
+    </script>
 
   </body>
 </html>

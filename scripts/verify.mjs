@@ -810,10 +810,13 @@ check(closed, 'Esc closes the shortcuts panel')
 const cut = await page.getByRole('radiogroup', { name: 'Image type' }).locator('.field-hint').evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent))
 check(cut.length === 0, `every preset's description fits (${cut.join(', ') || 'none cut off'})`)
 
-// The header offers sign-in to someone with no session (or when /api isn't set up).
-const signIn = page.locator('header [data-account="signed-out"]')
-const signInShown = await signIn.waitFor({ timeout: 5000 }).then(() => true, () => false)
-check(signInShown && (await signIn.getAttribute('href')) === '/app/account/', 'the header shows Sign in, linking to the account page')
+// Inlay is free: the header has a tip button (tipjar) to Ko-fi, in a new tab, and nothing to sign in to or buy.
+const tip = page.locator('header a.tipjar')
+check(
+  (await tip.count()) === 1 && (await tip.getAttribute('href')) === 'https://ko-fi.com/mtblck' && (await tip.getAttribute('target')) === '_blank' && (await tip.innerText()).includes('Support'),
+  'the header has a Support button linking to Ko-fi in a new tab',
+)
+check((await page.locator('[data-account], [data-balance], [data-hd]').count()) === 0, 'the app shows no sign-in, credits or HD')
 
 // Header icons: the keyboard opens the same panel; the tooltip shows on keyboard focus; sun/moon switches theme.
 const kb = page.getByRole('button', { name: 'Keyboard shortcuts' })
@@ -1324,14 +1327,26 @@ if (siteOrigin) {
   const old = await landing.request.get(new URL('tools/img-to-svg/some/deep/link', siteOrigin).href, { maxRedirects: 0 })
   check(old.status() === 308 && old.headers().location === 'https://inlaytrace.com/app/some/deep/link', `the old app address redirects to inlaytrace.com/app/ (${old.status()} → ${old.headers().location})`)
   const privacy = await landing.request.get(new URL('privacy/', siteOrigin).href)
-  check(privacy.ok() && (await privacy.text()).includes('your images never leave your device'), 'the privacy page loads')
-  // Paddle's review: pricing, terms (seller and Merchant of Record), refunds (14–90 days) and privacy, all linked from every page.
-  for (const [path, must] of [['pricing/', 'Credit packs'], ['terms/', 'Paddle.com is the Merchant of Record for all our orders'], ['refunds/', 'within 30 days'], ['privacy/', 'Paddle']]) {
+  check(privacy.ok() && (await privacy.text()).includes('images never leave your device'), 'the privacy page loads')
+  // Inlay is free: the terms and privacy notice keep room for paid features later, and the paid pages are gone.
+  for (const [path, must] of [['terms/', 'Inlay has no paid features today'], ['privacy/', 'If we add paid features']]) {
     const r = await landing.request.get(new URL(path, siteOrigin).href)
-    check(r.ok() && (await r.text()).includes(must), `/${path} loads and says “${must}”`)
+    check(r.ok() && !(await r.text()).includes('Paddle') && (await r.text()).includes(must), `/${path} loads, says “${must}” and doesn't mention Paddle`)
+  }
+  for (const path of ['pricing/', 'refunds', 'app/buy/', 'app/account']) {
+    const r = await landing.request.get(new URL(path, siteOrigin).href, { maxRedirects: 0 })
+    const to = path.startsWith('app/') ? '/app/' : '/'
+    check(r.status() === 307 && r.headers().location === to, `/${path} redirects to ${to} (${r.status()} → ${r.headers().location})`)
   }
   const footer = await landing.locator('footer a').evaluateAll((as) => as.map((a) => a.getAttribute('href')))
-  check(['/pricing/', '/terms/', '/refunds/', '/privacy/'].every((h) => footer.includes(h)), 'the footer links to pricing, terms, refunds and privacy')
+  check(['/terms/', '/privacy/', 'https://ko-fi.com/mtblck'].every((h) => footer.includes(h)) && !footer.some((h) => /pricing|refunds/.test(h)), 'the footer links to terms, privacy and Ko-fi, and not to pricing or refunds')
+  // The floating tip button shows over the page and tucks away while the footer (with its own Ko-fi link) is on screen.
+  const floating = landing.locator('body > a.tipjar')
+  await landing.evaluate(() => window.scrollTo(0, 0))
+  const shownAtTop = await floating.isVisible()
+  await landing.locator('footer.foot').scrollIntoViewIfNeeded()
+  const tucked = await landing.waitForFunction(() => document.querySelector('body > a.tipjar')?.hasAttribute('data-tucked'), null, { timeout: 3000 }).then(() => true, () => false)
+  check(shownAtTop && tucked && (await floating.getAttribute('href')) === 'https://ko-fi.com/mtblck', `the site's tip button shows, links to Ko-fi, and tucks away at the footer (shown ${shownAtTop}, tucked ${tucked})`)
   const guessed = await landing.request.get(new URL('docs/', siteOrigin).href)
   check(guessed.ok() && guessed.url().endsWith('/docs/overview/'), `/docs/ leads to the docs (${guessed.url()})`)
   const docs = await newPage({ width: 1440, height: 900 })
@@ -1360,211 +1375,6 @@ if (siteOrigin) {
     check(over <= 0, `no horizontal scroll on a phone at /${path} (${over}px)`)
     if (!path) await shot(phone, '13-landing-mobile')
   }
-}
-
-// ---- HD trace (beta) ---------------------------------------------------------------
-// A 2600 × 1800 image: bigger than the app traces, so HD is offered. The server
-// is a stand-in (server/hd.test.ts tests the real one); this checks the app's
-// side: nothing is sent until the cost is confirmed, then the parts flow.
-{
-  console.log('\n  hd trace\n')
-  const W = 2600
-  const H = 1800
-  const data = new Uint8Array(W * H * 4)
-  for (let y = 0; y < H; y++)
-    for (let x = 0; x < W; x++) data.set(Math.hypot(x - 1300, y - 900) < 600 ? [30, 60, 140, 255] : [250, 248, 240, 255], (y * W + x) * 4)
-  const big = Buffer.from(encodePng({ width: W, height: H, data, channels: 4, depth: 8 }))
-  const hd = await newPage({ width: 1440, height: 900 })
-  const apiCalls = []
-  let uploaded = 0
-  await hd.route('**/api/**', async (route) => {
-    const req = route.request()
-    const path = new URL(req.url()).pathname.replace('/api/', '')
-    apiCalls.push(path)
-    const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
-    if (path === 'account') return json({ signedIn: true, email: 'ada@example.com', balance: 10, ledger: [] })
-    if (path === 'account/summary') return json({ signedIn: true, email: 'ada@example.com', balance: uploaded ? 8 : 10 })
-    if (path === 'hd/start') return json({ run: '00000000-0000-0000-0000-000000000001', credits: 2, partBytes: 4194304 })
-    if (path === 'hd/upload') return (uploaded++, route.fulfill({ status: 204 }))
-    if (path === 'hd/run') return json({ parts: 1, contentType: 'image/svg+xml', bytes: 120, credits: 2 })
-    if (path === 'hd/result') return route.fulfill({ status: 200, contentType: 'application/octet-stream', body: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"><path fill="#1e3c8c" d="M700 900a600 600 0 1 0 1200 0a600 600 0 1 0-1200 0Z"/></svg>` })
-    return json({ error: 'Not found.' }, 404)
-  })
-  await hd.goto(url)
-  await hd.locator('input[type=file]').setInputFiles({ name: 'big.png', mimeType: 'image/png', buffer: big })
-  await traced(hd)
-  const summary = hd.locator('[data-hd="trace"] summary')
-  check((await summary.innerText()).includes('2,600 × 1,800, 2 credits'), `a big image offers HD with its size and cost (${(await summary.innerText()).replace(/\s+/g, ' ')})`)
-  // The header asks who's signed in; nothing else, and nothing about the image, goes out.
-  check(apiCalls.every((p) => p === 'account/summary'), `nothing is sent to the server just for opening a big image (${apiCalls.join(', ') || 'no calls'})`)
-  check((await hd.locator('header [data-balance]').innerText()) === '10 credits', 'the header shows the balance when signed in')
-  await summary.click()
-  await hd.getByRole('button', { name: 'Trace in HD for 2 credits' }).click()
-  await hd.getByRole('button', { name: 'Start HD trace' }).click()
-  await hd.getByRole('button', { name: 'Download HD' }).waitFor({ timeout: 60_000 })
-  check(uploaded >= 1 && apiCalls.includes('hd/run') && apiCalls.includes('hd/result'), `confirming uploads the image in parts, runs, and fetches the result (${uploaded} part(s))`)
-  const after = await hd.locator('header [data-balance]').filter({ hasText: '8 credits' }).waitFor({ timeout: 5000 }).then(() => true, () => false)
-  check(after, 'the header balance updates after an HD run')
-  await shot(hd, '19-hd-done')
-  const small = await newPage({ width: 1440, height: 900 })
-  await small.goto(url)
-  await small.getByRole('button', { name: 'Try a sample' }).click()
-  await traced(small)
-  const offers = await small.locator('[data-hd]').evaluateAll((els) => els.map((e) => e.getAttribute('data-hd')))
-  const dims = await small.evaluate(() => document.querySelector('aside')?.innerText.match(/(\d+) × (\d+)/)?.slice(1).map(Number))
-  const smallEnough = dims && dims[0] * dims[1] <= 500_000
-  check(!offers.includes('trace') && (smallEnough ? offers.includes('upscale') : offers.length === 0), `a small image offers no HD trace${smallEnough ? ', and offers HD upscale (2 credits)' : ''} (${offers.join(', ') || 'none'})`)
-}
-
-// ---- The account page (sign-in and credits for HD) ----------------------------
-// The page's own behaviour, against a stand-in /api (server/api.ts has its own
-// tests against a fake Supabase), plus one real request to the API.
-{
-  const accountUrl = new URL('account/', url).href
-  console.log(`\n  account ${accountUrl}\n`)
-  const real = await (await newPage({ width: 1280, height: 800 })).request.get(new URL('/api/account', url).href)
-  const realBody = await real.json().catch(() => null)
-  check(
-    (real.status() === 200 && realBody?.signedIn === false) || (real.status() === 503 && /set up/.test(realBody?.error ?? '')),
-    `the API answers /api/account without a session (${real.status()}${real.status() === 503 ? ', no Supabase settings here' : ''})`,
-  )
-
-  const ledger = [
-    { id: 3, delta: -2, reason: 'use', details: { what: 'background removal' }, created_at: '2026-10-18T15:00:00Z' },
-    { id: 2, delta: 2, reason: 'refund_use', details: {}, created_at: '2026-10-18T14:00:00Z' },
-    { id: 1, delta: 60, reason: 'purchase', details: {}, created_at: '2026-10-17T12:00:00Z' },
-  ]
-  /** A stand-in /api: signed out until a code is exchanged. */
-  async function fakeApi(page) {
-    const seen = []
-    let signedIn = false
-    await page.route('**/api/**', async (route) => {
-      const req = route.request()
-      const path = new URL(req.url()).pathname.replace('/api/', '')
-      seen.push({ path, method: req.method(), type: req.headers()['content-type'], body: req.postDataJSON?.() ?? null })
-      const json = (status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
-      if (path === 'account') return json(200, signedIn ? { signedIn: true, email: 'ada@example.com', balance: 60, ledger } : { signedIn: false })
-      if (path === 'auth/start') return route.fulfill({ status: 204 })
-      if (path === 'auth/exchange') return req.postDataJSON().code === 'good' ? ((signedIn = true), json(200, { email: 'ada@example.com' })) : json(400, { error: 'That sign-in link has expired or was already used. Ask for a new one.', code: 'expired' })
-      if (path === 'auth/signout' || path === 'account/delete') return (signedIn = false), route.fulfill({ status: 204 })
-      return json(404, { error: 'Not found.' })
-    })
-    return seen
-  }
-
-  const acct = await newPage({ width: 1280, height: 800 })
-  const seen = await fakeApi(acct)
-  const res = await acct.goto(accountUrl)
-  const acctCsp = res?.headers()['content-security-policy'] ?? ''
-  check(res?.ok() && /connect-src 'self'/.test(acctCsp) && /worker-src/.test(acctCsp), "the account page loads under the app's CSP (connect-src 'self')")
-  await acct.getByLabel('Email').waitFor()
-  check(await acct.getByText('You only need an account to buy credits for HD mode').isVisible(), 'signed out: it says an account is only for buying HD credits')
-  const legal = await acct.getByRole('navigation', { name: 'Legal' }).locator('a').evaluateAll((as) => as.map((a) => a.getAttribute('href')))
-  check(['/terms/', '/privacy/', '/refunds/'].every((h) => legal.includes(h)), `the account page links the terms, privacy notice and refund policy (${legal.join(', ')})`)
-  await acct.getByLabel('Email').fill('ada@example.com')
-  await acct.getByRole('button', { name: 'Email me a sign-in link' }).click()
-  await acct.getByText('Check your email.').waitFor()
-  const start = seen.find((s) => s.path === 'auth/start')
-  check(start?.method === 'POST' && start.type === 'application/json' && start.body.email === 'ada@example.com', 'asking for a link posts the email as JSON to /api/auth/start')
-  await shot(acct, '14-account-sent')
-
-  await acct.goto(`${accountUrl}?code=good`)
-  await acct.getByText('Signed in as').waitFor()
-  check(!acct.url().includes('code='), 'the sign-in code is taken out of the address bar')
-  check((await acct.locator('[data-balance]').innerText()) === '60', 'signed in: the balance shows')
-  const rows = await acct.locator('tbody tr').allInnerTexts()
-  check(rows.length === 3 && rows[0].includes('HD: background removal') && rows[0].includes('−2') && rows[2].includes('Bought 60 credits') && rows[2].includes('+60'), 'the history lists uses, refunds and purchases with signed amounts')
-  await shot(acct, '15-account-signed-in')
-  await acct.getByRole('button', { name: 'Delete account…' }).click()
-  await acct.getByRole('button', { name: 'Delete my account' }).click()
-  await acct.getByText('Your account is deleted.').waitFor()
-  check(seen.some((s) => s.path === 'account/delete' && s.body?.confirm === true), 'deleting asks again, then posts a confirmation')
-
-  const expired = await newPage({ width: 1280, height: 800 })
-  await fakeApi(expired)
-  // A stand-in 400 is a resource error in the console; that one is expected here.
-  const before = failures.length
-  await expired.goto(`${accountUrl}?code=used`)
-  await expired.getByRole('alert').waitFor()
-  check((await expired.getByRole('alert').innerText()).includes('expired'), 'an expired link says so and offers the form again')
-  failures.splice(before, failures.length - before, ...failures.slice(before).filter((f) => !/status of 400/.test(f)))
-
-  const phone = await newPage({ width: 390, height: 844 }, 'dark')
-  await fakeApi(phone)
-  await phone.goto(`${accountUrl}?code=good`)
-  await phone.getByText('Signed in as').waitFor()
-  const over = await phone.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
-  check(over <= 0 && (await phone.evaluate(() => document.documentElement.dataset.theme)) === 'dark', `the account page fits a phone and follows dark mode (${over}px)`)
-  await shot(phone, '16-account-phone-dark')
-}
-
-// ---- The buy page (Paddle checkout) -------------------------------------------
-// Paddle.js is replaced by a stand-in that records what the page asks of it, so
-// this runs offline; the stand-in is served from cdn.paddle.com, so the buy
-// page's CSP is what lets it in.
-{
-  const buyUrl = new URL('buy/', url).href
-  console.log(`\n  buy ${buyUrl}\n`)
-  const packs = [
-    { priceId: 'pri_20', credits: 20, price: '$5' },
-    { priceId: 'pri_60', credits: 60, price: '$12' },
-    { priceId: 'pri_200', credits: 200, price: '$30' },
-  ]
-  const page = await newPage({ width: 1280, height: 800 })
-  let balance = 60
-  const seen = []
-  await page.route('**/api/**', async (route) => {
-    const req = route.request()
-    const path = new URL(req.url()).pathname.replace('/api/', '')
-    seen.push({ path, body: req.postDataJSON?.() ?? null })
-    const json = (body) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
-    if (path === 'account') return json({ signedIn: true, email: 'ada@example.com', balance, ledger: [] })
-    if (path === 'checkout/config') return json({ environment: 'sandbox', token: 'test_token', packs })
-    if (path === 'checkout') return json({ transactionId: 'txn_test' })
-    return route.fulfill({ status: 404 })
-  })
-  await page.route('https://cdn.paddle.com/paddle/v2/paddle.js', (route) =>
-    route.fulfill({
-      contentType: 'text/javascript',
-      body: `window.__paddle = { env: null, init: null, opened: [], closed: 0 };
-        window.Paddle = {
-          Environment: { set: (e) => { window.__paddle.env = e } },
-          Initialize: (o) => { window.__paddle.init = { token: o.token }; window.__paddle.cb = o.eventCallback },
-          Checkout: { open: (o) => window.__paddle.opened.push(o), close: () => { window.__paddle.closed++ } },
-        }`,
-    }),
-  )
-  const res = await page.goto(buyUrl)
-  const csp = res?.headers()['content-security-policy'] ?? ''
-  check(res?.ok() && csp.includes('https://cdn.paddle.com') && csp.includes('frame-src https://buy.paddle.com https://sandbox-buy.paddle.com'), 'the buy page has its own CSP, allowing Paddle')
-  const appCsp = (await page.request.get(url)).headers()['content-security-policy'] ?? ''
-  check(!appCsp.includes('paddle'), "the app's CSP doesn't mention Paddle")
-  await page.getByRole('button', { name: 'Buy 60' }).waitFor()
-  check(await page.getByText('Test mode: no real payment is taken.').isVisible(), 'sandbox: the page says no real payment is taken')
-  check((await page.getByRole('listitem').allInnerTexts()).some((t) => t.includes('$0.20 a credit')), 'each pack shows its price per credit')
-  check((await page.evaluate(() => !!window.Paddle)) === false, "Paddle.js isn't loaded until someone buys")
-  await shot(page, '17-buy')
-  await page.getByRole('button', { name: 'Buy 60' }).click()
-  await page.waitForFunction(() => window.__paddle?.opened.length === 1)
-  const p = await page.evaluate(() => ({ env: window.__paddle.env, init: window.__paddle.init, opened: window.__paddle.opened[0] }))
-  check(p.env === 'sandbox' && p.init.token === 'test_token', 'Paddle.js starts in sandbox with the client token')
-  check(p.opened.transactionId === 'txn_test' && seen.some((s) => s.path === 'checkout' && s.body?.priceId === 'pri_60'), "the checkout opens on the server's transaction for the chosen pack")
-  balance = 120
-  await page.evaluate(() => window.__paddle.cb({ name: 'checkout.completed', data: {} }))
-  await page.getByText('Added 60 credits.').waitFor({ timeout: 10_000 })
-  check((await page.getByRole('status').innerText()).includes('120'), 'after paying, the page waits for the credits and shows the new balance')
-  await page.waitForFunction(() => window.__paddle.closed > 0, null, { timeout: 5000 }).catch(() => {})
-  check((await page.evaluate(() => window.__paddle.closed)) > 0, "Paddle's overlay is closed after payment, so the page underneath shows")
-  check((await page.getByRole('link', { name: 'Back to the app' }).last().getAttribute('href')) === '/app/', 'after paying, there is a way back to the app')
-  await shot(page, '18-buy-added')
-
-  const out = await newPage({ width: 390, height: 844 })
-  await out.route('**/api/account', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"signedIn":false}' }))
-  await out.goto(buyUrl)
-  await out.getByRole('link', { name: 'Sign in' }).waitFor()
-  check((await out.getByRole('link', { name: 'Sign in' }).getAttribute('href')) === '/app/account/', 'signed out, the buy page sends you to sign in')
-  const slash = await out.request.get(new URL('/app/buy', url).href, { maxRedirects: 0 })
-  check(slash.status() === 308 && slash.headers().location === '/app/buy/', `/app/buy redirects to /app/buy/ (${slash.status()})`)
 }
 
 await browser.close()

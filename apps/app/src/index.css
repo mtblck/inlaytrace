@@ -202,6 +202,22 @@
     border-color: var(--c-mark-hover);
   }
 
+  /* The header's tip button (components/Support.tsx, the tipjar package): sized
+     like the header's buttons and coloured from the theme, so it follows
+     data-theme rather than the system setting tipjar's own defaults read. */
+  :root {
+    --tipjar-bg: var(--c-accent);
+    --tipjar-label: var(--c-accent-ink);
+    --tipjar-focus: var(--c-accent);
+    --tipjar-radius: 6px;
+    --tipjar-size: 2rem;
+    --tipjar-pad: 0.75rem;
+    --tipjar-gap: 0.4rem;
+    --tipjar-font-size: 13px;
+    --tipjar-icon-size: 14px;
+    --tipjar-shadow: none;
+  }
+
   /* Over the canvas while it's tracing or optimising. Fades in after a beat, so a quick
      re-trace doesn't flash it; it never takes the pointer, so work carries on underneath. */
   .busy {
