@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { addOp, adjustmentOf, checkCleanup, sameGeometry, setAdjustment, straightenAngle, type CleanupOp, type Img } from './cleanup'
-import { backgroundOf, composite, dabAt, replay, sizeAfter, stampSegment, strokeColour, type Dab } from './cleanupPixels'
+import { backgroundOf, composite, dabAt, maskOver, replay, sizeAfter, stampSegment, strokeColour, type Dab } from './cleanupPixels'
 
 /** A w × h image where pixel (x, y) is grey level `f(x, y)`, opaque. */
 function image(w: number, h: number, f: (x: number, y: number) => number): Img {
@@ -154,13 +154,13 @@ describe('brush and eraser', () => {
   it('draws the same pixels live, a segment at a time, as the replay does', () => {
     const base = image(80, 50, (x, y) => (x * 3 + y * 5) % 256)
     const op = dot({ color: '#ff0000', size: 0.08, hardness: 0.4, points: [0.1, 0.2, 1, 0.4, 0.6, 0.5, 0.9, 0.3, 0.8] }) as Extract<CleanupOp, { kind: 'paint' }>
-    const mask = new Uint8Array(80 * 50)
+    const mask = maskOver({ x0: 0, y0: 0, x1: 80, y1: 50 })
     const out = base.rgba.slice()
     let last: Dab | null = null
     for (let i = 0; i < op.points.length; i += 3) {
       const d = dabAt(base, op, op.points[i], op.points[i + 1], op.points[i + 2])
-      const r = stampSegment(mask, 80, 50, last, d, op.hardness)
-      if (r) composite(out, base.rgba, mask, 80, strokeColour(base, op), r)
+      const r = stampSegment(mask, last, d, op.hardness)
+      if (r) composite(out, base.rgba, 80, mask, strokeColour(base, op), r)
       last = d
     }
     expect(Array.from(out)).toEqual(Array.from(replay(base, [op]).rgba))

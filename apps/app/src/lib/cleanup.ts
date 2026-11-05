@@ -47,14 +47,15 @@ export type BrushSettings = { size: number; hardness: number; color: string }
 export const BRUSH_DEFAULT: BrushSettings = { size: 16, hardness: 0.9, color: '#000000' }
 export const BRUSH_MIN = 1
 export const BRUSH_MAX = 400
-/** Points kept in one stroke; a longer one is cut there (it's still drawn, just in two strokes' worth of undo). */
-export const MAX_STROKE_POINTS = 4000
+/** Points in one stroke; a stroke ends there, and lifting and painting on carries on. */
+export const MAX_STROKE_POINTS = 10000
 
 /** The long edge clean-up works at (the fine-detail limit): larger originals are scaled down first. */
 export const CLEANUP_MAX_EDGE = 2048
 /** Below this many pixels on a side a crop isn't kept: nothing traceable is left. */
 export const MIN_CROP_PX = 4
-export const MAX_OPS = 2000
+/** The longest list kept; App refuses a change past it, since a saved list longer than this is thrown away on reload. */
+export const MAX_OPS = 5000
 
 export const LEVELS_DEFAULT: Levels = { kind: 'levels', black: 0, white: 255, gamma: 1 }
 export const THRESHOLD_DEFAULT: Threshold = { kind: 'threshold', level: 128 }

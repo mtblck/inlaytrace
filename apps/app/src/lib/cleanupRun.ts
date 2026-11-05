@@ -34,6 +34,9 @@ const KEEP = 4
 const recent: { bitmap: ImageBitmap; ops: CleanupOp[]; key: string; img: Img }[] = []
 const sameOp = (a: CleanupOp, b: CleanupOp) => a === b || JSON.stringify(a) === JSON.stringify(b)
 export function cleanedPixels(source: Source, ops: CleanupOp[]): Img {
+  // The same list again (most calls) is found without writing out its strokes.
+  const same = recent.find((r) => r.bitmap === source.bitmap && r.ops === ops)
+  if (same) return same.img
   const key = JSON.stringify(ops)
   const hit = recent.find((r) => r.bitmap === source.bitmap && r.key === key)
   if (hit) return hit.img

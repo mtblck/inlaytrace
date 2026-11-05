@@ -40,7 +40,7 @@ import {
 import { push, redo, startHistory, undo, type History } from './lib/history'
 import { centreAxis, likelyAxis, mirrorDoc, type Axis } from './lib/mirror'
 import { booleanOp, type BooleanOp } from './lib/boolean'
-import { addOp, BRUSH_DEFAULT, BRUSH_MAX, BRUSH_MIN, type BrushSettings, type CleanupOp } from './lib/cleanup'
+import { addOp, BRUSH_DEFAULT, BRUSH_MAX, BRUSH_MIN, MAX_OPS, type BrushSettings, type CleanupOp } from './lib/cleanup'
 import type { CleanTool, CropDraft } from './components/CleanUp'
 import { loadPaper } from './lib/paper'
 import { deleteNodes, moveHandle, moveNode, moveNodes, parsePath, serializePath, nodeCount, type NodePart, type NodeRef, type Pt } from './lib/pathdata'
@@ -380,9 +380,11 @@ export default function App() {
   const [heldCleanup, setHeldCleanup] = useState<CleanupOp[] | null>(null)
   const tracedCleanup = workMode === 'clean' && heldCleanup ? heldCleanup : cleanup
   const cleanable = !!source && !source.svg
-  const tracedJson = JSON.stringify(tracedCleanup)
+  // Written out once per list, not per render: strokes make it long.
+  const tracedJson = useMemo(() => JSON.stringify(tracedCleanup), [tracedCleanup])
+  const cleanupJson = useMemo(() => JSON.stringify(cleanup), [cleanup])
   /** The list differs from the one traced: leaving Clean up re-traces. Compared by content, so undoing back to it counts as no change. */
-  const cleanupPending = JSON.stringify(cleanup) !== tracedJson
+  const cleanupPending = cleanupJson !== tracedJson
   const cleanKey = cleanable && tracedCleanup.length ? `${source!.url}|${tracedJson}` : null
   const [cleaned, setCleaned] = useState<{ key: string; source: Source } | null>(null)
   useEffect(() => {
@@ -434,6 +436,7 @@ export default function App() {
    * the image they were drawn on.
    */
   const editCleanup = (next: CleanupOp[], key?: string) => {
+    if (next.length > MAX_OPS && next.length > cleanup.length) return setLoadError(`Clean up keeps up to ${MAX_OPS} changes. Undo all clean-up, or download the cleaned PNG and open that to carry on.`)
     const k = key ?? `cleanup-${++cleanSeq.current}`
     if (!detached) return commit((e) => ({ ...e, cleanup: next }), k)
     guard('Cleaning up the image re-traces it, which replaces your shape edits. Undo brings them back.', 'Discard edits and clean up', () => {

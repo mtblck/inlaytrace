@@ -32,11 +32,11 @@ import {
   type Img,
   type Paint,
 } from '../lib/cleanup'
-import { backgroundOf, composite, dabAt, stampSegment, strokeColour, type Dab } from '../lib/cleanupPixels'
+import { backgroundOf, composite, dabAt, maskOver, stampSegment, strokeColour, type Dab, type Mask } from '../lib/cleanupPixels'
 import { cleanedPixels, originalPixels, pngOf } from '../lib/cleanupRun'
 import type { Ink, ShownPath } from '../lib/doc'
 import type { Source } from '../lib/image'
-import { wheelFactor } from '../lib/zoom'
+import { STEP as ZOOM_STEP, wheelFactor } from '../lib/zoom'
 import { Section, Slider } from './Controls'
 
 export type CleanTool = 'crop' | 'straighten' | 'brush' | 'eraser'
@@ -58,13 +58,12 @@ const round = (v: number, places: number) => Math.round(v * 10 ** places) / 10 *
 /** The zoom: `k` times the fitted size, the image's centre moved (tx, ty) screen pixels from the canvas's. */
 type View = { k: number; tx: number; ty: number }
 const FIT: View = { k: 1, tx: 0, ty: 0 }
-const ZOOM_STEP = Math.SQRT2
 
 type Drag =
   | { kind: 'new' | 'move' | 'resize'; start: Pt; from: CropDraft | null; hx: number; hy: number }
   | { kind: 'line'; start: Pt }
   | { kind: 'pan'; x: number; y: number; view: View }
-type Stroke = { op: Paint; base: Img; mask: Uint8Array; out: Uint8ClampedArray; data: ImageData; colour: [number, number, number, number]; last: Dab | null }
+type Stroke = { op: Paint; base: Img; mask: Mask; touched: boolean; pressure: number; out: Uint8ClampedArray; data: ImageData; colour: [number, number, number, number]; last: Dab | null }
 
 export function CleanCanvas(p: {
   source: Source
@@ -100,6 +99,7 @@ export function CleanCanvas(p: {
     return () => ro.disconnect()
   }, [])
 
+  const stroke = useRef<Stroke | null>(null)
   const draw = (from: Img) => {
     const c = canvasRef.current
     if (!c) return
@@ -107,7 +107,11 @@ export function CleanCanvas(p: {
     c.height = from.height
     c.getContext('2d')!.putImageData(new ImageData(from.rgba as Uint8ClampedArray<ArrayBuffer>, from.width, from.height), 0, 0)
   }
-  useEffect(() => draw(img), [img])
+  useEffect(() => {
+    // The image changed under a stroke (an undo mid-stroke): the stroke was drawn on the old one, so it's dropped.
+    stroke.current = null
+    draw(img)
+  }, [img])
   const imgRef = useRef(img)
   imgRef.current = img
 
@@ -141,6 +145,8 @@ export function CleanCanvas(p: {
       return fitView({ k, tx: (to?.x ?? cx) - ox - k * ux, ty: (to?.y ?? cy) - oy - k * uy })
     })
   }
+  const geoView = useRef(view)
+  geoView.current = view
   const zoomRef = useRef(zoomAt)
   zoomRef.current = zoomAt
   // A new size (a crop or a turn) starts from the whole image again.
@@ -159,9 +165,11 @@ export function CleanCanvas(p: {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault()
         zoomRef.current(wheelFactor(e.deltaY, e.deltaMode), e.clientX, e.clientY)
-      } else {
+      } else if (geoView.current.k > 1) {
+        // Pans only once zoomed in; at fit the wheel scrolls the page as usual.
         e.preventDefault()
-        setView((v) => (v.k === 1 ? v : fitView({ ...v, tx: v.tx - e.deltaX, ty: v.ty - e.deltaY })))
+        const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? box.clientHeight : 1
+        setView((v) => fitView({ ...v, tx: v.tx - e.deltaX * unit, ty: v.ty - e.deltaY * unit }))
       }
     }
     // Safari reports trackpad pinches as gesture events.
@@ -212,6 +220,8 @@ export function CleanCanvas(p: {
   }, [])
 
   // On-screen size of the image now, for handles and the like that stay the same size on screen.
+  /** Painting, or zoomed in, the whole pane takes touches (strokes, pinches) rather than scrolling the page. */
+  const grabsPane = (isPaintTool(p.tool) && !p.showOriginal) || view.k > 1
   const sw = w * view.k
   const sh = h * view.k
 
@@ -227,22 +237,33 @@ export function CleanCanvas(p: {
   const minH = MIN_CROP_PX / img.height
 
   // ---- Strokes --------------------------------------------------------------------
-  const stroke = useRef<Stroke | null>(null)
+  /** Keep the stroke if it painted anything, and put the canvas back if it isn't kept. */
+  const endStroke = (s: Stroke) => {
+    stroke.current = null
+    if (!s.touched) return draw(s.base)
+    p.onStroke(s.op)
+    // If the stroke wasn't kept (shape edits to confirm first), the canvas goes back to the image as it is.
+    requestAnimationFrame(() => {
+      if (!stroke.current && imgRef.current === s.base) draw(s.base)
+    })
+  }
   const addPoint = (s: Stroke, pt: Pt, pressure: number) => {
-    const n = s.op.points.length
-    if (n >= MAX_STROKE_POINTS * 3) return
+    // A stroke that long ends there; lifting and painting on carries on.
+    if (s.op.points.length >= MAX_STROKE_POINTS * 3) return endStroke(s)
     // Stored rounded, and drawn from the stored numbers, so the replay matches to the pixel.
     const x = round(clamp(pt.x, -0.5, 1.5), 5)
     const y = round(clamp(pt.y, -0.5, 1.5), 5)
     const pr = round(pressure, 2)
+    s.pressure = pressure
     const d = dabAt(s.base, s.op, x, y, pr)
     // Points closer than a tenth of the brush add nothing but storage.
     if (s.last && Math.hypot(d.x - s.last.x, d.y - s.last.y) < Math.max(0.75, d.r * 0.1)) return
     s.op.points.push(x, y, pr)
-    const r = stampSegment(s.mask, s.base.width, s.base.height, s.last, d, s.op.hardness)
+    const r = stampSegment(s.mask, s.last, d, s.op.hardness)
     s.last = d
     if (!r) return
-    composite(s.out, s.base.rgba, s.mask, s.base.width, s.colour, r)
+    s.touched = true
+    composite(s.out, s.base.rgba, s.base.width, s.mask, s.colour, r)
     canvasRef.current?.getContext('2d')!.putImageData(s.data, 0, 0, r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0)
   }
   const startStroke = (pt: Pt, pressure: number) => {
@@ -256,7 +277,7 @@ export function CleanCanvas(p: {
       points: [],
     }
     const out = img.rgba.slice()
-    const s: Stroke = { op, base: img, mask: new Uint8Array(img.width * img.height), out, data: new ImageData(out as Uint8ClampedArray<ArrayBuffer>, img.width, img.height), colour: strokeColour(img, op), last: null }
+    const s: Stroke = { op, base: img, mask: maskOver({ x0: 0, y0: 0, x1: img.width, y1: img.height }), touched: false, pressure, out, data: new ImageData(out as Uint8ClampedArray<ArrayBuffer>, img.width, img.height), colour: strokeColour(img, op), last: null }
     stroke.current = s
     addPoint(s, pt, pressure)
   }
@@ -265,7 +286,8 @@ export function CleanCanvas(p: {
     stroke.current = null
     draw(img)
   }
-  const pressureOf = (e: { pointerType: string; pressure: number }) => (e.pointerType === 'pen' && e.pressure > 0 ? e.pressure : 1)
+  /** A pen's pressure; a mouse or finger paints at full width. A pen sample with none (touching down, lifting) keeps the last. */
+  const pressureOf = (e: { pointerType: string; pressure: number }) => (e.pointerType !== 'pen' ? 1 : e.pressure > 0 ? e.pressure : (stroke.current?.pressure ?? 0.5))
 
   // ---- Pointers -------------------------------------------------------------------
   // Touches down, for a two-finger pinch; the pinch's start; and whether the rest of this touch is spent (a pinch ended).
@@ -286,8 +308,11 @@ export function CleanCanvas(p: {
       // A pointer that's already gone: nothing to hold.
     }
   }
+  const imageRef = useRef<HTMLDivElement>(null)
   const onDown = (e: RPointerEvent<HTMLDivElement>) => {
     if (onControls(e)) return
+    // Crop and Straighten start on the image; round it, at fit, a finger scrolls the page (the panel is below on a phone).
+    if (!grabsPane && !imageRef.current?.contains(e.target as Node)) return
     if (e.pointerType === 'touch') {
       touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
       if (touches.current.size >= 2) {
@@ -349,7 +374,7 @@ export function CleanCanvas(p: {
     if (s) {
       // Every sample since the last event, so a fast stroke keeps its shape.
       const events = e.nativeEvent.getCoalescedEvents?.() ?? []
-      for (const c of events.length ? events : [e.nativeEvent]) addPoint(s, at(c), pressureOf(c))
+      for (const c of events.length ? events : [e.nativeEvent]) if (stroke.current === s) addPoint(s, at(c), pressureOf(c))
       return
     }
     const g = drag.current
@@ -388,15 +413,8 @@ export function CleanCanvas(p: {
     }
     const s = stroke.current
     if (s) {
-      stroke.current = null
-      if (e.type === 'pointercancel') draw(img)
-      else if (s.op.points.length) {
-        p.onStroke(s.op)
-        // If the stroke wasn't kept (shape edits to confirm first), the canvas goes back to the image as it is.
-        requestAnimationFrame(() => {
-          if (!stroke.current && imgRef.current === s.base) draw(s.base)
-        })
-      }
+      if (e.type === 'pointercancel') cancelStroke()
+      else endStroke(s)
       return
     }
     const g = drag.current
@@ -422,7 +440,7 @@ export function CleanCanvas(p: {
   return (
     <div
       ref={boxRef}
-      className={`mat absolute inset-0 z-[5] grid touch-none place-items-center overflow-hidden ${p.showOriginal ? '' : 'cursor-crosshair'}`}
+      className={`mat absolute inset-0 z-[5] grid place-items-center overflow-hidden ${grabsPane ? 'touch-none' : ''} ${p.showOriginal ? '' : 'cursor-crosshair'}`}
       data-clean-canvas={`${img.width}x${img.height}`}
       data-clean-zoom={round(view.k, 2)}
       data-original={p.showOriginal ? '' : undefined}
@@ -436,7 +454,7 @@ export function CleanCanvas(p: {
         setCursor(null)
       }}
     >
-      <div className="relative" style={{ width: w, height: h, transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.k})` }}>
+      <div ref={imageRef} className="relative touch-none" style={{ width: w, height: h, transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.k})` }}>
         <canvas
           ref={canvasRef}
           className="absolute inset-0 h-full w-full"
