@@ -322,7 +322,7 @@ export function BucketFields(p: { colour: string; onColour: (hex: string) => voi
       <div className="flex items-center gap-2">
         <input type="color" className="size-8 shrink-0 cursor-pointer rounded border border-rule" value={p.colour} onChange={(e) => p.onColour(e.target.value)} aria-label="Fill tool colour" />
         <span className="num grow text-[13px]">{p.colour}</span>
-        {p.busy && <span className="text-[12.5px] text-ink-muted">Filling…</span>}
+        <span className="text-[12.5px] text-ink-muted" role="status">{p.busy ? 'Filling…' : ''}</span>
       </div>
       {swatches.length > 0 && (
         <div className="flex flex-wrap gap-1" role="group" aria-label="Fill with a colour from the drawing">

@@ -656,6 +656,8 @@ export function Canvas(props: Props) {
                 data-fill-target={props.picking ? undefined : ''}
                 style={{ cursor: props.picking ? 'crosshair' : 'cell' }}
                 onPointerDown={(e) => {
+                  // Left button (or a touch or pen) only: a right-click is for the menu, a middle-drag pans.
+                  if (e.button !== 0) return
                   e.stopPropagation()
                   e.preventDefault()
                   const p = toSvg(e)
