@@ -4,7 +4,7 @@ order: 5
 
 # Mirror
 
-Edit tab → *Mirror*. Make a drawing exactly symmetrical: keep one half and
+Edit mode → *Mirror* in the tool rail. Make a drawing exactly symmetrical: keep one half and
 reflect it onto the other, or keep one slice and repeat it round a centre. For
 logos that should be symmetrical but weren't drawn (or scanned) quite that way.
 

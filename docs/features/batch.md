@@ -7,7 +7,7 @@ order: 7.5
 Drop several images at once, or choose several, and *Trace N images* opens:
 
 1. It lists the images. **Trace all** traces each with the preset and settings
-   you have now (whatever the Trace tab shows), optimises it as a download
+   you have now (whatever Trace mode shows), optimises it as a download
    would be, and shows its size as it goes.
 2. **Download zip** gives one SVG per image, named after it (`logo.png` →
    `logo.svg`; two files with the same name become `logo.svg` and

@@ -5,14 +5,11 @@ import { MAX_ORDER, MIN_ORDER, sameAxis, type Axis, type MirrorAxis, type TurnAx
 import type { Box } from '../lib/transform'
 import { Section } from './Controls'
 import { MOD } from './Shortcuts'
+import { TOOL_LABEL } from './Workspace'
 
 type Props = {
+  /** The rail's tool (components/Workspace.tsx); the panel shows its properties. */
   tool: Tool
-  onTool: (t: Tool) => void
-  canUndo: boolean
-  canRedo: boolean
-  onUndo: () => void
-  onRedo: () => void
   detached: boolean
   /** `nodes` counts the edited shape's nodes; `selectedNodes` those picked with the Nodes tool. */
   selection: { key: string; shapes: number; nodes: number; selectedNodes: number; box: Box | null } | null
@@ -59,42 +56,7 @@ export function EditPanel(p: Props) {
   const axis = p.axis
 
   return (
-    <Section
-      title="Edit"
-      action={
-        <div className="flex gap-1" role="group" aria-label="History">
-          <button className="btn h-7 px-2 text-[12.5px]" disabled={!p.canUndo} onClick={p.onUndo} title={`Undo (${mod}Z)`}>
-            Undo
-          </button>
-          <button className="btn h-7 px-2 text-[12.5px]" disabled={!p.canRedo} onClick={p.onRedo} title={`Redo (${mod === '⌘' ? '⇧⌘' : 'Ctrl+Shift+'}Z)`}>
-            Redo
-          </button>
-        </div>
-      }
-    >
-      <div role="radiogroup" aria-label="Tool" className="mb-3 grid grid-cols-3 gap-px overflow-hidden rounded-md border border-rule bg-rule">
-        {(
-          [
-            ['select', 'Select', 'V'],
-            ['nodes', 'Nodes', 'A'],
-            ['mirror', 'Mirror', 'M'],
-          ] as const
-        ).map(([t, label, key]) => (
-          <button
-            key={t}
-            role="radio"
-            aria-checked={p.tool === t}
-            aria-keyshortcuts={key}
-            title={t === 'mirror' && p.strokes ? 'Mirror works on filled shapes, and this trace has lines' : `${label} (${key})`}
-            disabled={t === 'mirror' && p.strokes}
-            onClick={() => p.onTool(t)}
-            className={`py-1.5 text-[13px] disabled:cursor-not-allowed disabled:text-ink-faint ${p.tool === t ? 'bg-paper font-medium text-accent' : 'bg-paper-sunk text-ink hover:bg-paper'}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
+    <Section title={TOOL_LABEL[p.tool]}>
       {p.tool === 'select' && (
         <div className="space-y-2">
           {p.selection ? (

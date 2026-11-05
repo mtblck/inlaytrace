@@ -5,7 +5,7 @@ order: 4.5
 # Open an SVG
 
 Drop, paste or choose an `.svg` and it opens to **edit**, not to trace: its
-own shapes become the drawing, straight in the Edit tab. Recolour, move,
+own shapes become the drawing, straight in Edit mode. Recolour, move,
 scale, reshape nodes, group, mirror, then export it like any trace.
 
 ## What comes in
@@ -22,7 +22,7 @@ scale, reshape nodes, group, mirror, then export it like any trace.
 
 ## What doesn't, and is said so
 
-The Trace tab lists anything the editor can't keep as it was:
+Trace mode lists anything the editor can't keep as it was:
 
 - **Gradients and patterns** are drawn in one colour (a gradient's first stop).
 - **Transparency** is drawn opaque.
