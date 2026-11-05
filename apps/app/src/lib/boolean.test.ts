@@ -86,6 +86,11 @@ describe('boolean ops', () => {
     const r = ok(booleanOp(paper, bar, ['bar', 'sq'], 'divide'))
     const reds = r.doc.paths.filter((p) => p.fill === '#ff0000')
     expect(reds.map((p) => Math.round(area(p.d)))).toEqual([800, 800])
+    // A hole goes with the area round it: a bar with a hole at its left end, cut in two, gives that end its hole.
+    const holed: Doc = { ...bar, paths: [{ ...bar.paths[0], d: 'M0 40L100 40L100 60L0 60Z M10 45L10 55L20 55L20 45Z' }, bar.paths[1]] }
+    const h = ok(booleanOp(paper, holed, ['bar', 'sq'], 'divide'))
+    const ends = h.doc.paths.filter((p) => p.fill === '#ff0000').map((p) => Math.round(area(p.d)))
+    expect(ends.sort((a, b) => a - b)).toEqual([700, 800])
     // A ring keeps its hole: one piece, not an outline and a hole apart.
     const ring: Doc = { width: 100, height: 100, paths: [{ id: 'big', fill: '#ff0000', d: square(0, 0, 60) }, { id: 'small', fill: '#0000ff', d: square(20, 20, 20) }] }
     const rr = ok(booleanOp(paper, ring, ['big', 'small'], 'divide'))
