@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { Tool } from './Canvas'
 import type { Arrange } from '../lib/doc'
 import type { BooleanOp } from '../lib/boolean'
@@ -9,6 +9,8 @@ import { MOD } from './Shortcuts'
 import { TOOL_LABEL } from './Workspace'
 
 type Props = {
+  /** The Fill tool's colour and messages (components/Shapes.tsx), shown while it's the tool. */
+  fillFields?: ReactNode
   /** The rail's tool (components/Workspace.tsx); the panel shows its properties. */
   tool: Tool
   detached: boolean
@@ -101,6 +103,8 @@ export function EditPanel(p: Props) {
           )}
         </div>
       )}
+
+      {p.tool === 'fill' && p.fillFields}
 
       {p.tool === 'mirror' && (
         <div className="space-y-3">

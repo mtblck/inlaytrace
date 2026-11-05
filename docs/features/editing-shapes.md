@@ -104,6 +104,27 @@ A value the selection doesn't share shows as *Mixed*; changing it sets them
 all. Each change is one undo step (a slider's drag is one), and it detaches
 the drawing from the trace.
 
+## Fill (K): colour in a line drawing
+
+The *Fill* tool works like a paint bucket. Pick a colour (or one of the
+drawing's own) and click:
+
+- **On a shape:** it takes the colour, as a colour of its own (see *Fill and
+  stroke* above).
+- **Between shapes:** the area they enclose there (the paper inside an outline
+  traced as Line art, a gap in a colouring-book page, or the background round
+  everything) becomes a new shape in that colour, at the back, so the lines stay
+  on top. Its edges are cut from the lines themselves, so there's no gap or
+  overlap, and it exports like any other shape (SVG, PDF, EPS, DXF and the
+  layers zip).
+
+Hidden shapes don't stop a fill (it runs on under them); locked ones do, and
+keep their own colour. A break in a hand-drawn line lets the fill run through
+to the next area; close it first, or fill the larger area and cut it with
+*Combine*. Lines traced as strokes (Centerline) have no inside, so Fill is off
+for those traces. Each fill is one undo step and detaches the drawing from the
+trace.
+
 ## Shapes: find, hide and lock
 
 The *Shapes* list in the Edit panel lists every shape, by colour (as the

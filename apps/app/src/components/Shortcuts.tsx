@@ -44,6 +44,7 @@ export const SHORTCUTS: { mode: (typeof MODES)[number]; title: string; rows: Row
       { keys: ['V'], does: 'Select: pick, move and scale shapes' },
       { keys: ['A'], does: 'Nodes: edit one shape’s nodes and curves' },
       { keys: ['M'], does: 'Mirror' },
+      { keys: ['K'], does: 'Fill: fill a shape, or the area between shapes, with a colour' },
       { keys: ['Double-click'], does: 'Edit a shape’s nodes (Select); add a node on the outline (Nodes)' },
     ],
   },

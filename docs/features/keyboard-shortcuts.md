@@ -33,6 +33,7 @@ mode switches to Edit mode.
 | V | Select: pick, move and scale shapes |
 | A | Nodes: edit one shape's nodes and curves |
 | M | Mirror |
+| K | Fill: fill a shape, or the area between shapes, with a colour |
 | Double-click a shape | Edit its nodes (from Select) |
 | Double-click the outline | Add a node there (Nodes) |
 

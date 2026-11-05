@@ -7,7 +7,7 @@ import type { Gradient } from '../lib/svg'
 import { anchorScroll, effective, snap, step, wheelFactor, type Zoom } from '../lib/zoom'
 
 export type ViewMode = 'split' | 'difference' | 'vector'
-export type Tool = 'select' | 'nodes' | 'mirror'
+export type Tool = 'select' | 'nodes' | 'mirror' | 'fill'
 /** How a click or marquee combines with the current selection: Shift adds (or toggles), Alt removes. */
 export type SelectMode = 'set' | 'add' | 'toggle' | 'subtract'
 export type Overlays = { paths: boolean; pathColor: string; nodes: boolean; nodeColor: string }
@@ -56,6 +56,8 @@ type Props = {
   /** The eyedropper is armed: the next click on the image picks a colour from the original there (SVG units). */
   picking: boolean
   onPick: (at: Pt) => void
+  /** The Fill tool's click (SVG units): fill the shape or the area there. */
+  onFill: (at: Pt) => void
   /** The mirror axis or turn centre, dragged to a new place. */
   onAxis: (axis: Axis) => void
 }
@@ -644,19 +646,22 @@ export function Canvas(props: Props) {
 
             {tool === 'mirror' && props.axis && <AxisOverlay axis={props.axis} width={width} height={height} unit={unit} onGrab={(e) => startDrag(e, { kind: 'axis' })} />}
 
-            {/* The eyedropper: over everything, so the click picks instead of selecting. */}
-            {props.picking && (
+            {/* The eyedropper and the Fill tool: over everything, so the click picks or fills instead of selecting. */}
+            {(props.picking || tool === 'fill') && (
               <rect
                 width={width}
                 height={height}
                 fill="transparent"
-                data-picker=""
-                style={{ cursor: 'crosshair' }}
+                data-picker={props.picking ? '' : undefined}
+                data-fill-target={props.picking ? undefined : ''}
+                style={{ cursor: props.picking ? 'crosshair' : 'cell' }}
                 onPointerDown={(e) => {
+                  // Left button (or a touch or pen) only: a right-click is for the menu, a middle-drag pans.
+                  if (e.button !== 0) return
                   e.stopPropagation()
                   e.preventDefault()
                   const p = toSvg(e)
-                  if (p) props.onPick(p)
+                  if (p) (props.picking ? props.onPick : props.onFill)(p)
                 }}
               />
             )}
