@@ -52,6 +52,8 @@ See [Editing shapes](features/editing-shapes.md), [Colours and background](featu
 | **Shape fitting** | *Exact shapes* (on for Logo, Illustration and Line art) draws an outline that is a circle, ellipse, (rounded) rectangle or regular polygon as that shape exactly; on the sample badge, 0.70% → 0.54% wrong pixels. See [Presets and settings](features/presets-and-settings.md). | [#37](https://github.com/mtblck/inlaytrace/issues/37) |
 | **Symmetry detection** | The Mirror tool opens set up for the mirror axis or turn the image has (95%+ match), and gains *Turn*: keep one slice and repeat it round a centre. See [Mirror](features/mirror.md). | [#36](https://github.com/mtblck/inlaytrace/issues/36) |
 | **DXF export** | *DXF* in Size and other formats: R12, one layer per colour, outlines as closed polylines and strokes as open ones, curves within 0.05 px, at the export size and unit. See [Export](features/export.md#size-and-other-formats). | [#42](https://github.com/mtblck/inlaytrace/issues/42) |
+| **Trace to your own colours** | *Use my colours* (Logo, Illustration, Outline art, Poster): paste hex codes or pick them from the image, and every shape is traced in one of them. Kept across presets and images. See [Presets and settings](features/presets-and-settings.md#settings). | [#191](https://github.com/mtblck/inlaytrace/issues/191) |
+| **Swatch export** | *Swatches* in Size and other formats: the colours as drawn as `.ase`, `.gpl` or CSS custom properties. See [Export](features/export.md#size-and-other-formats). | [#192](https://github.com/mtblck/inlaytrace/issues/192) |
 
 ## Next: bigger bets
 

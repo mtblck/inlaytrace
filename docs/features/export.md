@@ -15,7 +15,7 @@ The bottom of the panel, with live **Paths**, **Nodes** and **Size**.
 ## Size and other formats
 
 *Size and other formats*, under the buttons, sets the size every download uses
-and offers PNG, PDF, EPS and DXF.
+and offers PNG, PDF, EPS, DXF and swatches.
 
 - **Size**: width and height in px, mm, in or pt (96 px to the inch). Height
   follows the drawing's proportions. The SVG gets that width and height, so it
@@ -41,6 +41,15 @@ and offers PNG, PDF, EPS and DXF.
   640 mm), at the export size in its unit, with millimetres and inches named
   in the header. It's DXF R12, which every CAD and cutting program reads;
   checked by opening it with ezdxf, whose audit finds nothing to fix.
+
+- **Swatches**: the colours as drawn, so you can take a palette into other
+  tools: `.ase` (Adobe Swatch Exchange, for Illustrator, Photoshop and
+  InDesign), `.gpl` (GIMP palette, which Inkscape and Krita also read) or CSS
+  custom properties (`--color-1d3557: #1d3557;`). Colours come in paint order,
+  the background first if you've added one, each named by its hex; a
+  gradient shape gives its stops' colours. They follow
+  your colour edits: a replaced colour is listed as its new colour, a merged
+  one isn't listed, and a removed one is left out.
 
 ## What's in the SVG
 

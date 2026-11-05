@@ -60,13 +60,21 @@ export type Settings = {
   keepOutlines: boolean
   /** Draw text found in the image as type, in the nearest of our fonts, instead of tracing it. */
   recogniseText: boolean
+  /**
+   * Your own colours (vinyl stock, threads, inks, brand colours), as lowercase
+   * #rrggbb. Kept across presets and images, since they're about what you can
+   * print, not about this image.
+   */
+  ownColors: string[]
+  /** Trace with only `ownColors` (Logo, Illustration, Outline art, Poster), instead of picking colours from the image. */
+  useOwnColors: boolean
 }
 
 export type Preset = {
   id: PresetId
   label: string
   hint: string
-  defaults: Omit<Settings, 'preset' | 'merge' | 'removeBackground' | 'aiUpscale' | 'fineDetail' | 'smoothShading' | 'keepOutlines' | 'recogniseText'>
+  defaults: Omit<Settings, 'preset' | 'merge' | 'removeBackground' | 'aiUpscale' | 'fineDetail' | 'smoothShading' | 'keepOutlines' | 'recogniseText' | 'ownColors' | 'useOwnColors'>
 }
 
 /** Illustration's defaults, which Outline art shares: it differs only in tracing lines as strokes. */
@@ -119,7 +127,7 @@ export const PRESETS: Preset[] = [
 
 export const presetById = (id: PresetId) => PRESETS.find((p) => p.id === id)!
 
-export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {}, removeBackground: false, aiUpscale: false, fineDetail: false, smoothShading: false, keepOutlines: false, recogniseText: false })
+export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {}, removeBackground: false, aiUpscale: false, fineDetail: false, smoothShading: false, keepOutlines: false, recogniseText: false, ownColors: [], useOwnColors: false })
 
 /** One ink, thresholded: line art and centerline. */
 export const isInk = (id: PresetId) => id === 'lineart' || id === 'centerline'
@@ -146,6 +154,15 @@ export const canSmooth = (id: PresetId) => id === 'logo' || id === 'illustration
 /** Merging colours: the flat-art presets, whose palettes are real colours (Poster's are cluster averages). */
 export const canMerge = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline' || id === 'pixel'
 
+/** Tracing to your own colours: the colour presets, whose palettes are picked (Pixel art keeps its exact colours). */
+export const canOwnColors = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline' || id === 'photo'
+
+/** At most this many of your own colours, as many as the Colours slider allows. */
+export const MAX_OWN_COLORS = 64
+
+/** The colours to trace with, when tracing to your own colours is on and offered for this preset; else null. */
+export const ownPaletteOf = (s: Settings): string[] | null => (s.useOwnColors && canOwnColors(s.preset) && s.ownColors.length ? s.ownColors : null)
+
 /**
  * Smoothing 0–3 → fitting tolerance in px. The Logo default (1.5) lands on
  * 1 px, which on the sample badge beat VTracer on accuracy with 30% fewer nodes.
@@ -161,6 +178,8 @@ export type TraceOptions = {
   /** Palette mode: how many colours, and how they're picked from the image. */
   colors?: number
   palette?: 'peak' | 'exact' | 'quantize'
+  /** Palette mode: trace with exactly these colours (#rrggbb) instead of picking them; `palette` still says how they're cleaned up. */
+  own?: string[]
   merge?: Record<string, string>
   pixels?: boolean
   stacked?: boolean
@@ -197,15 +216,19 @@ export function toTraceOptions(s: Settings, scale = 1): TraceOptions {
   if (s.preset === 'centerline') return { ...fit, mode: 'centerline', threshold: s.threshold, ...(s.strokeWidth > 0 ? { strokeWidth: s.strokeWidth } : {}), ...(s.lightInk ? { invert: true } : {}) }
   if (s.preset === 'lineart') return { ...fit, mode: 'binary', threshold: s.threshold, ...(s.lightInk ? { invert: true } : {}) }
   const merge = Object.keys(s.merge ?? {}).length ? { merge: s.merge } : {}
+  // Your own colours replace the picked palette. Gradients are off: their stops
+  // are sampled from the image, so they'd bring back colours you don't have.
+  const own = ownPaletteOf(s)
+  const ownOpts = own ? { own: [...own] } : {}
   // Pixel art: its exact colours, every pixel kept, boundaries as pixel staircases.
   if (s.preset === 'pixel') return { ...fit, mode: 'palette', colors: s.colors, palette: 'exact', pixels: true, ...merge }
   // Poster: photos have no histogram peaks, so the palette is quantized (k-means in OKLab), and shapes stack by default.
-  if (s.preset === 'photo') return { ...fit, mode: 'palette', colors: s.colors, palette: 'quantize', stacked: s.shapes === 'stacked' }
+  if (s.preset === 'photo') return { ...fit, mode: 'palette', colors: s.colors, palette: 'quantize', stacked: s.shapes === 'stacked', ...ownOpts }
   // Logo, Illustration and Outline art: flat art's real colours are the histogram's peaks.
   // Outline art traces its thin outlines as stroked lines, the fills meeting beneath them.
   // Illustration and Outline art, stacked, draw soft shading as gradients; cut out is for cutters, which can't.
-  const gradients = s.shapes === 'stacked' && (s.preset === 'illustration' || s.preset === 'outline') ? { gradients: true } : {}
-  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', stacked: s.shapes === 'stacked', ...merge, ...gradients, ...(s.smoothShading ? { smooth: true } : {}), ...(s.keepOutlines ? { outlines: outlineRadius(scale) } : {}), ...(s.preset === 'outline' ? { strokes: true, ...(scale > 1 ? { scale } : {}) } : {}) }
+  const gradients = !own && s.shapes === 'stacked' && (s.preset === 'illustration' || s.preset === 'outline') ? { gradients: true } : {}
+  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', stacked: s.shapes === 'stacked', ...ownOpts, ...merge, ...gradients, ...(s.smoothShading ? { smooth: true } : {}), ...(s.keepOutlines ? { outlines: outlineRadius(scale) } : {}), ...(s.preset === 'outline' ? { strokes: true, ...(scale > 1 ? { scale } : {}) } : {}) }
 }
 
 /** Pixel art keeps every source pixel; everything else is traced at this size at most. */

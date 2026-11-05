@@ -8,7 +8,9 @@ import type { PrepStage } from './engine/prep'
 import { paintOut, type TextRun } from './engine/text/match'
 import type { Candidate } from './engine/targetSize'
 import type { SizeRun } from './components/Controls'
-import { canMerge, canSetText, canSmooth, isInk, maxTraceEdge, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
+import { canMerge, canSetText, canSmooth, isInk, maxTraceEdge, ownPaletteOf, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
+import { addColors, nearestColor, OWN_COLORS } from './lib/colors'
+import { swatchColors, swatchFile, type SwatchFormat } from './lib/swatches'
 import { ACCEPTED, canTraceFiner, colourAt, hasDarkBackground, loadSource, looksLikePhoto, pixelsOf, UPSCALE_BELOW, type Pixels, type Source } from './lib/image'
 import { formatBytes, normalizeHex, parseTrace, statsOf, withText, type Trace } from './lib/svg'
 import {
@@ -61,6 +63,9 @@ type Status = { kind: 'idle' } | { kind: 'tracing' } | { kind: 'done'; ms: numbe
 
 const NO_TEXT: TextRun[] = []
 
+/** Logo's defaults, keeping your own colours: they're about what you can print, not this image. */
+const keepOwnColors = (s: Settings): Settings => ({ ...settingsFor('logo'), ownColors: s.ownColors, useOwnColors: s.useOwnColors })
+
 export default function App() {
   const client = useMemo(() => new TraceClient(), [])
   useEffect(() => () => client.dispose(), [client])
@@ -80,6 +85,8 @@ export default function App() {
 
   const [source, setSource] = useState<Source | null>(null)
   const [settings, setSettings] = useState<Settings>(() => settingsFor('logo'))
+  const settingsRef = useRef(settings)
+  settingsRef.current = settings
   /** Whether a preset was chosen for the image on screen; until one is, a photo gets the Poster suggestion. */
   const [presetPicked, setPresetPicked] = useState(false)
   const [trace, setTrace] = useState<Trace | null>(null)
@@ -289,7 +296,7 @@ export default function App() {
         setHistory(startHistory(NO_EDITS))
         setSelectedIds([])
         setSelectedNodes([])
-        setSettings(settingsFor('logo'))
+        setSettings(keepOwnColors)
         setSessionNote(null)
         setExportSize(null)
         setPicking(null)
@@ -315,7 +322,7 @@ export default function App() {
   )
 
   const openSample = async () => {
-    setSettings(settingsFor('logo'))
+    setSettings(keepOwnColors)
     await open(await sampleImage(), 'sample-badge')
   }
 
@@ -387,7 +394,13 @@ export default function App() {
   }, [source, prepKey, prepClient])
   /** What gets traced: the prepared image when a step is on (none until it's ready), else the original. */
   const traceSource = prepKey ? (prepared?.key === prepKey ? prepared.source : null) : source
-  const traceText = wantText && prepared?.key === prepKey ? prepared.text : NO_TEXT
+  const foundText = wantText && prepared?.key === prepKey ? prepared.text : NO_TEXT
+  // Tracing to your own colours: text set as type takes the nearest of them too.
+  const ownKey = ownPaletteOf(settings)?.join() ?? ''
+  const traceText = useMemo(() => {
+    const own = ownKey ? ownKey.split(',') : null
+    return own && foundText.length ? foundText.map((r) => ({ ...r, fill: nearestColor(r.fill, own) })) : foundText
+  }, [foundText, ownKey])
 
   // ---- Tracing ------------------------------------------------------------
   useEffect(() => {
@@ -891,6 +904,11 @@ export default function App() {
   const drawable = () => ({ width: doc!.width, height: doc!.height, background: edits.background ? normalizeHex(edits.background) : null, paths: visiblePaths(doc!, edits.inks) })
   const downloadPdf = () => save(new Blob([buildPdf(drawable(), size, source!.name) as BlobPart], { type: 'application/pdf' }), `${source!.name}.pdf`)
   const downloadDxf = () => save(new Blob([buildDxf(drawable(), size)], { type: 'application/dxf' }), `${source!.name}.dxf`)
+  /** The colours as drawn (#192), so a designer can take the palette into other tools. */
+  const downloadSwatches = (format: SwatchFormat) => {
+    const f = swatchFile(format, swatchColors(shown, edits.background), source!.name)
+    save(new Blob([f.data as BlobPart], { type: f.type }), `${source!.name}-swatches.${f.ext}`)
+  }
   const downloadEps = () => save(new Blob([buildEps(drawable(), size, source!.name)], { type: 'application/postscript' }), `${source!.name}.eps`)
   /** A PNG rendered by the browser from the SVG, at the export size × scale (px) or at a dpi (physical units). */
   const downloadPng = async (scale: number, dpi: number) => {
@@ -1014,12 +1032,18 @@ export default function App() {
     const v = normalizeHex(hex)
     if (!v) return
     if (target === 'background') commit((e) => ({ ...e, background: v }))
+    else if (target === OWN_COLORS) {
+      // The screen picker resolves later: build on the settings as they are then.
+      const now = settingsRef.current
+      const ownColors = addColors(now.ownColors, [v])
+      if (ownColors.length !== now.ownColors.length) changeSettings({ ...now, ownColors })
+    }
     else editInks((i) => recolorInk(i, target, v))
   }
   const onPick = (at: Pt) => {
     if (!picking || !source || !doc) return
     // An ink that a re-trace took away has nothing to recolour.
-    if (picking.target !== 'background' && !inks.some((i) => i.hex === picking.target)) return setPicking(null)
+    if (picking.target !== 'background' && picking.target !== OWN_COLORS && !inks.some((i) => i.hex === picking.target)) return setPicking(null)
     const hex = colourAt(traceSource ?? source, at.x / doc.width, at.y / doc.height)
     // A transparent pixel has no colour: stay armed for another click.
     if (!hex) return
@@ -1056,6 +1080,9 @@ export default function App() {
     next.smoothShading = settings.smoothShading
     next.keepOutlines = settings.keepOutlines
     next.recogniseText = settings.recogniseText
+    // Your own colours are about what you can print, not this preset.
+    next.ownColors = settings.ownColors
+    next.useOwnColors = settings.useOwnColors
     if (isInk(id) && source && hasDarkBackground(source)) next.lightInk = true
     changeSettings(next)
   }
@@ -1403,6 +1430,8 @@ export default function App() {
                 onFindSize={findSize}
                 onApplySize={applySize}
                 onCancelSize={cancelSize}
+                pickingOwn={picking?.target === OWN_COLORS}
+                onPickOwn={() => setPicking((p) => (p?.target === OWN_COLORS ? null : { target: OWN_COLORS }))}
               />
               )}
             </div>
@@ -1448,6 +1477,8 @@ export default function App() {
                   onPdf={downloadPdf}
                   onEps={downloadEps}
                   onDxf={downloadDxf}
+                  onSwatches={downloadSwatches}
+                  hasSwatches={shown.length > 0 || !!edits.background}
                 />
               )}
             </div>

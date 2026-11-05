@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { render, searchSize } from './targetSize'
+import { moves, render, searchSize } from './targetSize'
 import { settingsFor } from './presets'
 
 describe('drawing back', () => {
@@ -56,5 +56,18 @@ describe('target size', () => {
     const r = searchSize(px, w, h, noisy, 1e9, measure)
     expect(r.tried).toBe(1)
     expect(r.best).toEqual(r.start)
+  })
+})
+
+describe('moves with your own colours', () => {
+  it('never tries fewer colours: the list is fixed, and the count is ignored', () => {
+    const own = { ...settingsFor('logo'), ownColors: ['#000000', '#ffffff', '#ff0000'], useOwnColors: true }
+    for (const big of [false, true]) {
+      const tried = moves(own, big)
+      expect(tried.length).toBeGreaterThan(0)
+      for (const m of tried) expect(m.colors).toBe(own.colors)
+    }
+    // The control: without them, one move drops a colour.
+    expect(moves(settingsFor('logo'), false).some((m) => m.colors < settingsFor('logo').colors)).toBe(true)
   })
 })

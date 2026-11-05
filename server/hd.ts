@@ -21,6 +21,7 @@
  */
 import { maxTraceEdge, PRESETS, toTraceOptions, type PresetId, type Settings } from '../apps/app/src/engine/presets.js'
 import { runTrace } from '../apps/app/src/engine/run.js'
+import { addColors } from '../apps/app/src/lib/colors.js'
 import { decodeImage, MAX_PIXELS } from './image.js'
 import { loadModel, type ModelEnv } from './models.js'
 import { costFor, UPSCALE } from './pricing.js'
@@ -100,6 +101,8 @@ export function cleanSettings(raw: unknown): Settings | null {
     smoothShading: s.smoothShading === true,
     keepOutlines: s.keepOutlines === true,
     recogniseText: false,
+    ownColors: Array.isArray(s.ownColors) ? addColors([], s.ownColors.filter((c): c is string => typeof c === 'string')) : [],
+    useOwnColors: s.useOwnColors === true,
   }
 }
 

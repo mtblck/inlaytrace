@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { SwatchFormat } from '../lib/swatches'
 import { convert, pngPixels, UNITS, type ExportSize, type Unit } from '../lib/vectorExport'
 
 type Props = {
@@ -17,7 +18,16 @@ type Props = {
   onPdf: () => void
   onEps: () => void
   onDxf: () => void
+  /** The colours as swatches; there are none to give with nothing drawn. */
+  onSwatches: (format: SwatchFormat) => void
+  hasSwatches: boolean
 }
+
+const SWATCHES: [SwatchFormat, string, string][] = [
+  ['ase', '.ase', 'Adobe Swatch Exchange, for Illustrator, Photoshop and InDesign'],
+  ['gpl', '.gpl', 'GIMP palette, for GIMP, Inkscape and Krita'],
+  ['css', 'CSS', 'CSS custom properties'],
+]
 
 const round = (n: number) => Math.round(n * 100) / 100
 
@@ -134,6 +144,16 @@ export function ExportOptions(p: Props) {
           <button className="btn" disabled={p.disabled} onClick={p.onDxf} title="DXF for CAD, CNC and laser cutting: one layer per colour, curves as polylines">
             DXF
           </button>
+        </div>
+        <div className="flex items-center gap-2" data-swatches="">
+          <span className="field-label shrink-0">Swatches</span>
+          <div className="grid flex-1 grid-cols-3 gap-2">
+            {SWATCHES.map(([format, label, title]) => (
+              <button key={format} className="btn" disabled={p.disabled || !p.hasSwatches} onClick={() => p.onSwatches(format)} title={`${title}: the colours as drawn`}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </details>

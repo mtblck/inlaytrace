@@ -121,6 +121,13 @@ describe('trace settings', () => {
     expect(s.removeBackground).toBe(false)
   })
 
+  it('keep your own colours, cleaned, and whether they are on', () => {
+    const s = cleanSettings({ ...SETTINGS, ownColors: ['#ABCDEF', 'bad', 7, '#abcdef', '#000'], useOwnColors: true })!
+    expect(s.ownColors).toEqual(['#abcdef', '#000000'])
+    expect(s.useOwnColors).toBe(true)
+    expect(cleanSettings({ ...SETTINGS, ownColors: 'nope', useOwnColors: 'yes' })).toMatchObject({ ownColors: [], useOwnColors: false })
+  })
+
   it("keep Line art's Auto threshold, so HD splits ink from paper as the preview did", () => {
     expect(cleanSettings({ ...SETTINGS, preset: 'lineart', threshold: 'auto' })!.threshold).toBe('auto')
     expect(cleanSettings({ ...SETTINGS, preset: 'lineart', threshold: 'bogus' })!.threshold).toBe(128)

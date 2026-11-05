@@ -1,6 +1,8 @@
 import { useId, useState, type ReactNode } from 'react'
 import type { PrepStage } from '../engine/prep'
-import { PRESETS, hasExactShapes, isInk, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
+import { MAX_OWN_COLORS, PRESETS, canOwnColors, ownPaletteOf, hasExactShapes, isInk, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
+import { addColors, parseColorList } from '../lib/colors'
+import { PipetteIcon } from './IconButton'
 import type { Candidate, SizeSearch } from '../engine/targetSize'
 import { formatBytes } from '../lib/svg'
 
@@ -41,9 +43,12 @@ type Props = {
   onFindSize?: (kb: number) => void
   onApplySize?: () => void
   onCancelSize?: () => void
+  /** The eyedropper is armed to add one of your own colours, and the button that arms it. */
+  pickingOwn?: boolean
+  onPickOwn?: () => void
 }
 
-export function Controls({ settings, onChange, onPreset, suggestPoster, measuredStroke, prep, ...size }: Props) {
+export function Controls({ settings, onChange, onPreset, suggestPoster, measuredStroke, prep, pickingOwn, onPickOwn, ...size }: Props) {
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) => onChange({ ...settings, [key]: value })
   const p = settings.preset
   const defaults = presetById(p).defaults
@@ -104,7 +109,9 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
         }
       >
         <div className="space-y-4">
-          {!isInk(p) && (
+          {canOwnColors(p) && <OwnColors settings={settings} onChange={onChange} picking={!!pickingOwn} onPick={onPickOwn} />}
+
+          {!isInk(p) && !ownPaletteOf(settings) && (
             <Slider label="Colours" value={settings.colors} min={2} max={64} step={1} onChange={(v) => set('colors', v)} format={(v) => `${v}`} hint="Fewer means a smaller file. If two colours merge into one, raise this." />
           )}
 
@@ -241,6 +248,103 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
 
       {size.onFindSize && <TargetSize {...size} onFindSize={size.onFindSize} />}
     </>
+  )
+}
+
+/**
+ * Trace to your own colours (#191): every shape comes out in one of them, and
+ * the shapes are found with them, which merging or replacing afterwards can't do.
+ * Paste hex codes or pick them from the image.
+ */
+function OwnColors({ settings, onChange, picking, onPick }: { settings: Settings; onChange: (next: Settings) => void; picking: boolean; onPick?: () => void }) {
+  const [text, setText] = useState('')
+  const [bad, setBad] = useState<string[]>([])
+  const list = settings.ownColors
+  const setList = (ownColors: string[]) => onChange({ ...settings, ownColors })
+  const add = () => {
+    const r = parseColorList(text)
+    setBad(r.bad)
+    if (r.colors.length) setList(addColors(list, r.colors))
+    setText(r.bad.join(' '))
+  }
+  const full = list.length >= MAX_OWN_COLORS
+  return (
+    <div className="space-y-2" data-own-colours={settings.useOwnColors ? list.length : 'off'}>
+      <label className="flex items-start gap-2 text-[13px]">
+        <input type="checkbox" className="mt-0.5 accent-[var(--c-accent)]" checked={settings.useOwnColors} onChange={(e) => onChange({ ...settings, useOwnColors: e.target.checked })} />
+        <span>
+          Use my colours
+          <span className="field-hint block">Trace with only the colours you have: vinyl, threads, inks or brand colours.</span>
+        </span>
+      </label>
+      {settings.useOwnColors && (
+        <div className="space-y-2 pl-6">
+          {list.length > 0 && (
+            <ul className="flex flex-wrap gap-1.5" aria-label="My colours">
+              {list.map((c) => (
+                <li key={c} className="flex items-center gap-1 rounded-full border border-rule py-0.5 pr-1 pl-0.5">
+                  <span className="size-5 rounded-full border border-rule-soft" style={{ background: c }} aria-hidden="true" />
+                  <span className="font-mono text-[11.5px]">{c}</span>
+                  <button
+                    type="button"
+                    className="grid size-5 place-items-center rounded-full text-ink-faint hover:bg-paper-sunk hover:text-accent"
+                    onClick={() => setList(list.filter((x) => x !== c))}
+                    aria-label={`Remove ${c}`}
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form
+            className="flex items-center gap-1.5"
+            onSubmit={(e) => {
+              e.preventDefault()
+              add()
+            }}
+          >
+            <input
+              type="text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              disabled={full}
+              placeholder="#1d3557, #e63946"
+              aria-label="Add colours as hex codes"
+              className="min-w-0 flex-1 rounded-md border border-rule bg-paper px-2 py-1.5 font-mono text-[13px]"
+            />
+            <button type="submit" className="btn h-[34px]" disabled={full || !text.trim()}>
+              Add
+            </button>
+            {onPick && (
+              <button
+                type="button"
+                onClick={onPick}
+                disabled={full}
+                aria-pressed={picking}
+                aria-label="Eyedropper: add a colour from the image"
+                title={picking ? 'Click the image to pick a colour (Esc to cancel)' : 'Add a colour from the image'}
+                className={`grid size-[34px] shrink-0 place-items-center rounded-md border border-rule ${picking ? 'bg-accent text-accent-ink' : 'text-ink-muted hover:bg-paper-sunk hover:text-ink'}`}
+              >
+                <PipetteIcon />
+              </button>
+            )}
+          </form>
+          {bad.length > 0 && (
+            <p role="alert" className="text-[12.5px] text-accent">
+              Not a hex colour: {bad.join(', ')}
+            </p>
+          )}
+          <p className="field-hint">
+            {list.length === 0
+              ? 'Paste hex codes, separated by commas, spaces or new lines, or pick them from the image. Until then the image picks its own.'
+              : full
+                ? `That's the most there can be (${MAX_OWN_COLORS}).`
+                : `${list.length} ${list.length === 1 ? 'colour' : 'colours'}. Each shape takes the nearest. Kept when you change the preset or open another image.`}
+          </p>
+        </div>
+      )}
+    </div>
   )
 }
 

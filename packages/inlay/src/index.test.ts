@@ -32,4 +32,28 @@ describe('the public API', () => {
     expect(svg).toMatch(/^<svg xmlns="http:\/\/www.w3.org\/2000\/svg" width="40" height="20" viewBox="0 0 40 20">/)
     expect(svg.match(/<path /g)).toHaveLength(3)
   })
+  it("traces with a caller's own palette: every fill is one of its colours", () => {
+    // Noisy, with soft edges, in colours that aren't the palette's: each shape
+    // must still come out in one of the caller's colours, whatever the options.
+    const w = 48
+    const h = 32
+    const px = new Uint8Array(w * h * 4)
+    let seed = 3
+    const noise = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) % 11) - 5
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const d = Math.hypot(x - 16, y - 16) - 10 // a disc with a 1 px soft edge
+        const t = Math.min(1, Math.max(0, 0.5 - d))
+        const c = x > 30 && y > 6 && y < 26 ? [40, 70, 190] : [0, 1, 2].map((i) => t * [200, 50, 40][i] + (1 - t) * [240, 236, 228][i])
+        px.set([...c.map((v) => Math.max(0, Math.min(255, Math.round(v + noise())))), 255], (y * w + x) * 4)
+      }
+    const palette = ['#FFFFFF', '#000000', '#ff0000', '#0000ff', '#00a000']
+    const allowed = new Set(palette.map((c) => c.toLowerCase()))
+    const base = { mode: 'palette' as const, palette, speckle: 2, tolerance: 1, cornerAngle: 45 }
+    for (const extra of [{}, { stacked: true }, { photo: true }, { photo: true, stacked: true }, { strokes: true }, { shapes: true }]) {
+      const r = trace(px, w, h, { ...base, ...extra })
+      expect(r.paths.length).toBeGreaterThan(0)
+      for (const p of r.paths) expect(allowed.has(p.fill), `${JSON.stringify(extra)}: ${p.fill}`).toBe(true)
+    }
+  })
 })

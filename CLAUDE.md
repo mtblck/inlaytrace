@@ -10,7 +10,7 @@ One npm workspace: run every command from the repo root.
 
 `npm test` · `npm run build` · `npm run preview` then `npm run verify [url]` · `npm run score` ·
 `npm run site:dev` · `npm run site:assets` after any tracer change (landing-page numbers)
-(real-browser E2E; `CHROME_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome`
+(real-browser E2E; `CHROME_PATH=/opt/pw-browsers/chromium`
 in Claude's cloud sandbox, where the Playwright CDN is blocked).
 
 CI and Claude review run on PRs (`.github/workflows/`; playbook in mtblck/boards `docs/ci.md`).
