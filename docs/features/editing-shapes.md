@@ -7,8 +7,8 @@ order: 4
 Edit mode, from the *Trace · Edit* switch above the canvas. Its tools are in
 the rail beside the canvas (above it, on a phone): *Select* (V) for whole
 shapes, *Nodes* (A) for one shape's outline, *Mirror* (M), then *Undo* and
-*Redo*. The panel (on the right; below the canvas on a phone) shows the chosen tool's settings, then the
-colours. Selecting a shape from the canvas switches to Edit mode; going back
+*Redo*. The panel (on the right; below the canvas on a phone) shows the chosen
+tool's settings, then the colours. Selecting a shape from the canvas switches to Edit mode; going back
 to Trace mode deselects and puts the tool back to Select.
 
 ## Select: pick, move and scale shapes

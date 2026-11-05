@@ -129,6 +129,8 @@ export default function App() {
     setMode('vector')
   }, [])
   const [tool, setTool] = useState<Tool>('select')
+  /** Opened as the SVG editor (/app/?mode=edit, from the site's /svg-editor/ page): the first file opens in Edit mode. */
+  const editFirst = useRef(typeof location !== 'undefined' && new URLSearchParams(location.search).get('mode') === 'edit')
   /** The workspace's mode (components/Workspace.tsx): Trace sets up the trace, Edit fixes its shapes. */
   const [workMode, setWorkMode] = useState<WorkMode>('trace')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -218,9 +220,12 @@ export default function App() {
       setSizeRun(null)
       axisTouched.current = false
       setTool('select')
-      setWorkMode(restore?.edits.doc || next.svg ? 'edit' : 'trace')
-      setMode(restore ? 'vector' : 'split')
-      viewChosen.current = !!restore
+      // Opened from the SVG editor page (/app/?mode=edit): the first file opens in Edit, traced first if it's an image.
+      const toEdit = !restore && editFirst.current
+      editFirst.current = false
+      setWorkMode(restore?.edits.doc || next.svg || toEdit ? 'edit' : 'trace')
+      setMode(restore || toEdit ? 'vector' : 'split')
+      viewChosen.current = !!restore || toEdit
       setZoom(null)
     } catch (error) {
       if (seq === openSeq.current) setLoadError(error instanceof Error ? error.message : String(error))
@@ -1290,6 +1295,7 @@ export default function App() {
             </>
           ) : (
             <Empty
+              editFirst={editFirst.current}
               loading={!!source && !trace && status.kind !== 'error'}
               error={loadError ?? (status.kind === 'error' ? status.message : null)}
               onChoose={() => fileInput.current?.click()}
@@ -1457,9 +1463,14 @@ export default function App() {
                 {status.kind === 'error' && <span className="text-accent">{status.message}</span>}
               </p>
               <div className="grid grid-cols-2 gap-2">
-                <button className="btn btn-primary col-span-2 hidden lg:inline-flex" disabled={!trace} onClick={download}>
+                <button className={`btn btn-primary hidden lg:inline-flex ${workMode === 'edit' ? 'col-span-2' : ''}`} disabled={!trace} onClick={download}>
                   Download SVG
                 </button>
+                {workMode !== 'edit' && (
+                  <button className="btn hidden lg:inline-flex" disabled={!trace} onClick={() => chooseMode('edit')} title="Fix the shapes before you download: recolour, move, reshape, mirror">
+                    Edit SVG
+                  </button>
+                )}
                 <button className="btn" disabled={!trace} onClick={copy}>
                   {copied ? 'Copied' : 'Copy SVG'}
                 </button>
@@ -1496,6 +1507,13 @@ export default function App() {
                   More formats
                 </a>
               </div>
+              {workMode !== 'edit' && (
+                <button className="btn h-12 shrink-0 px-3 sm:px-4" disabled={!trace} onClick={() => chooseMode('edit')} aria-label="Edit SVG">
+                  {/* Just "Edit" on the narrowest phones, so the stats beside it keep some room. */}
+                  <span className="min-[400px]:hidden">Edit</span>
+                  <span className="hidden min-[400px]:inline">Edit SVG</span>
+                </button>
+              )}
               <button className="btn btn-primary h-12 px-5" disabled={!trace} onClick={download}>
                 Download SVG
               </button>
@@ -1530,7 +1548,7 @@ const COMPARE_HINT = {
   vector: 'The SVG on its own, over a check pattern where it is transparent.',
 } as const
 
-function Empty(props: { loading: boolean; error: string | null; onChoose: () => void; onSample: () => void }) {
+function Empty(props: { editFirst: boolean; loading: boolean; error: string | null; onChoose: () => void; onSample: () => void }) {
   return (
     <div className="mat grid flex-1 place-items-center p-4 sm:p-6">
       <div className="w-full max-w-lg rounded-2xl border-2 border-dashed border-on-mat/45 bg-black/15 px-6 py-10 text-center sm:px-10 sm:py-14">
@@ -1540,13 +1558,15 @@ function Empty(props: { loading: boolean; error: string | null; onChoose: () => 
           </p>
         ) : (
           <>
-            <h2 className="font-display text-[32px] leading-tight text-on-mat-strong sm:text-[42px]">Drop an image here</h2>
+            <h2 className="font-display text-[32px] leading-tight text-on-mat-strong sm:text-[42px]">{props.editFirst ? 'Drop an SVG to edit' : 'Drop an image here'}</h2>
             <p className="mx-auto mt-3 max-w-md text-[14.5px] leading-relaxed text-balance text-on-mat">
-              Or paste one, or choose a file. PNG, JPG, WebP, GIF or BMP to trace, or an SVG to edit; several at once to trace them all. It never leaves this device: everything runs in your browser.
+              {props.editFirst
+                ? 'Or paste one, or choose a file. Its shapes open to edit. A PNG, JPG, WebP, GIF or BMP is traced into shapes first. It never leaves this device: everything runs in your browser.'
+                : 'Or paste one, or choose a file. PNG, JPG, WebP, GIF or BMP to trace, or an SVG to edit; several at once to trace them all. It never leaves this device: everything runs in your browser.'}
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
               <button className="btn btn-primary h-11 px-5 text-[15px]" onClick={props.onChoose}>
-                Choose an image
+                {props.editFirst ? 'Choose a file' : 'Choose an image'}
               </button>
               <button className="btn h-11 border-on-mat/50 bg-transparent px-5 text-[15px] text-on-mat-strong hover:bg-white/5" onClick={props.onSample}>
                 Try a sample
