@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { checkEdits, checkSettings } from './session'
 import { settingsFor } from '../engine/presets'
-import { buildSvg, groupPaths, reserveGroups } from './doc'
+import { buildSvg, groupPaths, ownFill, reserveGroups } from './doc'
 
 describe('restoring a saved session', () => {
   it('fills settings from the preset and keeps only well-typed saved fields', () => {
@@ -86,5 +86,13 @@ describe('groups in a saved session', () => {
     expect(svg).toContain('fill="#000000" opacity="0.5"')
     expect(checkEdits({ ...base, doc: null, hidden: [], locked: 'p1' })).not.toHaveProperty('hidden')
     expect(checkEdits({ ...base, doc: null, locked: 'p1' })).not.toHaveProperty('locked')
+  })
+
+  it('gives a shape its own fill, stepping off a colour that has been replaced or removed', () => {
+    const inks = { recolor: { '#ff0000': '#0000ff' }, removed: ['#00ff00'] }
+    expect(ownFill('#123456', inks)).toBe('#123456')
+    expect(ownFill('#ff0000', inks)).toBe('#ff0001')
+    expect(ownFill('#00ff00', inks)).toBe('#00ff01')
+    expect(ownFill('#0000ff', { recolor: { '#0000ff': '#000000' }, removed: [] })).toBe('#0000fe')
   })
 })

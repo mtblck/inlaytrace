@@ -231,6 +231,24 @@ export function recolorInk(inks: InkEdits, hex: string, to: string | null): InkE
   return { recolor, removed: inks.removed.filter((h) => h !== hex) }
 }
 
+/**
+ * A shape's own fill: the colour asked for, unless that's a traced colour
+ * that's been replaced or removed (the shape would be drawn in the new colour
+ * or vanish); then the nearest colour that isn't, one step of blue away.
+ */
+export function ownFill(hex: string, inks: InkEdits): string {
+  const taken = (h: string) => !!inks.recolor[h] || inks.removed.includes(h)
+  if (!taken(hex)) return hex
+  const n = parseInt(hex.slice(1), 16)
+  for (const step of [1, -1, 2, -2, 3, -3]) {
+    const b = (n & 255) + step
+    if (b < 0 || b > 255) continue
+    const h = `#${((n & 0xffff00) | b).toString(16).padStart(6, '0')}`
+    if (!taken(h)) return h
+  }
+  return hex
+}
+
 export const removeInk = (inks: InkEdits, hex: string): InkEdits =>
   inks.removed.includes(hex) ? inks : { ...inks, removed: [...inks.removed, hex] }
 

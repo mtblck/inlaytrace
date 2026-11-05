@@ -23,7 +23,7 @@ The document is these parts (`apps/app/src/lib/doc.ts`):
 | `background` | The background colour, or none | Kept |
 | `doc` | Your edited shapes, or nothing | See below |
 | `cleanup` | Clean up's edits to the image | Kept (it's what is traced) |
-| `hidden`, `locked` | Shapes hidden or locked while you edit (by id) | Kept, for the shapes that still exist |
+| `hidden`, `locked` | Shapes hidden or locked while you edit (by id; setting one detaches `doc`) | Kept with `doc` |
 
 `doc` stays empty, meaning "whatever the tracer produces", until your first
 shape edit (a node drag, a delete, a mirror). That edit copies the trace into an

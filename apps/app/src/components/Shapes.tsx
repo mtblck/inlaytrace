@@ -8,7 +8,8 @@
  * so both export as usual.
  *
  * A trace can have thousands of shapes, so a section lists its rows only once
- * opened, a page at a time, and sizes are measured only for what is listed.
+ * opened, a page at a time, and sizes are measured only for open sections
+ * (and kept per path data).
  *
  * Fill and stroke sets the selection's own fill, outline and opacity. A fill
  * of its own takes a shape out of its ink, into one of that colour.
@@ -30,7 +31,7 @@ const boundsCache = new Map<string, Box | null>()
 function boundsOf(d: string) {
   let b = boundsCache.get(d)
   if (b === undefined) {
-    if (boundsCache.size > 20000) boundsCache.clear()
+    if (boundsCache.size > 50000) boundsCache.clear()
     b = pathBounds(d)
     boundsCache.set(d, b)
   }
@@ -55,6 +56,8 @@ export function ShapesList(p: {
   const [by, setBy] = useState<'colour' | 'group'>('colour')
   const [sort, setSort] = useState<'order' | 'size'>('order')
   const [open, setOpen] = useState<Record<string, number>>({})
+  // A section's order by size, worked out once per list of shapes, not every render.
+  const sizeOrder = useMemo(() => new Map<string, string[]>(), [p.paths, by])
   const byId = useMemo(() => new Map(p.paths.map((s, i) => [s.id, { s, n: i + 1 }])), [p.paths])
 
   const groups = useMemo(() => {
@@ -84,7 +87,12 @@ export function ShapesList(p: {
         <ul className="divide-y divide-rule-soft rounded-md border border-rule">
           {groups.map((g) => {
             const shown = open[g.key] ?? 0
-            const ids = shown && sort === 'size' ? [...g.ids].sort((a, b) => areaOf(byId.get(b)!.s.d) - areaOf(byId.get(a)!.s.d)) : g.ids
+            let ids = g.ids
+            if (shown && sort === 'size') {
+              let sorted = sizeOrder.get(g.key)
+              if (!sorted) sizeOrder.set(g.key, (sorted = [...g.ids].sort((a, b) => areaOf(byId.get(b)!.s.d) - areaOf(byId.get(a)!.s.d))))
+              ids = sorted
+            }
             const allHidden = g.ids.every((id) => p.hidden.has(id))
             const allLocked = g.ids.every((id) => p.locked.has(id))
             return (
@@ -250,35 +258,53 @@ export function StyleFields(p: { paths: ShownPath[]; defaultStroke: number; onSt
           />
           Outline only (a stroke, not filled)
         </label>
-        {!!stroke && (
-          <label className="flex items-center gap-2 text-[13px]">
-            <span className="field-label">Stroke width</span>
-            <input
-              type="number"
-              min={0.1}
-              step={0.5}
-              className="w-20 rounded-md border border-rule bg-paper px-2 py-1 font-mono text-[13px]"
-              value={Math.round(stroke * 100) / 100}
-              onChange={(e) => {
-                const v = Number(e.target.value)
-                if (Number.isFinite(v) && v > 0) p.onStyle({ stroke: v }, key('stroke'))
-              }}
-              aria-label="Stroke width"
-            />
-            <span className="text-ink-muted">px</span>
-          </label>
-        )}
+        {!!stroke && <StrokeWidth width={stroke} onWidth={(v) => p.onStyle({ stroke: v }, key('stroke'))} />}
         <Slider
           label="Opacity"
           value={Math.round((opacity ?? 1) * 100)}
           min={0}
           max={100}
           step={1}
-          hint={opacity === undefined ? 'Mixed: a change sets them all.' : 'See-through shapes show what’s behind them, in the export too.'}
+          hint={opacity === undefined ? 'Mixed: a change sets them all.' : 'See-through shapes show what’s behind them, in the SVG and PNG too (PDF, EPS and DXF draw them solid).'}
           format={(v) => (opacity === undefined ? 'Mixed' : `${v}%`)}
           onChange={(v) => p.onStyle({ opacity: v / 100 }, key('opacity'))}
         />
       </div>
     </Section>
+  )
+}
+
+/** The width as typed: a half-typed "0." stays on screen, and only a width above 0 is applied. */
+function StrokeWidth(p: { width: number; onWidth: (v: number) => void }) {
+  const shown = String(Math.round(p.width * 100) / 100)
+  const [text, setText] = useState(shown)
+  const applied = useRef(p.width)
+  // The width changed elsewhere (undo): show it.
+  if (applied.current !== p.width) {
+    applied.current = p.width
+    if (Number(text) !== p.width) setText(shown)
+  }
+  return (
+    <label className="flex items-center gap-2 text-[13px]">
+      <span className="field-label">Stroke width</span>
+      <input
+        type="number"
+        min={0.1}
+        step={0.5}
+        className="w-20 rounded-md border border-rule bg-paper px-2 py-1 font-mono text-[13px]"
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value)
+          const v = Number(e.target.value)
+          if (e.target.value.trim() && Number.isFinite(v) && v > 0) {
+            applied.current = v
+            p.onWidth(v)
+          }
+        }}
+        onBlur={() => setText(String(Math.round(p.width * 100) / 100))}
+        aria-label="Stroke width"
+      />
+      <span className="text-ink-muted">px</span>
+    </label>
   )
 }

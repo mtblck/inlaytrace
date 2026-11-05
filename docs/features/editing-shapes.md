@@ -92,10 +92,13 @@ With shapes selected (Select tool), *Fill and stroke* sets their own style:
 
 - **Fill:** a colour of their own. They leave their colour in the Colours
   list for one of the new colour, so recolouring the old one no longer changes
-  them. A gradient fill becomes flat.
+  them. A gradient fill becomes flat. (If the colour you pick is one you've
+  replaced or removed in the Colours list, they get the nearest colour that
+  isn't, one step of blue away, so they don't vanish or turn another colour.)
 - **Outline only** draws them as a stroke in their colour instead of filling
   them, at the *stroke width* you set; untick it to fill them again.
-- **Opacity** makes them see-through, in the export too.
+- **Opacity** makes them see-through, in the SVG and PNG too. PDF, EPS and
+  DXF draw them solid.
 
 A value the selection doesn't share shows as *Mixed*; changing it sets them
 all. Each change is one undo step (a slider's drag is one), and it detaches
@@ -113,11 +116,12 @@ a row to select its shape, even one too small to click on the canvas; ⇧ or
 - **The padlock locks** it: still drawn, but clicks and marquees go through it,
   so it can't be moved by accident.
 - The buttons on a colour or group's row hide or lock all of it; *Show all*
-  and *Unlock all* undo the lot.
+  and *Unlock all* undo the lot. A shape in a group hides and locks with its
+  group, so a group never splits.
 
 Hidden and locked are editing state only: both still export, as usual. They
-undo like any edit and are saved with the session, but they don't detach the
-drawing from the trace.
+undo like any edit and are saved with the session. They're kept by shape, so,
+like a shape edit, the first one detaches the drawing from the trace.
 
 ## Nodes: move nodes and bend curves
 

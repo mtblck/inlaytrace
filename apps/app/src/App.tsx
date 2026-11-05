@@ -19,6 +19,7 @@ import {
   docFromTrace,
   arrange,
   docOf,
+  ownFill,
   groupPaths,
   hasStrokes,
   reserveGroups,
@@ -664,6 +665,8 @@ export default function App() {
     return doc.paths.filter((p) => ids.has(p.id))
   }, [doc, selectedIds])
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
+  /** The selection as drawn (colours resolved), for Fill and stroke. */
+  const selectedShown = useMemo(() => shown.filter((p) => selectedSet.has(p.id)), [shown, selectedSet])
   const selectionBox = useMemo(() => union(selectedPaths.map((p) => pathBounds(p.d))), [selectedPaths])
 
   type DocT = NonNullable<typeof doc>
@@ -849,14 +852,26 @@ export default function App() {
   )
 
   /** Group, ungroup and paint order: shape edits on the selection, each one undo step. */
-  /** Hide or show, lock or unlock shapes (#209): an edit, so it undoes, but never a change to the drawing. */
-  const flagShapes = (flag: ShapeFlag, ids: string[], on: boolean) =>
-    commit((e) => {
-      const cur = e[flag] ?? []
-      const next = on ? [...new Set([...cur, ...ids])] : cur.filter((id) => !ids.includes(id))
-      const { [flag]: _, ...rest } = e
-      return next.length ? { ...rest, [flag]: next } : rest
-    })
+  /**
+   * Hide or show, lock or unlock shapes (#209): an edit, so it undoes. A group
+   * goes all together, so it never splits. They're kept by shape id, and a
+   * trace's ids are new each time it's traced, so the first one detaches the
+   * drawing from the trace, like a shape edit.
+   */
+  const flagShapes = useCallback(
+    (flag: ShapeFlag, ids: string[], on: boolean) => {
+      if (!traced) return
+      commit((e) => {
+        const d = docOf(e, traced)
+        const all = new Set(withGroups(d, ids))
+        const cur = e[flag] ?? []
+        const next = on ? [...new Set([...cur, ...all])] : cur.filter((id) => !all.has(id))
+        const { [flag]: _, ...rest } = e
+        return { ...rest, doc: d, ...(next.length ? { [flag]: next } : {}) }
+      })
+    },
+    [commit, traced],
+  )
   /** The selection's own fill, outline or opacity (#209). A slider's drag shares a key, so it undoes as one step. */
   const styleSelection = (patch: StylePatch, key: string) => {
     const ids = new Set(selectedIds)
@@ -869,7 +884,7 @@ export default function App() {
           if (patch.fill) {
             // A colour of its own: flat, out of its ink and into that colour's.
             const { gradient: _, ...flat } = q
-            q = { ...flat, fill: normalizeHex(patch.fill) ?? q.fill }
+            q = { ...flat, fill: ownFill(normalizeHex(patch.fill) ?? q.fill, edits.inks) }
           }
           if (patch.stroke !== undefined) {
             const { stroke: _, ...rest } = q
@@ -1657,8 +1672,8 @@ export default function App() {
                 onMirror={mirror}
               />
             )}
-            {doc && tool === 'select' && selectedPaths.length > 0 && (
-              <StyleFields key={selectedIds.join(' ')} paths={shown.filter((p) => selectedIds.includes(p.id))} defaultStroke={Math.max(1, Math.round(Math.max(doc.width, doc.height) / 200))} onStyle={styleSelection} />
+            {doc && tool === 'select' && selectedShown.length > 0 && (
+              <StyleFields key={selectedIds.join(' ')} paths={selectedShown} defaultStroke={Math.max(1, Math.round(Math.max(doc.width, doc.height) / 200))} onStyle={styleSelection} />
             )}
             {doc && (
               <Inks
@@ -1690,7 +1705,7 @@ export default function App() {
               />
             )}
             {doc && workMode === 'edit' && (
-              <ShapesList paths={shown} hidden={hiddenSet} locked={lockedSet} selected={selectedSet} onSelect={(id, how) => select(id, how)} onFlag={flagShapes} />
+              <ShapesList paths={shown} hidden={hiddenSet} locked={lockedSet} selected={selectedSet} onSelect={select} onFlag={flagShapes} />
             )}
             </div>
             <div role="tabpanel" id="panel-trace" aria-labelledby="tab-trace" hidden={!!doc && workMode !== 'trace'}>
