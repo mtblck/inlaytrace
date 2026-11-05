@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { swatchColors, toAse, toCss, toGpl } from './swatches'
+import { swatchColors, swatchFile, toAse, toCss, toGpl } from './swatches'
 
 describe('swatchColors', () => {
   it('lists colours as drawn, in paint order, background first, each once', () => {
@@ -72,5 +72,15 @@ describe('Adobe Swatch Exchange', () => {
     // Block: type 0x0001, length 2 + 16 + 4 + 12 + 2 = 36, name length 8 ("#000000" + null).
     expect([...b.slice(12, 20)]).toEqual([0, 1, 0, 0, 0, 36, 0, 8])
     expect(b.length).toBe(12 + 6 + 36)
+  })
+})
+
+describe('swatchFile', () => {
+  it('names each format with its type and extension', () => {
+    const c = ['#123456']
+    expect(swatchFile('ase', c, 'x')).toMatchObject({ type: 'application/octet-stream', ext: 'ase' })
+    expect(swatchFile('ase', c, 'x').data).toBeInstanceOf(Uint8Array)
+    expect(swatchFile('gpl', c, 'x')).toMatchObject({ type: 'text/plain', ext: 'gpl', data: toGpl(c, 'x') })
+    expect(swatchFile('css', c, 'x')).toMatchObject({ type: 'text/css', ext: 'css', data: toCss(c) })
   })
 })

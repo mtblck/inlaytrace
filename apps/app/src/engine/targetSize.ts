@@ -29,7 +29,7 @@ const MIN_COLORS = 2
 export const MAX_TRIES = 30
 
 /** Moves that should make the file smaller, from these settings; bigger ones while the file is far over. */
-function moves(s: Settings, big: boolean): Settings[] {
+export function moves(s: Settings, big: boolean): Settings[] {
   const out: Settings[] = []
   if (s.preset !== 'pixel') {
     // Pixel art keeps every pixel; only fewer colours make it smaller.
