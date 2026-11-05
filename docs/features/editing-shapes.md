@@ -63,6 +63,26 @@ With shapes selected, *Arrange* in the Edit panel:
 Both are shape edits: one undo step each, and they detach the drawing from
 the trace like any other.
 
+## Combine: unite, subtract, intersect, divide
+
+With two or more filled shapes selected, *Combine* in the Edit panel joins or
+cuts them, the usual fixes for a trace: fold a speck into the shape beside
+it, cut a shape out of the background, join two halves.
+
+- **Unite** makes one shape of their combined area.
+- **Subtract** cuts the shapes in front out of the one at the back. A shape
+  that sits wholly inside leaves a hole.
+- **Intersect** keeps only the area every shape covers. If they don't all
+  overlap it says so and changes nothing.
+- **Divide** splits the selection at every edge into pieces that don't
+  overlap, each in the colour that was on top there, so each can be
+  recoloured, moved or deleted on its own.
+
+The back shape is the lowest in paint order. Unite, Subtract and Intersect
+leave one shape in its place, with its colour, gradient and group, and select
+it. Lines (Centerline and Outline art strokes) have no inside, so they can't
+be combined. One undo step each, and they detach the drawing from the trace.
+
 ## Nodes: move nodes and bend curves
 
 Click a shape to show its nodes and handles.
@@ -119,7 +139,9 @@ simplifying are in `apps/app/src/lib/nodeops.ts`: adding splits the cubic with
 de Casteljau's construction; rounding cuts each side at the radius and joins
 the cuts with a cubic whose handles are (4/3)·tan(φ/4) of the arc's radius for
 a turn of φ; simplifying samples the outline about a pixel apart and runs it
-back through `fitChain`. During a drag, each update is applied to the
+back through `fitChain`. Combine uses paper.js's booleans
+(`apps/app/src/lib/boolean.ts`), loaded only when first used, like Mirror's,
+and writes each result back through the same path writer. During a drag, each update is applied to the
 shapes as they were when the drag began, not to the previous update, so a long
 drag never accumulates rounding; the whole drag is one undo step.
 

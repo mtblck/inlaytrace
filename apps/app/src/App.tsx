@@ -39,6 +39,7 @@ import {
 } from './lib/doc'
 import { push, redo, startHistory, undo, type History } from './lib/history'
 import { centreAxis, likelyAxis, mirrorDoc, type Axis } from './lib/mirror'
+import { booleanOp, type BooleanOp } from './lib/boolean'
 import { loadPaper } from './lib/paper'
 import { deleteNodes, moveHandle, moveNode, moveNodes, parsePath, serializePath, nodeCount, type NodePart, type NodeRef, type Pt } from './lib/pathdata'
 import { addNode, nearestOnPath, roundNode, sharpenNode, simplifySubpaths, smoothNode } from './lib/nodeops'
@@ -753,6 +754,22 @@ export default function App() {
   const groupSelection = () => selectedIds.length > 1 && editDoc((d) => groupPaths(d, selectedIds))
   const ungroupSelection = () => selectedIds.length && editDoc((d) => ungroupPaths(d, selectedIds))
   const arrangeSelection = (how: Arrange) => selectedIds.length && editDoc((d) => arrange(d, selectedIds, how))
+  /** Unite, Subtract, Intersect or Divide the selection (#207); resolves to why it couldn't, or null. */
+  const combineSelection = async (op: BooleanOp): Promise<string | null> => {
+    if (!doc || selectedIds.length < 2) return null
+    try {
+      const paper = await loadPaper()
+      // Combines the drawing as it was when the button was pressed, like Mirror.
+      const r = booleanOp(paper, doc, selectedIds, op)
+      if ('error' in r) return r.error
+      editDoc(() => r.doc)
+      setSelectedIds(r.selected)
+      setSelectedNodes([])
+      return null
+    } catch (error) {
+      return `That didn’t work: ${error instanceof Error ? error.message : String(error)}. Your drawing is unchanged.`
+    }
+  }
 
   const deleteSelection = useCallback(() => {
     if (!selectedPaths.length) return
@@ -1392,6 +1409,7 @@ export default function App() {
                 onGroup={groupSelection}
                 onUngroup={ungroupSelection}
                 onArrange={arrangeSelection}
+                onCombine={combineSelection}
                 grouped={!!doc && doc.paths.some((p) => p.group && selectedIds.includes(p.id))}
                 onBox={setBox}
                 onBoxDone={boxDone}
