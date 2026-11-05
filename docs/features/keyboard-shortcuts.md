@@ -6,9 +6,18 @@ order: 8
 
 Press **?** (or the keyboard icon in the header) for the list in the app. ⌘ on a Mac,
 Ctrl elsewhere; ⌥ is Alt. Shortcuts don't fire while you're typing in a field.
-The panel lists them by mode: Edit mode's tools, selection and editing keys,
-then those that work in every mode (history and view). A tool key from Trace
+The panel lists them by mode: Clean up's tools, Edit mode's tools, selection
+and editing keys, then those that work in every mode (history and view). A tool key from Trace
 mode switches to Edit mode.
+
+## Clean up mode
+
+| Keys | Does |
+| --- | --- |
+| C | Crop: drag a box on the image |
+| Enter | Crop to the box |
+| Esc | Cancel the box |
+| L | Straighten: drag along a line that should be level or upright |
 
 ## Tools (Edit mode)
 

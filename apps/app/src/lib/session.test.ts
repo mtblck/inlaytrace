@@ -63,4 +63,12 @@ describe('groups in a saved session', () => {
     const doc = checkEdits({ inks: { recolor: {}, removed: [] }, background: null, doc: { width: 10, height: 10, paths: [{ id: 'p1', d: 'M0 0L1 0L1 1Z', fill: '#000000', group: 'g3' }] } }).doc!
     expect(buildSvg(doc)).not.toContain('<g')
   })
+
+  it('keeps a clean-up list, and drops one with anything in it that isn’t ours', () => {
+    const base = { inks: { recolor: {}, removed: [] }, background: null, doc: null }
+    const cleanup = [{ kind: 'crop', x: 0.1, y: 0.2, width: 0.5, height: 0.5 }, { kind: 'threshold', level: 120 }]
+    expect(checkEdits({ ...base, cleanup }).cleanup).toEqual(cleanup)
+    expect(checkEdits({ ...base, cleanup: [...cleanup, { kind: 'script', src: 'x' }] })).not.toHaveProperty('cleanup')
+    expect(checkEdits({ ...base, cleanup: [] })).not.toHaveProperty('cleanup')
+  })
 })

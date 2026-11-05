@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { zipSync, strToU8 } from 'fflate'
 import { TraceClient } from './engine/client'
 import { BatchDialog } from './components/Batch'
@@ -40,6 +40,8 @@ import {
 import { push, redo, startHistory, undo, type History } from './lib/history'
 import { centreAxis, likelyAxis, mirrorDoc, type Axis } from './lib/mirror'
 import { booleanOp, type BooleanOp } from './lib/boolean'
+import { addOp, type CleanupOp } from './lib/cleanup'
+import type { CleanTool, CropDraft } from './components/CleanUp'
 import { loadPaper } from './lib/paper'
 import { deleteNodes, moveHandle, moveNode, moveNodes, parsePath, serializePath, nodeCount, type NodePart, type NodeRef, type Pt } from './lib/pathdata'
 import { addNode, nearestOnPath, roundNode, sharpenNode, simplifySubpaths, smoothNode } from './lib/nodeops'
@@ -51,7 +53,7 @@ import { track } from './lib/track'
 import { Canvas, type Overlays, type SelectMode, type Tool, type ViewMode } from './components/Canvas'
 import { ShortcutsDialog } from './components/Shortcuts'
 import { ExportOptions } from './components/ExportOptions'
-import { EDIT_TOOLS, ModeSwitch, ToolRail, useWide, type WorkMode } from './components/Workspace'
+import { CLEAN_TOOLS, EDIT_TOOLS, ModeSwitch, ToolRail, useWide, type WorkMode } from './components/Workspace'
 import { clearSession, loadSession, newSessionId, saveImage, saveState } from './lib/session'
 import { buildDxf, buildEps, buildPdf, pngPixels, withSize, type ExportSize } from './lib/vectorExport'
 import { IconButton, KeyboardIcon, MoonIcon, SunIcon } from './components/IconButton'
@@ -64,8 +66,10 @@ import { useTheme } from './lib/theme'
 type Status = { kind: 'idle' } | { kind: 'tracing' } | { kind: 'done'; ms: number } | { kind: 'opened' } | { kind: 'error'; message: string }
 
 const NO_TEXT: TextRun[] = []
-/** The workspace's modes, in order. Clean up joins them with #199. */
-const MODES: WorkMode[] = ['trace', 'edit']
+// Clean up is loaded the first time it opens, with the replay it runs.
+const CleanCanvas = lazy(() => import('./components/CleanUp').then((m) => ({ default: m.CleanCanvas })))
+const CleanPanel = lazy(() => import('./components/CleanUp').then((m) => ({ default: m.CleanPanel })))
+const NO_CLEANUP: CleanupOp[] = []
 
 /** Logo's defaults, keeping your own colours: they're about what you can print, not this image. */
 const keepOwnColors = (s: Settings): Settings => ({ ...settingsFor('logo'), ownColors: s.ownColors, useOwnColors: s.useOwnColors })
@@ -367,16 +371,88 @@ export default function App() {
     return () => window.removeEventListener('paste', onPaste)
   }, [open])
 
+  // ---- Clean up -----------------------------------------------------------------
+  // Clean up (#199) edits the image before tracing, as a list of ops in the
+  // edits (so Undo and the session carry it). The trace follows the list
+  // outside the mode; inside it, the list it was traced from is held while the
+  // canvas previews the new one, so leaving the mode re-traces once.
+  const cleanup = edits.cleanup ?? NO_CLEANUP
+  const [heldCleanup, setHeldCleanup] = useState<CleanupOp[] | null>(null)
+  const tracedCleanup = workMode === 'clean' && heldCleanup ? heldCleanup : cleanup
+  const cleanable = !!source && !source.svg
+  const tracedJson = JSON.stringify(tracedCleanup)
+  /** The list differs from the one traced: leaving Clean up re-traces. Compared by content, so undoing back to it counts as no change. */
+  const cleanupPending = JSON.stringify(cleanup) !== tracedJson
+  const cleanKey = cleanable && tracedCleanup.length ? `${source!.url}|${tracedJson}` : null
+  const [cleaned, setCleaned] = useState<{ key: string; source: Source } | null>(null)
+  useEffect(() => {
+    const drop = (prev: { source: Source } | null) => {
+      if (prev && prev.source !== source) {
+        URL.revokeObjectURL(prev.source.url)
+        prev.source.bitmap.close()
+      }
+    }
+    // Nothing to clean (none, or another image): let the last cleaned image go.
+    if (!cleanKey || !source) return void setCleaned((prev) => (drop(prev), null))
+    let live = true
+    const ops = tracedCleanup
+    void import('./lib/cleanupRun')
+      .then((m) => m.cleanedSource(source, ops))
+      .then((s) => {
+        if (!live) return void (URL.revokeObjectURL(s.url), s.bitmap.close())
+        setCleaned((prev) => (drop(prev), { key: cleanKey, source: s }))
+      })
+      .catch((error) => {
+        if (!live) return
+        // Trace the original rather than nothing, and say why.
+        setLoadError(`Clean-up couldn’t be applied (${error instanceof Error ? error.message : String(error)}), so the original is traced.`)
+        setCleaned((prev) => (drop(prev), { key: cleanKey, source }))
+      })
+    return () => {
+      live = false
+    }
+    // The key names the source and the list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cleanKey, source])
+  /** The image the rest of the pipeline sees: the cleaned one once it's ready, or the original when there's nothing to clean. */
+  const base = !source ? null : cleanKey ? (cleaned?.key === cleanKey ? cleaned.source : null) : source
+  const [cleanTool, setCleanTool] = useState<CleanTool>('crop')
+  const [cropDraft, setCropDraft] = useState<CropDraft | null>(null)
+  const [showOriginal, setShowOriginal] = useState(false)
+  const cleanSeq = useRef(0)
+  /**
+   * Change the list. The first change made over shape edits asks first, and
+   * clears them in the same step, so one Undo brings back both the edits and
+   * the image they were drawn on.
+   */
+  const editCleanup = (next: CleanupOp[], key?: string) => {
+    const k = key ?? `cleanup-${++cleanSeq.current}`
+    if (!detached) return commit((e) => ({ ...e, cleanup: next }), k)
+    guard('Cleaning up the image re-traces it, which replaces your shape edits. Undo brings them back.', 'Discard edits and clean up', () => {
+      commit((e) => ({ ...e, cleanup: next, doc: null }))
+      setSelectedIds([])
+      setSelectedNodes([])
+    })
+  }
+  // A crop box is drawn on the image as it is: any other change to it (a turn, an undo) puts the box away.
+  useEffect(() => setCropDraft(null), [cleanup])
+  const applyCrop = () => {
+    if (!cropDraft) return
+    editCleanup(addOp(cleanup, { kind: 'crop', ...cropDraft }))
+    setCropDraft(null)
+  }
+
   // ---- AI preparation ---------------------------------------------------------
   // Background removal and 4× upscaling run before tracing, in a worker of
   // their own, and give a prepared copy of the image that's traced (and
   // compared against) instead. Upscaling only applies to small images.
   // Recognising text finds lines to draw as type; the tracer gets the image
   // with them painted out.
-  const wantUpscale = settings.aiUpscale && !!source && Math.max(source.bitmap.width, source.bitmap.height) < UPSCALE_BELOW
-  const wantText = settings.recogniseText && canSetText(settings.preset) && !!source && !source.svg
-  const prepKey = source && (settings.removeBackground || wantUpscale || wantText) ? `${source.url}|${settings.removeBackground}|${wantUpscale}|${wantText}` : null
+  const wantUpscale = settings.aiUpscale && !!base && Math.max(base.bitmap.width, base.bitmap.height) < UPSCALE_BELOW
+  const wantText = settings.recogniseText && canSetText(settings.preset) && !!base && !base.svg
+  const prepKey = base && (settings.removeBackground || wantUpscale || wantText) ? `${base.url}|${settings.removeBackground}|${wantUpscale}|${wantText}` : null
   useEffect(() => {
+    const source = base
     if (!source || !prepKey) {
       prepClient.stop()
       setPrepStatus(null)
@@ -418,9 +494,9 @@ export default function App() {
     }
     // Settings other than the steps don't change what's prepared.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, prepKey, prepClient])
-  /** What gets traced: the prepared image when a step is on (none until it's ready), else the original. */
-  const traceSource = prepKey ? (prepared?.key === prepKey ? prepared.source : null) : source
+  }, [base, prepKey, prepClient])
+  /** What gets traced: the prepared image when a step is on (none until it's ready), else the (cleaned) original. */
+  const traceSource = prepKey ? (prepared?.key === prepKey ? prepared.source : null) : base
   const foundText = wantText && prepared?.key === prepKey ? prepared.text : NO_TEXT
   // Tracing to your own colours: text set as type takes the nearest of them too.
   const ownKey = ownPaletteOf(settings)?.join() ?? ''
@@ -836,7 +912,12 @@ export default function App() {
     } else if (tool === 'select') transformSelection(translate(dx, dy), key)
   }
   const chooseMode = (m: WorkMode) => {
+    if (m === workMode) return
     setWorkMode(m)
+    // Clean up holds the trace's list while you work; leaving lets it follow the edited one, which re-traces.
+    setHeldCleanup(m === 'clean' ? cleanup : null)
+    setCropDraft(null)
+    setShowOriginal(false)
     if (m === 'edit') return startEditing()
     // Leaving Edit puts its tools away: no hidden selection for Delete or the
     // arrows to act on, and no Nodes or Mirror on a canvas without a rail.
@@ -869,6 +950,21 @@ export default function App() {
       onRedo={() => historyStep('redo')}
     />
   )
+  const cleanRail = (
+    <ToolRail
+      tools={CLEAN_TOOLS}
+      tool={cleanTool}
+      onTool={(t) => {
+        setCleanTool(t)
+        setCropDraft(null)
+      }}
+      canUndo={history.past.length > 0}
+      canRedo={history.future.length > 0}
+      onUndo={() => historyStep('undo')}
+      onRedo={() => historyStep('redo')}
+    />
+  )
+  const modeRail = workMode === 'edit' ? rail : workMode === 'clean' ? cleanRail : null
 
   // Keyboard. The list the shortcuts panel shows is in components/Shortcuts.tsx; keep them in step.
   // The handler reads the latest render through a ref, so it is attached once.
@@ -906,7 +1002,7 @@ export default function App() {
         e.preventDefault()
         const up = e.code === 'BracketRight'
         arrangeSelection(e.shiftKey ? (up ? 'front' : 'back') : up ? 'forward' : 'backward')
-      } else if (mod && key === 'a' && hasDoc) {
+      } else if (mod && key === 'a' && hasDoc && workMode !== 'clean') {
         e.preventDefault()
         if (tool === 'nodes' && editingSubs) setSelectedNodes(allRefs(editingSubs))
         else {
@@ -918,6 +1014,16 @@ export default function App() {
         }
       } else if (mod || e.altKey) {
         return
+      } else if (workMode === 'clean') {
+        // Clean up's own keys; Edit's tool keys don't reach past it, so leaving always goes through the mode switch.
+        if (e.key === '?' || (e.key === '/' && e.shiftKey)) setShortcutsOpen(true)
+        else if (key === 'c' || key === 'l') {
+          setCleanTool(key === 'c' ? 'crop' : 'straighten')
+          setCropDraft(null)
+        } else if (e.key === 'Enter' && cropDraft && el?.tagName !== 'BUTTON' && el?.tagName !== 'A') {
+          e.preventDefault()
+          applyCrop()
+        } else if (e.key === 'Escape') setCropDraft(null)
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length && tool !== 'mirror') {
         e.preventDefault()
         deleteSelection()
@@ -1118,7 +1224,7 @@ export default function App() {
     if (!picking || !source || !doc) return
     // An ink that a re-trace took away has nothing to recolour.
     if (picking.target !== 'background' && picking.target !== OWN_COLORS && !inks.some((i) => i.hex === picking.target)) return setPicking(null)
-    const hex = colourAt(traceSource ?? source, at.x / doc.width, at.y / doc.height)
+    const hex = colourAt(traceSource ?? base ?? source, at.x / doc.width, at.y / doc.height)
     // A transparent pixel has no colour: stay armed for another click.
     if (!hex) return
     applyPicked(picking.target, hex)
@@ -1230,11 +1336,11 @@ export default function App() {
             <>
               {/* The mode switcher, above the canvas; on a phone the tool rail shares its row, to leave the canvas room. */}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-rule px-4 py-1.5 lg:py-2" data-workspace={workMode}>
-                <ModeSwitch modes={MODES} mode={workMode} onMode={chooseMode} edited={detached} />
-                {workMode === 'edit' && !wide && <div className="min-w-0 flex-1">{rail}</div>}
+                <ModeSwitch modes={cleanable ? ['clean', 'trace', 'edit'] : ['trace', 'edit']} mode={workMode} onMode={chooseMode} edited={detached} />
+                {modeRail && !wide && <div className="min-w-fit flex-1">{modeRail}</div>}
               </div>
               <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-                {workMode === 'edit' && wide && rail}
+                {modeRail && wide && modeRail}
                 <div className="relative min-h-0 flex-1">
                   {picking && (
                     <div role="status" className="absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3 rounded-md border border-rule bg-paper px-3 py-2 text-[13px] shadow-md" data-picking={picking.target}>
@@ -1249,6 +1355,21 @@ export default function App() {
                       </button>
                     </div>
                   )}
+                  {workMode === 'clean' && cleanable && (
+                    <Suspense fallback={null}>
+                      <CleanCanvas
+                        source={source}
+                        ops={cleanup}
+                        traced={tracedCleanup}
+                        outline={doc ? { paths: shown, width: doc.width, height: doc.height } : null}
+                        showOriginal={showOriginal}
+                        tool={cleanTool}
+                        draft={cropDraft}
+                        onDraft={setCropDraft}
+                        onStraighten={(degrees) => editCleanup(addOp(cleanup, { kind: 'rotate', degrees }))}
+                      />
+                    </Suspense>
+                  )}
                   <Canvas
                     imageUrl={(traceSource ?? source).url}
                     paths={shown}
@@ -1256,7 +1377,7 @@ export default function App() {
                     height={doc!.height}
                     mode={mode}
                     zoom={zoom}
-                    naturalWidth={source.originalWidth}
+                    naturalWidth={(base ?? source).originalWidth}
                     onZoom={setZoom}
                     onFitScale={setFitScale}
                     tool={tool}
@@ -1288,7 +1409,7 @@ export default function App() {
               </div>
               {/* One row, the same height as the sidebar's footer beside it (lg). The hint shows where there's room for it
                   (each view's button carries it as a tooltip too) and shortens rather than wrapping. */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rule px-4 py-2.5 lg:h-13 lg:flex-nowrap lg:py-0">
+              <div className={`${workMode === 'clean' ? 'hidden' : 'flex'} flex-wrap items-center justify-between gap-3 border-t border-rule px-4 py-2.5 lg:h-13 lg:flex-nowrap lg:py-0`}>
                 <div role="radiogroup" aria-label="Compare" className="flex shrink-0 gap-px overflow-hidden rounded-md border border-rule bg-rule">
                   {(
                     [
@@ -1402,6 +1523,27 @@ export default function App() {
                 </div>
               </div>
             )}
+            {cleanable && (
+              <div role="tabpanel" id="panel-clean" aria-labelledby="tab-clean" hidden={!doc || workMode !== 'clean'}>
+                {workMode === 'clean' && (
+                  <Suspense fallback={null}>
+                    <CleanPanel
+                      source={source}
+                      ops={cleanup}
+                      onOps={editCleanup}
+                      tool={cleanTool}
+                      draft={cropDraft}
+                      onDraft={setCropDraft}
+                      onApplyCrop={applyCrop}
+                      showOriginal={showOriginal}
+                      onShowOriginal={setShowOriginal}
+                      pending={cleanupPending}
+                      onSave={save}
+                    />
+                  </Suspense>
+                )}
+              </div>
+            )}
             <div role="tabpanel" id="panel-edit" aria-labelledby="tab-edit" hidden={!doc || workMode !== 'edit'}>
             {doc && axis && (
               <EditPanel
@@ -1476,7 +1618,7 @@ export default function App() {
                 onPreset={choosePreset}
                 suggestPoster={suggestPoster}
                 measuredStroke={settings.preset === 'centerline' && settings.strokeWidth === 0 ? (trace?.paths[0]?.stroke ?? null) : null}
-                prep={{ smallImage: !!source && Math.max(source.bitmap.width, source.bitmap.height) < UPSCALE_BELOW, finer: !!source && settings.preset !== 'pixel' && canTraceFiner(source, maxTraceEdge(settings.preset)), textPreset: canSetText(settings.preset), smoothable: canSmooth(settings.preset), text: wantText && prepared?.key === prepKey ? prepared.text : null, status: prepStatus, error: prepError }}
+                prep={{ smallImage: !!base && Math.max(base.bitmap.width, base.bitmap.height) < UPSCALE_BELOW, finer: !!base && settings.preset !== 'pixel' && canTraceFiner(base, maxTraceEdge(settings.preset)), textPreset: canSetText(settings.preset), smoothable: canSmooth(settings.preset), text: wantText && prepared?.key === prepKey ? prepared.text : null, status: prepStatus, error: prepError }}
                 currentBytes={stats?.bytes ?? null}
                 sizeRun={sizeRun}
                 onFindSize={findSize}

@@ -15,6 +15,7 @@ import { PRESETS, settingsFor, type Settings } from '../engine/presets'
 import { checkGradient, normalizeHex } from './svg'
 import { addColors } from './colors'
 import type { Doc, Edits } from './doc'
+import { checkCleanup } from './cleanup'
 
 const VERSION = 1
 export type SavedImage = { v: number; id: string; file: Blob; name: string }
@@ -145,5 +146,6 @@ export function checkEdits(x: unknown): Edits {
       })
     doc = { width: d.width, height: d.height, paths }
   }
-  return { inks: { recolor, removed }, doc, background }
+  const cleanup = checkCleanup(x.cleanup)
+  return { inks: { recolor, removed }, doc, background, ...(cleanup?.length ? { cleanup } : {}) }
 }

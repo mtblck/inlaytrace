@@ -455,7 +455,7 @@ export function Section({ title, action, children }: { title: string; action?: R
   )
 }
 
-function Slider(props: {
+export function Slider(props: {
   label: string
   value: number
   min: number
