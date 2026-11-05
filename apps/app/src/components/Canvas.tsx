@@ -15,7 +15,10 @@ export type { ShownPath }
 
 type Props = {
   imageUrl: string
+  /** The shapes drawn (hidden ones left out). */
   paths: ShownPath[]
+  /** Shapes drawn but not clickable (#209): a click goes through to what's underneath. */
+  locked?: ReadonlySet<string>
   width: number
   height: number
   mode: ViewMode
@@ -463,7 +466,7 @@ export function Canvas(props: Props) {
           >
             {props.background && <rect width={width} height={height} fill={props.background} data-background="" />}
             {props.paths.map((p) => (
-              <VectorPath key={p.id} id={p.id} d={p.d} fill={p.fill} stroke={p.stroke} gradient={p.gradient} />
+              <VectorPath key={p.id} id={p.id} d={p.d} fill={p.fill} stroke={p.stroke} gradient={p.gradient} opacity={p.opacity} />
             ))}
           </svg>
 
@@ -479,7 +482,7 @@ export function Canvas(props: Props) {
             }}
           >
             {tool !== 'mirror' &&
-              props.paths.map((p) => <HitPath key={p.id} id={p.id} d={p.d} stroke={p.stroke} unit={p.stroke ? unit : 1} movable={tool === 'select' && selectedSet.has(p.id)} onDown={onShapeDown} onDouble={onShapeDouble} />)}
+              props.paths.map((p) => !props.locked?.has(p.id) && <HitPath key={p.id} id={p.id} d={p.d} stroke={p.stroke} unit={p.stroke ? unit : 1} movable={tool === 'select' && selectedSet.has(p.id)} onDown={onShapeDown} onDouble={onShapeDouble} />)}
 
             {overlays.paths && (
               <g fill="none" stroke={overlays.pathColor} strokeWidth={1} pointerEvents="none">
@@ -695,10 +698,10 @@ export function Canvas(props: Props) {
 
 // Each shape is its own memoised element: dragging a node changes one path,
 // and the thousands of others in a busy trace skip re-rendering entirely.
-const VectorPath = memo(function VectorPath({ id, d, fill, stroke, gradient }: { id: string; d: string; fill: string; stroke?: number; gradient?: Gradient }) {
+const VectorPath = memo(function VectorPath({ id, d, fill, stroke, gradient, opacity }: { id: string; d: string; fill: string; stroke?: number; gradient?: Gradient; opacity?: number }) {
   // A centerline stroke: drawn in its colour, not filled, as it will be exported.
-  if (stroke) return <path d={d} fill="none" stroke={fill} strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" />
-  if (!gradient) return <path d={d} fill={fill} />
+  if (stroke) return <path d={d} fill="none" stroke={fill} strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" opacity={opacity} />
+  if (!gradient) return <path d={d} fill={fill} opacity={opacity} />
   // Not the export's ids: the exported SVG may be shown on the same page.
   const gid = `canvas-gr-${id}`
   return (
@@ -706,7 +709,7 @@ const VectorPath = memo(function VectorPath({ id, d, fill, stroke, gradient }: {
       <defs>
         <GradientDef g={gradient} id={gid} />
       </defs>
-      <path d={d} fill={`url(#${gid}) ${fill}`} />
+      <path d={d} fill={`url(#${gid}) ${fill}`} opacity={opacity} />
     </>
   )
 })

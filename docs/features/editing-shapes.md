@@ -86,6 +86,39 @@ per separate area. The result is selected. If nothing would change (shapes
 that don't overlap), it says so and leaves the drawing alone. Lines (Centerline and Outline art strokes) have no inside, so they can't
 be combined. One undo step each, and they detach the drawing from the trace.
 
+## Fill and stroke
+
+With shapes selected (Select tool), *Fill and stroke* sets their own style:
+
+- **Fill:** a colour of their own. They leave their colour in the Colours
+  list for one of the new colour, so recolouring the old one no longer changes
+  them. A gradient fill becomes flat.
+- **Outline only** draws them as a stroke in their colour instead of filling
+  them, at the *stroke width* you set; untick it to fill them again.
+- **Opacity** makes them see-through, in the export too.
+
+A value the selection doesn't share shows as *Mixed*; changing it sets them
+all. Each change is one undo step (a slider's drag is one), and it detaches
+the drawing from the trace.
+
+## Shapes: find, hide and lock
+
+The *Shapes* list in the Edit panel lists every shape, by colour (as the
+Colours list groups them) or by group, in paint order or biggest first. Open
+a colour or group to list its shapes; a big one lists a page at a time. Click
+a row to select its shape, even one too small to click on the canvas; ⇧ or
+⌘/Ctrl-click adds it to the selection.
+
+- **The eye hides** a shape from the canvas while you work on what's behind it.
+- **The padlock locks** it: still drawn, but clicks and marquees go through it,
+  so it can't be moved by accident.
+- The buttons on a colour or group's row hide or lock all of it; *Show all*
+  and *Unlock all* undo the lot.
+
+Hidden and locked are editing state only: both still export, as usual. They
+undo like any edit and are saved with the session, but they don't detach the
+drawing from the trace.
+
 ## Nodes: move nodes and bend curves
 
 Click a shape to show its nodes and handles.

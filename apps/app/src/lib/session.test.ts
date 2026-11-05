@@ -71,4 +71,20 @@ describe('groups in a saved session', () => {
     expect(checkEdits({ ...base, cleanup: [...cleanup, { kind: 'script', src: 'x' }] })).not.toHaveProperty('cleanup')
     expect(checkEdits({ ...base, cleanup: [] })).not.toHaveProperty('cleanup')
   })
+
+  it('keeps hidden and locked shapes and each shape’s opacity (#209), and they export as usual', () => {
+    const base = { inks: { recolor: {}, removed: [] }, background: null }
+    const doc = { width: 10, height: 10, paths: [{ id: 'p1', d: 'M0 0L1 0L1 1Z', fill: '#000000', opacity: 0.5 }, { id: 'p2', d: 'M0 0L2 0L2 2Z', fill: '#ff0000', opacity: 7 }] }
+    const e = checkEdits({ ...base, doc, hidden: ['p1', 'p1', '<bad>', 3], locked: ['p2'] })
+    expect(e.hidden).toEqual(['p1'])
+    expect(e.locked).toEqual(['p2'])
+    expect(e.doc!.paths[0].opacity).toBe(0.5)
+    expect(e.doc!.paths[1]).not.toHaveProperty('opacity')
+    // Hidden is editing state: the export still has both shapes, the first see-through.
+    const svg = buildSvg(e.doc!)
+    expect(svg.match(/<path/g)).toHaveLength(2)
+    expect(svg).toContain('fill="#000000" opacity="0.5"')
+    expect(checkEdits({ ...base, doc: null, hidden: [], locked: 'p1' })).not.toHaveProperty('hidden')
+    expect(checkEdits({ ...base, doc: null, locked: 'p1' })).not.toHaveProperty('locked')
+  })
 })
