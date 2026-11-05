@@ -82,7 +82,8 @@ export type InlayOptions = FitOptions & {
   /**
    * How many times the drawing was enlarged before tracing (an upscaled small
    * image, or a full-size trace of one usually traced smaller). The widths
-   * `strokes` takes as lines (2.5–8 px) grow with it. Default 1.
+   * `strokes` takes as lines (2.5–8 px) grow with it, and so do the gaps
+   * `closeGaps` closes. Default 1.
    */
   scale?: number
   /**
@@ -196,7 +197,8 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
   if (!o.pixels && !(o.mode === 'palette' && o.photo)) joinDiagonals(labels, w, h, rgba, drawn)
   const labs = o.mode === 'palette' && !o.photo ? colors.map((c) => (c ? oklab(hexToRgb(c)) : null)) : undefined
   mergeSpecks(labels, w, h, Math.max(0, Math.round(o.speckle)) ** 2, labs)
-  if (o.mode === 'binary' && o.closeGaps) closeInkGaps(labels, w, h)
+  // Joins can close off a pocket of paper too small to keep: specks again after.
+  if (o.mode === 'binary' && o.closeGaps && closeInkGaps(labels, w, h, o.scale)) mergeSpecks(labels, w, h, Math.max(0, Math.round(o.speckle)) ** 2)
   if (labs && !o.pixels) mergeSlivers(labels, w, h, labs, o.lines)
   const lines = o.mode === 'palette' && o.strokes && labs && !o.pixels ? strokesOf(rgba, labels, w, h, colors, labs, drawn, o) : []
 
@@ -814,12 +816,13 @@ function labelPalette(rgba: ArrayLike<number>, w: number, h: number, palette: st
   return { labels: fixed, colors, drawn }
 }
 
-/** Line art's ink is label 0: close its gaps (gaps.ts), the joins becoming ink. */
-export function closeInkGaps(labels: Int32Array, w: number, h: number) {
+/** Line art's ink is label 0: close its gaps (gaps.ts), the joins becoming ink. Whether anything was joined. */
+function closeInkGaps(labels: Int32Array, w: number, h: number, scale?: number): boolean {
   const ink = new Uint8Array(w * h)
   for (let i = 0; i < ink.length; i++) ink[i] = labels[i] === 0 ? 1 : 0
-  if (!closeGaps(ink, w, h)) return
+  if (!closeGaps(ink, w, h, { scale })) return false
   for (let i = 0; i < ink.length; i++) if (ink[i]) labels[i] = 0
+  return true
 }
 
 export function labelBinary(rgba: ArrayLike<number>, w: number, h: number, threshold: number | 'auto' | null) {
@@ -1441,7 +1444,8 @@ function strokesOf(rgba: ArrayLike<number>, labels: Int32Array, w: number, h: nu
     if (kept < LINE_SHARE * all) continue
     for (let i = 0; i < n; i++) if (ink[i] && !fits(pieces.comp[i])) ink[i] = skel[i] = 0
     // Breaks in the line joined, and the skeleton thinned again to run through them.
-    const joined = o.closeGaps && closeGaps(ink, w, h) > 0
+    // Other colours' lines, already drawn, are in the way: a join doesn't cross them.
+    const joined = o.closeGaps && closeGaps(ink, w, h, { scale: k, blocked: line, skel }) > 0
     const { subs, measured } = skeletonStrokes(ink, w, h, o, joined ? undefined : skel)
     if (!subs.length) continue
     // Ink past a line's end that the stroke doesn't reach stays a shape of the

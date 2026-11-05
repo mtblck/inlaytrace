@@ -192,7 +192,7 @@ export type TraceOptions = {
   shapes?: boolean
   /** Palette mode: trace thin outlines as stroked lines. */
   strokes?: boolean
-  /** With strokes: how many times the image was enlarged for tracing, so line widths scale with it. */
+  /** With strokes or closeGaps: how many times the image was enlarged for tracing, so line widths and gap sizes scale with it. */
   scale?: number
   /** Palette mode: soft shading as gradient fills (Illustration and Outline art, stacked). */
   gradients?: boolean
@@ -220,7 +220,7 @@ export type TraceOptions = {
  */
 export function toTraceOptions(s: Settings, scale = 1): TraceOptions {
   const fit = { speckle: s.speckle, tolerance: toleranceFor(s.smoothing), cornerAngle: s.corners, ...(s.exact && hasExactShapes(s.preset) ? { shapes: true } : {}) }
-  const gaps = s.closeGaps ? { closeGaps: true } : {}
+  const gaps = s.closeGaps ? { closeGaps: true, ...(scale > 1 ? { scale } : {}) } : {}
   if (s.preset === 'centerline') return { ...fit, mode: 'centerline', threshold: s.threshold, ...gaps, ...(s.strokeWidth > 0 ? { strokeWidth: s.strokeWidth } : {}), ...(s.lightInk ? { invert: true } : {}) }
   if (s.preset === 'lineart') return { ...fit, mode: 'binary', threshold: s.threshold, ...gaps, ...(s.lightInk ? { invert: true } : {}) }
   const merge = Object.keys(s.merge ?? {}).length ? { merge: s.merge } : {}

@@ -39,8 +39,8 @@ export function runTrace(pixels: Uint8Array, width: number, height: number, o: T
       pixels[i + 2] = 255 - pixels[i + 2]
     }
   const fit = { speckle: o.speckle, tolerance: o.tolerance, cornerAngle: o.cornerAngle, pixels: !!o.pixels, stacked: !!o.stacked, shapes: !!o.shapes }
-  if (o.mode === 'centerline') return traceCenterline(pixels, width, height, { threshold: o.threshold ?? null, speckle: o.speckle, tolerance: o.tolerance, cornerAngle: o.cornerAngle, strokeWidth: o.strokeWidth, closeGaps: o.closeGaps })
-  if (o.mode === 'binary') return traceInlay(pixels, width, height, { ...fit, mode: 'binary', threshold: o.threshold ?? null, closeGaps: o.closeGaps })
+  if (o.mode === 'centerline') return traceCenterline(pixels, width, height, { threshold: o.threshold ?? null, speckle: o.speckle, tolerance: o.tolerance, cornerAngle: o.cornerAngle, strokeWidth: o.strokeWidth, closeGaps: o.closeGaps, scale: o.scale })
+  if (o.mode === 'binary') return traceInlay(pixels, width, height, { ...fit, mode: 'binary', threshold: o.threshold ?? null, closeGaps: o.closeGaps, scale: o.scale })
   // Painted outlines made plain first, and marked, so neither smoothing nor the clean-up after labelling takes them away.
   const lines = o.outlines ? new Uint8Array(width * height) : undefined
   if (o.outlines) pixels = new Uint8Array(boostLines(pixels, width, height, o.outlines, lines).buffer)

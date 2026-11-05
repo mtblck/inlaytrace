@@ -68,4 +68,23 @@ describe('closeGaps', () => {
     expect(closeGaps(ink, W, H)).toBe(0)
     expect(pieces(ink)).toBe(2)
   })
+
+  it('closes a ring broken at the top: a line can join itself', () => {
+    const ring = page([10, 10, 29, 13], [32, 10, 50, 13], [10, 10, 13, 50], [47, 10, 50, 50], [10, 47, 50, 50])
+    expect(closeGaps(ring, W, H)).toBe(1)
+  })
+
+  it('doesn’t cross pixels it’s told are in the way', () => {
+    const ink = page([5, 28, 37, 31], [40, 28, 75, 31])
+    const blocked = new Uint8Array(W * H)
+    for (let y = 20; y < 40; y++) blocked[y * W + 38] = 1
+    expect(closeGaps(ink, W, H, { blocked })).toBe(0)
+  })
+
+  it('closes wider breaks in an enlarged drawing', () => {
+    // A 6 px break in a 6 px line, as a 3 px break in a 3 px line traced at twice its size.
+    const ink = page([5, 26, 34, 32], [40, 26, 75, 32])
+    expect(closeGaps(page([5, 26, 34, 32], [40, 26, 75, 32]), W, H)).toBe(0)
+    expect(closeGaps(ink, W, H, { scale: 2 })).toBe(1)
+  })
 })

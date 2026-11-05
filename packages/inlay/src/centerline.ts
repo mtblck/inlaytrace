@@ -19,7 +19,9 @@
  * Everything here is written for this project (MIT); no GPL tracer is used.
  */
 import { serializePath } from './path'
-import { attr, closeInkGaps, joinDiagonals, labelBinary, mergeSpecks } from './inlay'
+import { attr, joinDiagonals, labelBinary, mergeSpecks } from './inlay'
+import { closeGaps } from './gaps'
+import { thin } from './skeleton'
 import { skeletonStrokes } from './skeleton'
 
 export type CenterlineOptions = {
@@ -37,6 +39,8 @@ export type CenterlineOptions = {
   color?: string
   /** Join a line's ends across small breaks before tracing (gaps.ts). Off by default. */
   closeGaps?: boolean
+  /** How many times the drawing was enlarged before tracing: gap closing's pixel limits grow with it. Default 1. */
+  scale?: number
 }
 
 /** One stroked path: open subpaths (and closed loops), drawn with round caps and joins. */
@@ -63,11 +67,19 @@ export function centerline(rgba: ArrayLike<number>, w: number, h: number, o: Cen
   const { labels, drawn } = labelBinary(rgba, w, h, o.threshold)
   joinDiagonals(labels, w, h, rgba, drawn)
   mergeSpecks(labels, w, h, Math.max(0, Math.round(o.speckle)) ** 2)
-  if (o.closeGaps) closeInkGaps(labels, w, h)
   const ink = new Uint8Array(w * h)
   for (let i = 0; i < ink.length; i++) ink[i] = labels[i] === 0 ? 1 : 0
 
-  const { subs, measured } = skeletonStrokes(ink, w, h, o)
+  // Thinned once: gap closing's skeleton is the strokes' too, unless it joined something.
+  const skel = o.closeGaps ? thin(ink, w, h) : undefined
+  const joined = !!skel && closeGaps(ink, w, h, { scale: o.scale, skel }) > 0
+  if (joined) {
+    // Joins can close off a pocket of paper too small to keep (it would thin to a little loop): specks again.
+    for (let i = 0; i < ink.length; i++) if (ink[i]) labels[i] = 0
+    mergeSpecks(labels, w, h, Math.max(0, Math.round(o.speckle)) ** 2)
+    for (let i = 0; i < ink.length; i++) ink[i] = labels[i] === 0 ? 1 : 0
+  }
+  const { subs, measured } = skeletonStrokes(ink, w, h, o, joined ? undefined : skel)
   const width = o.strokeWidth && o.strokeWidth > 0 ? o.strokeWidth : measured
   const paths = subs.length ? [{ d: serializePath(subs), stroke: o.color ?? '#000000', strokeWidth: round(width) }] : []
   return { width: w, height: h, paths, measuredWidth: round(measured) }

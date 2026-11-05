@@ -50,21 +50,36 @@ const DY = [-1, -1, 0, 1, 1, 1, 0, -1]
 type End = { i: number; x: number; y: number; dx: number; dy: number; width: number }
 type Join = { a: End; b: End | null; tx: number; ty: number; gap: number; width: number }
 
+export type GapOptions = {
+  /** How many times the drawing was enlarged before tracing: the pixel limits grow with it. Default 1. */
+  scale?: number
+  /** Pixels a join may not cross (another colour's lines, already drawn). */
+  blocked?: Uint8Array
+  /** The ink's skeleton, if already thinned. It's pruned in place, and still the skeleton when nothing was joined. */
+  skel?: Uint8Array
+}
+
 /**
  * Close small gaps in `ink` (1 = ink), in place. Returns how many joins were
  * painted.
  */
-export function closeGaps(ink: Uint8Array, w: number, h: number): number {
-  const skel = thin(ink, w, h)
+export function closeGaps(ink: Uint8Array, w: number, h: number, o: GapOptions = {}): number {
+  const k = Math.max(1, o.scale ?? 1)
+  const skel = o.skel ?? thin(ink, w, h)
   const width = strokeWidthOf(skel, ink, w)
   prune(skel, w, h, Math.max(3, Math.round(width)))
   const ends = endsOf(skel, ink, w, h, width)
   if (!ends.length) return 0
 
-  const reachOf = (e: End) => Math.min(GAP_MAX, Math.max(GAP_MIN, GAP_WIDTHS * e.width))
+  const reachOf = (e: End) => Math.min(GAP_MAX * k, Math.max(GAP_MIN * k, GAP_WIDTHS * e.width))
+  const cross = (ax: number, ay: number, bx: number, by: number) => crossing(ink, o.blocked, w, h, ax, ay, bx, by)
   const joins: Join[] = []
-  // End to end: both point at the other, and one gap between them.
-  const cell = Math.max(8, Math.ceil(4 * width))
+  // End to end: both point at the other, and one gap between them. Cells as
+  // wide as the furthest two ends can be apart, so each pair is in
+  // neighbouring cells.
+  let widest = 0
+  for (const e of ends) widest = Math.max(widest, e.width)
+  const cell = Math.ceil(widest + GAP_MAX * k + 2)
   const grid = new Map<number, End[]>()
   const key = (cx: number, cy: number) => cy * 65536 + cx
   for (const e of ends) {
@@ -83,18 +98,20 @@ export function closeGaps(ink: Uint8Array, w: number, h: number): number {
           const vx = b.x - a.x
           const vy = b.y - a.y
           const d = Math.hypot(vx, vy)
-          if (d === 0 || d > (a.width + b.width) / 2 + Math.max(reachOf(a), reachOf(b)) + 2) continue
+          const reach = Math.min(reachOf(a), reachOf(b))
+          if (d === 0 || d > (a.width + b.width) / 2 + reach + 2) continue
           if ((a.dx * vx + a.dy * vy) / d < FACING || -(b.dx * vx + b.dy * vy) / d < FACING) continue
-          const gap = crossing(ink, w, h, a.x, a.y, b.x, b.y)
-          if (gap <= 0 || gap > Math.min(reachOf(a), reachOf(b))) continue
+          const gap = cross(a.x, a.y, b.x, b.y)
+          if (gap <= 0 || gap > reach) continue
           joins.push({ a, b, tx: b.x, ty: b.y, gap, width: Math.min(a.width, b.width) })
         }
   }
   // End to ink: straight on from the end, across one gap, into other ink.
   for (const a of ends) {
-    const hit = reach(ink, w, h, a, reachOf(a))
+    const hit = reach(ink, o.blocked, w, h, a, reachOf(a))
+    if (!hit) continue
     // Counted a little longer than an end-to-end join of the same gap, so two ends that meet win.
-    if (hit) joins.push({ a, b: null, tx: hit.x, ty: hit.y, gap: hit.gap * 1.25, width: a.width })
+    joins.push({ a, b: null, tx: hit.x, ty: hit.y, gap: hit.gap * 1.25, width: a.width })
   }
 
   joins.sort((p, q) => p.gap - q.gap)
@@ -103,7 +120,7 @@ export function closeGaps(ink: Uint8Array, w: number, h: number): number {
   for (const j of joins) {
     if (used.has(j.a.i) || (j.b && used.has(j.b.i))) continue
     // An earlier join may have closed this gap already.
-    if (crossing(ink, w, h, j.a.x, j.a.y, j.tx, j.ty) <= 0) continue
+    if (cross(j.a.x, j.a.y, j.tx, j.ty) <= 0) continue
     used.add(j.a.i)
     if (j.b) used.add(j.b.i)
     paint(ink, w, h, j.a.x, j.a.y, j.tx, j.ty, j.width / 2)
@@ -128,21 +145,28 @@ function endsOf(skel: Uint8Array, ink: Uint8Array, w: number, h: number, width: 
     while (path.length <= back) {
       const cx = cur % w
       const cy = (cur / w) | 0
-      let next = -1
-      let count = 0
+      const next: number[] = []
       for (let k = 0; k < 8; k++) {
         const nx = cx + DX[k]
         const ny = cy + DY[k]
         const j = ny * w + nx
         if (nx < 0 || nx >= w || ny < 0 || ny >= h || !skel[j] || j === prev || path.includes(j)) continue
-        next = j
-        count++
+        next.push(j)
       }
-      if (count !== 1) break
+      // A staircase step leaves two pixels side by side ahead, one square on
+      // and one diagonal: the same line, so step to the diagonal and pass the
+      // other. Two apart are a junction: stop.
+      if (next.length === 2 && touch(next[0], next[1], w)) {
+        const diag = (j: number) => j % w !== cx && ((j / w) | 0) !== cy
+        const [on, by] = diag(next[0]) ? [next[0], next[1]] : [next[1], next[0]]
+        path.push(by)
+        next.length = 0
+        next.push(on)
+      }
+      if (next.length !== 1) break
       prev = cur
-      cur = next
+      cur = next[0]
       path.push(cur)
-      if (degree(skel, w, h, cur % w, (cur / w) | 0) > 2) break
     }
     if (path.length < END_MIN) continue
     const bx = cur % w
@@ -155,6 +179,8 @@ function endsOf(skel: Uint8Array, ink: Uint8Array, w: number, h: number, width: 
   }
   return ends
 }
+
+const touch = (a: number, b: number, w: number) => Math.abs((a % w) - (b % w)) <= 1 && Math.abs(((a / w) | 0) - ((b / w) | 0)) <= 1
 
 function degree(img: Uint8Array, w: number, h: number, x: number, y: number) {
   let d = 0
@@ -188,27 +214,33 @@ function radiusAt(ink: Uint8Array, w: number, h: number, x: number, y: number, m
  * ink; 0 when it never leaves the ink; -1 when it crosses more than one gap
  * (another line in between) or ends on paper.
  */
-function crossing(ink: Uint8Array, w: number, h: number, ax: number, ay: number, bx: number, by: number): number {
+function crossing(ink: Uint8Array, blocked: Uint8Array | undefined, w: number, h: number, ax: number, ay: number, bx: number, by: number): number {
   const d = Math.hypot(bx - ax, by - ay)
   const steps = Math.max(1, Math.ceil(d * 2))
   let state = 0 // 0: in the first ink, 1: crossing paper, 2: in the far ink
-  let gap = 0
+  let out = 0
+  let back = 0
   for (let s = 0; s <= steps; s++) {
     const t = s / steps
     const px = Math.floor(ax + (bx - ax) * t)
     const py = Math.floor(ay + (by - ay) * t)
-    const on = px >= 0 && px < w && py >= 0 && py < h && ink[py * w + px] === 1
-    if (state === 0 && !on) state = 1
-    else if (state === 1 && on) state = 2
-    else if (state === 2 && !on) return -1
-    if (state === 1) gap += d / steps
+    if (px < 0 || px >= w || py < 0 || py >= h || blocked?.[py * w + px]) return -1
+    const on = ink[py * w + px] === 1
+    if (state === 0 && !on) {
+      state = 1
+      out = s
+    } else if (state === 1 && on) {
+      state = 2
+      back = s
+    } else if (state === 2 && !on) return -1
   }
   if (state === 1) return -1
-  return state === 0 ? 0 : gap
+  // From where it leaves the ink to where it's back in, to the half pixel.
+  return state === 0 ? 0 : ((back - out) * d) / steps
 }
 
 /** Straight on from end `e`: out of its own ink, across paper no wider than `max`, into other ink. */
-function reach(ink: Uint8Array, w: number, h: number, e: End, max: number): { x: number; y: number; gap: number } | null {
+function reach(ink: Uint8Array, blocked: Uint8Array | undefined, w: number, h: number, e: End, max: number): { x: number; y: number; gap: number } | null {
   const step = 0.5
   let left = false
   let gap = 0
@@ -217,7 +249,7 @@ function reach(ink: Uint8Array, w: number, h: number, e: End, max: number): { x:
     const y = e.y + e.dy * t
     const px = Math.floor(x)
     const py = Math.floor(y)
-    if (px < 0 || px >= w || py < 0 || py >= h) return null
+    if (px < 0 || px >= w || py < 0 || py >= h || blocked?.[py * w + px]) return null
     const on = ink[py * w + px] === 1
     if (!left) {
       if (!on) left = true
