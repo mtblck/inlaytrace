@@ -46,14 +46,15 @@ export function runTrace(pixels: Uint8Array, width: number, height: number, o: T
   if (o.outlines) pixels = new Uint8Array(boostLines(pixels, width, height, o.outlines, lines).buffer)
   // Painted shading evened out first, so its noise doesn't fleck it with the neighbouring colour.
   if (o.smooth) pixels = new Uint8Array(smoothShading(pixels, width, height, lines).buffer)
-  // Peaks are told the width so they can find pale tints by their flatness.
+  // Your own colours are the palette as given. Otherwise peaks are told the
+  // width so they can find pale tints by their flatness.
   const colors = o.colors ?? 8
-  let palette = o.palette === 'exact' ? exactPalette(pixels, colors) : o.palette === 'quantize' ? quantizePalette(pixels, colors) : peakPalette(pixels, colors, { width })
+  let palette = o.own?.length ? o.own : o.palette === 'exact' ? exactPalette(pixels, colors) : o.palette === 'quantize' ? quantizePalette(pixels, colors) : peakPalette(pixels, colors, { width })
   // Pixel art is its exact colours, which cover all of it. When they cover
   // little (a photo, or art saved as JPEG), the most common exact colours are
   // near-copies of the commonest one: a photo's 32 were all black and grey.
   // Then cluster instead, as Poster does; the edges stay pixel-exact.
-  if (o.palette === 'exact' && coverage(pixels, palette) < EXACT_COVERAGE) palette = quantizePalette(pixels, colors)
+  if (!o.own?.length && o.palette === 'exact' && coverage(pixels, palette) < EXACT_COVERAGE) palette = quantizePalette(pixels, colors)
   // Poster's clusters get a photo's clean-up; flat art's real colours get flat art's.
   return traceInlay(pixels, width, height, { ...fit, mode: 'palette', palette, merge: o.merge, photo: o.palette === 'quantize', strokes: !!o.strokes, scale: o.scale, gradients: !!o.gradients, lines })
 }

@@ -93,6 +93,19 @@ painted film poster, skin had no colour of its own and split between the white
 shirt and a dark tan, in ragged patches. Illustration's 24 gave it skin and its
 shadow (about 6% more file).
 
+**Use my colours** (Logo, Illustration, Outline art, Poster): trace with only
+colours you choose, such as vinyl stock, embroidery threads, screen-print inks
+or brand colours. Paste hex codes into the box (commas, spaces, semicolons or
+new lines; the `#` is optional) and press *Add*, or use the eyedropper beside
+it to add a colour from the image. Each pixel takes the nearest of your
+colours, and anti-aliased edge pixels that mix two of them are split between
+the two, so shapes are found with your colours, not traced in the image's and
+recoloured afterwards (which is what *Replace* and *Merge* do). While it's on,
+*Colours* is hidden, gradients are off (their stops come from the image),
+*Target size* doesn't try fewer colours, and text set as type takes the
+nearest of your colours too. Up to 64. The list is kept when you change preset
+or open another image, and switching it off keeps it for next time.
+
 **Ink is** (Line art, Centerline): *Dark on light* or *Light on dark*. Line art keeps one
 side and makes the rest transparent; *Light on dark* inverts first. It's chosen
 automatically when the image's border is dark, which turns a white logo on black

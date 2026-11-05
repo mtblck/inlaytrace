@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { runTrace } from './run'
-import { PRESETS, settingsFor, toTraceOptions, type TraceOptions } from './presets'
+import { PRESETS, canOwnColors, ownPaletteOf, settingsFor, toTraceOptions, type TraceOptions } from './presets'
 import { parseTrace } from '../lib/svg'
 import { inksOf } from '../lib/doc'
 import { checkSettings } from '../lib/session'
@@ -170,5 +170,45 @@ describe('Outline art', () => {
     expect(t.paths.filter((p) => !p.stroke && p.fill === lines[0].fill)).toHaveLength(0)
     // Illustration, the same but shapes: the outline is a filled ring.
     expect(trace(px, w, h, toTraceOptions(settingsFor('illustration'))).paths.some((p) => p.stroke)).toBe(false)
+  })
+})
+
+describe('your own colours', () => {
+  const { px, w, h } = testCard()
+  const mine = ['#111111', '#ffffff', '#cc0000', '#ffcc00', '#0044aa', '#00aa44']
+
+  it('are offered on the colour presets whose palettes are picked', () => {
+    for (const p of PRESETS) expect(canOwnColors(p.id)).toBe(p.id === 'logo' || p.id === 'illustration' || p.id === 'outline' || p.id === 'photo')
+  })
+
+  it('reach the tracer only when switched on, offered and not empty', () => {
+    const s = { ...settingsFor('logo'), ownColors: mine }
+    expect(toTraceOptions(s).own).toBeUndefined()
+    expect(toTraceOptions({ ...s, useOwnColors: true }).own).toEqual(mine)
+    expect(toTraceOptions({ ...s, ownColors: [], useOwnColors: true }).own).toBeUndefined()
+    expect(ownPaletteOf({ ...s, preset: 'pixel', useOwnColors: true })).toBeNull()
+    expect(toTraceOptions({ ...s, preset: 'lineart', useOwnColors: true }).own).toBeUndefined()
+  })
+
+  it('turn off gradients, whose stops would bring back the image’s colours', () => {
+    expect(toTraceOptions(settingsFor('illustration')).gradients).toBe(true)
+    expect(toTraceOptions({ ...settingsFor('illustration'), ownColors: mine, useOwnColors: true }).gradients).toBeUndefined()
+  })
+
+  for (const id of ['logo', 'illustration', 'outline', 'photo'] as const)
+    it(`trace ${id} in only those colours`, () => {
+      const t = trace(px, w, h, toTraceOptions({ ...settingsFor(id), ownColors: mine, useOwnColors: true }))
+      expect(t.paths.length).toBeGreaterThan(0)
+      for (const p of t.paths) expect(mine).toContain(p.fill)
+      // The red disc comes out in my red, the blue bar in my blue.
+      expect(inksOf(t).map((i) => i.hex)).toEqual(expect.arrayContaining(['#cc0000', '#0044aa']))
+    })
+
+  it('survive a saved session, malformed entries dropped', () => {
+    const s = checkSettings({ ...settingsFor('logo'), ownColors: ['#CC0000', 'nope', 3, '#cc0000', '#abc'], useOwnColors: true })
+    expect(s.ownColors).toEqual(['#cc0000', '#aabbcc'])
+    expect(s.useOwnColors).toBe(true)
+    const { ownColors: _, useOwnColors: __, ...old } = settingsFor('logo')
+    expect(checkSettings(old)).toMatchObject({ ownColors: [], useOwnColors: false })
   })
 })

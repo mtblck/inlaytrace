@@ -13,6 +13,7 @@
  */
 import { PRESETS, settingsFor, type Settings } from '../engine/presets'
 import { checkGradient, normalizeHex } from './svg'
+import { addColors } from './colors'
 import type { Doc, Edits } from './doc'
 
 const VERSION = 1
@@ -112,6 +113,8 @@ export function checkSettings(x: unknown): Settings {
   if (typeof x.recogniseText === 'boolean') out.recogniseText = x.recogniseText
   if (typeof x.strokeWidth === 'number' && Number.isFinite(x.strokeWidth) && x.strokeWidth >= 0) out.strokeWidth = x.strokeWidth
   if (x.shapes === 'stacked' || x.shapes === 'cutout') out.shapes = x.shapes
+  if (Array.isArray(x.ownColors)) out.ownColors = addColors([], x.ownColors.filter((c): c is string => typeof c === 'string'))
+  if (typeof x.useOwnColors === 'boolean') out.useOwnColors = x.useOwnColors
   if (isObj(x.merge)) out.merge = Object.fromEntries(Object.entries(x.merge).filter(([a, b]) => normalizeHex(a) && typeof b === 'string' && normalizeHex(b)) as [string, string][])
   return out
 }

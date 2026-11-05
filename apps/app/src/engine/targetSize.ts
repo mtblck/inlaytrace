@@ -16,7 +16,7 @@
  */
 import { parsePath } from 'inlaytrace'
 import { runTrace } from './run'
-import { toTraceOptions, type Settings } from './presets'
+import { ownPaletteOf, toTraceOptions, type Settings } from './presets'
 
 export type Candidate = { settings: Settings; bytes: number; error: number }
 export type SizeSearch = { start: Candidate; best: Candidate; fits: boolean; tried: number }
@@ -36,7 +36,8 @@ function moves(s: Settings, big: boolean): Settings[] {
     if (s.smoothing < MAX_SMOOTHING) out.push({ ...s, smoothing: Math.min(MAX_SMOOTHING, s.smoothing + (big ? 1 : 0.5)) })
     if (s.speckle < MAX_SPECKLE) out.push({ ...s, speckle: Math.min(MAX_SPECKLE, Math.max(s.speckle + 2, Math.round(s.speckle * (big ? 2 : 1.5)))) })
   }
-  if (s.preset !== 'lineart' && s.preset !== 'centerline' && s.colors > MIN_COLORS)
+  // Your own colours are a fixed list: the Colours count doesn't apply.
+  if (s.preset !== 'lineart' && s.preset !== 'centerline' && !ownPaletteOf(s) && s.colors > MIN_COLORS)
     out.push({ ...s, colors: big && s.colors > 4 ? Math.max(MIN_COLORS, Math.round(s.colors * 0.67)) : s.colors - 1 })
   return out
 }
