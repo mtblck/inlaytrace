@@ -649,6 +649,10 @@ await page.getByRole('tab', { name: /Trace/ }).click()
 await page.getByRole('tab', { name: /Edit/ }).click()
 check(await viewIs('Split'), 'a view picked afterwards sticks')
 await page.getByRole('tab', { name: /Trace/ }).click()
+// Edit SVG, beside Download (#201): switches to Edit mode, and isn't offered once there.
+await page.getByRole('button', { name: 'Edit SVG' }).click()
+check((await page.getByRole('tab', { name: /Edit/ }).getAttribute('aria-selected')) === 'true' && (await page.getByRole('button', { name: 'Edit SVG' }).count()) === 0, 'Edit SVG beside Download switches to Edit mode')
+await page.getByRole('tab', { name: /Trace/ }).click()
 
 for (const mode of ['Difference', 'Vector']) {
   await page.getByRole('radio', { name: mode }).click()
@@ -1363,7 +1367,27 @@ if (siteOrigin) {
     const to = path.startsWith('app/') ? '/app/' : '/'
     check(r.status() === 307 && r.headers().location === to, `/${path} redirects to ${to} (${r.status()} → ${r.headers().location})`)
   }
+  // The SVG editor page (#201): listed in the sitemap, and its button opens the app ready to edit.
+  const editorPage = await newPage({ width: 1280, height: 900 })
+  check((await editorPage.goto(new URL('svg-editor/', siteOrigin).href))?.ok(), 'the SVG editor page loads')
+  const sitemap = await (await editorPage.request.get(new URL('sitemap-0.xml', siteOrigin).href)).text()
+  check(sitemap.includes('/svg-editor/'), 'the SVG editor page is in the sitemap')
+  await editorPage.getByRole('link', { name: 'Open the SVG editor' }).click()
+  await editorPage.waitForURL(/\/app\/\?mode=edit/)
+  check(await editorPage.getByRole('heading', { name: 'Drop an SVG to edit' }).isVisible(), 'it opens the app ready for an SVG')
+  await editorPage.getByRole('button', { name: 'Try a sample' }).click()
+  await editorPage.getByRole('tab', { name: /Edit/ }).waitFor()
+  check((await editorPage.getByRole('tab', { name: /Edit/ }).getAttribute('aria-selected')) === 'true', 'and the first file opens in Edit mode')
+  // Having opened a file, the link is used up: a reload brings the work back rather than an empty editor.
+  check(!editorPage.url().includes('mode=edit'), 'opening a file drops ?mode=edit from the URL')
+  await traced(editorPage)
+  await editorPage.waitForTimeout(1500) // the session saves just after the trace
+  await editorPage.reload()
+  await editorPage.getByRole('tab', { name: /Edit/ }).waitFor({ timeout: 15000 }).catch(() => {})
+  check((await editorPage.getByRole('heading', { name: 'Drop an SVG to edit' }).count()) === 0 && (await editorPage.getByRole('tab', { name: /Edit/ }).count()) === 1, 'a reload afterwards restores the work')
+  await editorPage.close()
   const footer = await landing.locator('footer a').evaluateAll((as) => as.map((a) => a.getAttribute('href')))
+  check(footer.includes('/svg-editor/'), 'the footer links to the SVG editor page')
   check(['/terms/', '/privacy/', 'https://ko-fi.com/mtblck'].every((h) => footer.includes(h)) && !footer.some((h) => /pricing|refunds/.test(h)), 'the footer links to terms, privacy and Ko-fi, and not to pricing or refunds')
   // The floating tip button shows over the page and tucks away while the footer (with its own Ko-fi link) is on screen.
   const floating = landing.locator('body > a.tipjar')

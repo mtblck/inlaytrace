@@ -1,0 +1,57 @@
+---
+/**
+ * A page for people looking for a free SVG editor (#201). It says what the
+ * app's Edit mode can change and opens the app straight into it
+ * (/app/?mode=edit). Every claim here is a feature documented in docs/features/.
+ * No inline scripts, so the site's CSP needs no new hash.
+ */
+import Page from '../layouts/Page.astro'
+
+/** The app in Edit mode: drop an SVG and it opens to edit, not to trace. */
+const EDITOR = '/app/?mode=edit'
+const description =
+  'Edit an SVG in your browser, free: recolour, move, scale and rotate shapes, edit nodes and curves, group, mirror and export to SVG, PNG, PDF, EPS or DXF. Nothing is uploaded.'
+---
+
+<Page title="Free SVG editor in your browser · Inlay" description={description}>
+  <article class="prose" aria-labelledby="editor-title">
+    <h1 id="editor-title">A free SVG editor, in your browser</h1>
+    <p class="lede">
+      Drop an SVG into Inlay and its shapes open to edit: change the colours, move and reshape shapes, tidy the nodes, then download it
+      again. Your file never leaves your device.
+    </p>
+    <p class="actions">
+      <a class="button" href={EDITOR}>Open the SVG editor</a>
+    </p>
+    <p>No account and no watermark. Have a PNG or JPG instead? Drop that in and Inlay traces it into shapes first, then you can edit them.</p>
+
+    <h2>What you can edit</h2>
+    <ul>
+      <li><strong>Colours:</strong> every colour in the drawing is listed. Replace one everywhere, pick a new one from the screen, or remove it so that area is transparent. Add a background colour. <a href="/docs/features/colours-and-background/">More</a></li>
+      <li><strong>Shapes:</strong> select, move, scale and rotate them, with typed sizes and arrow-key nudges. Group them, change their order, delete them. <a href="/docs/features/editing-shapes/">More</a></li>
+      <li><strong>Nodes and curves:</strong> drag nodes and handles, add a node on an outline, make corners sharp or smooth, round a corner, or simplify a shape to fewer nodes. <a href="/docs/features/editing-shapes/">More</a></li>
+      <li><strong>Symmetry:</strong> keep one half and mirror it, or repeat a slice round a centre. <a href="/docs/features/mirror/">More</a></li>
+      <li><strong>Undo:</strong> every change can be undone, and your work is kept in this browser if you reload. <a href="/docs/features/undo-and-edits/">More</a></li>
+    </ul>
+
+    <h2>What it opens</h2>
+    <p>
+      Paths, rectangles, circles, ellipses, lines, polylines and polygons, in any groups and transforms, with fills and strokes. Gradients,
+      text, images, filters and masks aren't edited; Inlay says what it couldn't keep. <a href="/docs/features/open-an-svg/">Details</a>
+    </p>
+
+    <h2>What you get back</h2>
+    <p>
+      An optimised SVG, or PNG, PDF, EPS and DXF at a size you choose, one SVG per colour for screen printing and cutting, or the colours as
+      swatches. <a href="/docs/features/export/">Export</a>
+    </p>
+
+    <h2>What it isn't</h2>
+    <p>
+      Inlay is for fixing and finishing drawings, many of them traced from images. For artboards, text layout, masks and effects, use
+      Figma, Illustrator or Inkscape: <em>Copy SVG</em> takes your shapes there.
+    </p>
+
+    <p class="fine">Free and open source (MIT). Everything runs in your browser; see <a href="/privacy/">Privacy</a>.</p>
+  </article>
+</Page>
