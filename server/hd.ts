@@ -100,6 +100,8 @@ export function cleanSettings(raw: unknown): Settings | null {
     smoothShading: s.smoothShading === true,
     keepOutlines: s.keepOutlines === true,
     recogniseText: false,
+    ownColors: Array.isArray(s.ownColors) ? [...new Set(s.ownColors.filter((c): c is string => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c)).map((c) => c.toLowerCase()))].slice(0, 64) : [],
+    useOwnColors: s.useOwnColors === true,
   }
 }
 
