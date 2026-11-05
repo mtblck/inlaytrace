@@ -18,6 +18,13 @@ mode switches to Edit mode.
 | Enter | Crop to the box |
 | Esc | Cancel the box |
 | L | Straighten: drag along a line that should be level or upright |
+| B | Brush: paint over gaps, holes and blotches |
+| E | Eraser: paint the background colour over stray marks |
+| [ / ] | Brush smaller, bigger |
+| Shift [ / Shift ] | Brush softer, harder |
+| ⌥ click | Pick the brush colour from the image |
+| Space drag | Pan when zoomed in (or drag with the middle button) |
+| ⌘ + / ⌘ − / ⌘ 0 | Zoom the image in, out, back to fit (pinch and ⌘ wheel too) |
 
 ## Tools (Edit mode)
 

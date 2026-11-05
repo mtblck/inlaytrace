@@ -34,6 +34,27 @@ faster.
   **Rotate** to turn by any amount, clockwise.
 - **Flip ↔ and Flip ↕** mirror the image left to right or top to bottom.
 
+## Brush (B) and eraser (E)
+
+- **Brush:** paint to close a gap in an outline, fill a hole or join a broken
+  letter (a hard brush), or to even out a blotchy fill or a gradient that
+  splits into two inks (a soft one). Pick its colour from the image (*Pick
+  from image*, or ⌥/Alt-click with the brush), from the trace's own colours,
+  or with the colour picker, so a fix lands in the right ink.
+- **Eraser:** paints the image's background colour (the commonest colour
+  round its edge), not transparency, so dust, stray marks and signatures
+  trace as nothing. On a transparent image it erases to transparent.
+- **Size and hardness** are sliders in the panel; **[ and ]** make the brush
+  smaller and bigger, **Shift [ and Shift ]** softer and harder. A pen or
+  Apple Pencil's pressure sets the width as you draw.
+- Each stroke is one undo step.
+
+To paint detail, zoom in: pinch, ⌘/Ctrl + the wheel (or a trackpad pinch),
+⌘/Ctrl + and −, or the zoom buttons over the image; *Fit* or ⌘/Ctrl 0 goes
+back to the whole image. Two fingers, the wheel, Space-drag or a
+middle-button drag pans. On a phone, the brush's size, hardness and colour sit
+in a bar along the bottom of the image, so they're at hand while you paint.
+
 ## Levels and threshold
 
 - **Levels:** the *black point* turns everything that dark or darker black,
@@ -53,7 +74,8 @@ original, as one undoable step.
 
 ## How it works
 
-Clean-up is a list of operations (crop, rotate, flip, levels, threshold)
+Clean-up is a list of operations (crop, rotate, flip, levels, threshold,
+and brush and eraser strokes)
 stored with your edits, so Undo and Redo step through it like any other edit,
 and it is saved with the session, so a reload brings it back
 (`apps/app/src/lib/cleanup.ts`). Replaying the list onto the original makes
@@ -67,4 +89,9 @@ up to 2048 px on the long edge. Quarter turns and flips move pixels; any
 other angle samples bilinearly onto a canvas grown to fit; a crop is stored in
 fractions of the image, so it doesn't depend on that size. Levels and
 threshold are adjustments, at most one of each, edited in place as the sliders
-move. The mode's code loads the first time you open it.
+move. A stroke is stored as the points you drew (in fractions of the image,
+with pen pressure) plus the brush's size and hardness, and replays as round
+dabs stamped along them into a coverage mask, so overlapping dabs don't build
+up; drawing uses the same code a segment at a time, so what you see while
+painting is what's traced. A new stroke replays only itself, on top of the
+last result. The mode's code loads the first time you open it.

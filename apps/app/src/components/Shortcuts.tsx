@@ -28,6 +28,13 @@ export const SHORTCUTS: { mode: (typeof MODES)[number]; title: string; rows: Row
       { keys: ['Enter'], does: 'Crop to the box' },
       { keys: ['Esc'], does: 'Cancel the box' },
       { keys: ['L'], does: 'Straighten: drag along a line that should be level or upright' },
+      { keys: ['B'], does: 'Brush: paint over gaps, holes and blotches' },
+      { keys: ['E'], does: 'Eraser: paint the background colour over stray marks' },
+      { keys: ['[', ']'], does: 'Brush smaller, bigger' },
+      { keys: [`${SHIFT} [`, `${SHIFT} ]`], does: 'Brush softer, harder' },
+      { keys: [`${ALT} click`], does: 'Pick the brush colour from the image' },
+      { keys: ['Space drag'], does: 'Pan when zoomed in (or drag with the middle button)' },
+      { keys: [`${MOD} +`, `${MOD} −`, `${MOD} 0`], does: 'Zoom the image in, out, back to fit' },
     ],
   },
   {

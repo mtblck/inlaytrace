@@ -16,10 +16,14 @@
  *    as nothing rather than as a frame;
  *  - flip: horizontal (left to right) or vertical;
  *  - levels: black and white points and a midtone (gamma), per channel;
- *  - threshold: black or white by brightness, the one-click fix for line art.
+ *  - threshold: black or white by brightness, the one-click fix for line art;
+ *  - paint (#202): a brush or eraser stroke, as the points drawn (fractions of
+ *    the image at that step, with pen pressure) plus the brush's size and
+ *    hardness. The eraser paints the image's background colour, worked out at
+ *    that step, so what it erases traces as nothing.
  *
  * Levels and threshold are adjustments: there is at most one of each, edited
- * in place as their sliders move. Crop, rotate and flip are appended.
+ * in place as their sliders move. Crop, rotate, flip and strokes are appended.
  */
 
 export type Img = { rgba: Uint8ClampedArray; width: number; height: number }
@@ -29,13 +33,28 @@ export type Rotate = { kind: 'rotate'; degrees: number }
 export type Flip = { kind: 'flip'; axis: 'horizontal' | 'vertical' }
 export type Levels = { kind: 'levels'; black: number; white: number; gamma: number }
 export type Threshold = { kind: 'threshold'; level: number }
-export type CleanupOp = Crop | Rotate | Flip | Levels | Threshold
+/**
+ * A stroke. `points` is flat, three numbers a point: x and y as fractions of
+ * the image's width and height, and pressure from 0 to 1 (1 for a mouse or a
+ * finger). `size` is the brush's diameter at full pressure, as a fraction of
+ * the image's long edge; `hardness` 1 is a crisp edge, 0 a soft one.
+ */
+export type Paint = { kind: 'paint'; tool: 'brush' | 'eraser'; color?: string; size: number; hardness: number; points: number[] }
+export type CleanupOp = Crop | Rotate | Flip | Levels | Threshold | Paint
+
+/** The brush as the panel sets it: size in pixels of the cleaned image, hardness 0–1, colour as hex. */
+export type BrushSettings = { size: number; hardness: number; color: string }
+export const BRUSH_DEFAULT: BrushSettings = { size: 16, hardness: 0.9, color: '#000000' }
+export const BRUSH_MIN = 1
+export const BRUSH_MAX = 400
+/** Points kept in one stroke; a longer one is cut there (it's still drawn, just in two strokes' worth of undo). */
+export const MAX_STROKE_POINTS = 4000
 
 /** The long edge clean-up works at (the fine-detail limit): larger originals are scaled down first. */
 export const CLEANUP_MAX_EDGE = 2048
 /** Below this many pixels on a side a crop isn't kept: nothing traceable is left. */
 export const MIN_CROP_PX = 4
-export const MAX_OPS = 200
+export const MAX_OPS = 2000
 
 export const LEVELS_DEFAULT: Levels = { kind: 'levels', black: 0, white: 255, gamma: 1 }
 export const THRESHOLD_DEFAULT: Threshold = { kind: 'threshold', level: 128 }
@@ -43,7 +62,7 @@ export const THRESHOLD_DEFAULT: Threshold = { kind: 'threshold', level: 128 }
 // ---- The list ---------------------------------------------------------------
 
 /** Append a geometric op, folding it into the last one where that's exact. */
-export function addOp(ops: CleanupOp[], op: Crop | Rotate | Flip): CleanupOp[] {
+export function addOp(ops: CleanupOp[], op: Crop | Rotate | Flip | Paint): CleanupOp[] {
   const last = ops[ops.length - 1]
   if (op.kind === 'rotate') {
     const degrees = normDegrees(op.degrees)
@@ -92,6 +111,18 @@ export function straightenAngle(a: { x: number; y: number }, b: { x: number; y: 
 // ---- Validation (sessions are read back from storage) -------------------------
 
 const num = (v: unknown, lo: number, hi: number) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi
+const HEX = /^#[0-9a-f]{6}$/i
+
+function checkPaint(o: Record<string, unknown>): Paint | null {
+  const { tool, color, size, hardness, points } = o
+  if (tool !== 'brush' && tool !== 'eraser') return null
+  if (tool === 'brush' ? typeof color !== 'string' || !HEX.test(color) : color !== undefined) return null
+  if (!num(size, 1e-6, 1) || !num(hardness, 0, 1)) return null
+  if (!Array.isArray(points) || !points.length || points.length % 3 || points.length > MAX_STROKE_POINTS * 3) return null
+  // A stroke can start or pass just outside the image (its brush still reaches in).
+  for (let i = 0; i < points.length; i += 3) if (!num(points[i], -1, 2) || !num(points[i + 1], -1, 2) || !num(points[i + 2], 0, 1)) return null
+  return { kind: 'paint', tool, ...(tool === 'brush' ? { color: (color as string).toLowerCase() } : {}), size: size as number, hardness: hardness as number, points: (points as number[]).slice() }
+}
 
 /** A saved list, checked op by op; null if anything in it isn't one of ours. */
 export function checkCleanup(value: unknown): CleanupOp[] | null {
@@ -106,7 +137,11 @@ export function checkCleanup(value: unknown): CleanupOp[] | null {
     else if (o.kind === 'levels' && num(o.black, 0, 254) && num(o.white, 1, 255) && (o.black as number) < (o.white as number) && num(o.gamma, 0.1, 10))
       out.push({ kind: 'levels', black: o.black as number, white: o.white as number, gamma: o.gamma as number })
     else if (o.kind === 'threshold' && num(o.level, 1, 255)) out.push({ kind: 'threshold', level: o.level as number })
-    else return null
+    else if (o.kind === 'paint') {
+      const p = checkPaint(o)
+      if (!p) return null
+      out.push(p)
+    } else return null
   }
   return out
 }

@@ -1338,7 +1338,7 @@ const siteOrigin = process.env.SITE ?? (new URL(url).hostname.endsWith('mattblac
   await cp.getByRole('tab', { name: 'Clean up' }).click()
   await cp.locator('[data-clean-canvas]').waitFor()
   const rail = cp.locator('[data-rail]')
-  check((await rail.getByRole('radio').allInnerTexts()).join() === 'Crop,Straighten', 'Clean up has Crop and Straighten in its rail')
+  check((await rail.getByRole('radio').allInnerTexts()).join() === 'Crop,Straighten,Brush,Eraser', 'Clean up has Crop, Straighten, Brush and Eraser in its rail')
   check((await size()) === '640x640', `Clean up shows the image at its own size (${await size()})`)
   // Crop: draw a box, then apply it.
   const ov = await cp.locator('[data-clean-overlay]').boundingBox()
@@ -1356,6 +1356,50 @@ const siteOrigin = process.env.SITE ?? (new URL(url).hostname.endsWith('mattblac
   await cp.getByRole('button', { name: '⟳ 90°' }).click()
   check((await size()) === '160x320', 'a quarter turn swaps width and height')
   await cp.getByRole('checkbox', { name: 'Black and white only' }).check()
+  // Brush and eraser (#202): a stroke paints, undoes as one step, and the eraser paints the background back.
+  const pixel = (fx, fy) =>
+    cp.evaluate(
+      ([fx, fy]) => {
+        const c = document.querySelector('[data-clean-canvas] canvas')
+        const d = c.getContext('2d').getImageData(Math.floor(fx * c.width), Math.floor(fy * c.height), 1, 1).data
+        return Array.from(d).join()
+      },
+      [fx, fy],
+    )
+  const stroke = async (y) => {
+    const box = await cp.locator('[data-clean-overlay]').boundingBox()
+    await cp.mouse.move(box.x + box.width * 0.3, box.y + box.height * y)
+    await cp.mouse.down()
+    await cp.mouse.move(box.x + box.width * 0.7, box.y + box.height * y, { steps: 8 })
+    await cp.mouse.up()
+  }
+  await cp.keyboard.press('b')
+  check((await cp.locator('[data-brush-fields="brush"]').count()) === 1, 'B picks the brush, with its size, hardness and colour')
+  check(!(await cp.locator('[data-brush-bar]').isVisible()), 'the phone’s brush bar stays hidden on a wide screen')
+  await cp.locator('[data-brush-fields]').getByLabel('Brush colour', { exact: true }).fill('#ff0000')
+  const corner = await pixel(0.01, 0.01)
+  await stroke(0.5)
+  check((await pixel(0.5, 0.5)) === '255,0,0,255', `a brush stroke paints in the brush’s colour (${await pixel(0.5, 0.5)})`)
+  await cp.keyboard.press(`${MOD}+z`)
+  check((await pixel(0.5, 0.5)) !== '255,0,0,255', 'Undo takes the stroke away')
+  await cp.keyboard.press(`${MOD}+Shift+z`)
+  check((await pixel(0.5, 0.5)) === '255,0,0,255', 'Redo paints it again')
+  // Alt-click picks the colour under the pointer.
+  const ovb = await cp.locator('[data-clean-overlay]').boundingBox()
+  await cp.keyboard.down('Alt')
+  await cp.mouse.click(ovb.x + ovb.width * 0.5, ovb.y + ovb.height * 0.5)
+  await cp.keyboard.up('Alt')
+  check((await cp.locator('[data-brush-colour]').innerText()) === '#ff0000', `Alt-click picks the brush colour from the image (${await cp.locator('[data-brush-colour]').innerText()})`)
+  await cp.keyboard.press('e')
+  for (let i = 0; i < 3; i++) await cp.keyboard.press(']')
+  await stroke(0.5)
+  check((await pixel(0.5, 0.5)) === corner, `the eraser paints the background colour back (${await pixel(0.5, 0.5)} vs ${corner})`)
+  // Zoom: the buttons, and Fit back.
+  const zoom = () => cp.locator('[data-clean-canvas]').getAttribute('data-clean-zoom').then(Number)
+  await cp.getByRole('button', { name: 'Zoom in' }).click()
+  check((await zoom()) > 1, `Zoom in enlarges the image (${await zoom()}×)`)
+  await cp.getByRole('button', { name: 'Fit', exact: true }).click()
+  check((await zoom()) === 1, 'Fit shows the whole image again')
   const download = cp.waitForEvent('download')
   await cp.getByRole('button', { name: 'Download PNG' }).click()
   check((await download).suggestedFilename() === 'sample-badge-cleaned.png', 'Download PNG saves the cleaned image')
@@ -1396,6 +1440,34 @@ const siteOrigin = process.env.SITE ?? (new URL(url).hostname.endsWith('mattblac
   await cp.waitForFunction((v) => document.querySelector('svg[aria-label="Traced SVG"]')?.getAttribute('viewBox') === v, first, { timeout: 30000 }).catch(() => {})
   check((await viewBox()) === first, 'undoing all clean-up traces the original again')
   await cp.close()
+
+  // On a phone: the brush's settings ride along under the image, and two fingers pinch to zoom.
+  const pp = await newPage({ width: 390, height: 844 })
+  await pp.goto(url)
+  await pp.getByRole('button', { name: 'Try a sample' }).click()
+  await traced(pp)
+  await pp.getByRole('tab', { name: 'Clean up' }).click()
+  await pp.locator('[data-clean-canvas]').waitFor()
+  await pp.locator('[data-rail]').getByRole('radio', { name: 'Brush' }).click()
+  check(await pp.locator('[data-brush-bar]').isVisible(), 'on a phone the brush’s size, hardness and colour sit under the image')
+  const pinched = await pp.evaluate(() => {
+    const box = document.querySelector('[data-clean-canvas]')
+    const r = box.getBoundingClientRect()
+    const cx = r.left + r.width / 2
+    const cy = r.top + r.height / 2
+    const fire = (type, id, x) => box.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: id, pointerType: 'touch', isPrimary: id === 1, clientX: x, clientY: cy, button: 0, buttons: 1 }))
+    fire('pointerdown', 1, cx - 20)
+    fire('pointerdown', 2, cx + 20)
+    fire('pointermove', 1, cx - 60)
+    fire('pointermove', 2, cx + 60)
+    fire('pointerup', 1, cx - 60)
+    fire('pointerup', 2, cx + 60)
+    // Pointer moves render at React's continuous priority: give them a moment.
+    return new Promise((done) => setTimeout(() => done(Number(box.getAttribute('data-clean-zoom'))), 150))
+  })
+  check(pinched > 2, `a two-finger pinch zooms the image (${pinched}×), and paints nothing`)
+  check(await pp.locator('[data-rail]').getByRole('button', { name: /^Undo/ }).isDisabled(), 'the pinch’s first finger left no stroke behind')
+  await pp.close()
 }
 
 if (siteOrigin) {

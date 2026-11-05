@@ -25,16 +25,29 @@ export function originalPixels(source: Source): Img {
   return img
 }
 
-/** The cleaned pixels. The last few results are kept, so the preview and the trace share one replay. */
-const recent: { bitmap: ImageBitmap; key: string; img: Img }[] = []
+/**
+ * The cleaned pixels. The last few results are kept, so the preview and the
+ * trace share one replay, and a list that only adds to one of them (a new
+ * stroke) replays just what it adds.
+ */
+const KEEP = 4
+const recent: { bitmap: ImageBitmap; ops: CleanupOp[]; key: string; img: Img }[] = []
+const sameOp = (a: CleanupOp, b: CleanupOp) => a === b || JSON.stringify(a) === JSON.stringify(b)
 export function cleanedPixels(source: Source, ops: CleanupOp[]): Img {
   const key = JSON.stringify(ops)
   const hit = recent.find((r) => r.bitmap === source.bitmap && r.key === key)
   if (hit) return hit.img
-  const img = replay(originalPixels(source), ops)
+  let from = 0
+  let start = originalPixels(source)
+  for (const r of recent)
+    if (r.bitmap === source.bitmap && r.ops.length > from && r.ops.length < ops.length && r.ops.every((o, i) => sameOp(o, ops[i]))) {
+      from = r.ops.length
+      start = r.img
+    }
+  const img = replay(start, ops.slice(from))
   // Only this image's results are kept: another image's go with it.
-  const mine = recent.filter((r) => r.bitmap === source.bitmap).slice(0, 2)
-  recent.splice(0, recent.length, { bitmap: source.bitmap, key, img }, ...mine)
+  const mine = recent.filter((r) => r.bitmap === source.bitmap).slice(0, KEEP - 1)
+  recent.splice(0, recent.length, { bitmap: source.bitmap, ops, key, img }, ...mine)
   return img
 }
 
