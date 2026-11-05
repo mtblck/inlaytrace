@@ -93,7 +93,7 @@ export function turnSlice(order: number) {
 
 let scope: InstanceType<Paper['PaperScope']> | null = null
 
-function scopeFor(paper: Paper) {
+export function scopeFor(paper: Paper) {
   if (!scope) {
     scope = new paper.PaperScope()
     // A size rather than a canvas element: paper creates its own offscreen

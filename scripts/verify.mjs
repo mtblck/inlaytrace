@@ -450,6 +450,19 @@ async function selectChecks(page, label, id, n) {
     break
   }
   check(added, `${label}: Shift-click adds a second shape`)
+  // Combine (#207): Unite folds the two into one shape, selected, and undoes in one step.
+  if (added) {
+    const before = await page.locator('path[data-path-id]').count()
+    await page.getByRole('group', { name: 'Combine' }).getByRole('button', { name: 'Unite' }).click()
+    await page.waitForFunction((n) => document.querySelectorAll('path[data-path-id]').length === n - 1, before, { timeout: 10000 }).catch(() => {})
+    const united = (await page.locator('path[data-path-id]').count()) === before - 1 && (await page.locator('[data-selection-box]').getAttribute('data-selection-box')) === '1'
+    check(united, `${label}: Unite joins two shapes into one, selected`)
+    // Only undo what Unite did, never an earlier edit.
+    if (united) {
+      await page.keyboard.press(`${MOD}+z`)
+      check((await page.locator('path[data-path-id]').count()) === before, `${label}: Undo puts both shapes back`)
+    }
+  }
   await page.keyboard.press('Escape')
   const total = await page.locator('path[data-path-id]').count()
   const sheet = await page.locator('svg[aria-label="Traced SVG"]').boundingBox()

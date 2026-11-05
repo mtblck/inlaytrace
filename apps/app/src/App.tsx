@@ -39,6 +39,7 @@ import {
 } from './lib/doc'
 import { push, redo, startHistory, undo, type History } from './lib/history'
 import { centreAxis, likelyAxis, mirrorDoc, type Axis } from './lib/mirror'
+import { booleanOp, type BooleanOp } from './lib/boolean'
 import { loadPaper } from './lib/paper'
 import { deleteNodes, moveHandle, moveNode, moveNodes, parsePath, serializePath, nodeCount, type NodePart, type NodeRef, type Pt } from './lib/pathdata'
 import { addNode, nearestOnPath, roundNode, sharpenNode, simplifySubpaths, smoothNode } from './lib/nodeops'
@@ -753,6 +754,29 @@ export default function App() {
   const groupSelection = () => selectedIds.length > 1 && editDoc((d) => groupPaths(d, selectedIds))
   const ungroupSelection = () => selectedIds.length && editDoc((d) => ungroupPaths(d, selectedIds))
   const arrangeSelection = (how: Arrange) => selectedIds.length && editDoc((d) => arrange(d, selectedIds, how))
+  /** Unite, Subtract, Intersect or Divide the selection (#207); resolves to why it couldn't, or null. */
+  const combining = useRef(false)
+  const combineSelection = async (op: BooleanOp): Promise<string | null> => {
+    const ids = selectedIds
+    if (combining.current || ids.length < 2) return null
+    combining.current = true
+    try {
+      const paper = await loadPaper()
+      // The drawing as it is now, after the wait for paper.js: edits made meanwhile are kept.
+      const current = docRef.current
+      if (!current) return null
+      const r = booleanOp(paper, current, ids, op)
+      if ('error' in r) return r.error
+      editDoc(() => r.doc)
+      setSelectedIds(r.selected)
+      setSelectedNodes([])
+      return null
+    } catch (error) {
+      return `That didn’t work: ${error instanceof Error ? error.message : String(error)}. Your drawing is unchanged.`
+    } finally {
+      combining.current = false
+    }
+  }
 
   const deleteSelection = useCallback(() => {
     if (!selectedPaths.length) return
@@ -1392,6 +1416,7 @@ export default function App() {
                 onGroup={groupSelection}
                 onUngroup={ungroupSelection}
                 onArrange={arrangeSelection}
+                onCombine={combineSelection}
                 grouped={!!doc && doc.paths.some((p) => p.group && selectedIds.includes(p.id))}
                 onBox={setBox}
                 onBoxDone={boxDone}

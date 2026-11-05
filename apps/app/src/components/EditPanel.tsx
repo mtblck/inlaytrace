@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Tool } from './Canvas'
 import type { Arrange } from '../lib/doc'
+import type { BooleanOp } from '../lib/boolean'
 import { MAX_ORDER, MIN_ORDER, sameAxis, type Axis, type MirrorAxis, type TurnAxis } from '../lib/mirror'
 import type { Box } from '../lib/transform'
 import { Section } from './Controls'
@@ -18,6 +19,8 @@ type Props = {
   onGroup: () => void
   onUngroup: () => void
   onArrange: (how: Arrange) => void
+  /** Unite, Subtract, Intersect or Divide the selection; resolves to why it couldn't, or null. */
+  onCombine: (op: BooleanOp) => Promise<string | null>
   grouped: boolean
   /** One typed field of the bounds; `lock` keeps W and H in proportion. Changes in one field undo together. */
   onBox: (field: keyof Box, value: number, lock: boolean) => void
@@ -68,7 +71,8 @@ export function EditPanel(p: Props) {
               {p.selection.box && <BoxFields key={p.selection.key} box={p.selection.box} onBox={p.onBox} onDone={p.onBoxDone} />}
               <RotateFields onRotate={p.onRotate} />
               <ArrangeFields shapes={p.selection.shapes} grouped={p.grouped} onGroup={p.onGroup} onUngroup={p.onUngroup} onArrange={p.onArrange} />
-              <SimplifyFields key={p.selection.key} now={p.selectionNodes} preview={p.simplifyPreview} onSimplify={p.onSimplify} />
+              <CombineFields key={`combine-${p.selection.key}`} shapes={p.selection.shapes} onCombine={p.onCombine} />
+              <SimplifyFields key={`simplify-${p.selection.key}`} now={p.selectionNodes} preview={p.simplifyPreview} onSimplify={p.onSimplify} />
               <button className="btn w-full" onClick={p.onDeleteSelection}>
                 {p.selection.shapes === 1 ? 'Delete shape' : `Delete ${p.selection.shapes} shapes`}
               </button>
@@ -425,6 +429,47 @@ function TurnFields({ axis, width, height, onAxis }: { axis: TurnAxis; width: nu
         <p className="field-hint mt-1">Drag the dot on the canvas to move the centre. Inside the circle, the slice pointing up is kept and the faded rest is replaced by copies of it. Outside the circle stays as it is.</p>
       </div>
     </>
+  )
+}
+
+/**
+ * Pathfinder-style booleans on two or more filled shapes. The back shape (lowest
+ * in paint order) keeps its colour; Subtract cuts the front shapes out of it;
+ * Divide keeps every overlap as its own piece. Keyed to the selection, so an
+ * error clears when it changes.
+ */
+function CombineFields(p: { shapes: number; onCombine: (op: BooleanOp) => Promise<string | null> }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const run = async (op: BooleanOp) => {
+    setBusy(true)
+    setError(await p.onCombine(op))
+    setBusy(false)
+  }
+  return (
+    <div className="space-y-1.5">
+      <span className="field-label">Combine</span>
+      <div className="grid grid-cols-4 gap-1" role="group" aria-label="Combine">
+        {(
+          [
+            ['unite', 'Unite', 'Join the shapes into one, in the back shape’s colour'],
+            ['subtract', 'Subtract', 'Cut the front shapes out of the back one'],
+            ['intersect', 'Intersect', 'Keep only where every shape overlaps'],
+            ['divide', 'Divide', 'Split into pieces at every edge, each in the colour on top'],
+          ] as const
+        ).map(([op, label, hint]) => (
+          <button key={op} className="btn h-7 px-1 text-[12px]" disabled={p.shapes < 2 || busy} onClick={() => void run(op)} title={hint}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {p.shapes < 2 && <p className="field-hint">Select two or more shapes to combine them.</p>}
+      {error && (
+        <p role="alert" className="text-[12.5px] text-accent">
+          {error}
+        </p>
+      )}
+    </div>
   )
 }
 
