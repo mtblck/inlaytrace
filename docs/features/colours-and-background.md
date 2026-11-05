@@ -4,7 +4,7 @@ order: 3
 
 # Colours and background
 
-Edit tab → *Colours*. Every colour the trace found is listed with how many
+Edit mode → *Colours*, in the panel. Every colour the trace found is listed with how many
 shapes use it, most-used first. Selecting a shape highlights its colour.
 
 ## Replace a colour

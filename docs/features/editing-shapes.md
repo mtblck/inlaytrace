@@ -4,8 +4,11 @@ order: 4
 
 # Editing shapes
 
-Edit tab → *Select* (V) for whole shapes, *Nodes* (A) for one shape's outline.
-Selecting a shape from the canvas opens the Edit tab.
+Edit mode, from the *Trace · Edit* switch above the canvas. Its tools are in
+the rail beside the canvas (above it, on a phone): *Select* (V) for whole
+shapes, *Nodes* (A) for one shape's outline, *Mirror* (M), then *Undo* and
+*Redo*. The panel on the right shows the chosen tool's settings, then the
+colours. Selecting a shape from the canvas switches to Edit mode.
 
 ## Select: pick, move and scale shapes
 

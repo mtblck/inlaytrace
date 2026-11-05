@@ -6,8 +6,11 @@ order: 8
 
 Press **?** (or the keyboard icon in the header) for the list in the app. ⌘ on a Mac,
 Ctrl elsewhere; ⌥ is Alt. Shortcuts don't fire while you're typing in a field.
+The panel lists them by mode: Edit mode's tools, selection and editing keys,
+then those that work in every mode (history and view). A tool key from Trace
+mode switches to Edit mode.
 
-## Tools
+## Tools (Edit mode)
 
 | Keys | Does |
 | --- | --- |
@@ -17,7 +20,7 @@ Ctrl elsewhere; ⌥ is Alt. Shortcuts don't fire while you're typing in a field.
 | Double-click a shape | Edit its nodes (from Select) |
 | Double-click the outline | Add a node there (Nodes) |
 
-## Selection
+## Selection (Edit mode)
 
 | Keys | Does |
 | --- | --- |
@@ -27,7 +30,7 @@ Ctrl elsewhere; ⌥ is Alt. Shortcuts don't fire while you're typing in a field.
 | ⇧ drag, ⌥ drag | Add to / remove from the selection |
 | Esc | Put the eyedropper away; deselect nodes, then shapes; then go back to Select |
 
-## Editing
+## Editing (Edit mode)
 
 | Keys | Does |
 | --- | --- |
@@ -39,10 +42,15 @@ Ctrl elsewhere; ⌥ is Alt. Shortcuts don't fire while you're typing in a field.
 | ⌘G, ⇧⌘G | Group / ungroup the selected shapes |
 | ⌘], ⌘[ | Bring forward / send backward |
 | ⇧⌘], ⇧⌘[ | Bring to front / send to back |
+
+## History (every mode)
+
+| Keys | Does |
+| --- | --- |
 | ⌘Z | Undo |
 | ⇧⌘Z, Ctrl + Y | Redo |
 
-## View
+## View (every mode)
 
 | Keys | Does |
 | --- | --- |

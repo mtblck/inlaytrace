@@ -4,7 +4,7 @@ order: 1
 
 # Presets and settings
 
-The Trace tab. A preset is a starting point: it picks the tracer and sensible
+Trace mode, the first of the modes above the canvas. A preset is a starting point: it picks the tracer and sensible
 defaults, and every setting can be changed afterwards. Changing anything
 re-traces within about 120 ms of the last change.
 

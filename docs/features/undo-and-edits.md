@@ -6,7 +6,7 @@ order: 6
 
 ## Undo and redo
 
-*Undo* and *Redo* in the Edit tab, or ⌘/Ctrl + Z and ⇧⌘Z / Ctrl + Y. Up to 100
+*Undo* and *Redo* at the foot of Edit mode's tool rail, or ⌘/Ctrl + Z and ⇧⌘Z / Ctrl + Y. Up to 100
 steps.
 
 One step is one thing you meant to do: a whole node drag, one session in a
@@ -25,7 +25,7 @@ The document is three things (`apps/app/src/lib/doc.ts`):
 
 `doc` stays empty, meaning "whatever the tracer produces", until your first
 shape edit (a node drag, a delete, a mirror). That edit copies the trace into an
-editable document, and the Edit tab gets a dot to show it.
+editable document, and the Edit mode switch gets a dot to show it.
 
 From then on, changing a trace setting or opening another image would throw
 those edits away, so it asks first:

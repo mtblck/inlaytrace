@@ -8,13 +8,17 @@ const SHIFT = MAC ? '⇧' : 'Shift'
 
 type Row = { keys: string[]; does: string }
 
+/** The shortcuts panel's headings, in order: each workspace mode with shortcuts of its own, then those that work in all. */
+const MODES = ['Edit mode', 'Every mode'] as const
+
 /**
  * Every shortcut, grouped as the panel shows them. The handlers live in
  * App.tsx (editing) and Canvas.tsx (zoom, drag modifiers); keep this list in
  * step with them and with docs/features/keyboard-shortcuts.md.
  */
-export const SHORTCUTS: { title: string; rows: Row[] }[] = [
+export const SHORTCUTS: { mode: 'Edit mode' | 'Every mode'; title: string; rows: Row[] }[] = [
   {
+    mode: 'Edit mode',
     title: 'Tools',
     rows: [
       { keys: ['V'], does: 'Select: pick, move and scale shapes' },
@@ -24,6 +28,7 @@ export const SHORTCUTS: { title: string; rows: Row[] }[] = [
     ],
   },
   {
+    mode: 'Edit mode',
     title: 'Selection',
     rows: [
       { keys: [`${MOD} A`], does: 'Select all shapes, or all nodes with Nodes' },
@@ -34,6 +39,7 @@ export const SHORTCUTS: { title: string; rows: Row[] }[] = [
     ],
   },
   {
+    mode: 'Edit mode',
     title: 'Editing',
     rows: [
       { keys: ['← ↑ → ↓'], does: 'Nudge the selection 1 px' },
@@ -44,11 +50,18 @@ export const SHORTCUTS: { title: string; rows: Row[] }[] = [
       { keys: [`${MOD} G`, `${SHIFT} ${MOD} G`], does: 'Group / ungroup the selected shapes' },
       { keys: [`${MOD} ]`, `${MOD} [`], does: 'Bring forward / send backward' },
       { keys: [`${SHIFT} ${MOD} ]`, `${SHIFT} ${MOD} [`], does: 'Bring to front / send to back' },
+    ],
+  },
+  {
+    mode: 'Every mode',
+    title: 'History',
+    rows: [
       { keys: [`${MOD} Z`], does: 'Undo' },
       { keys: [MAC ? '⇧⌘ Z' : 'Ctrl Shift Z', MAC ? '' : 'Ctrl Y'].filter(Boolean), does: 'Redo' },
     ],
   },
   {
+    mode: 'Every mode',
     title: 'View',
     rows: [
       { keys: [`${MOD} =`, `${MOD} −`], does: 'Zoom in / out around the pointer' },
@@ -89,27 +102,32 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () 
           Close
         </button>
       </div>
-      <div className="grid gap-x-8 gap-y-5 px-5 py-4 sm:grid-cols-2">
-        {SHORTCUTS.map((g) => (
-          <section key={g.title}>
-            <h3 className="field-label mb-2">{g.title}</h3>
-            <dl className="space-y-1.5">
-              {g.rows.map((r) => (
-                <div key={r.does} className="flex items-baseline justify-between gap-3 text-[13px]">
-                  <dt className="text-ink-muted">{r.does}</dt>
-                  <dd className="flex shrink-0 flex-wrap justify-end gap-1">
-                    {r.keys.map((k) => (
-                      <kbd key={k} className="rounded border border-rule bg-paper-sunk px-1.5 py-px font-mono text-[12px] whitespace-nowrap text-ink">
-                        {k}
-                      </kbd>
-                    ))}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-        ))}
-      </div>
+      {MODES.map((mode) => (
+        <div key={mode} className="border-b border-rule-soft px-5 py-4 last:border-b-0" data-shortcuts-mode={mode}>
+          <h3 className="mb-3 text-[13px] font-semibold text-ink">{mode}</h3>
+          <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
+            {SHORTCUTS.filter((g) => g.mode === mode).map((g) => (
+              <section key={g.title}>
+                <h4 className="field-label mb-2">{g.title}</h4>
+                <dl className="space-y-1.5">
+                  {g.rows.map((r) => (
+                    <div key={r.does} className="flex items-baseline justify-between gap-3 text-[13px]">
+                      <dt className="text-ink-muted">{r.does}</dt>
+                      <dd className="flex shrink-0 flex-wrap justify-end gap-1">
+                        {r.keys.map((k) => (
+                          <kbd key={k} className="rounded border border-rule bg-paper-sunk px-1.5 py-px font-mono text-[12px] whitespace-nowrap text-ink">
+                            {k}
+                          </kbd>
+                        ))}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            ))}
+          </div>
+        </div>
+      ))}
       <p className="field-hint border-t border-rule px-5 py-3">Shortcuts don’t fire while you’re typing in a field. Nudges are in pixels of the trace.</p>
     </dialog>
   )

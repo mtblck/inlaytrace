@@ -50,6 +50,7 @@ import { track } from './lib/track'
 import { Canvas, type Overlays, type SelectMode, type Tool, type ViewMode } from './components/Canvas'
 import { ShortcutsDialog } from './components/Shortcuts'
 import { ExportOptions } from './components/ExportOptions'
+import { EDIT_TOOLS, ModeSwitch, ToolRail, useWide, type WorkMode } from './components/Workspace'
 import { clearSession, loadSession, newSessionId, saveImage, saveState } from './lib/session'
 import { buildDxf, buildEps, buildPdf, pngPixels, withSize, type ExportSize } from './lib/vectorExport'
 import { IconButton, KeyboardIcon, MoonIcon, SunIcon } from './components/IconButton'
@@ -62,6 +63,8 @@ import { useTheme } from './lib/theme'
 type Status = { kind: 'idle' } | { kind: 'tracing' } | { kind: 'done'; ms: number } | { kind: 'opened' } | { kind: 'error'; message: string }
 
 const NO_TEXT: TextRun[] = []
+/** The workspace's modes, in order. Clean up joins them with #199. */
+const MODES: WorkMode[] = ['trace', 'edit']
 
 /** Logo's defaults, keeping your own colours: they're about what you can print, not this image. */
 const keepOwnColors = (s: Settings): Settings => ({ ...settingsFor('logo'), ownColors: s.ownColors, useOwnColors: s.useOwnColors })
@@ -126,7 +129,8 @@ export default function App() {
     setMode('vector')
   }, [])
   const [tool, setTool] = useState<Tool>('select')
-  const [panel, setPanel] = useState<'trace' | 'edit'>('trace')
+  /** The workspace's mode (components/Workspace.tsx): Trace sets up the trace, Edit fixes its shapes. */
+  const [workMode, setWorkMode] = useState<WorkMode>('trace')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   /** Nodes selected in the shape the Nodes tool is editing (the first selected shape). */
   const [selectedNodes, setSelectedNodes] = useState<NodeRef[]>([])
@@ -214,7 +218,7 @@ export default function App() {
       setSizeRun(null)
       axisTouched.current = false
       setTool('select')
-      setPanel(restore?.edits.doc || next.svg ? 'edit' : 'trace')
+      setWorkMode(restore?.edits.doc || next.svg ? 'edit' : 'trace')
       setMode(restore ? 'vector' : 'split')
       viewChosen.current = !!restore
       setZoom(null)
@@ -514,7 +518,7 @@ export default function App() {
       setSelectedNodes([])
       // The selection's tools live in the Edit tab.
       if (id) {
-        setPanel('edit')
+        setWorkMode('edit')
         startEditing()
       }
     },
@@ -654,7 +658,7 @@ export default function App() {
     })
     setSelectedNodes([])
     if (hits.length) {
-      setPanel('edit')
+      setWorkMode('edit')
       startEditing()
     }
   }
@@ -664,7 +668,7 @@ export default function App() {
       setSelectedIds([id])
       setSelectedNodes([])
       setTool('nodes')
-      setPanel('edit')
+      setWorkMode('edit')
       startEditing()
     },
     [startEditing],
@@ -785,6 +789,10 @@ export default function App() {
       editPath(editing.id, (subs) => moveNodes(subs, refs, dx, dy), key)
     } else if (tool === 'select') transformSelection(translate(dx, dy), key)
   }
+  const chooseMode = (m: WorkMode) => {
+    setWorkMode(m)
+    if (m === 'edit') startEditing()
+  }
   const chooseTool = useCallback((t: Tool) => {
     setTool(t)
     setPicking(null)
@@ -795,6 +803,20 @@ export default function App() {
     else if (t === 'mirror') setSelectedIds([])
     if (t === 'mirror') void loadPaper().catch(() => {}) // warm it up while the user picks a side
   }, [])
+
+  /** Edit mode's tool rail: beside the canvas on a wide screen, in the mode bar on a phone (one or the other, never both). */
+  const wide = useWide()
+  const rail = (
+    <ToolRail
+      tools={EDIT_TOOLS(strokes)}
+      tool={tool}
+      onTool={chooseTool}
+      canUndo={history.past.length > 0}
+      canRedo={history.future.length > 0}
+      onUndo={() => historyStep('undo')}
+      onRedo={() => historyStep('redo')}
+    />
+  )
 
   // Keyboard. The list the shortcuts panel shows is in components/Shortcuts.tsx; keep them in step.
   // The handler reads the latest render through a ref, so it is attached once.
@@ -839,7 +861,7 @@ export default function App() {
           if (tool !== 'select') setTool('select')
           setSelectedIds(shown.map((p) => p.id))
           setSelectedNodes([])
-          setPanel('edit')
+          setWorkMode('edit')
           startEditing()
         }
       } else if (mod || e.altKey) {
@@ -860,7 +882,7 @@ export default function App() {
         setShortcutsOpen(true)
       } else if (hasDoc && !e.shiftKey && (key === 'v' || key === 'a' || key === 'm')) {
         if (key !== 'm' || !strokes) chooseTool(key === 'v' ? 'select' : key === 'a' ? 'nodes' : 'mirror')
-        setPanel('edit')
+        setWorkMode('edit')
         startEditing()
       }
     }
@@ -1016,7 +1038,7 @@ export default function App() {
       setSelectedIds([])
       setSelectedNodes([])
       setSource((s) => (s ? { ...s, svg: undefined } : s))
-      setPanel('trace')
+      setWorkMode('trace')
     })
 
   const mergeInk = (from: string, into: string) => changeSettings({ ...settings, merge: { ...settings.merge, [from]: into } })
@@ -1150,58 +1172,67 @@ export default function App() {
 
       <main className="flex min-h-0 flex-1 flex-col lg:flex-row" data-traces={traceCount}>
         {/* ---- Work surface ---- */}
-        <div className="relative flex min-h-[52vh] min-w-0 flex-1 flex-col lg:min-h-0">
+        {/* On a phone, 52vh plus the mode bar: the bar replaced the sidebar's tabs and mustn't cost the canvas its height. */}
+        <div className="relative flex min-h-[calc(52vh+44px)] min-w-0 flex-1 flex-col lg:min-h-0">
           {source && trace ? (
             <>
-              <div className="relative min-h-0 flex-1">
-                {picking && (
-                  <div role="status" className="absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3 rounded-md border border-rule bg-paper px-3 py-2 text-[13px] shadow-md" data-picking={picking.target}>
-                    <span>Click the image to pick a colour from the original.</span>
-                    {screenDropper && (
-                      <button className="text-ink-muted underline-offset-2 hover:text-ink hover:underline" onClick={pickFromScreen}>
-                        Pick from screen
+              {/* The mode switcher, above the canvas; on a phone the tool rail shares its row, to leave the canvas room. */}
+              <div className="flex items-center gap-3 border-b border-rule px-4 py-1.5 lg:py-2" data-workspace={workMode}>
+                <ModeSwitch modes={MODES} mode={workMode} onMode={chooseMode} edited={detached} />
+                {workMode === 'edit' && !wide && <div className="min-w-0 flex-1">{rail}</div>}
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+                {workMode === 'edit' && wide && rail}
+                <div className="relative min-h-0 flex-1">
+                  {picking && (
+                    <div role="status" className="absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3 rounded-md border border-rule bg-paper px-3 py-2 text-[13px] shadow-md" data-picking={picking.target}>
+                      <span>Click the image to pick a colour from the original.</span>
+                      {screenDropper && (
+                        <button className="text-ink-muted underline-offset-2 hover:text-ink hover:underline" onClick={pickFromScreen}>
+                          Pick from screen
+                        </button>
+                      )}
+                      <button className="text-ink-muted underline-offset-2 hover:text-ink hover:underline" onClick={() => setPicking(null)}>
+                        Cancel
                       </button>
-                    )}
-                    <button className="text-ink-muted underline-offset-2 hover:text-ink hover:underline" onClick={() => setPicking(null)}>
-                      Cancel
-                    </button>
-                  </div>
-                )}
-                <Canvas
-                  imageUrl={(traceSource ?? source).url}
-                  paths={shown}
-                  width={doc!.width}
-                  height={doc!.height}
-                  mode={mode}
-                  zoom={zoom}
-                  naturalWidth={source.originalWidth}
-                  onZoom={setZoom}
-                  onFitScale={setFitScale}
-                  tool={tool}
-                  overlays={overlays}
-                  background={edits.background}
-                  selectedIds={selectedIds}
-                  selectedNodes={selectedNodes}
-                  axis={axis}
-                  onSelect={select}
-                  onSelectNodes={selectNodes}
-                  onMarquee={onMarquee}
-                  onEnterNodes={enterNodes}
-                  onDragNode={onDragNode}
-                  onTransform={onTransform}
-                  onAddNode={onAddNode}
-                  picking={!!picking}
-                  onPick={onPick}
-                  onAxis={moveAxis}
-                />
-                {busy && (
-                  <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
-                    <div key={busy} role="status" className="busy flex items-center gap-2.5 rounded-full border border-rule bg-paper px-4 py-2 text-[13.5px] font-medium shadow-md" data-busy={busy}>
-                      <span className="spinner" aria-hidden="true" />
-                      {busy}…
                     </div>
-                  </div>
-                )}
+                  )}
+                  <Canvas
+                    imageUrl={(traceSource ?? source).url}
+                    paths={shown}
+                    width={doc!.width}
+                    height={doc!.height}
+                    mode={mode}
+                    zoom={zoom}
+                    naturalWidth={source.originalWidth}
+                    onZoom={setZoom}
+                    onFitScale={setFitScale}
+                    tool={tool}
+                    overlays={overlays}
+                    background={edits.background}
+                    selectedIds={selectedIds}
+                    selectedNodes={selectedNodes}
+                    axis={axis}
+                    onSelect={select}
+                    onSelectNodes={selectNodes}
+                    onMarquee={onMarquee}
+                    onEnterNodes={enterNodes}
+                    onDragNode={onDragNode}
+                    onTransform={onTransform}
+                    onAddNode={onAddNode}
+                    picking={!!picking}
+                    onPick={onPick}
+                    onAxis={moveAxis}
+                  />
+                  {busy && (
+                    <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
+                      <div key={busy} role="status" className="busy flex items-center gap-2.5 rounded-full border border-rule bg-paper px-4 py-2 text-[13.5px] font-medium shadow-md" data-busy={busy}>
+                        <span className="spinner" aria-hidden="true" />
+                        {busy}…
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               {/* One row, the same height as the sidebar's footer beside it (lg). The hint shows where there's room for it
                   (each view's button carries it as a tooltip too) and shortens rather than wrapping. */}
@@ -1318,43 +1349,10 @@ export default function App() {
                 </div>
               </div>
             )}
-            {doc && (
-              <div role="tablist" aria-label="Panel" className="flex border-b border-rule px-5">
-                {(
-                  [
-                    ['trace', 'Trace'],
-                    ['edit', 'Edit'],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    role="tab"
-                    id={`tab-${id}`}
-                    aria-selected={panel === id}
-                    aria-controls={`panel-${id}`}
-                    onClick={() => {
-                      setPanel(id)
-                      if (id === 'edit') startEditing()
-                    }}
-                    className={`-mb-px border-b-2 px-1 py-2.5 mr-5 text-[13.5px] ${panel === id ? 'border-accent font-medium text-ink' : 'border-transparent text-ink-muted hover:text-ink'}`}
-                  >
-                    {label}
-                    {id === 'edit' && detached && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" data-edited="">
-                        <span className="sr-only">(edited)</span>
-                      </span>}
-                  </button>
-                ))}
-              </div>
-            )}
-            <div role="tabpanel" id="panel-edit" aria-labelledby="tab-edit" hidden={!doc || panel !== 'edit'}>
+            <div role="tabpanel" id="panel-edit" aria-labelledby="tab-edit" hidden={!doc || workMode !== 'edit'}>
             {doc && axis && (
               <EditPanel
                 tool={tool}
-                onTool={chooseTool}
-                canUndo={history.past.length > 0}
-                canRedo={history.future.length > 0}
-                onUndo={() => historyStep('undo')}
-                onRedo={() => historyStep('redo')}
                 detached={detached}
                 selection={
                   selectedPaths.length
@@ -1414,7 +1412,7 @@ export default function App() {
               />
             )}
             </div>
-            <div role="tabpanel" id="panel-trace" aria-labelledby="tab-trace" hidden={!!doc && panel !== 'trace'}>
+            <div role="tabpanel" id="panel-trace" aria-labelledby="tab-trace" hidden={!!doc && workMode !== 'trace'}>
               {source?.svg ? (
                 <SvgOpened svg={source.svg} onTrace={() => traceInstead()} />
               ) : (

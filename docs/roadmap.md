@@ -60,10 +60,16 @@ See [Editing shapes](features/editing-shapes.md), [Colours and background](featu
 | Item | Why | Ticket |
 | --- | --- | --- |
 | **HD mode** (shelved) | A paid, opt-in server-side trace, clearly marked as leaving the device. Built as a beta, then taken out of the app in November 2026 so Inlay stays free ([ADR 0004](adr/0004-free-with-tips.md)); the server code is dormant. [Plan](hd-mode.md). | [#46](https://github.com/mtblck/inlaytrace/issues/46) |
+| **Edit mode** | Grow the editor into a mode with the tools a trace needs: boolean ops, a shapes panel, then pen and shapes, eraser and knife. The workspace shell (modes above the canvas, a tool rail beside it) is in. [ADR 0005](adr/0005-editor-scope.md). | [#197](https://github.com/mtblck/inlaytrace/issues/197) |
+| **Clean up mode** | Fix the image before tracing: crop, rotate, brushes, levels, as an op list replayed on the original. | [#214](https://github.com/mtblck/inlaytrace/issues/214) |
 
 ## Not planned
 
 - **Uploading images by default.** Local is the point; HD mode would be opt-in.
 - **GPL/AGPL code** (Potrace, AutoTrace, `@imgly/*`). The repo is MIT.
-- **A general vector editor.** Edits exist to fix traces; Figma and Illustrator
-  are better at everything else, and Copy SVG gets you there.
+- **A general vector editor.** Edits exist to fix traces. Drawing and cutting
+  shapes (pen, shapes, boolean ops, eraser, knife) and cleaning up the image
+  before tracing are in, for that ([ADR 0005](adr/0005-editor-scope.md));
+  artboards, symbols, masks, clip paths, filters, text layout, layers and
+  plugins are not. Figma and Illustrator are better there, and Copy SVG gets
+  you there.

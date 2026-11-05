@@ -23,11 +23,15 @@ export function swatchColors(paths: { fill: string; gradient?: { stops: { color:
   return [...seen]
 }
 
-
 /** A GIMP palette, which Inkscape and Krita read too. Each colour named by its hex. */
 export function toGpl(colors: string[], name: string): string {
   const lines = ['GIMP Palette', `Name: ${name.replace(/[\r\n]+/g, ' ')}`, 'Columns: 0', '#']
-  for (const c of colors) lines.push(`${rgb(c).map((v) => String(v).padStart(3)).join(' ')}\t${c}`)
+  for (const c of colors)
+    lines.push(
+      `${rgb(c)
+        .map((v) => String(v).padStart(3))
+        .join(' ')}\t${c}`,
+    )
   return lines.join('\n') + '\n'
 }
 
