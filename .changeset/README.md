@@ -20,5 +20,5 @@ release as written (`changelog.mjs` here formats it).
 To release: `npm run version-packages` on a branch (it runs `changeset
 version`, which bumps `packages/inlay/package.json` and writes
 `packages/inlay/CHANGELOG.md`, copies it to `docs/changelog.md`, then updates
-the lockfile to match), and merge that PR. The release workflow stages any version that isn't on npm yet; it
-goes public when a maintainer approves it (see CONTRIBUTING).
+the lockfile to match), and merge that PR. Merging it publishes: the release workflow publishes any version
+that isn't on npm yet, tags it and makes the GitHub release (see CONTRIBUTING).

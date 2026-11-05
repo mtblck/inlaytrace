@@ -1,19 +1,18 @@
 name: Release
 
-# Stages a new version of the inlaytrace package for Matt to approve. Versions
-# come from Changesets (see .changeset/README.md): merge the PR that ran
-# `npm run version-packages`, and this stages it. Runs when the package's
-# package.json changes on main, or by hand from the Actions tab.
+# Publishes a new version of the inlaytrace package (ADR 0006). Versions come
+# from Changesets (see .changeset/README.md): merging the PR that ran
+# `npm run version-packages` is the approval, and this run publishes it, tags
+# it `inlaytrace@x.y.z` and makes the GitHub release from the version's
+# CHANGELOG section (and any missing for older tags). Runs when the package's
+# package.json changes on main, or by hand from the Actions tab to finish a
+# half-done release.
 #
 # Auth is npm trusted publishing: GitHub proves to npm which workflow is
 # running, so no npm token is stored anywhere, and the release carries a
-# provenance statement linking it to this repo and commit. The trusted
-# publisher may only *stage*: nothing is public until a maintainer approves it
-# with two-factor authentication (`npx npm@11.21.1 stage list inlaytrace`, then
-# `npx npm@11.21.1 stage approve <id>`). After approving, run this workflow from
-# the Actions tab: it finds the version on npm, publishes nothing, tags it and
-# makes the GitHub release from the version's CHANGELOG section (and any
-# missing for older tags).
+# provenance statement linking it to this repo and commit. Keep this file's
+# name: the trusted publisher on npmjs.com (inlaytrace -> Settings -> Trusted
+# publishers, repository mtblck/inlaytrace, workflow release.yml) names it.
 on:
   push:
     branches: [main]
@@ -36,14 +35,14 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write # pushes the version tag
-      id-token: write # trusted publishing (stage only) and provenance
+      id-token: write # trusted publishing and provenance
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-node@v7.1.0
         with:
           node-version: 24
           cache: npm
-      # `npm stage` and trusted publishing need a recent npm; pin a known one.
+      # Trusted publishing needs npm 11.5.1 or newer; pin a known one.
       - run: npm install -g npm@11.21.1 && npm --version
       - name: Is this version on npm yet?
         id: version
@@ -66,13 +65,18 @@ jobs:
           npm run build -w packages/inlay
           npm run check -w packages/inlay
           node packages/inlay/test/smoke.mjs
-      # `npm stage` doesn't understand workspaces, so it runs in the package's folder.
+      # Publishing from the package's folder publishes only the package, not the workspace root.
       - if: steps.version.outputs.publish == 'true'
-        name: Stage inlaytrace@${{ steps.version.outputs.version }}
+        name: Publish inlaytrace@${{ steps.version.outputs.version }}
         working-directory: packages/inlay
         run: |
-          npm stage publish --access public --provenance
-          echo "::notice::inlaytrace@${{ steps.version.outputs.version }} is staged. Approve it with 'npx npm@11.21.1 stage list inlaytrace' and 'npx npm@11.21.1 stage approve <id>', then re-run this workflow to tag it and make the GitHub release."
+          npm publish --access public --provenance
+          # The tag step checks npm for the version; give the registry a moment to show it.
+          for i in $(seq 1 12); do
+            npm view "inlaytrace@${{ steps.version.outputs.version }}" version > /dev/null 2>&1 && exit 0
+            sleep 10
+          done
+          echo "::warning::npm doesn't list the new version yet; re-run this workflow to tag it."
       # Every run, not only publishing ones: if a publish succeeded but its tag
       # push failed, a re-run (which publishes nothing) still makes the tag.
       - name: Tag the release
