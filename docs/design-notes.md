@@ -618,3 +618,16 @@ time (download included); upscaling a 120 × 80 mark about 2 s. The steps give a
 prepared copy of the image that is traced and compared against instead of the
 original; the original is still what's saved.
 
+**Gap closing joins only small breaks, measured in widths and pixels (#145).**
+A broken outline lets a fill leak and costs a plotter a pen lift, but some gaps
+are drawn. On a new fixture (`broken.svg`, 3.2 px lines broken 1.6–3.8 px
+apart, plus dashes four widths apart), Line art and Centerline went from 13
+pieces to all 9 and Outline art to 10 (its T is two straight strokes it keeps
+as shapes, outside the lines it joins), with wrong pixels unchanged. A limit in
+widths alone (1.6) joined the 8 px junction fixture's dashes, a width apart,
+and the pen drawing's chimney, 10 px short of its roof: so it's capped at
+5.5 px too. A JPEG's or a faint pen's breaks are a few pixels on any line.
+Every other fixture scored as before. Ends come from the pruned skeleton (its
+degree-1 pixels) rather than GIMP's curvature on the ink's border, since the
+skeleton is already there for Centerline and Outline art, and its direction is
+taken a few widths back, past the end's round cap.

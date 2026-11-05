@@ -34,6 +34,7 @@ import { serializePath, type PathNode, type Pt, type Subpath } from './path'
 import { complete, endDir, sample, SHARP, SMOOTH, startDir, straightEnd, turn } from './layers'
 import { regionWidths, skeletonStrokes } from './skeleton'
 import { shadings, type Gradient } from './gradient'
+import { closeGaps } from './gaps'
 
 export type InlayOptions = FitOptions & {
   /** Regions smaller than speckle × speckle pixels are merged into their surroundings. */
@@ -81,7 +82,8 @@ export type InlayOptions = FitOptions & {
   /**
    * How many times the drawing was enlarged before tracing (an upscaled small
    * image, or a full-size trace of one usually traced smaller). The widths
-   * `strokes` takes as lines (2.5–8 px) grow with it. Default 1.
+   * `strokes` takes as lines (2.5–8 px) grow with it, and so do the gaps
+   * `closeGaps` closes. Default 1.
    */
   scale?: number
   /**
@@ -99,6 +101,12 @@ export type InlayOptions = FitOptions & {
    * them.
    */
   lines?: ArrayLike<number>
+  /**
+   * Join a line's ends across small breaks (up to 1.6 times the line's width,
+   * and 5.5 px) before tracing (gaps.ts): line art's ink, and Outline art's
+   * lines (`strokes`). Off by default: some gaps are drawn.
+   */
+  closeGaps?: boolean
 } & (
     /**
      * `merge` folds colours together before any region is built, so the edge
@@ -189,6 +197,8 @@ export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOpt
   if (!o.pixels && !(o.mode === 'palette' && o.photo)) joinDiagonals(labels, w, h, rgba, drawn)
   const labs = o.mode === 'palette' && !o.photo ? colors.map((c) => (c ? oklab(hexToRgb(c)) : null)) : undefined
   mergeSpecks(labels, w, h, Math.max(0, Math.round(o.speckle)) ** 2, labs)
+  // Joins can close off a pocket of paper too small to keep: specks again after.
+  if (o.mode === 'binary' && o.closeGaps && closeInkGaps(labels, w, h, o.scale)) mergeSpecks(labels, w, h, Math.max(0, Math.round(o.speckle)) ** 2)
   if (labs && !o.pixels) mergeSlivers(labels, w, h, labs, o.lines)
   const lines = o.mode === 'palette' && o.strokes && labs && !o.pixels ? strokesOf(rgba, labels, w, h, colors, labs, drawn, o) : []
 
@@ -806,6 +816,15 @@ function labelPalette(rgba: ArrayLike<number>, w: number, h: number, palette: st
   return { labels: fixed, colors, drawn }
 }
 
+/** Line art's ink is label 0: close its gaps (gaps.ts), the joins becoming ink. Whether anything was joined. */
+function closeInkGaps(labels: Int32Array, w: number, h: number, scale?: number): boolean {
+  const ink = new Uint8Array(w * h)
+  for (let i = 0; i < ink.length; i++) ink[i] = labels[i] === 0 ? 1 : 0
+  if (!closeGaps(ink, w, h, { scale })) return false
+  for (let i = 0; i < ink.length; i++) if (ink[i]) labels[i] = 0
+  return true
+}
+
 export function labelBinary(rgba: ArrayLike<number>, w: number, h: number, threshold: number | 'auto' | null) {
   const n = w * h
   const lum = new Uint8Array(n)
@@ -1360,7 +1379,7 @@ function chamfer(comp: Int32Array, w: number, h: number, sign: 1 | -1, into?: In
  * to the shapes either side, which meet under the line's middle. The paper is
  * never a line, however thin its gaps.
  */
-function strokesOf(rgba: ArrayLike<number>, labels: Int32Array, w: number, h: number, colors: string[], labs: (Rgb | null)[], drawn: boolean[], o: FitOptions & { scale?: number }): InlayPath[] {
+function strokesOf(rgba: ArrayLike<number>, labels: Int32Array, w: number, h: number, colors: string[], labs: (Rgb | null)[], drawn: boolean[], o: FitOptions & { scale?: number; closeGaps?: boolean }): InlayPath[] {
   const n = w * h
   const k = Math.max(1, o.scale ?? 1)
   const widest = LINE_WIDEST * k
@@ -1424,7 +1443,10 @@ function strokesOf(rgba: ArrayLike<number>, labels: Int32Array, w: number, h: nu
     }
     if (kept < LINE_SHARE * all) continue
     for (let i = 0; i < n; i++) if (ink[i] && !fits(pieces.comp[i])) ink[i] = skel[i] = 0
-    const { subs, measured } = skeletonStrokes(ink, w, h, o, skel)
+    // Breaks in the line joined, and the skeleton thinned again to run through them.
+    // Other colours' lines, already drawn, are in the way: a join doesn't cross them.
+    const joined = o.closeGaps && closeGaps(ink, w, h, { scale: k, blocked: line, skel }) > 0
+    const { subs, measured } = skeletonStrokes(ink, w, h, o, joined ? undefined : skel)
     if (!subs.length) continue
     // Ink past a line's end that the stroke doesn't reach stays a shape of the
     // line's colour: a dot drawn on the end, like a flagpole's knob.

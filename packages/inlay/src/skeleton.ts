@@ -41,7 +41,7 @@ export function skeletonStrokes(ink: Uint8Array, w: number, h: number, o: { tole
  * transform's median is out by a pixel on even widths, where the skeleton
  * can't sit on the middle.)
  */
-function strokeWidthOf(skel: Uint8Array, ink: Uint8Array, w: number) {
+export function strokeWidthOf(skel: Uint8Array, ink: Uint8Array, w: number) {
   let area = 0
   let length = 0
   for (let i = 0; i < ink.length; i++) {
@@ -140,7 +140,7 @@ for (let m = 0; m < 256; m++) {
   SPARE[m] = b >= 2 && pieces(p) === 1 ? 1 : 0
 }
 
-function thin(ink: Uint8Array, w: number, h: number): Uint8Array {
+export function thin(ink: Uint8Array, w: number, h: number): Uint8Array {
   // Work on a copy with a blank one-pixel border, so no neighbour is off the edge.
   const W = w + 2
   const img = new Uint8Array(W * (h + 2))
@@ -204,7 +204,7 @@ function thin(ink: Uint8Array, w: number, h: number): Uint8Array {
 const degree = (img: Uint8Array, w: number, h: number, i: number) => neighbours(img, w, h, i % w, (i / w) | 0).reduce((s, v) => s + v, 0)
 
 /** Remove branches from an end to a junction shorter than `min` pixels, until none are left. */
-function prune(skel: Uint8Array, w: number, h: number, min: number) {
+export function prune(skel: Uint8Array, w: number, h: number, min: number) {
   for (let pass = 0; pass < 4; pass++) {
     let removed = false
     for (let i = 0; i < skel.length; i++) {
