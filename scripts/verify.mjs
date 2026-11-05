@@ -628,10 +628,6 @@ check(await viewIs('Split'), 'a new image opens on Split')
 const modes = await page.getByRole('tablist', { name: 'Mode' }).getByRole('tab').allInnerTexts()
 check(modes.join() === 'Trace,Edit', `the mode switcher shows Trace and Edit (${modes.join(', ')})`)
 check((await page.locator('[data-rail]').count()) === 0, 'Trace mode has no tool rail')
-// Edit SVG, beside Download (#201): switches to Edit mode, and isn't offered once there.
-await page.getByRole('button', { name: 'Edit SVG' }).click()
-check((await page.getByRole('tab', { name: /Edit/ }).getAttribute('aria-selected')) === 'true' && (await page.getByRole('button', { name: 'Edit SVG' }).count()) === 0, 'Edit SVG beside Download switches to Edit mode')
-await page.getByRole('tab', { name: /Trace/ }).click()
 await page.getByRole('tab', { name: /Edit/ }).click()
 check(await viewIs('Vector'), 'starting to edit switches to Vector, hiding the original')
 const rail = page.locator('[data-rail]')
@@ -652,6 +648,10 @@ await page.getByRole('radio', { name: 'Split' }).click()
 await page.getByRole('tab', { name: /Trace/ }).click()
 await page.getByRole('tab', { name: /Edit/ }).click()
 check(await viewIs('Split'), 'a view picked afterwards sticks')
+await page.getByRole('tab', { name: /Trace/ }).click()
+// Edit SVG, beside Download (#201): switches to Edit mode, and isn't offered once there.
+await page.getByRole('button', { name: 'Edit SVG' }).click()
+check((await page.getByRole('tab', { name: /Edit/ }).getAttribute('aria-selected')) === 'true' && (await page.getByRole('button', { name: 'Edit SVG' }).count()) === 0, 'Edit SVG beside Download switches to Edit mode')
 await page.getByRole('tab', { name: /Trace/ }).click()
 
 for (const mode of ['Difference', 'Vector']) {

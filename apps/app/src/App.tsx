@@ -129,8 +129,9 @@ export default function App() {
     setMode('vector')
   }, [])
   const [tool, setTool] = useState<Tool>('select')
-  /** Opened as the SVG editor (/app/?mode=edit, from the site's /svg-editor/ page): the first file opens in Edit mode. */
-  const editFirst = useRef(typeof location !== 'undefined' && new URLSearchParams(location.search).get('mode') === 'edit')
+  /** Opened as the SVG editor (/app/?mode=edit, from the site's /svg-editor/ page): the empty screen asks for an SVG, and the first file opens in Edit mode. */
+  const [editEntry] = useState(() => typeof location !== 'undefined' && new URLSearchParams(location.search).get('mode') === 'edit')
+  const editFirst = useRef(editEntry)
   /** The workspace's mode (components/Workspace.tsx): Trace sets up the trace, Edit fixes its shapes. */
   const [workMode, setWorkMode] = useState<WorkMode>('trace')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -240,13 +241,19 @@ export default function App() {
     // StrictMode runs effects twice in development; restore once.
     if (restoredOnce.current) return
     restoredOnce.current = true
+    // The SVG editor link starts empty, waiting for a file, rather than bringing back the last image.
+    if (editEntry) return
     const seqAtStart = openSeq.current
     void loadSession().then((saved) => {
       // Anything opened meanwhile (a drop, a paste, the sample) wins.
       if (!saved || openSeq.current !== seqAtStart) return
       void openNow(saved.image.file, saved.image.name, { settings: saved.settings, edits: saved.edits, id: saved.image.id })
     })
-  }, [openNow])
+  }, [openNow, editEntry])
+  // A batch isn't the first file: whatever opens after it opens as usual.
+  useEffect(() => {
+    if (batch) editFirst.current = false
+  }, [batch])
   // The image is stored once, after it has traced: one that can't be traced is never brought back.
   const imageSaved = useRef(false)
   useEffect(() => {
@@ -1295,7 +1302,7 @@ export default function App() {
             </>
           ) : (
             <Empty
-              editFirst={editFirst.current}
+              editFirst={editEntry}
               loading={!!source && !trace && status.kind !== 'error'}
               error={loadError ?? (status.kind === 'error' ? status.message : null)}
               onChoose={() => fileInput.current?.click()}
