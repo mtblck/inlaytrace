@@ -111,10 +111,16 @@ function divide(s: InstanceType<Paper['PaperScope']>, items: Item[], sel: DocPat
 export function separate(s: InstanceType<Paper['PaperScope']>, item: Item): Item[] {
   const kids = ((item as unknown as { children?: Path[] }).children ?? [item as unknown as Path]).filter((c) => !c.isEmpty())
   if (kids.length < 2) return [item]
-  // Tested at a point on c's own outline: contours don't cross, so it's inside d or not. (An
+  // Tested at points on c's own outline: contours don't cross, so c is inside d or not. (An
   // interior point won't do: nested contours can share one, the middle of a ring round a dot.)
-  const on = new Map(kids.map((c) => [c, c.getPointAt(c.length * 0.37) ?? c.interiorPoint]))
-  const inside = (c: Path, d: Path) => c !== d && d.contains(on.get(c)!)
+  // Contours can touch, though, so a point that lies on d's outline too says nothing: skip it.
+  const on = new Map(kids.map((c) => [c, [0.37, 0.11, 0.63, 0.89, 0.24, 0.5, 0.76].map((t) => c.getPointAt(c.length * t)).filter(Boolean)]))
+  const inside = (c: Path, d: Path) => {
+    if (c === d) return false
+    const tol = 1e-6 * Math.max(1, d.bounds.width, d.bounds.height)
+    const p = on.get(c)!.find((q) => d.getNearestPoint(q).getDistance(q) > tol)
+    return d.contains(p ?? c.interiorPoint)
+  }
   const depth = kids.map((c) => kids.filter((d) => inside(c, d)).length)
   const outlines = kids.filter((_, k) => depth[k] % 2 === 0)
   if (outlines.length < 2) return [item]

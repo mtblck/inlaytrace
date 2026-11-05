@@ -16,7 +16,8 @@
  * outline let a fill leak into the next area: gap closing (#145) is the fix.
  */
 import type PaperNS from 'paper/dist/paper-core'
-import { newId, ownFill, type Doc, type InkEdits } from './doc'
+import { newId, shownFill, stylePath, type Doc, type DocPath, type InkEdits } from './doc'
+import { normalizeHex } from './svg'
 import { scopeFor } from './mirror'
 import { parsePath, serializePath, type Pt } from './pathdata'
 import { separate } from './boolean'
@@ -26,8 +27,8 @@ type Item = InstanceType<Paper['PathItem']>
 
 export type BucketResult = { doc: Doc; id: string; added: boolean } | { error: string }
 
-/** Below this a face is a sliver between two lines' fitted edges, not an area anyone would fill. */
-const MIN_AREA = 0.5
+/** Below this share of the frame a face is a sliver between two lines' fitted edges, not an area anyone would fill. */
+const MIN_SHARE = 1e-6
 const areaOf = (item: Item) => Math.abs((item as unknown as { area?: number }).area ?? 0)
 
 /**
@@ -40,22 +41,43 @@ export function bucketFill(paper: Paper, doc: Doc, inks: InkEdits, drawn: Readon
   const s = scopeFor(paper)
   const point = new s.Point(at.x, at.y)
   if (at.x < 0 || at.y < 0 || at.x > doc.width || at.y > doc.height) return { error: 'Click inside the drawing.' }
-  const fill = ownFill(colour, inks)
-  const live = doc.paths.filter((p) => !inks.removed.includes(p.fill))
-  const filled = live.filter((p) => !p.stroke && drawn.has(p.id))
+  const want = normalizeHex(colour) ?? colour
+  // Filled shapes you can see: not removed, hidden, see-through or drawn as a line.
+  const filled = doc.paths.filter((p) => !p.stroke && p.opacity !== 0 && drawn.has(p.id) && !inks.removed.includes(p.fill))
 
   // A shape under the click, topmost first, takes the colour.
-  for (let i = live.length - 1; i >= 0; i--) {
-    const p = live[i]
-    if (p.stroke || !drawn.has(p.id)) continue
+  for (let i = filled.length - 1; i >= 0; i--) {
+    const p = filled[i]
     const item = new s.CompoundPath({ pathData: p.d, insert: false }) as Item
     if (!item.bounds.contains(point) || !item.contains(point)) continue
     if (locked.has(p.id)) return { error: 'That shape is locked: unlock it in the Shapes list to fill it.' }
-    if (p.fill === fill && !p.gradient) return { error: 'That shape is already this colour.' }
-    return { doc: { ...doc, paths: doc.paths.map((q) => (q.id === p.id ? (({ gradient: _, ...flat }) => ({ ...flat, fill }))(q) : q)) }, id: p.id, added: false }
+    // Compared as drawn: a recoloured ink shows its new colour, flat.
+    if (shownFill(inks, p.fill) === want && (!p.gradient || inks.recolor[p.fill])) return { error: 'That shape is already this colour.' }
+    return { doc: { ...doc, paths: doc.paths.map((q) => (q.id === p.id ? stylePath(q, { fill: colour }, inks) : q)) }, id: p.id, added: false }
   }
 
-  // Between shapes: the area they enclose there. United pairwise, so a busy drawing stays quick.
+  const face = separate(s, spaceOf(s, doc, filled)).find((f) => f.contains(point) && areaOf(f) >= MIN_SHARE * doc.width * doc.height)
+  if (!face) return { error: 'There’s no area to fill there.' }
+  const d = serializePath(parsePath(face.pathData))
+  if (!d) return { error: 'There’s no area to fill there.' }
+  const id = newId()
+  // At the back, so the lines that bound it stay on top. Its own fill, as StyleFields would set it.
+  const path = stylePath({ id, d, fill: want }, { fill: colour }, inks)
+  return { doc: { ...doc, paths: [path, ...doc.paths] }, id, added: true }
+}
+
+/**
+ * The frame minus every filled shape: the paper between them. The union is the
+ * slow part on a busy drawing, so the last one is kept, for the next click on
+ * the same shapes (a fill adds a shape at the back, inside this space, and the
+ * cache is keyed by what the shapes are, so that's a miss; clicks that recolour
+ * or fail are hits).
+ */
+let cached: { key: DocPath[]; w: number; h: number; space: Item } | null = null
+function spaceOf(s: InstanceType<Paper['PaperScope']>, doc: Doc, filled: DocPath[]): Item {
+  if (cached && cached.w === doc.width && cached.h === doc.height && cached.key.length === filled.length && cached.key.every((p, i) => p === filled[i] || (p.d === filled[i].d && p.id === filled[i].id)))
+    return cached.space
+  // United pairwise, so a busy drawing stays quick.
   let items = filled.map((p) => new s.CompoundPath({ pathData: p.d, insert: false }) as Item)
   while (items.length > 1) {
     const next: Item[] = []
@@ -64,11 +86,6 @@ export function bucketFill(paper: Paper, doc: Doc, inks: InkEdits, drawn: Readon
   }
   const frame = new s.Path.Rectangle({ point: [0, 0], size: [doc.width, doc.height], insert: false }) as unknown as Item
   const space = items.length ? (frame.subtract(items[0], { insert: false }) as Item) : frame
-  const face = separate(s, space).find((f) => f.contains(point) && areaOf(f) >= MIN_AREA)
-  if (!face) return { error: 'There’s no area to fill there.' }
-  const d = serializePath(parsePath(face.pathData))
-  if (!d) return { error: 'There’s no area to fill there.' }
-  const id = newId()
-  // At the back, so the lines that bound it stay on top.
-  return { doc: { ...doc, paths: [{ id, d, fill }, ...doc.paths] }, id, added: true }
+  cached = { key: filled, w: doc.width, h: doc.height, space }
+  return space
 }

@@ -36,6 +36,7 @@ import {
   replacePath,
   reserveIds,
   restoreInk,
+  shownFill,
   visiblePaths,
   type Edits,
 } from './lib/doc'
@@ -599,10 +600,12 @@ export default function App() {
   selectableRef.current = selectableIds
   const inks = useMemo(() => (doc ? inksOf(doc) : []), [doc])
   const strokes = useMemo(() => !!doc && hasStrokes(doc), [doc])
+  // Fill needs the trace's lines filled (not Centerline). A shape given a stroke later just doesn't bound a fill.
+  const lineTrace = useMemo(() => !!traced && hasStrokes(traced), [traced])
   // Strokes can't be mirrored or bound a fill: leave those tools if a trace turns into them.
   useEffect(() => {
-    if (strokes && (tool === 'mirror' || tool === 'fill')) setTool('select')
-  }, [strokes, tool])
+    if ((strokes && tool === 'mirror') || (lineTrace && tool === 'fill')) setTool('select')
+  }, [strokes, lineTrace, tool])
 
   // Shapes that no longer exist (re-trace, undo past their creation), or are
   // hidden or locked now, drop out of the selection, and so do nodes that no
@@ -910,6 +913,11 @@ export default function App() {
   const [filling, setFilling] = useState(false)
   const fillingRef = useRef(false)
   const drawnIds = useMemo(() => new Set(drawn.map((p) => p.id)), [drawn])
+  // Read after the wait for paper.js, so the doc and these are from the same moment.
+  const fillInputs = useRef({ inks: edits.inks, drawnIds, lockedSet, fillColour })
+  fillInputs.current = { inks: edits.inks, drawnIds, lockedSet, fillColour }
+  /** The colours on screen, for the Fill tool's swatches: recolours applied, removed inks dropped. */
+  const shownInks = useMemo(() => [...new Set(inks.map((i) => shownFill(edits.inks, i.hex)).filter((h): h is string => !!h))], [inks, edits.inks])
   /** A click with the Fill tool: the shape there takes the colour, or the area the shapes enclose there becomes a shape. */
   const fillAt = async (at: Pt) => {
     if (fillingRef.current) return
@@ -918,10 +926,13 @@ export default function App() {
     setFillError(null)
     try {
       const paper = await loadPaper()
+      // Let "Filling…" paint before a big drawing's booleans hold the thread.
+      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)))
       // The drawing as it is now, after the wait for paper.js.
       const current = docRef.current
       if (!current) return
-      const r = bucketFill(paper, current, edits.inks, drawnIds, lockedSet, at, fillColour)
+      const { inks, drawnIds, lockedSet, fillColour } = fillInputs.current
+      const r = bucketFill(paper, current, inks, drawnIds, lockedSet, at, fillColour)
       if ('error' in r) return setFillError(r.error)
       editDoc(() => r.doc)
     } catch (error) {
@@ -1020,7 +1031,7 @@ export default function App() {
   const wide = useWide()
   const rail = (
     <ToolRail
-      tools={EDIT_TOOLS(strokes)}
+      tools={EDIT_TOOLS(strokes, lineTrace)}
       tool={tool}
       onTool={chooseTool}
       canUndo={history.past.length > 0}
@@ -1125,7 +1136,7 @@ export default function App() {
         e.preventDefault()
         setShortcutsOpen(true)
       } else if (hasDoc && !e.shiftKey && (key === 'v' || key === 'a' || key === 'm' || key === 'k')) {
-        if ((key !== 'm' && key !== 'k') || !strokes) chooseTool(({ v: 'select', a: 'nodes', m: 'mirror', k: 'fill' } as const)[key])
+        if (!(key === 'm' && strokes) && !(key === 'k' && lineTrace)) chooseTool(({ v: 'select', a: 'nodes', m: 'mirror', k: 'fill' } as const)[key])
         setWorkMode('edit')
         startEditing()
       }
@@ -1649,7 +1660,7 @@ export default function App() {
             {doc && axis && (
               <EditPanel
                 tool={tool}
-                fillFields={<BucketFields colour={fillColour} onColour={setFillColour} inks={inks.map((i) => i.hex)} busy={filling} error={fillError} />}
+                fillFields={<BucketFields colour={fillColour} onColour={setFillColour} inks={shownInks} busy={filling} error={fillError} />}
                 detached={detached}
                 selection={
                   selectedPaths.length

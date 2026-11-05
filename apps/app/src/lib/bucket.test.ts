@@ -2,6 +2,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import type PaperNS from 'paper/dist/paper-core'
 import { bucketFill } from './bucket'
+import { separate } from './boolean'
 import { scopeFor } from './mirror'
 import { NO_INKS, type Doc } from './doc'
 
@@ -75,5 +76,26 @@ describe('paint bucket', () => {
     const gone = ok(bucketFill(paper, doc, { recolor: {}, removed: ['#000000'] }, all, none, { x: 30, y: 30 }, '#ffcc00'))
     expect(area(gone.doc.paths[0].d)).toBeCloseTo(10000, 0)
     expect(bucketFill(paper, doc, NO_INKS, all, none, { x: 150, y: 30 }, '#ffcc00')).toHaveProperty('error')
+  })
+
+  it('knows a recoloured ink is already the colour it shows', () => {
+    const inks = { recolor: { '#000000': '#ff0000' }, removed: [] }
+    expect(bucketFill(paper, doc, inks, all, none, { x: 50, y: 50 }, '#ff0000')).toHaveProperty('error')
+  })
+
+  it('looks through a see-through shape', () => {
+    const clear: Doc = { ...doc, paths: doc.paths.map((p) => (p.id === 'dot' ? { ...p, opacity: 0 } : p)) }
+    const r = ok(bucketFill(paper, clear, NO_INKS, all, none, { x: 50, y: 50 }, '#00ff00'))
+    expect(r.added).toBe(true)
+    expect(area(r.doc.paths[0].d)).toBeCloseTo(50 * 50, 0)
+  })
+
+  it('splits contours that touch into separate areas, not an outline and a hole', () => {
+    // Side by side, sharing the edge x = 30: a point 37% round A lands on that edge, inside B by paper.js's count.
+    const s = scopeFor(paper)
+    const pair = new s.CompoundPath({ pathData: `${square(10, 10, 20)} ${square(30, 10, 20)}`, insert: false })
+    const parts = separate(s, pair as never)
+    expect(parts).toHaveLength(2)
+    expect(parts.map((p) => Math.round(Math.abs((p as unknown as { area: number }).area)))).toEqual([400, 400])
   })
 })
