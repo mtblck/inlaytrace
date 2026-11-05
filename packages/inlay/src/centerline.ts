@@ -21,8 +21,7 @@
 import { serializePath } from './path'
 import { attr, joinDiagonals, labelBinary, mergeSpecks } from './inlay'
 import { closeGaps } from './gaps'
-import { thin } from './skeleton'
-import { skeletonStrokes } from './skeleton'
+import { skeletonStrokes, thin } from './skeleton'
 
 export type CenterlineOptions = {
   /** Ink is darker than this (0–255); 'auto' splits ink from paper by the image's histogram (Otsu); null compares each pixel with its neighbourhood instead. */

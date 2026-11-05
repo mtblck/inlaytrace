@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { closeGaps } from './gaps'
+import { centerline } from './centerline'
+import { trace } from './inlay'
 
 const W = 80
 const H = 60
@@ -86,5 +88,34 @@ describe('closeGaps', () => {
     const ink = page([5, 26, 34, 32], [40, 26, 75, 32])
     expect(closeGaps(page([5, 26, 34, 32], [40, 26, 75, 32]), W, H)).toBe(0)
     expect(closeGaps(ink, W, H, { scale: 2 })).toBe(1)
+  })
+})
+
+describe('closeGaps through the tracers', () => {
+  // A black line on white broken by a 3 px gap, as RGBA.
+  const rgba = () => {
+    const ink = page([5, 28, 37, 31], [40, 28, 75, 31])
+    const px = new Uint8Array(W * H * 4).fill(255)
+    for (let i = 0; i < ink.length; i++) if (ink[i]) px[i * 4] = px[i * 4 + 1] = px[i * 4 + 2] = 0
+    return px
+  }
+  const opts = { threshold: 128, speckle: 2, tolerance: 1, cornerAngle: 45 } as const
+  const subpaths = (d: string) => (d.match(/M/g) ?? []).length
+
+  it('centerline draws the broken line as one stroke, or two without', () => {
+    expect(subpaths(centerline(rgba(), W, H, { ...opts, closeGaps: true }).paths[0].d)).toBe(1)
+    expect(subpaths(centerline(rgba(), W, H, opts).paths[0].d)).toBe(2)
+  })
+
+  it('line art traces it as one shape, or two without', () => {
+    const shapes = (closeGaps: boolean) => trace(rgba(), W, H, { ...opts, mode: 'binary', closeGaps }).paths.map((p) => subpaths(p.d)).reduce((a, b) => a + b, 0)
+    expect(shapes(true)).toBe(1)
+    expect(shapes(false)).toBe(2)
+  })
+
+  it('Outline art draws the broken line as one stroke, or two without', () => {
+    const stroke = (closeGaps: boolean) => trace(rgba(), W, H, { ...opts, mode: 'palette', palette: ['#ffffff', '#000000'], strokes: true, closeGaps }).paths.find((p) => p.stroke)!
+    expect(subpaths(stroke(true).d)).toBe(1)
+    expect(subpaths(stroke(false).d)).toBe(2)
   })
 })
