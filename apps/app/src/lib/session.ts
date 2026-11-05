@@ -14,7 +14,7 @@
 import { PRESETS, settingsFor, type Settings } from '../engine/presets'
 import { checkGradient, normalizeHex } from './svg'
 import { addColors } from './colors'
-import type { Doc, Edits } from './doc'
+import { validOpacity, type Doc, type Edits } from './doc'
 import { checkCleanup } from './cleanup'
 
 const VERSION = 1
@@ -133,7 +133,7 @@ export function checkEdits(x: unknown): Edits {
   if (isObj(d) && typeof d.width === 'number' && typeof d.height === 'number' && Array.isArray(d.paths)) {
     const paths = d.paths
       .filter((p): p is Doc['paths'][number] => isObj(p) && typeof p.id === 'string' && typeof p.d === 'string' && typeof p.fill === 'string')
-      .map(({ id, d, fill, stroke, group, gradient }) => {
+      .map(({ id, d, fill, stroke, group, gradient, opacity }) => {
         const g = gradient === undefined ? null : checkGradient(gradient)
         return {
           id,
@@ -142,10 +142,17 @@ export function checkEdits(x: unknown): Edits {
           ...(typeof stroke === 'number' && Number.isFinite(stroke) && stroke > 0 ? { stroke } : {}),
           ...(typeof group === 'string' && /^g\d+$/.test(group) ? { group } : {}),
           ...(g ? { gradient: g } : {}),
+          ...(validOpacity(opacity) ? { opacity } : {}),
         }
       })
     doc = { width: d.width, height: d.height, paths }
   }
   const cleanup = checkCleanup(x.cleanup)
-  return { inks: { recolor, removed }, doc, background, ...(cleanup?.length ? { cleanup } : {}) }
+  // Path ids only, as the doc uses them.
+  const ids = (v: unknown) => (Array.isArray(v) ? [...new Set(v.filter((i): i is string => typeof i === 'string' && /^[\w-]{1,64}$/.test(i)))] : [])
+  // Only shapes of the saved doc (they're kept with it, as setting one detaches it).
+  const inDoc = new Set(doc?.paths.map((p) => p.id) ?? [])
+  const hidden = ids(x.hidden).filter((i) => inDoc.has(i))
+  const locked = ids(x.locked).filter((i) => inDoc.has(i))
+  return { inks: { recolor, removed }, doc, background, ...(cleanup?.length ? { cleanup } : {}), ...(hidden.length ? { hidden } : {}), ...(locked.length ? { locked } : {}) }
 }

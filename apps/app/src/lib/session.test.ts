@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { checkEdits, checkSettings } from './session'
 import { settingsFor } from '../engine/presets'
-import { buildSvg, groupPaths, reserveGroups } from './doc'
+import { buildSvg, flagIds, groupPaths, ownFill, reserveGroups, stylePath } from './doc'
 
 describe('restoring a saved session', () => {
   it('fills settings from the preset and keeps only well-typed saved fields', () => {
@@ -70,5 +70,46 @@ describe('groups in a saved session', () => {
     expect(checkEdits({ ...base, cleanup }).cleanup).toEqual(cleanup)
     expect(checkEdits({ ...base, cleanup: [...cleanup, { kind: 'script', src: 'x' }] })).not.toHaveProperty('cleanup')
     expect(checkEdits({ ...base, cleanup: [] })).not.toHaveProperty('cleanup')
+  })
+
+  it('keeps hidden and locked shapes and each shape’s opacity (#209), and they export as usual', () => {
+    const base = { inks: { recolor: {}, removed: [] }, background: null }
+    const doc = { width: 10, height: 10, paths: [{ id: 'p1', d: 'M0 0L1 0L1 1Z', fill: '#000000', opacity: 0.5 }, { id: 'p2', d: 'M0 0L2 0L2 2Z', fill: '#ff0000', opacity: 7 }] }
+    const e = checkEdits({ ...base, doc, hidden: ['p1', 'p1', '<bad>', 3, 'p9'], locked: ['p2'] })
+    expect(e.hidden).toEqual(['p1'])
+    expect(e.locked).toEqual(['p2'])
+    expect(e.doc!.paths[0].opacity).toBe(0.5)
+    expect(e.doc!.paths[1]).not.toHaveProperty('opacity')
+    // Hidden is editing state: the export still has both shapes, the first see-through.
+    const svg = buildSvg(e.doc!)
+    expect(svg.match(/<path/g)).toHaveLength(2)
+    expect(svg).toContain('fill="#000000" opacity="0.5"')
+    expect(checkEdits({ ...base, doc: null, hidden: [], locked: 'p1' })).not.toHaveProperty('hidden')
+    expect(checkEdits({ ...base, doc: null, locked: 'p1' })).not.toHaveProperty('locked')
+  })
+
+  it('gives a shape its own fill, stepping off a colour that has been replaced or removed', () => {
+    const inks = { recolor: { '#ff0000': '#0000ff' }, removed: ['#00ff00'] }
+    expect(ownFill('#123456', inks)).toBe('#123456')
+    expect(ownFill('#ff0000', inks)).toBe('#ff0001')
+    expect(ownFill('#00ff00', inks)).toBe('#00ff01')
+    expect(ownFill('#0000ff', { recolor: { '#0000ff': '#000000' }, removed: [] })).toBe('#0000fe')
+  })
+
+  it('styles a shape: fill out of its ink, outline on and off, opacity back to full drops the field', () => {
+    const p = { id: 'p1', d: 'M0 0L1 0L1 1Z', fill: '#000000', gradient: { kind: 'linear' } } as unknown as Parameters<typeof stylePath>[0]
+    const filled = stylePath(p, { fill: '#AABBCC' }, { recolor: {}, removed: [] })
+    expect(filled).toEqual({ id: 'p1', d: 'M0 0L1 0L1 1Z', fill: '#aabbcc' })
+    const outlined = stylePath(filled, { stroke: 3, opacity: 0.4 }, { recolor: {}, removed: [] })
+    expect(outlined).toMatchObject({ stroke: 3, opacity: 0.4 })
+    const back = stylePath(outlined, { stroke: null, opacity: 1 }, { recolor: {}, removed: [] })
+    expect(back).toEqual(filled)
+  })
+
+  it('flags whole groups, and only shapes that exist', () => {
+    const doc = { width: 10, height: 10, paths: [{ id: 'a', d: 'M0 0Z', fill: '#000000', group: 'g1' }, { id: 'b', d: 'M0 0Z', fill: '#000000', group: 'g1' }, { id: 'c', d: 'M0 0Z', fill: '#000000' }] }
+    expect(flagIds(doc, [], ['a'], true).sort()).toEqual(['a', 'b'])
+    expect(flagIds(doc, ['a', 'b', 'c', 'gone'], ['b'], false)).toEqual(['c'])
+    expect(flagIds(doc, ['gone'], ['c'], true)).toEqual(['c'])
   })
 })

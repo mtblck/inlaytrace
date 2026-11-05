@@ -1034,6 +1034,61 @@ if (process.env.FIXTURE) {
   await sv.close()
 }
 
+// ---- Shapes list, hide and lock, fill and stroke (#209), on a 2,500-shape drawing ----
+{
+  const sp = await newPage({ width: 1440, height: 900 })
+  await sp.goto(url)
+  // A pale background, then a 50 × 50 grid of small squares in two colours.
+  const squares = []
+  for (let j = 0; j < 50; j++) for (let i = 0; i < 50; i++) squares.push(`<rect x="${i * 20 + 5}" y="${j * 20 + 5}" width="10" height="10" fill="${(i + j) % 2 ? '#cc3311' : '#113388'}"/>`)
+  const file = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><rect width="1000" height="1000" fill="#eeeeee"/>${squares.join('')}</svg>`
+  await sp.locator('input[type=file]').setInputFiles({ name: 'grid.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(file) })
+  await sp.locator('[data-svg-opened]').waitFor({ state: 'attached', timeout: 15_000 })
+  const list = sp.locator('[data-shapes]')
+  check((await list.locator('[data-shape-group]').count()) === 3, 'the Shapes list has a section per colour')
+  const drawnCount = () => sp.locator(VECTOR).count()
+  const selectedCount = async () => ((await sp.locator('[data-selection-box]').count()) ? Number(await sp.locator('[data-selection-box]').getAttribute('data-selection-box')) : 0)
+  const t0 = Date.now()
+  await list.locator('[data-shape-group="#113388"] button[aria-expanded]').click()
+  await list.locator('[data-shape-row]').first().waitFor()
+  const opened = Date.now() - t0
+  check((await list.locator('[data-shape-row]').count()) === 100 && opened < 1500, `opening a colour of 1,250 shapes lists a page of them quickly (${opened} ms)`)
+  await list.locator('[data-shape-row]').first().locator('button[aria-pressed]:not([data-flag])').click()
+  check((await selectedCount()) === 1, 'clicking a row selects its shape')
+  // Fill and stroke: opacity sets the shape's own, in the export too.
+  check(await sp.locator('[data-style-fields]').isVisible(), 'a selection shows Fill and stroke')
+  await sp.locator('[data-style-fields]').getByLabel('Fill colour').fill('#00aa00')
+  check((await sp.locator('[data-shape-group="#00aa00"]').count()) === 1, 'a fill of its own moves the shape into a colour of its own')
+  // Hide: off the canvas, still exported; Undo shows it again.
+  const all = await drawnCount()
+  const before = await exportSvg(sp)
+  await list.locator('[data-shape-row]').nth(1).locator('[data-flag="hidden"]').click()
+  check((await drawnCount()) === all - 1, 'the eye hides a shape from the canvas')
+  check((await exportSvg(sp)) === before, 'a hidden shape still exports: the file is the same')
+  await sp.keyboard.press(`${MOD}+z`)
+  check((await drawnCount()) === all, 'Undo shows it again')
+  await sp.keyboard.press(`${MOD}+Shift+z`)
+  // Lock the background: a click on it between the squares selects nothing.
+  await sp.keyboard.press('Escape')
+  const sheet = await sp.locator('svg[aria-label="Traced SVG"]').boundingBox()
+  const gap = { x: sheet.x + sheet.width * 0.002, y: sheet.y + sheet.height * 0.002 }
+  await sp.mouse.click(gap.x, gap.y)
+  check((await selectedCount()) === 1, 'the background is clickable before it’s locked')
+  await sp.keyboard.press('Escape')
+  await list.locator('[data-shape-group="#eeeeee"] [data-flag="locked"]').first().click()
+  await sp.mouse.click(gap.x, gap.y)
+  check((await selectedCount()) === 0, 'a locked shape lets the click through')
+  // Hidden and locked are saved with the session.
+  await sp.waitForTimeout(1500)
+  await sp.reload()
+  await sp.locator('[data-shapes]').waitFor({ timeout: 15_000 })
+  check((await drawnCount()) === all - 1 && (await sp.locator('[data-shape-group="#eeeeee"] [data-flag="locked"][data-on]').count()) === 1, 'a reload keeps hidden and locked shapes')
+  await sp.getByRole('button', { name: 'Show all', exact: true }).click()
+  await sp.getByRole('button', { name: 'Unlock all', exact: true }).click()
+  check((await drawnCount()) === all, 'Show all and Unlock all put them back')
+  await sp.close()
+}
+
 // ---- Soft shading as gradients -------------------------------------------------
 {
   const gr = await newPage({ width: 1440, height: 900 })

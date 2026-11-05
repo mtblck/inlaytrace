@@ -24,8 +24,9 @@ import type { CleanupOp } from './cleanup'
  * instead, and `fill` (its average colour) is the ink it belongs to: recolouring
  * that ink fills it flat. Paths with the same `group` are one group: they
  * select together, sit next to each other in paint order, and export as a <g>.
+ * `opacity` (0–1, missing means 1) is the whole shape's (#209).
  */
-export type DocPath = { id: string; d: string; fill: string; stroke?: number; group?: string; gradient?: Gradient }
+export type DocPath = { id: string; d: string; fill: string; stroke?: number; group?: string; gradient?: Gradient; opacity?: number }
 /** A path as drawn, its colour resolved. */
 export type ShownPath = DocPath
 export type Doc = { width: number; height: number; paths: DocPath[] }
@@ -35,9 +36,12 @@ export type InkEdits = { recolor: Record<string, string>; removed: string[] }
  * ink edits it never touches geometry, so it survives re-tracing; it only
  * shows where shapes are removed or a colour is deleted. `cleanup` is Clean
  * up's list of edits to the image (lib/cleanup.ts), replayed onto the original
- * before tracing; missing means none.
+ * before tracing; missing means none. `hidden` and `locked` (#209) are path
+ * ids set aside while editing: a hidden shape isn't drawn on the canvas and a
+ * locked one can't be selected, but both export as usual. They're edits, so
+ * undo steps through them and the session keeps them.
  */
-export type Edits = { inks: InkEdits; doc: Doc | null; background: string | null; cleanup?: CleanupOp[] }
+export type Edits = { inks: InkEdits; doc: Doc | null; background: string | null; cleanup?: CleanupOp[]; hidden?: string[]; locked?: string[] }
 /** `shaded`: every shape in it has a gradient, so its colour is an average, not one the tracer can merge. */
 export type Ink = { hex: string; count: number; shaded?: boolean }
 
@@ -135,6 +139,7 @@ export function visiblePaths(doc: Doc, inks: InkEdits, only?: string) {
       ...(validStroke(p.stroke) ? { stroke: p.stroke } : {}),
       ...(p.group && GROUP.test(p.group) ? { group: p.group } : {}),
       ...(gradient ? { gradient } : {}),
+      ...(validOpacity(p.opacity) ? { opacity: p.opacity } : {}),
     })
   }
   return out
@@ -180,11 +185,14 @@ function grouped(paths: ShownPath[]) {
 
 const GROUP = /^g\d+$/
 const validStroke = (s: unknown): s is number => typeof s === 'number' && Number.isFinite(s) && s > 0
+/** An opacity worth writing: 0 up to (not including) 1. */
+export const validOpacity = (o: unknown): o is number => typeof o === 'number' && Number.isFinite(o) && o >= 0 && o < 1
 
 /** One path as markup: filled (with its gradient, its colour the fallback), or a round-capped stroke in its colour. */
-export function pathMarkup(p: { id?: string; d: string; fill: string; stroke?: number; gradient?: Gradient }) {
-  if (p.stroke) return `<path d="${p.d}" fill="none" stroke="${p.fill}" stroke-width="${Math.round(p.stroke * 100) / 100}" stroke-linecap="round" stroke-linejoin="round"/>`
-  return p.gradient && p.id ? `<path d="${p.d}" fill="url(#${gradientId(p.id)}) ${p.fill}"/>` : `<path d="${p.d}" fill="${p.fill}"/>`
+export function pathMarkup(p: { id?: string; d: string; fill: string; stroke?: number; gradient?: Gradient; opacity?: number }) {
+  const op = validOpacity(p.opacity) ? ` opacity="${Math.round(p.opacity * 1000) / 1000}"` : ''
+  if (p.stroke) return `<path d="${p.d}" fill="none" stroke="${p.fill}" stroke-width="${Math.round(p.stroke * 100) / 100}" stroke-linecap="round" stroke-linejoin="round"${op}/>`
+  return p.gradient && p.id ? `<path d="${p.d}" fill="url(#${gradientId(p.id)}) ${p.fill}"${op}/>` : `<path d="${p.d}" fill="${p.fill}"${op}/>`
 }
 
 /** Whether a document draws strokes (centerline) rather than filled shapes. */
@@ -221,6 +229,53 @@ export function recolorInk(inks: InkEdits, hex: string, to: string | null): InkE
   if (next === hex) delete recolor[hex]
   else recolor[hex] = next
   return { recolor, removed: inks.removed.filter((h) => h !== hex) }
+}
+
+/**
+ * A shape's own fill: the colour asked for, unless that's a traced colour
+ * that's been replaced or removed (the shape would be drawn in the new colour
+ * or vanish); then the nearest colour that isn't, one step of blue away.
+ */
+export function ownFill(hex: string, inks: InkEdits): string {
+  const taken = (h: string) => !!inks.recolor[h] || inks.removed.includes(h)
+  if (!taken(hex)) return hex
+  const n = parseInt(hex.slice(1), 16)
+  for (const step of [1, -1, 2, -2, 3, -3]) {
+    const b = (n & 255) + step
+    if (b < 0 || b > 255) continue
+    const h = `#${((n & 0xffff00) | b).toString(16).padStart(6, '0')}`
+    if (!taken(h)) return h
+  }
+  return hex
+}
+
+/** A shape's own style (#209): fill (flat, out of its ink), stroke (null fills it again) and opacity (1 drops the field). */
+export function stylePath(p: DocPath, patch: { fill?: string; stroke?: number | null; opacity?: number }, inks: InkEdits): DocPath {
+  let q: DocPath = { ...p }
+  if (patch.fill) {
+    const { gradient: _, ...flat } = q
+    q = { ...flat, fill: ownFill(normalizeHex(patch.fill) ?? q.fill, inks) }
+  }
+  if (patch.stroke !== undefined) {
+    const { stroke: _, ...rest } = q
+    q = patch.stroke && patch.stroke > 0 ? { ...rest, stroke: patch.stroke } : rest
+  }
+  if (patch.opacity !== undefined) {
+    const { opacity: _, ...rest } = q
+    q = patch.opacity < 1 ? { ...rest, opacity: Math.max(0, patch.opacity) } : rest
+  }
+  return q
+}
+
+/**
+ * Hidden or locked ids after flagging `ids` on or off (#209): a group goes all
+ * together, and ids no longer in the doc drop out, so a later shape that
+ * happens to reuse one isn't born hidden.
+ */
+export function flagIds(doc: Doc, cur: string[], ids: string[], on: boolean): string[] {
+  const all = new Set(withGroups(doc, ids))
+  const exists = new Set(doc.paths.map((p) => p.id))
+  return (on ? [...new Set([...cur, ...all])] : cur.filter((id) => !all.has(id))).filter((id) => exists.has(id))
 }
 
 export const removeInk = (inks: InkEdits, hex: string): InkEdits =>

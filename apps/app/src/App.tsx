@@ -19,6 +19,8 @@ import {
   docFromTrace,
   arrange,
   docOf,
+  flagIds,
+  stylePath,
   groupPaths,
   hasStrokes,
   reserveGroups,
@@ -40,6 +42,7 @@ import {
 import { push, redo, startHistory, undo, type History } from './lib/history'
 import { centreAxis, likelyAxis, mirrorDoc, type Axis } from './lib/mirror'
 import { booleanOp, type BooleanOp } from './lib/boolean'
+import { ShapesList, StyleFields, type ShapeFlag, type StylePatch } from './components/Shapes'
 import { addOp, BRUSH_DEFAULT, BRUSH_MAX, BRUSH_MIN, MAX_OPS, type BrushSettings, type CleanupOp } from './lib/cleanup'
 import type { CleanTool, CropDraft } from './components/CleanUp'
 import { loadPaper } from './lib/paper'
@@ -585,6 +588,14 @@ export default function App() {
   const doc = traced ? docOf(edits, traced) : null
   const svg = useMemo(() => (doc ? buildSvg(doc, edits.inks, undefined, edits.background) : ''), [doc, edits.inks, edits.background])
   const shown = useMemo(() => (doc ? visiblePaths(doc, edits.inks) : []), [doc, edits.inks])
+  // Hidden shapes aren't drawn and locked ones can't be picked (#209); both still export.
+  const hiddenSet = useMemo(() => new Set(edits.hidden ?? []), [edits.hidden])
+  const lockedSet = useMemo(() => new Set(edits.locked ?? []), [edits.locked])
+  const drawn = useMemo(() => (hiddenSet.size ? shown.filter((p) => !hiddenSet.has(p.id)) : shown), [shown, hiddenSet])
+  const selectable = useMemo(() => (lockedSet.size ? drawn.filter((p) => !lockedSet.has(p.id)) : drawn), [drawn, lockedSet])
+  const selectableIds = useMemo(() => new Set(selectable.map((p) => p.id)), [selectable])
+  const selectableRef = useRef(selectableIds)
+  selectableRef.current = selectableIds
   const inks = useMemo(() => (doc ? inksOf(doc) : []), [doc])
   const strokes = useMemo(() => !!doc && hasStrokes(doc), [doc])
   // Strokes can't be mirrored: leave the Mirror tool if a trace turns into them.
@@ -592,16 +603,16 @@ export default function App() {
     if (strokes && tool === 'mirror') setTool('select')
   }, [strokes, tool])
 
-  // Shapes that no longer exist (re-trace, undo past their creation) drop out
-  // of the selection, and so do nodes that no longer exist in the edited shape.
+  // Shapes that no longer exist (re-trace, undo past their creation), or are
+  // hidden or locked now, drop out of the selection, and so do nodes that no
+  // longer exist in the edited shape.
   useEffect(() => {
-    const ids = new Set(shown.map((p) => p.id))
-    if (selectedIds.some((id) => !ids.has(id))) {
-      const kept = selectedIds.filter((id) => ids.has(id))
+    if (selectedIds.some((id) => !selectableIds.has(id))) {
+      const kept = selectedIds.filter((id) => selectableIds.has(id))
       setSelectedIds(kept)
       if (kept[0] !== selectedIds[0]) setSelectedNodes([])
     }
-  }, [shown, selectedIds])
+  }, [selectableIds, selectedIds])
   const editing = shown.find((p) => p.id === selectedIds[0]) ?? null
   const editingSubs = useMemo(() => (editing ? parsePath(editing.d) : null), [editing])
   useEffect(() => {
@@ -618,8 +629,9 @@ export default function App() {
     (id: string | null, how: SelectMode = 'set') => {
       setSelectedIds((cur) => {
         if (id === null) return how === 'set' ? [] : cur
-        // A shape in a group stands for its whole group.
-        const ids = docRef.current ? withGroups(docRef.current, [id]) : [id]
+        // A shape in a group stands for its whole group (but for any of it hidden or locked).
+        const ids = (docRef.current ? withGroups(docRef.current, [id]) : [id]).filter((x) => selectableRef.current.has(x))
+        if (!ids.length) return cur
         if (how === 'set') return ids
         if (how === 'subtract') return cur.filter((x) => !ids.includes(x))
         if (how === 'add') return [...cur, ...ids.filter((x) => !cur.includes(x))]
@@ -653,6 +665,9 @@ export default function App() {
     const ids = new Set(selectedIds)
     return doc.paths.filter((p) => ids.has(p.id))
   }, [doc, selectedIds])
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
+  /** The selection as drawn (colours resolved), for Fill and stroke. */
+  const selectedShown = useMemo(() => shown.filter((p) => selectedSet.has(p.id)), [shown, selectedSet])
   const selectionBox = useMemo(() => union(selectedPaths.map((p) => pathBounds(p.d))), [selectedPaths])
 
   type DocT = NonNullable<typeof doc>
@@ -760,7 +775,7 @@ export default function App() {
       if (editingSubs) selectNodes(nodesInRect(editingSubs, rect), how)
       return
     }
-    const hits = doc ? withGroups(doc, pathsInRect(shown, rect)) : pathsInRect(shown, rect)
+    const hits = (doc ? withGroups(doc, pathsInRect(selectable, rect)) : pathsInRect(selectable, rect)).filter((id) => selectableIds.has(id))
     setSelectedIds((cur) => {
       if (how === 'set') return hits
       if (how === 'subtract') return cur.filter((id) => !hits.includes(id))
@@ -837,6 +852,29 @@ export default function App() {
     [selectedPaths, nodesOfSelection],
   )
 
+  /**
+   * Hide or show, lock or unlock shapes (#209): an edit, so it undoes. A group
+   * goes all together, so it never splits. They're kept by shape id, and a
+   * trace's ids are new each time it's traced, so the first one detaches the
+   * drawing from the trace, like a shape edit.
+   */
+  const flagShapes = useCallback(
+    (flag: ShapeFlag, ids: string[], on: boolean) => {
+      if (!traced) return
+      commit((e) => {
+        const d = docOf(e, traced)
+        const next = flagIds(d, e[flag] ?? [], ids, on)
+        const { [flag]: _, ...rest } = e
+        return { ...rest, doc: d, ...(next.length ? { [flag]: next } : {}) }
+      })
+    },
+    [commit, traced],
+  )
+  /** The selection's own fill, outline or opacity (#209). A slider's drag shares a key, so it undoes as one step. */
+  const styleSelection = (patch: StylePatch, key: string) => {
+    const ids = new Set(selectedIds)
+    editDoc((d) => ({ ...d, paths: d.paths.map((p) => (ids.has(p.id) ? stylePath(p, patch, edits.inks) : p)) }), key)
+  }
   /** Group, ungroup and paint order: shape edits on the selection, each one undo step. */
   const groupSelection = () => selectedIds.length > 1 && editDoc((d) => groupPaths(d, selectedIds))
   const ungroupSelection = () => selectedIds.length && editDoc((d) => ungroupPaths(d, selectedIds))
@@ -1015,7 +1053,7 @@ export default function App() {
         if (tool === 'nodes' && editingSubs) setSelectedNodes(allRefs(editingSubs))
         else {
           if (tool !== 'select') setTool('select')
-          setSelectedIds(shown.map((p) => p.id))
+          setSelectedIds(selectable.map((p) => p.id))
           setSelectedNodes([])
           setWorkMode('edit')
           startEditing()
@@ -1398,7 +1436,8 @@ export default function App() {
                   )}
                   <Canvas
                     imageUrl={(traceSource ?? source).url}
-                    paths={shown}
+                    paths={drawn}
+                    locked={lockedSet}
                     width={doc!.width}
                     height={doc!.height}
                     mode={mode}
@@ -1609,6 +1648,9 @@ export default function App() {
                 onMirror={mirror}
               />
             )}
+            {doc && tool === 'select' && selectedShown.length > 0 && (
+              <StyleFields key={selectedIds.join(' ')} paths={selectedShown} defaultStroke={Math.max(1, Math.round(Math.max(doc.width, doc.height) / 200))} onStyle={styleSelection} />
+            )}
             {doc && (
               <Inks
                 inks={inks}
@@ -1637,6 +1679,9 @@ export default function App() {
                 onMerge={mergeInk}
                 onUnmerge={unmergeInk}
               />
+            )}
+            {doc && workMode === 'edit' && (
+              <ShapesList paths={shown} hidden={hiddenSet} locked={lockedSet} selected={selectedSet} onSelect={select} onFlag={flagShapes} />
             )}
             </div>
             <div role="tabpanel" id="panel-trace" aria-labelledby="tab-trace" hidden={!!doc && workMode !== 'trace'}>
