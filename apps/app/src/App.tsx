@@ -40,7 +40,7 @@ import {
 import { push, redo, startHistory, undo, type History } from './lib/history'
 import { centreAxis, likelyAxis, mirrorDoc, type Axis } from './lib/mirror'
 import { booleanOp, type BooleanOp } from './lib/boolean'
-import { addOp, type CleanupOp } from './lib/cleanup'
+import { addOp, BRUSH_DEFAULT, BRUSH_MAX, BRUSH_MIN, MAX_OPS, type BrushSettings, type CleanupOp } from './lib/cleanup'
 import type { CleanTool, CropDraft } from './components/CleanUp'
 import { loadPaper } from './lib/paper'
 import { deleteNodes, moveHandle, moveNode, moveNodes, parsePath, serializePath, nodeCount, type NodePart, type NodeRef, type Pt } from './lib/pathdata'
@@ -380,9 +380,11 @@ export default function App() {
   const [heldCleanup, setHeldCleanup] = useState<CleanupOp[] | null>(null)
   const tracedCleanup = workMode === 'clean' && heldCleanup ? heldCleanup : cleanup
   const cleanable = !!source && !source.svg
-  const tracedJson = JSON.stringify(tracedCleanup)
+  // Written out once per list, not per render: strokes make it long.
+  const tracedJson = useMemo(() => JSON.stringify(tracedCleanup), [tracedCleanup])
+  const cleanupJson = useMemo(() => JSON.stringify(cleanup), [cleanup])
   /** The list differs from the one traced: leaving Clean up re-traces. Compared by content, so undoing back to it counts as no change. */
-  const cleanupPending = JSON.stringify(cleanup) !== tracedJson
+  const cleanupPending = cleanupJson !== tracedJson
   const cleanKey = cleanable && tracedCleanup.length ? `${source!.url}|${tracedJson}` : null
   const [cleaned, setCleaned] = useState<{ key: string; source: Source } | null>(null)
   useEffect(() => {
@@ -419,6 +421,14 @@ export default function App() {
   const [cleanTool, setCleanTool] = useState<CleanTool>('crop')
   const [cropDraft, setCropDraft] = useState<CropDraft | null>(null)
   const [showOriginal, setShowOriginal] = useState(false)
+  const [brush, setBrush] = useState<BrushSettings>(BRUSH_DEFAULT)
+  /** The next click on the image picks the brush colour. */
+  const [cleanPick, setCleanPick] = useState(false)
+  const chooseCleanTool = (t: CleanTool) => {
+    setCleanTool(t)
+    setCropDraft(null)
+    setCleanPick(false)
+  }
   const cleanSeq = useRef(0)
   /**
    * Change the list. The first change made over shape edits asks first, and
@@ -426,6 +436,7 @@ export default function App() {
    * the image they were drawn on.
    */
   const editCleanup = (next: CleanupOp[], key?: string) => {
+    if (next.length > MAX_OPS && next.length > cleanup.length) return setLoadError(`Clean up keeps up to ${MAX_OPS} changes. Undo all clean-up, or download the cleaned PNG and open that to carry on.`)
     const k = key ?? `cleanup-${++cleanSeq.current}`
     if (!detached) return commit((e) => ({ ...e, cleanup: next }), k)
     guard('Cleaning up the image re-traces it, which replaces your shape edits. Undo brings them back.', 'Discard edits and clean up', () => {
@@ -954,10 +965,7 @@ export default function App() {
     <ToolRail
       tools={CLEAN_TOOLS}
       tool={cleanTool}
-      onTool={(t) => {
-        setCleanTool(t)
-        setCropDraft(null)
-      }}
+      onTool={chooseCleanTool}
       canUndo={history.past.length > 0}
       canRedo={history.future.length > 0}
       onUndo={() => historyStep('undo')}
@@ -1017,13 +1025,23 @@ export default function App() {
       } else if (workMode === 'clean') {
         // Clean up's own keys; Edit's tool keys don't reach past it, so leaving always goes through the mode switch.
         if (e.key === '?' || (e.key === '/' && e.shiftKey)) setShortcutsOpen(true)
-        else if (key === 'c' || key === 'l') {
-          setCleanTool(key === 'c' ? 'crop' : 'straighten')
-          setCropDraft(null)
+        else if (key === 'c' || key === 'l' || key === 'b' || key === 'e') chooseCleanTool(({ c: 'crop', l: 'straighten', b: 'brush', e: 'eraser' } as const)[key])
+        else if ((e.code === 'BracketLeft' || e.code === 'BracketRight') && (cleanTool === 'brush' || cleanTool === 'eraser')) {
+          // [ ] size, Shift + [ ] hardness, as in most paint programs.
+          e.preventDefault()
+          const up = e.code === 'BracketRight'
+          setBrush((b) =>
+            e.shiftKey
+              ? { ...b, hardness: Math.round(Math.min(1, Math.max(0, b.hardness + (up ? 0.1 : -0.1))) * 10) / 10 }
+              : { ...b, size: Math.min(BRUSH_MAX, Math.max(BRUSH_MIN, up ? Math.max(b.size + 1, Math.round(b.size * 1.25)) : Math.min(b.size - 1, Math.round(b.size / 1.25)))) },
+          )
         } else if (e.key === 'Enter' && cropDraft && el?.tagName !== 'BUTTON' && el?.tagName !== 'A') {
           e.preventDefault()
           applyCrop()
-        } else if (e.key === 'Escape') setCropDraft(null)
+        } else if (e.key === 'Escape') {
+          setCropDraft(null)
+          setCleanPick(false)
+        }
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length && tool !== 'mirror') {
         e.preventDefault()
         deleteSelection()
@@ -1367,6 +1385,14 @@ export default function App() {
                         draft={cropDraft}
                         onDraft={setCropDraft}
                         onStraighten={(degrees) => editCleanup(addOp(cleanup, { kind: 'rotate', degrees }))}
+                        brush={brush}
+                        onBrush={setBrush}
+                        onStroke={(op) => editCleanup(addOp(cleanup, op))}
+                        picking={cleanPick}
+                        onPick={(hex) => {
+                          setBrush((b) => ({ ...b, color: hex }))
+                          setCleanPick(false)
+                        }}
                       />
                     </Suspense>
                   )}
@@ -1539,6 +1565,11 @@ export default function App() {
                       onShowOriginal={setShowOriginal}
                       pending={cleanupPending}
                       onSave={save}
+                      brush={brush}
+                      onBrush={setBrush}
+                      inks={inks}
+                      picking={cleanPick}
+                      onPicking={setCleanPick}
                     />
                   </Suspense>
                 )}

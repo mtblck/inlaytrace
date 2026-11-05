@@ -1,29 +1,69 @@
 /**
- * Clean up mode (#199): the canvas and panel for editing the image before it
- * is traced. Loaded only when the mode is first opened (App lazy-loads this
- * module), with the replay it uses.
+ * Clean up mode (#199, #202): the canvas and panel for editing the image
+ * before it is traced. Loaded only when the mode is first opened (App
+ * lazy-loads this module), with the replay it uses.
  *
  * The canvas shows the cleaned image, replayed from the list on every change,
  * with the current trace as a faint outline while its geometry still matches.
  * Crop draws a box (handles to adjust, Enter or the panel to apply);
- * Straighten draws a line along something that should be level or upright.
- * The panel holds the rest: quarter turns, an angle, flips, levels, threshold,
- * before and after, and the cleaned PNG.
+ * Straighten draws a line along something that should be level or upright;
+ * Brush and Eraser paint, a stroke at a time. It zooms (pinch, ⌘/Ctrl + wheel
+ * or the buttons) and pans (two fingers, the wheel, or Space or the middle
+ * button and drag) on its own, since painting needs a close look. The panel
+ * holds the rest: quarter turns, an angle, flips, the brush, levels,
+ * threshold, before and after, and the cleaned PNG.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
-import { addOp, adjustmentOf, LEVELS_DEFAULT, MIN_CROP_PX, sameGeometry, setAdjustment, straightenAngle, THRESHOLD_DEFAULT, type CleanupOp, type Img } from '../lib/cleanup'
+import {
+  addOp,
+  adjustmentOf,
+  BRUSH_MAX,
+  BRUSH_MIN,
+  clamp,
+  LEVELS_DEFAULT,
+  MAX_STROKE_POINTS,
+  MIN_CROP_PX,
+  sameGeometry,
+  setAdjustment,
+  straightenAngle,
+  THRESHOLD_DEFAULT,
+  type BrushSettings,
+  type CleanupOp,
+  type Img,
+  type Paint,
+} from '../lib/cleanup'
+import { backgroundOf, composite, dabAt, maskOver, stampSegment, strokeColour, type Dab, type Mask } from '../lib/cleanupPixels'
 import { cleanedPixels, originalPixels, pngOf } from '../lib/cleanupRun'
-import type { ShownPath } from '../lib/doc'
+import type { Ink, ShownPath } from '../lib/doc'
 import type { Source } from '../lib/image'
+import { STEP as ZOOM_STEP, wheelFactor } from '../lib/zoom'
 import { Section, Slider } from './Controls'
 
-export type CleanTool = 'crop' | 'straighten'
+export type CleanTool = 'crop' | 'straighten' | 'brush' | 'eraser'
+export const isPaintTool = (t: CleanTool): t is 'brush' | 'eraser' => t === 'brush' || t === 'eraser'
 /** A crop box being drawn, in fractions of the cleaned image. */
 export type CropDraft = { x: number; y: number; width: number; height: number }
 
 type Pt = { x: number; y: number }
 const HANDLE_PX = 9
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
+const hex2 = (v: number) => v.toString(16).padStart(2, '0')
+/** The colour of the pixel at (x, y), fractions of the image. */
+const pixelHex = (img: Img, x: number, y: number) => {
+  const o = (clamp(Math.floor(y * img.height), 0, img.height - 1) * img.width + clamp(Math.floor(x * img.width), 0, img.width - 1)) * 4
+  return `#${hex2(img.rgba[o])}${hex2(img.rgba[o + 1])}${hex2(img.rgba[o + 2])}`
+}
+const round = (v: number, places: number) => Math.round(v * 10 ** places) / 10 ** places
+
+/** The zoom: `k` times the fitted size, the image's centre moved (tx, ty) screen pixels from the canvas's. */
+type View = { k: number; tx: number; ty: number }
+const FIT: View = { k: 1, tx: 0, ty: 0 }
+
+type Drag =
+  | { kind: 'new' | 'move' | 'resize'; start: Pt; from: CropDraft | null; hx: number; hy: number }
+  | { kind: 'line'; start: Pt }
+  | { kind: 'pan'; x: number; y: number; view: View }
+type Stroke = { op: Paint; base: Img; mask: Mask; touched: boolean; pressure: number; out: Uint8ClampedArray; data: ImageData; colour: [number, number, number, number]; last: Dab | null }
 
 export function CleanCanvas(p: {
   source: Source
@@ -36,6 +76,12 @@ export function CleanCanvas(p: {
   draft: CropDraft | null
   onDraft: (d: CropDraft | null) => void
   onStraighten: (degrees: number) => void
+  brush: BrushSettings
+  onBrush: (b: BrushSettings) => void
+  onStroke: (op: Paint) => void
+  /** The next click picks the brush colour from the image. */
+  picking: boolean
+  onPick: (hex: string) => void
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -53,42 +99,255 @@ export function CleanCanvas(p: {
     return () => ro.disconnect()
   }, [])
 
-  useEffect(() => {
+  const stroke = useRef<Stroke | null>(null)
+  const draw = (from: Img) => {
     const c = canvasRef.current
     if (!c) return
-    c.width = img.width
-    c.height = img.height
-    c.getContext('2d')!.putImageData(new ImageData(img.rgba as Uint8ClampedArray<ArrayBuffer>, img.width, img.height), 0, 0)
+    c.width = from.width
+    c.height = from.height
+    c.getContext('2d')!.putImageData(new ImageData(from.rgba as Uint8ClampedArray<ArrayBuffer>, from.width, from.height), 0, 0)
+  }
+  useEffect(() => {
+    // The image changed under a stroke (an undo mid-stroke): the stroke was drawn on the old one, so it's dropped.
+    stroke.current = null
+    draw(img)
   }, [img])
+  const imgRef = useRef(img)
+  imgRef.current = img
 
   const scale = room.w && room.h ? Math.min(room.w / img.width, room.h / img.height) : 0
   const w = img.width * scale
   const h = img.height * scale
+
+  // ---- Zoom and pan -------------------------------------------------------------
+  const [view, setView] = useState<View>(FIT)
+  // Up to 16 screen pixels an image pixel, or 8× fit if that's more.
+  const maxK = scale ? Math.max(8, 16 / scale) : 8
+  const geo = useRef({ w, h, maxK })
+  geo.current = { w, h, maxK }
+  const fitView = (v: View): View => {
+    const { w, h, maxK } = geo.current
+    const k = clamp(v.k, 1, maxK)
+    if (k < 1.001) return FIT
+    // Keep some of the image under the canvas's centre.
+    return { k, tx: clamp(v.tx, (-w * k) / 2, (w * k) / 2), ty: clamp(v.ty, (-h * k) / 2, (h * k) / 2) }
+  }
+  /** Zoom by `factor` keeping the image point under (cx, cy) on screen where it is; from `base` when given (a pinch). */
+  const zoomAt = (factor: number, cx: number, cy: number, base?: View, to?: Pt) => {
+    const r = boxRef.current!.getBoundingClientRect()
+    const ox = r.left + r.width / 2
+    const oy = r.top + r.height / 2
+    setView((now) => {
+      const v = base ?? now
+      const k = clamp(v.k * factor, 1, geo.current.maxK)
+      const ux = (cx - ox - v.tx) / v.k
+      const uy = (cy - oy - v.ty) / v.k
+      return fitView({ k, tx: (to?.x ?? cx) - ox - k * ux, ty: (to?.y ?? cy) - oy - k * uy })
+    })
+  }
+  const geoView = useRef(view)
+  geoView.current = view
+  const zoomRef = useRef(zoomAt)
+  zoomRef.current = zoomAt
+  // A new size (a crop or a turn) starts from the whole image again.
+  useEffect(() => setView(FIT), [img.width, img.height])
+
+  const hovering = useRef<Pt | null>(null)
+  const space = useRef(false)
+  useEffect(() => {
+    const box = boxRef.current!
+    const centre = () => {
+      const r = box.getBoundingClientRect()
+      return hovering.current ?? { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+    }
+    // A trackpad pinch is a wheel event with ctrlKey set; ⌘/Ctrl + wheel zooms too, and the plain wheel pans once zoomed in.
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        zoomRef.current(wheelFactor(e.deltaY, e.deltaMode), e.clientX, e.clientY)
+      } else if (geoView.current.k > 1) {
+        // Pans only once zoomed in; at fit the wheel scrolls the page as usual.
+        e.preventDefault()
+        const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? box.clientHeight : 1
+        setView((v) => fitView({ ...v, tx: v.tx - e.deltaX * unit, ty: v.ty - e.deltaY * unit }))
+      }
+    }
+    // Safari reports trackpad pinches as gesture events.
+    type Gesture = UIEvent & { scale: number; clientX: number; clientY: number }
+    let last = 1
+    const onGestureStart = (e: Event) => {
+      e.preventDefault()
+      last = 1
+    }
+    const onGestureChange = (e: Event) => {
+      const g = e as Gesture
+      e.preventDefault()
+      zoomRef.current(g.scale / last, g.clientX, g.clientY)
+      last = g.scale
+    }
+    const typing = (el: EventTarget | null) => el instanceof HTMLElement && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === ' ' && hovering.current && !typing(e.target)) {
+        e.preventDefault()
+        space.current = true
+        return
+      }
+      // ⌘/Ctrl + = − 0 while the pointer is over the image.
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || !hovering.current) return
+      const at = centre()
+      if (e.key === '=' || e.key === '+') zoomRef.current(ZOOM_STEP, at.x, at.y)
+      else if (e.key === '-' || e.key === '_') zoomRef.current(1 / ZOOM_STEP, at.x, at.y)
+      else if (e.key === '0') setView(FIT)
+      else return
+      e.preventDefault()
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === ' ') space.current = false
+    }
+    box.addEventListener('wheel', onWheel, { passive: false })
+    box.addEventListener('gesturestart', onGestureStart)
+    box.addEventListener('gesturechange', onGestureChange)
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      box.removeEventListener('wheel', onWheel)
+      box.removeEventListener('gesturestart', onGestureStart)
+      box.removeEventListener('gesturechange', onGestureChange)
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keyup', onKeyUp)
+    }
+    // Attached once: fitView reads geo, a ref, and the rest are refs or state setters.
+  }, [])
+
+  // On-screen size of the image now, for handles and the like that stay the same size on screen.
+  /** Painting, or zoomed in, the whole pane takes touches (strokes, pinches) rather than scrolling the page. */
+  const grabsPane = (isPaintTool(p.tool) && !p.showOriginal) || view.k > 1
+  const sw = w * view.k
+  const sh = h * view.k
 
   /** Pointer position in fractions of the image. */
   const at = (e: { clientX: number; clientY: number }): Pt => {
     const r = overlayRef.current!.getBoundingClientRect()
     return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }
   }
-  const drag = useRef<null | { kind: 'new' | 'move' | 'resize' | 'line'; start: Pt; from: CropDraft | null; hx: number; hy: number }>(null)
+  const drag = useRef<Drag | null>(null)
   const [line, setLine] = useState<{ a: Pt; b: Pt } | null>(null)
+  const [cursor, setCursor] = useState<Pt | null>(null)
   const minW = MIN_CROP_PX / img.width
   const minH = MIN_CROP_PX / img.height
 
-  const onDown = (e: RPointerEvent<SVGSVGElement>) => {
+  // ---- Strokes --------------------------------------------------------------------
+  /** Keep the stroke if it painted anything, and put the canvas back if it isn't kept. */
+  const endStroke = (s: Stroke) => {
+    stroke.current = null
+    if (!s.touched) return draw(s.base)
+    p.onStroke(s.op)
+    // If the stroke wasn't kept (shape edits to confirm first), the canvas goes back to the image as it is.
+    requestAnimationFrame(() => {
+      if (!stroke.current && imgRef.current === s.base) draw(s.base)
+    })
+  }
+  const addPoint = (s: Stroke, pt: Pt, pressure: number) => {
+    // A stroke that long ends there; lifting and painting on carries on.
+    if (s.op.points.length >= MAX_STROKE_POINTS * 3) return endStroke(s)
+    // Stored rounded, and drawn from the stored numbers, so the replay matches to the pixel.
+    const x = round(clamp(pt.x, -0.5, 1.5), 5)
+    const y = round(clamp(pt.y, -0.5, 1.5), 5)
+    const pr = round(pressure, 2)
+    s.pressure = pressure
+    const d = dabAt(s.base, s.op, x, y, pr)
+    // Points closer than a tenth of the brush add nothing but storage.
+    if (s.last && Math.hypot(d.x - s.last.x, d.y - s.last.y) < Math.max(0.75, d.r * 0.1)) return
+    s.op.points.push(x, y, pr)
+    const r = stampSegment(s.mask, s.last, d, s.op.hardness)
+    s.last = d
+    if (!r) return
+    s.touched = true
+    composite(s.out, s.base.rgba, s.base.width, s.mask, s.colour, r)
+    canvasRef.current?.getContext('2d')!.putImageData(s.data, 0, 0, r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0)
+  }
+  const startStroke = (pt: Pt, pressure: number) => {
+    const t = p.tool as 'brush' | 'eraser'
+    const op: Paint = {
+      kind: 'paint',
+      tool: t,
+      ...(t === 'brush' ? { color: p.brush.color.toLowerCase() } : {}),
+      size: round(Math.min(1, p.brush.size / Math.max(img.width, img.height)), 6),
+      hardness: round(p.brush.hardness, 2),
+      points: [],
+    }
+    const out = img.rgba.slice()
+    const s: Stroke = { op, base: img, mask: maskOver({ x0: 0, y0: 0, x1: img.width, y1: img.height }), touched: false, pressure, out, data: new ImageData(out as Uint8ClampedArray<ArrayBuffer>, img.width, img.height), colour: strokeColour(img, op), last: null }
+    stroke.current = s
+    addPoint(s, pt, pressure)
+  }
+  const cancelStroke = () => {
+    if (!stroke.current) return
+    stroke.current = null
+    draw(img)
+  }
+  /** A pen's pressure; a mouse or finger paints at full width. A pen sample with none (touching down, lifting) keeps the last. */
+  const pressureOf = (e: { pointerType: string; pressure: number }) => (e.pointerType !== 'pen' ? 1 : e.pressure > 0 ? e.pressure : (stroke.current?.pressure ?? 0.5))
+
+  // ---- Pointers -------------------------------------------------------------------
+  // Touches down, for a two-finger pinch; the pinch's start; and whether the rest of this touch is spent (a pinch ended).
+  const touches = useRef(new Map<number, Pt>())
+  const pinch = useRef<null | { d: number; m: Pt; view: View }>(null)
+  const spent = useRef(false)
+  const pair = () => {
+    const [a, b] = [...touches.current.values()]
+    return { d: Math.hypot(b.x - a.x, b.y - a.y), m: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } }
+  }
+
+  /** The zoom buttons and the brush bar sit over the canvas: their clicks are theirs. */
+  const onControls = (e: { target: EventTarget }) => e.target instanceof Element && !!e.target.closest('[data-clean-controls]')
+  const capture = (e: RPointerEvent<HTMLDivElement>) => {
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {
+      // A pointer that's already gone: nothing to hold.
+    }
+  }
+  const imageRef = useRef<HTMLDivElement>(null)
+  const onDown = (e: RPointerEvent<HTMLDivElement>) => {
+    if (onControls(e)) return
+    // Crop and Straighten start on the image; round it, at fit, a finger scrolls the page (the panel is below on a phone).
+    if (!grabsPane && !imageRef.current?.contains(e.target as Node)) return
+    if (e.pointerType === 'touch') {
+      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (touches.current.size >= 2) {
+        // A second finger: whatever the first began is dropped, and the two pinch and pan.
+        cancelStroke()
+        drag.current = null
+        setLine(null)
+        capture(e)
+        if (touches.current.size === 2) pinch.current = { ...pair(), view }
+        spent.current = true
+        return
+      }
+      spent.current = false
+    }
+    if (e.button === 1 || (e.button === 0 && space.current)) {
+      e.preventDefault()
+      capture(e)
+      drag.current = { kind: 'pan', x: e.clientX, y: e.clientY, view }
+      return
+    }
     if (p.showOriginal || e.button !== 0) return
     const pt = at(e)
-    e.currentTarget.setPointerCapture(e.pointerId)
+    if (isPaintTool(p.tool) && (p.picking || e.altKey)) return p.onPick(pixelHex(img, pt.x, pt.y))
+    capture(e)
+    if (isPaintTool(p.tool)) return startStroke(pt, pressureOf(e))
     if (p.tool === 'straighten') {
-      drag.current = { kind: 'line', start: pt, from: null, hx: 0, hy: 0 }
+      drag.current = { kind: 'line', start: pt }
       setLine({ a: pt, b: pt })
       return
     }
     const d = p.draft
     if (d) {
       // A handle: which edges it moves, -1 for left/top, 1 for right/bottom, 0 for neither.
-      const tolX = HANDLE_PX / w
-      const tolY = HANDLE_PX / h
+      const tolX = HANDLE_PX / sw
+      const tolY = HANDLE_PX / sh
       const hx = Math.abs(pt.x - d.x) < tolX ? -1 : Math.abs(pt.x - (d.x + d.width)) < tolX ? 1 : 0
       const hy = Math.abs(pt.y - d.y) < tolY ? -1 : Math.abs(pt.y - (d.y + d.height)) < tolY ? 1 : 0
       const within = pt.x > d.x - tolX && pt.x < d.x + d.width + tolX && pt.y > d.y - tolY && pt.y < d.y + d.height + tolY
@@ -97,10 +356,30 @@ export function CleanCanvas(p: {
     }
     drag.current = { kind: 'new', start: pt, from: null, hx: 0, hy: 0 }
   }
-  const onMove = (e: RPointerEvent<SVGSVGElement>) => {
+  const onMove = (e: RPointerEvent<HTMLDivElement>) => {
+    hovering.current = { x: e.clientX, y: e.clientY }
+    if (e.pointerType === 'touch' && touches.current.has(e.pointerId)) {
+      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      const start = pinch.current
+      if (start && touches.current.size >= 2) {
+        const now = pair()
+        zoomAt(now.d / Math.max(1, start.d), start.m.x, start.m.y, start.view, now.m)
+        return
+      }
+      if (spent.current) return
+    }
+    const pt = at(e)
+    if (isPaintTool(p.tool) && e.pointerType !== 'touch') setCursor(onControls(e) ? null : pt)
+    const s = stroke.current
+    if (s) {
+      // Every sample since the last event, so a fast stroke keeps its shape.
+      const events = e.nativeEvent.getCoalescedEvents?.() ?? []
+      for (const c of events.length ? events : [e.nativeEvent]) if (stroke.current === s) addPoint(s, at(c), pressureOf(c))
+      return
+    }
     const g = drag.current
     if (!g) return
-    const pt = at(e)
+    if (g.kind === 'pan') return setView(fitView({ ...g.view, tx: g.view.tx + e.clientX - g.x, ty: g.view.ty + e.clientY - g.y }))
     if (g.kind === 'line') return setLine({ a: g.start, b: pt })
     if (g.kind === 'new') {
       const x0 = clamp01(Math.min(g.start.x, pt.x))
@@ -126,15 +405,27 @@ export function CleanCanvas(p: {
     if (g.hy > 0) y2 = Math.max(y + minH, clamp01(y2 + dy))
     p.onDraft({ x, y, width: x2 - x, height: y2 - y })
   }
-  const onUp = () => {
+  const onUp = (e: RPointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'touch') {
+      touches.current.delete(e.pointerId)
+      if (touches.current.size < 2) pinch.current = null
+      if (spent.current) return
+    }
+    const s = stroke.current
+    if (s) {
+      if (e.type === 'pointercancel') cancelStroke()
+      else endStroke(s)
+      return
+    }
     const g = drag.current
     drag.current = null
     if (g?.kind !== 'line' || !line) return
     setLine(null)
+    if (e.type === 'pointercancel') return
     // In image pixels, so the angle is the image's, not the fitted box's.
     const a = { x: line.a.x * img.width, y: line.a.y * img.height }
     const b = { x: line.b.x * img.width, y: line.b.y * img.height }
-    if (Math.hypot((line.b.x - line.a.x) * w, (line.b.y - line.a.y) * h) < 8) return
+    if (Math.hypot((line.b.x - line.a.x) * sw, (line.b.y - line.a.y) * sh) < 8) return
     const degrees = straightenAngle(a, b)
     if (Math.abs(degrees) >= 0.05) p.onStraighten(degrees)
   }
@@ -144,10 +435,33 @@ export function CleanCanvas(p: {
   const handles = d
     ? [-1, 0, 1].flatMap((hx) => [-1, 0, 1].filter((hy) => hx || hy).map((hy) => ({ x: d.x + ((hx + 1) / 2) * d.width, y: d.y + ((hy + 1) / 2) * d.height })))
     : []
+  const paintTool = isPaintTool(p.tool) && !p.showOriginal
+  const pixelScale = scale * view.k
   return (
-    <div ref={boxRef} className="mat absolute inset-0 z-[5] grid place-items-center overflow-hidden" data-clean-canvas={`${img.width}x${img.height}`} data-original={p.showOriginal ? '' : undefined}>
-      <div className="relative" style={{ width: w, height: h }}>
-        <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-label={p.showOriginal ? 'The original image' : 'The cleaned image'} role="img" />
+    <div
+      ref={boxRef}
+      className={`mat absolute inset-0 z-[5] grid place-items-center overflow-hidden ${grabsPane ? 'touch-none' : ''} ${p.showOriginal ? '' : 'cursor-crosshair'}`}
+      data-clean-canvas={`${img.width}x${img.height}`}
+      data-clean-zoom={round(view.k, 2)}
+      data-original={p.showOriginal ? '' : undefined}
+      onPointerDown={onDown}
+      onPointerMove={onMove}
+      onPointerUp={onUp}
+      onPointerCancel={onUp}
+      onAuxClick={(e) => e.preventDefault()}
+      onPointerLeave={() => {
+        hovering.current = null
+        setCursor(null)
+      }}
+    >
+      <div ref={imageRef} className="relative touch-none" style={{ width: w, height: h, transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.k})` }}>
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 h-full w-full"
+          style={pixelScale >= 2 ? { imageRendering: 'pixelated' } : undefined}
+          aria-label={p.showOriginal ? 'The original image' : 'The cleaned image'}
+          role="img"
+        />
         {showOutline && (
           <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${p.outline!.width} ${p.outline!.height}`} preserveAspectRatio="none" aria-hidden="true">
             {p.outline!.paths.map((s) => (
@@ -157,30 +471,81 @@ export function CleanCanvas(p: {
         )}
         <svg
           ref={overlayRef}
-          className={`absolute inset-0 h-full w-full touch-none ${p.showOriginal ? '' : 'cursor-crosshair'}`}
+          className="absolute inset-0 h-full w-full overflow-visible"
           viewBox="0 0 1 1"
           preserveAspectRatio="none"
-          onPointerDown={onDown}
-          onPointerMove={onMove}
-          onPointerUp={onUp}
-          onPointerCancel={onUp}
           data-clean-overlay={p.tool}
+          data-picking={p.picking ? '' : undefined}
         >
           {d && (
             <g data-crop-draft="">
               <path d={`M0 0H1V1H0Z M${d.x} ${d.y}V${d.y + d.height}H${d.x + d.width}V${d.y}Z`} fill="rgb(0 0 0 / 0.45)" fillRule="evenodd" />
               <rect x={d.x} y={d.y} width={d.width} height={d.height} fill="none" stroke="white" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
               {handles.map((hp, i) => (
-                <rect key={i} x={hp.x - HANDLE_PX / 2 / w} y={hp.y - HANDLE_PX / 2 / h} width={HANDLE_PX / w} height={HANDLE_PX / h} fill="white" stroke="black" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                <rect key={i} x={hp.x - HANDLE_PX / 2 / sw} y={hp.y - HANDLE_PX / 2 / sh} width={HANDLE_PX / sw} height={HANDLE_PX / sh} fill="white" stroke="black" strokeWidth={1} vectorEffect="non-scaling-stroke" />
               ))}
             </g>
           )}
           {line && <line x1={line.a.x} y1={line.a.y} x2={line.b.x} y2={line.b.y} stroke="white" strokeWidth={2} vectorEffect="non-scaling-stroke" strokeDasharray="6 4" />}
+          {paintTool && cursor && !p.picking && (
+            <g className="pointer-events-none" aria-hidden="true">
+              {[
+                ['black', 2],
+                ['white', 1],
+              ].map(([c, sw]) => (
+                <ellipse key={c} cx={cursor.x} cy={cursor.y} rx={p.brush.size / 2 / img.width} ry={p.brush.size / 2 / img.height} fill="none" stroke={c as string} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+              ))}
+            </g>
+          )}
         </svg>
       </div>
+
+      {/* Zoom: the buttons for a mouse without a wheel, and the way back to the whole image. */}
+      <div data-clean-controls="" className="absolute top-2 right-2 z-10 flex items-center gap-px overflow-hidden rounded-md border border-rule bg-paper text-[12.5px] shadow-sm" role="group" aria-label="Zoom">
+        <button className="grid h-7 w-7 place-items-center hover:bg-paper-sunk" onClick={() => zoomCentre(1 / ZOOM_STEP)} aria-label="Zoom out" disabled={view.k <= 1}>
+          −
+        </button>
+        <span className="num w-12 text-center" data-clean-zoom-label="">
+          {Math.round(pixelScale * 100)}%
+        </span>
+        <button className="grid h-7 w-7 place-items-center hover:bg-paper-sunk" onClick={() => zoomCentre(ZOOM_STEP)} aria-label="Zoom in" disabled={view.k >= maxK}>
+          +
+        </button>
+        {view.k > 1 && (
+          <button className="h-7 border-l border-rule px-2 hover:bg-paper-sunk" onClick={() => setView(FIT)}>
+            Fit
+          </button>
+        )}
+      </div>
+
+      {/* On a phone the panel is below the fold, so the brush's settings ride along at the bottom of the canvas. */}
+      {paintTool && (
+        <div data-clean-controls="" className="absolute inset-x-2 bottom-2 z-10 flex items-center gap-3 rounded-md border border-rule bg-paper px-3 py-1.5 text-[12.5px] shadow-md lg:hidden" data-brush-bar="">
+          <label className="flex min-w-0 flex-1 items-center gap-2">
+            <span className="shrink-0">Size</span>
+            <input type="range" className="range min-w-0 flex-1" min={0} max={1} step={0.01} value={sizeToSlider(p.brush.size)} onChange={(e) => p.onBrush({ ...p.brush, size: sliderToSize(Number(e.target.value)) })} aria-label="Brush size" />
+          </label>
+          <label className="flex min-w-0 flex-1 items-center gap-2">
+            <span className="shrink-0">Hard</span>
+            <input type="range" className="range min-w-0 flex-1" min={0} max={100} step={5} value={Math.round(p.brush.hardness * 100)} onChange={(e) => p.onBrush({ ...p.brush, hardness: Number(e.target.value) / 100 })} aria-label="Brush hardness" />
+          </label>
+          {p.tool === 'brush' && (
+            <input type="color" className="size-7 shrink-0 cursor-pointer rounded border border-rule" value={p.brush.color} onChange={(e) => p.onBrush({ ...p.brush, color: e.target.value })} aria-label="Brush colour" />
+          )}
+        </div>
+      )}
     </div>
   )
+
+  function zoomCentre(factor: number) {
+    const r = boxRef.current!.getBoundingClientRect()
+    zoomAt(factor, r.left + r.width / 2, r.top + r.height / 2)
+  }
 }
+
+/** The size slider runs on a log scale, so small brushes get as much travel as big ones. */
+const sizeToSlider = (px: number) => Math.log(px / BRUSH_MIN) / Math.log(BRUSH_MAX / BRUSH_MIN)
+const sliderToSize = (v: number) => Math.max(BRUSH_MIN, Math.round(BRUSH_MIN * (BRUSH_MAX / BRUSH_MIN) ** v))
 
 export function CleanPanel(p: {
   source: Source
@@ -196,6 +561,12 @@ export function CleanPanel(p: {
   /** The list differs from what was traced: leaving the mode re-traces. */
   pending: boolean
   onSave: (blob: Blob, name: string) => void
+  brush: BrushSettings
+  onBrush: (b: BrushSettings) => void
+  /** The trace's inks, most used first: a stroke in one of them lands in that ink. */
+  inks: Ink[]
+  picking: boolean
+  onPicking: (on: boolean) => void
 }) {
   const size = useMemo(() => cleanedPixels(p.source, p.ops), [p.source, p.ops])
   const [angle, setAngle] = useState('')
@@ -209,8 +580,10 @@ export function CleanPanel(p: {
 
   return (
     <>
-      <Section title={p.tool === 'crop' ? 'Crop' : 'Straighten'}>
-        {p.tool === 'crop' ? (
+      <Section title={{ crop: 'Crop', straighten: 'Straighten', brush: 'Brush', eraser: 'Eraser' }[p.tool]}>
+        {isPaintTool(p.tool) ? (
+          <BrushFields {...p} tool={p.tool} background={backgroundOf(size)} />
+        ) : p.tool === 'crop' ? (
           <div className="space-y-2">
             <p className="field-hint">Drag a box on the image; drag its edges or corners to adjust. Cutting away borders and watermarks also makes the trace quicker.</p>
             {p.draft && (
@@ -398,5 +771,72 @@ export function CleanPanel(p: {
         </div>
       </Section>
     </>
+  )
+}
+
+function BrushFields(p: {
+  tool: 'brush' | 'eraser'
+  brush: BrushSettings
+  onBrush: (b: BrushSettings) => void
+  inks: Ink[]
+  picking: boolean
+  onPicking: (on: boolean) => void
+  background: [number, number, number, number]
+}) {
+  const b = p.brush
+  const bg = p.background[3] ? `#${p.background.slice(0, 3).map(hex2).join('')}` : null
+  const swatches = [...new Set(p.inks.map((i) => i.hex.toLowerCase()))].slice(0, 16)
+  return (
+    <div className="space-y-3" data-brush-fields={p.tool}>
+      <p className="field-hint">
+        {p.tool === 'brush'
+          ? 'Paint over gaps in an outline, holes in a fill or a broken letter. Alt-click the image to pick its colour. A pen’s pressure sets the width.'
+          : bg
+            ? `Paints the background colour, ${bg}, so stray marks, dust and signatures trace as nothing.`
+            : 'Paints the background, which is transparent here, so stray marks trace as nothing.'}
+      </p>
+      <Slider label="Size" value={sizeToSlider(b.size)} min={0} max={1} step={0.005} hint="[ and ] make it smaller and bigger." format={() => `${b.size} px`} onChange={(v) => p.onBrush({ ...b, size: sliderToSize(v) })} />
+      <Slider
+        label="Hardness"
+        value={Math.round(b.hardness * 100)}
+        min={0}
+        max={100}
+        step={5}
+        hint="Hard for a crisp edge that joins an outline; soft to even out a blotchy fill. Shift + [ and ] change it."
+        format={(v) => `${v}%`}
+        onChange={(v) => p.onBrush({ ...b, hardness: v / 100 })}
+      />
+      {p.tool === 'brush' && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <input type="color" className="size-8 shrink-0 cursor-pointer rounded border border-rule" value={b.color} onChange={(e) => p.onBrush({ ...b, color: e.target.value })} aria-label="Brush colour" />
+            <span className="num grow text-[13px]" data-brush-colour="">
+              {b.color}
+            </span>
+            <button className="btn h-8 px-3 text-[12.5px]" aria-pressed={p.picking} onClick={() => p.onPicking(!p.picking)}>
+              {p.picking ? 'Click the image…' : 'Pick from image'}
+            </button>
+          </div>
+          {swatches.length > 0 && (
+            <div>
+              <p className="field-label mb-1">The trace’s colours</p>
+              <div className="flex flex-wrap gap-1" role="group" aria-label="Brush colour from the trace">
+                {swatches.map((hex) => (
+                  <button
+                    key={hex}
+                    className={`size-6 rounded border ${hex === b.color.toLowerCase() ? 'border-ink ring-1 ring-ink' : 'border-rule'}`}
+                    style={{ background: hex }}
+                    title={hex}
+                    aria-label={`Paint in ${hex}`}
+                    aria-pressed={hex === b.color.toLowerCase()}
+                    onClick={() => p.onBrush({ ...b, color: hex })}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }

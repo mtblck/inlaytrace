@@ -3,18 +3,21 @@
  * list itself so it loads only once Clean up is used: the session check and
  * the mode's glue need the list, not the pixel loops.
  */
-import { clamp, isQuarter, normDegrees, type CleanupOp, type Crop, type Flip, type Img, type Levels } from './cleanup'
+import { clamp, isQuarter, normDegrees, type CleanupOp, type Crop, type Flip, type Img, type Levels, type Paint } from './cleanup'
 
 // ---- Replay -----------------------------------------------------------------
 
 export function replay(img: Img, ops: CleanupOp[]): Img {
   let out = img
-  for (const op of ops) out = apply(out, op)
+  // A stroke paints in place on an image this replay made, rather than copying it once a stroke.
+  for (const op of ops) out = op.kind === 'paint' ? paint(out, op, out !== img) : apply(out, op)
   return out
 }
 
 export function apply(img: Img, op: CleanupOp): Img {
   switch (op.kind) {
+    case 'paint':
+      return paint(img, op, false)
     case 'crop':
       return crop(img, op)
     case 'rotate':
@@ -212,3 +215,123 @@ function threshold(img: Img, level: number): Img {
   return { rgba, width: img.width, height: img.height }
 }
 
+
+// ---- Brush and eraser ------------------------------------------------------------
+//
+// A stroke is stamped as round dabs along its points into a coverage mask (the
+// most any dab covers each pixel, so overlapping dabs don't build up), then the
+// colour is laid over the image through the mask once. Drawing live uses the
+// same three steps a segment at a time, so what's drawn is what replays.
+
+export type Rect = { x0: number; y0: number; x1: number; y1: number }
+export type Dab = { x: number; y: number; r: number }
+/** Coverage, 0–255, for the pixels in a window of the image (the whole image while drawing; the stroke's box in a replay). */
+export type Mask = { data: Uint8Array; x: number; y: number; w: number; h: number }
+export const maskOver = (r: Rect): Mask => ({ data: new Uint8Array((r.x1 - r.x0) * (r.y1 - r.y0)), x: r.x0, y: r.y0, w: r.x1 - r.x0, h: r.y1 - r.y0 })
+
+/** Radius at a pressure: a light touch still leaves a mark a fifth of the full width. */
+export const radiusAt = (full: number, pressure: number) => Math.max(0.5, full * (0.2 + 0.8 * pressure))
+
+/** The colour a stroke lays down, RGBA. The eraser's is the background of the image it paints on. */
+export function strokeColour(img: Img, op: Paint): [number, number, number, number] {
+  if (op.tool === 'eraser' || !op.color) return backgroundOf(img)
+  const n = parseInt(op.color.slice(1), 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 255]
+}
+
+/** One stroke point in image pixels. */
+export function dabAt(img: { width: number; height: number }, op: Pick<Paint, 'size'>, x: number, y: number, pressure: number): Dab {
+  return { x: x * img.width, y: y * img.height, r: radiusAt((op.size * Math.max(img.width, img.height)) / 2, pressure) }
+}
+
+/** Stamp one dab into the mask; returns the pixels it touched (none outside the mask's window). */
+function stamp(mask: Mask, d: Dab, hardness: number): Rect | null {
+  const x0 = Math.max(mask.x, Math.floor(d.x - d.r))
+  const y0 = Math.max(mask.y, Math.floor(d.y - d.r))
+  const x1 = Math.min(mask.x + mask.w, Math.ceil(d.x + d.r))
+  const y1 = Math.min(mask.y + mask.h, Math.ceil(d.y + d.r))
+  if (x0 >= x1 || y0 >= y1) return null
+  // The edge fades over this many pixels: at least one, so a hard brush is still anti-aliased.
+  const fade = Math.max(1, d.r * (1 - hardness))
+  const soft = hardness < 1
+  const m = mask.data
+  for (let y = y0; y < y1; y++) {
+    const dy = y + 0.5 - d.y
+    const row = (y - mask.y) * mask.w - mask.x
+    for (let x = x0; x < x1; x++) {
+      const dx = x + 0.5 - d.x
+      let c = (d.r - Math.sqrt(dx * dx + dy * dy)) / fade
+      if (c <= 0) continue
+      if (c > 1) c = 1
+      else if (soft) c = c * c * (3 - 2 * c)
+      const v = Math.round(c * 255)
+      const i = row + x
+      if (v > m[i]) m[i] = v
+    }
+  }
+  return { x0, y0, x1, y1 }
+}
+
+const union = (a: Rect | null, b: Rect | null): Rect | null => (!a ? b : !b ? a : { x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) })
+
+/**
+ * Stamp from `from` (already stamped) to `to`, dabs a fifth of a radius apart
+ * so the edge stays smooth; with no `from`, just `to`.
+ */
+export function stampSegment(mask: Mask, from: Dab | null, to: Dab, hardness: number): Rect | null {
+  if (!from) return stamp(mask, to, hardness)
+  const len = Math.hypot(to.x - from.x, to.y - from.y)
+  const n = Math.max(1, Math.ceil(len / Math.max(0.5, Math.min(from.r, to.r) * 0.2)))
+  let rect: Rect | null = null
+  for (let i = 1; i <= n; i++) {
+    const t = i / n
+    rect = union(rect, stamp(mask, { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t, r: from.r + (to.r - from.r) * t }, hardness))
+  }
+  return rect
+}
+
+/** Lay `colour` over `base` through the mask, into `out`, within `rect` (alpha-correct, so an eraser can paint transparency). */
+export function composite(out: Uint8ClampedArray, base: Uint8ClampedArray, w: number, mask: Mask, colour: [number, number, number, number], rect: Rect) {
+  const [cr, cg, cb, ca] = colour
+  for (let y = rect.y0; y < rect.y1; y++)
+    for (let x = rect.x0; x < rect.x1; x++) {
+      const m = mask.data[(y - mask.y) * mask.w + x - mask.x]
+      if (!m) continue
+      const o = (y * w + x) * 4
+      const c = m / 255
+      const sa = base[o + 3] * (1 - c)
+      const pa = ca * c
+      const a = sa + pa
+      out[o + 3] = a
+      if (a > 0) {
+        out[o] = (base[o] * sa + cr * pa) / a
+        out[o + 1] = (base[o + 1] * sa + cg * pa) / a
+        out[o + 2] = (base[o + 2] * sa + cb * pa) / a
+      }
+    }
+}
+
+/** Replay one stroke. With `inPlace`, it paints on `img` itself (the replay owns it). */
+function paint(img: Img, op: Paint, inPlace: boolean): Img {
+  const { width: w, height: h } = img
+  const dabs: Dab[] = []
+  // The mask covers only the stroke's box, not the whole image.
+  let box: Rect | null = null
+  for (let i = 0; i < op.points.length; i += 3) {
+    const d = dabAt(img, op, op.points[i], op.points[i + 1], op.points[i + 2])
+    dabs.push(d)
+    box = union(box, { x0: Math.floor(d.x - d.r), y0: Math.floor(d.y - d.r), x1: Math.ceil(d.x + d.r), y1: Math.ceil(d.y + d.r) })
+  }
+  const clip = box && { x0: Math.max(0, box.x0), y0: Math.max(0, box.y0), x1: Math.min(w, box.x1), y1: Math.min(h, box.y1) }
+  if (!clip || clip.x0 >= clip.x1 || clip.y0 >= clip.y1) return img
+  const mask = maskOver(clip)
+  let rect: Rect | null = null
+  let last: Dab | null = null
+  for (const d of dabs) {
+    rect = union(rect, stampSegment(mask, last, d, op.hardness))
+    last = d
+  }
+  const out = inPlace ? img : { rgba: img.rgba.slice(), width: w, height: h }
+  if (rect) composite(out.rgba, img.rgba, w, mask, strokeColour(img, op), rect)
+  return out
+}

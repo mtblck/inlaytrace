@@ -8,7 +8,7 @@ Everything the tool does, how to use it, and how it works underneath.
 
 | Feature | Where | Page |
 | --- | --- | --- |
-| Crop, straighten, rotate and flip the image; levels and threshold; a cleaned PNG | Clean up mode | [Clean up](features/clean-up.md) |
+| Crop, straighten, rotate and flip the image; paint over gaps and erase marks; levels and threshold; a cleaned PNG | Clean up mode | [Clean up](features/clean-up.md) |
 | The SVG editor: Edit SVG beside Download, and a page that opens the app ready to edit | Edit mode, [/svg-editor/](https://inlaytrace.com/svg-editor/) | [The SVG editor](features/svg-editor.md) |
 | Presets and settings, including Centerline single strokes for plotters and a target file size | Trace mode | [Presets and settings](features/presets-and-settings.md) |
 | Split, Difference and Vector views, overlays, zoom | Bar under the image | [Comparing and zooming](features/comparing-and-zoom.md) |

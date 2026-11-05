@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { addOp, adjustmentOf, checkCleanup, sameGeometry, setAdjustment, straightenAngle, type CleanupOp, type Img } from './cleanup'
-import { backgroundOf, replay, sizeAfter } from './cleanupPixels'
+import { backgroundOf, composite, dabAt, maskOver, replay, sizeAfter, stampSegment, strokeColour, type Dab } from './cleanupPixels'
 
 /** A w × h image where pixel (x, y) is grey level `f(x, y)`, opaque. */
 function image(w: number, h: number, f: (x: number, y: number) => number): Img {
@@ -108,6 +108,76 @@ describe('clean-up replay', () => {
   })
 })
 
+describe('brush and eraser', () => {
+  const white = () => image(100, 100, () => 255)
+  const dot = (over: Partial<CleanupOp & { kind: 'paint' }> = {}): CleanupOp => ({ kind: 'paint', tool: 'brush', color: '#000000', size: 0.2, hardness: 1, points: [0.5, 0.5, 1], ...over }) as CleanupOp
+
+  it('stamps a hard round dab of the brush’s size', () => {
+    const out = replay(white(), [dot()])
+    // 20 px across at full pressure: solid inside, untouched outside, an anti-aliased edge between.
+    expect(at(out, 50, 50)).toBe(0)
+    expect(at(out, 50, 41)).toBe(0)
+    expect(at(out, 50, 39)).toBe(255)
+    expect(at(out, 62, 50)).toBe(255)
+    expect(at(out, 57, 57)).toBe(255) // the corner of the box is outside the circle
+  })
+
+  it('fades a soft brush towards its edge, and a light pen pressure draws thinner', () => {
+    const soft = replay(white(), [dot({ hardness: 0 })])
+    expect(at(soft, 50, 50)).toBeLessThan(20)
+    const mid = at(soft, 50, 45)
+    expect(mid).toBeGreaterThan(20)
+    expect(mid).toBeLessThan(235)
+    const light = replay(white(), [dot({ points: [0.5, 0.5, 0] })])
+    expect(at(light, 50, 50)).toBe(0)
+    expect(at(light, 50, 45)).toBe(255) // a fifth of the width
+  })
+
+  it('draws a line between points, without doubling up where dabs overlap', () => {
+    const out = replay(white(), [dot({ color: '#808080', hardness: 0, points: [0.2, 0.5, 1, 0.8, 0.5, 1] })])
+    // Grey at half strength or so all along: one even line, not darker where dabs overlap.
+    expect(at(out, 30, 50)).toBe(at(out, 70, 50))
+    expect(at(out, 50, 50)).toBe(at(out, 30, 50))
+    expect(Math.abs(at(out, 50, 50) - 128)).toBeLessThan(4)
+    expect(at(out, 50, 80)).toBe(255)
+  })
+
+  it('erases to the background colour, worked out from the image at that step', () => {
+    const page = image(60, 60, (x, y) => (x > 20 && x < 40 && y > 20 && y < 40 ? 0 : 230))
+    const out = replay(page, [{ kind: 'paint', tool: 'eraser', size: 0.5, hardness: 1, points: [0.5, 0.5, 1] }])
+    expect(at(out, 30, 30)).toBe(230)
+    // On a transparent image the eraser clears to transparent.
+    const clear = { ...page, rgba: page.rgba.map((v, i) => (i % 4 === 3 && !(i / 4 % 60 > 20 && i / 4 % 60 < 40 && Math.floor(i / 240) > 20 && Math.floor(i / 240) < 40) ? 0 : v)) }
+    expect(replay(clear, [{ kind: 'paint', tool: 'eraser', size: 0.5, hardness: 1, points: [0.5, 0.5, 1] }]).rgba[(30 * 60 + 30) * 4 + 3]).toBe(0)
+  })
+
+  it('draws the same pixels live, a segment at a time, as the replay does', () => {
+    const base = image(80, 50, (x, y) => (x * 3 + y * 5) % 256)
+    const op = dot({ color: '#ff0000', size: 0.08, hardness: 0.4, points: [0.1, 0.2, 1, 0.4, 0.6, 0.5, 0.9, 0.3, 0.8] }) as Extract<CleanupOp, { kind: 'paint' }>
+    const mask = maskOver({ x0: 0, y0: 0, x1: 80, y1: 50 })
+    const out = base.rgba.slice()
+    let last: Dab | null = null
+    for (let i = 0; i < op.points.length; i += 3) {
+      const d = dabAt(base, op, op.points[i], op.points[i + 1], op.points[i + 2])
+      const r = stampSegment(mask, last, d, op.hardness)
+      if (r) composite(out, base.rgba, 80, mask, strokeColour(base, op), r)
+      last = d
+    }
+    expect(Array.from(out)).toEqual(Array.from(replay(base, [op]).rgba))
+  })
+
+  it('paints in place only on pixels a replay made itself', () => {
+    const src = white()
+    const before = src.rgba.slice()
+    replay(src, [dot()])
+    expect(src.rgba).toEqual(before)
+    // After a flip the stroke paints on the flipped copy: the result is still right.
+    const out = replay(src, [{ kind: 'flip', axis: 'horizontal' }, dot({ points: [0.1, 0.1, 1] })])
+    expect(at(out, 10, 10)).toBe(0)
+    expect(src.rgba).toEqual(before)
+  })
+})
+
 describe('clean-up list', () => {
   it('folds quarter turns together and cancels a repeated flip', () => {
     let ops = addOp([], { kind: 'rotate', degrees: 90 })
@@ -144,6 +214,14 @@ describe('clean-up list', () => {
     expect(checkCleanup([{ kind: 'crop', x: 0.8, y: 0, width: 0.5, height: 1 }])).toBeNull()
     expect(checkCleanup([{ kind: 'levels', black: 200, white: 100, gamma: 1 }])).toBeNull()
     expect(checkCleanup([{ kind: 'paint' }])).toBeNull()
+    const stroke = { kind: 'paint', tool: 'brush', color: '#AABBCC', size: 0.05, hardness: 0.5, points: [0.1, 0.2, 1, 0.3, 0.4, 0.5] }
+    expect(checkCleanup([stroke])).toEqual([{ ...stroke, color: '#aabbcc' }])
+    expect(checkCleanup([{ kind: 'paint', tool: 'eraser', size: 0.05, hardness: 1, points: [0.5, 0.5, 1] }])).toHaveLength(1)
+    expect(checkCleanup([{ ...stroke, color: 'red' }])).toBeNull()
+    expect(checkCleanup([{ ...stroke, points: [0.1, 0.2] }])).toBeNull()
+    expect(checkCleanup([{ ...stroke, points: [0.1, 0.2, 2] }])).toBeNull()
+    expect(checkCleanup([{ ...stroke, tool: 'eraser' }])).toBeNull() // an eraser has no colour of its own
+    expect(checkCleanup([{ ...stroke, tool: 'smudge' }])).toBeNull()
     expect(checkCleanup('nope')).toBeNull()
   })
 })

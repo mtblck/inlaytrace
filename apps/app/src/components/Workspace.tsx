@@ -65,11 +65,13 @@ export const EDIT_TOOLS = (strokes: boolean): RailTool<Tool>[] => [
   },
 ]
 
-/** Clean up's tools by name (#199, #200). */
-export const CLEAN_TOOL_LABEL = { crop: 'Crop', straighten: 'Straighten' } as const
+/** Clean up's tools by name (#199, #200, #202). */
+export const CLEAN_TOOL_LABEL = { crop: 'Crop', straighten: 'Straighten', brush: 'Brush', eraser: 'Eraser' } as const
 export const CLEAN_TOOLS: RailTool<keyof typeof CLEAN_TOOL_LABEL>[] = [
   { id: 'crop', label: CLEAN_TOOL_LABEL.crop, key: 'C', icon: icon('M5 1.5V13h11.5M1.5 5H13v11.5') },
   { id: 'straighten', label: CLEAN_TOOL_LABEL.straighten, key: 'L', icon: icon('M2 12.5L16 5.5M2 15.5h14') },
+  { id: 'brush', label: CLEAN_TOOL_LABEL.brush, key: 'B', icon: icon('M15.5 2.5L8 10M8 10c-2-.5-4 .5-4.5 3S2 16 2 16s2.5.5 5-.5 3-3 1-5.5') },
+  { id: 'eraser', label: CLEAN_TOOL_LABEL.eraser, key: 'E', icon: icon('M10.5 3l4.5 4.5-7 7H4.5L2 12zM6 7.5L10.5 12M8 14.5h8') },
 ]
 
 /**
