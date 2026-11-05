@@ -350,21 +350,23 @@ async function whole(art, svg) {
 
 // Lines are the fixture's line colour; Line art and Centerline draw them in
 // black, which is still nearest that colour, so they count too.
-const flatArt = async (file, title, line, presets, { wholes = false } = {}) => {
+const flatArt = async (file, title, line, presets, { wholes = false, clean } = {}) => {
   const source = readFileSync(join(root, 'scripts/fixtures', file), 'utf8')
   const art = await prepare(source, line)
+  // Traced as drawn, scored against `clean` (the art as it's meant), which sets the reference.
+  if (clean) await prepare(clean(source), line)
   console.log(`\n  ${title}, ${SIZE} px JPEG q72, wrong past 24\n`)
   console.log(`  ${'Preset'.padEnd(23)} Wrong px  Regions  Lines${wholes ? '  Whole' : ''}   Nodes  Paths   Size`)
   // A preset name alone is its defaults; with ':stacked' or ':cutout', those shapes; with ':gradients', gradient fills.
   for (const entry of presets) {
     const [id, mod] = entry.split(':')
     const shapes = mod === 'stacked' || mod === 'cutout' ? mod : undefined
-    const prep = mod === 'smooth' ? { smoothShading: true } : mod === 'outlines' ? { smoothShading: true, keepOutlines: true } : {}
+    const prep = mod === 'smooth' ? { smoothShading: true } : mod === 'outlines' ? { smoothShading: true, keepOutlines: true } : mod === 'open' ? { closeGaps: false } : {}
     const t = performance.now()
     const svg = runTrace(art.slice(), SIZE, SIZE, { ...toTraceOptions({ ...settingsFor(id), ...(shapes ? { shapes } : {}), ...prep }), ...(mod === 'gradients' ? { gradients: true } : {}) })
     const ms = performance.now() - t
     const r = await score(svg, 24)
-    const label = PRESETS.find((p) => p.id === id).label + (mod ? { stacked: ', stacked', cutout: ', cut out', gradients: ', gradients', smooth: ', smoothed', outlines: ', outlines' }[mod] : '')
+    const label = PRESETS.find((p) => p.id === id).label + (mod ? { stacked: ', stacked', cutout: ', cut out', gradients: ', gradients', smooth: ', smoothed', outlines: ', outlines', open: ', gaps left open' }[mod] : '')
     console.log(
       `  ${label.padEnd(23)} ${pct(r.wrong)}  ${regions(r)}  ${line ? lines(r) : '    –'}${wholes ? `  ${(await whole(source, svg)).padStart(5)}` : ''}  ${String(r.nodes).padStart(6)} ${String(r.paths).padStart(6)} ${r.kb.toFixed(1).padStart(5)} KB  (${ms.toFixed(0)} ms)`,
     )
@@ -391,6 +393,13 @@ await flatArt('junctions-hair.svg', 'Junctions (lines 1.1 px wide)', '#4f86af', 
 // Lines 8 px wide: the skeleton Centerline draws bends toward each junction
 // over about a stroke's width, so a crossing is pinched unless refitted.
 await flatArt('junctions-thick.svg', 'Junctions (lines 8 px wide)', '#4f86af', ['lineart', 'centerline'])
+
+// Broken outlines (#145): traced with their breaks, scored against the art
+// without them, so a closed gap is fewer pieces and fewer wrong pixels. The
+// dashed line's gaps are drawn: all 9 pieces is every break closed and the
+// dashes left apart.
+const unbroken = (svg) => svg.replace(/<g id="breaks"[\s\S]*?<\/g>/, '')
+await flatArt('broken.svg', 'Broken outlines (lines 3.2 px wide, breaks 1.6–3.8 px)', '#1f2a33', ['outline', 'outline:open', 'lineart', 'lineart:open', 'centerline', 'centerline:open'], { clean: unbroken })
 
 // ---- Overlaps ---------------------------------------------------------------
 // Shapes partly behind others, down to a thin crescent: what cut-out shapes

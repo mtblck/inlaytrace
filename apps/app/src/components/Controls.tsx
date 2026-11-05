@@ -1,6 +1,6 @@
 import { useId, useState, type ReactNode } from 'react'
 import type { PrepStage } from '../engine/prep'
-import { MAX_OWN_COLORS, PRESETS, canOwnColors, ownPaletteOf, hasExactShapes, isInk, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
+import { MAX_OWN_COLORS, PRESETS, canOwnColors, closesGaps, ownPaletteOf, hasExactShapes, isInk, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
 import { addColors, parseColorList } from '../lib/colors'
 import { PipetteIcon } from './IconButton'
 import type { Candidate, SizeSearch } from '../engine/targetSize'
@@ -178,6 +178,16 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
               format={(v) => (v === 0 ? `Auto${measuredStroke ? ` (${measuredStroke} px)` : ''}` : `${v} px`)}
               hint="Auto matches the ink. Set it to your pen or bit: the strokes keep their path, only the width changes."
             />
+          )}
+
+          {closesGaps(p) && (
+            <label className="flex items-start gap-2 text-[13px]">
+              <input type="checkbox" className="mt-0.5 accent-[var(--c-accent)]" checked={settings.closeGaps} onChange={(e) => set('closeGaps', e.target.checked)} />
+              <span>
+                Close small gaps
+                <span className="field-hint block">Joins a line across a break of a few pixels, so an outline stays whole and a fill stays inside it. Turn it off to keep every gap as drawn.</span>
+              </span>
+            </label>
           )}
 
           <Slider label="Ignore specks" value={settings.speckle} min={0} max={32} step={1} onChange={(v) => set('speckle', v)} format={(v) => (v === 0 ? 'Off' : `${v} px`)} hint="Drops shapes smaller than this. Raise it for noisy scans." />

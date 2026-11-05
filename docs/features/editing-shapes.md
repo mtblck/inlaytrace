@@ -119,9 +119,10 @@ drawing's own) and click:
   layers zip).
 
 Hidden shapes don't stop a fill (it runs on under them); locked ones do, and
-keep their own colour. A break in a hand-drawn line lets the fill run through
-to the next area; close it first, or fill the larger area and cut it with
-*Combine*. Lines traced as strokes (Centerline) have no inside, so Fill is off
+keep their own colour. Line art closes breaks of a few pixels when it traces
+(*Close small gaps*); a wider break in a hand-drawn line lets the fill run
+through to the next area, so close it first, or fill the larger area and cut
+it with *Combine*. Lines traced as strokes (Centerline) have no inside, so Fill is off
 for those traces. Each fill is one undo step and detaches the drawing from the
 trace.
 

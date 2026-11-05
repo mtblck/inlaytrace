@@ -19,7 +19,7 @@
  * Everything here is written for this project (MIT); no GPL tracer is used.
  */
 import { serializePath } from './path'
-import { attr, joinDiagonals, labelBinary, mergeSpecks } from './inlay'
+import { attr, closeInkGaps, joinDiagonals, labelBinary, mergeSpecks } from './inlay'
 import { skeletonStrokes } from './skeleton'
 
 export type CenterlineOptions = {
@@ -35,6 +35,8 @@ export type CenterlineOptions = {
   strokeWidth?: number
   /** The stroke colour. Default black. */
   color?: string
+  /** Join a line's ends across small breaks before tracing (gaps.ts). Off by default. */
+  closeGaps?: boolean
 }
 
 /** One stroked path: open subpaths (and closed loops), drawn with round caps and joins. */
@@ -61,6 +63,7 @@ export function centerline(rgba: ArrayLike<number>, w: number, h: number, o: Cen
   const { labels, drawn } = labelBinary(rgba, w, h, o.threshold)
   joinDiagonals(labels, w, h, rgba, drawn)
   mergeSpecks(labels, w, h, Math.max(0, Math.round(o.speckle)) ** 2)
+  if (o.closeGaps) closeInkGaps(labels, w, h)
   const ink = new Uint8Array(w * h)
   for (let i = 0; i < ink.length; i++) ink[i] = labels[i] === 0 ? 1 : 0
 

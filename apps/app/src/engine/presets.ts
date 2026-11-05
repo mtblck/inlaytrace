@@ -54,6 +54,8 @@ export type Settings = {
   aiUpscale: boolean
   /** Trace an image of 512 px or more at up to twice its size, so 1 px lines and small features survive. */
   fineDetail: boolean
+  /** Line art, Centerline and Outline art: join a line's ends across small breaks before tracing (gaps.ts). */
+  closeGaps: boolean
   /** Flat-art presets: even out painted shading before tracing, so it doesn't break into flecks. */
   smoothShading: boolean
   /** Flat-art presets: darken faint painted outlines before tracing, so the shapes they part don't merge. */
@@ -78,14 +80,14 @@ export type Preset = {
 }
 
 /** Illustration's defaults, which Outline art shares: it differs only in tracing lines as strokes. */
-const ILLUSTRATION: Preset['defaults'] = { colors: 24, threshold: null, lightInk: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked', exact: true, strokeWidth: 0 }
+const ILLUSTRATION: Preset['defaults'] = { colors: 24, threshold: null, lightInk: false, closeGaps: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked', exact: true, strokeWidth: 0 }
 
 export const PRESETS: Preset[] = [
   {
     id: 'logo',
     label: 'Logo',
     hint: 'Few flat colours, crisp corners',
-    defaults: { colors: 8, threshold: null, lightInk: false, speckle: 8, smoothing: 1.5, corners: 45, shapes: 'cutout', exact: true, strokeWidth: 0 },
+    defaults: { colors: 8, threshold: null, lightInk: false, closeGaps: false, speckle: 8, smoothing: 1.5, corners: 45, shapes: 'cutout', exact: true, strokeWidth: 0 },
   },
   {
     id: 'illustration',
@@ -97,37 +99,40 @@ export const PRESETS: Preset[] = [
     id: 'outline',
     label: 'Outline art',
     hint: 'Drawn outlines kept as editable lines',
-    defaults: ILLUSTRATION,
+    defaults: { ...ILLUSTRATION, closeGaps: true },
   },
   {
     id: 'lineart',
     label: 'Line art',
     hint: 'Ink drawings and scans, one colour',
-    defaults: { colors: 2, threshold: 'auto', lightInk: false, speckle: 6, smoothing: 1.5, corners: 45, shapes: 'stacked', exact: true, strokeWidth: 0 },
+    defaults: { colors: 2, threshold: 'auto', lightInk: false, closeGaps: true, speckle: 6, smoothing: 1.5, corners: 45, shapes: 'stacked', exact: true, strokeWidth: 0 },
   },
   {
     id: 'centerline',
     label: 'Centerline',
     hint: 'Single strokes for plotters and engraving',
-    defaults: { colors: 2, threshold: 'auto', lightInk: false, speckle: 4, smoothing: 1.5, corners: 45, shapes: 'stacked', exact: false, strokeWidth: 0 },
+    defaults: { colors: 2, threshold: 'auto', lightInk: false, closeGaps: true, speckle: 4, smoothing: 1.5, corners: 45, shapes: 'stacked', exact: false, strokeWidth: 0 },
   },
   {
     id: 'photo',
     label: 'Poster',
     hint: 'Photos flattened into colour bands',
-    defaults: { colors: 24, threshold: null, lightInk: false, speckle: 8, smoothing: 1, corners: 90, shapes: 'stacked', exact: false, strokeWidth: 0 },
+    defaults: { colors: 24, threshold: null, lightInk: false, closeGaps: false, speckle: 8, smoothing: 1, corners: 90, shapes: 'stacked', exact: false, strokeWidth: 0 },
   },
   {
     id: 'pixel',
     label: 'Pixel art',
     hint: 'Hard edges, nothing smoothed',
-    defaults: { colors: 32, threshold: null, lightInk: false, speckle: 0, smoothing: 0, corners: 0, shapes: 'stacked', exact: false, strokeWidth: 0 },
+    defaults: { colors: 32, threshold: null, lightInk: false, closeGaps: false, speckle: 0, smoothing: 0, corners: 0, shapes: 'stacked', exact: false, strokeWidth: 0 },
   },
 ]
 
 export const presetById = (id: PresetId) => PRESETS.find((p) => p.id === id)!
 
 export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {}, removeBackground: false, aiUpscale: false, fineDetail: false, smoothShading: false, keepOutlines: false, recogniseText: false, ownColors: [], useOwnColors: false })
+
+/** Presets that can close small gaps in their lines (gaps.ts). */
+export const closesGaps = (id: PresetId) => id === 'lineart' || id === 'centerline' || id === 'outline'
 
 /** One ink, thresholded: line art and centerline. */
 export const isInk = (id: PresetId) => id === 'lineart' || id === 'centerline'
@@ -199,6 +204,8 @@ export type TraceOptions = {
   strokeWidth?: number
   /** Binary and centerline modes. */
   threshold?: number | 'auto' | null
+  /** Binary and centerline modes, and Outline art's lines: join lines' ends across small breaks. */
+  closeGaps?: boolean
   invert?: boolean
 }
 
@@ -213,8 +220,9 @@ export type TraceOptions = {
  */
 export function toTraceOptions(s: Settings, scale = 1): TraceOptions {
   const fit = { speckle: s.speckle, tolerance: toleranceFor(s.smoothing), cornerAngle: s.corners, ...(s.exact && hasExactShapes(s.preset) ? { shapes: true } : {}) }
-  if (s.preset === 'centerline') return { ...fit, mode: 'centerline', threshold: s.threshold, ...(s.strokeWidth > 0 ? { strokeWidth: s.strokeWidth } : {}), ...(s.lightInk ? { invert: true } : {}) }
-  if (s.preset === 'lineart') return { ...fit, mode: 'binary', threshold: s.threshold, ...(s.lightInk ? { invert: true } : {}) }
+  const gaps = s.closeGaps ? { closeGaps: true } : {}
+  if (s.preset === 'centerline') return { ...fit, mode: 'centerline', threshold: s.threshold, ...gaps, ...(s.strokeWidth > 0 ? { strokeWidth: s.strokeWidth } : {}), ...(s.lightInk ? { invert: true } : {}) }
+  if (s.preset === 'lineart') return { ...fit, mode: 'binary', threshold: s.threshold, ...gaps, ...(s.lightInk ? { invert: true } : {}) }
   const merge = Object.keys(s.merge ?? {}).length ? { merge: s.merge } : {}
   // Your own colours replace the picked palette. Gradients are off: their stops
   // are sampled from the image, so they'd bring back colours you don't have.
@@ -228,7 +236,7 @@ export function toTraceOptions(s: Settings, scale = 1): TraceOptions {
   // Outline art traces its thin outlines as stroked lines, the fills meeting beneath them.
   // Illustration and Outline art, stacked, draw soft shading as gradients; cut out is for cutters, which can't.
   const gradients = !own && s.shapes === 'stacked' && (s.preset === 'illustration' || s.preset === 'outline') ? { gradients: true } : {}
-  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', stacked: s.shapes === 'stacked', ...ownOpts, ...merge, ...gradients, ...(s.smoothShading ? { smooth: true } : {}), ...(s.keepOutlines ? { outlines: outlineRadius(scale) } : {}), ...(s.preset === 'outline' ? { strokes: true, ...(scale > 1 ? { scale } : {}) } : {}) }
+  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', stacked: s.shapes === 'stacked', ...ownOpts, ...merge, ...gradients, ...(s.smoothShading ? { smooth: true } : {}), ...(s.keepOutlines ? { outlines: outlineRadius(scale) } : {}), ...(s.preset === 'outline' ? { strokes: true, ...gaps, ...(scale > 1 ? { scale } : {}) } : {}) }
 }
 
 /** Pixel art keeps every source pixel; everything else is traced at this size at most. */

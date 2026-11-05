@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- Outlines broken in small gaps, for gap closing in npm run score (made for this repo, MIT): a
+       circle, a box and a leaf with breaks half a line width to a line and a half wide, a T whose
+       stem stops short of its bar, a wave in three pieces, and a dashed water line whose gaps (four
+       widths) are drawn. The breaks are the white cuts in "breaks"; the clean art is this without
+       them: 9 pieces. -->
+  <rect width="200" height="200" fill="#ffffff"/>
+  <g fill="none" stroke="#1f2a33" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="55" cy="55" r="25"/>
+    <rect x="110" y="30" width="60" height="60" rx="6"/>
+    <path d="M30 170 Q60 120 90 170 Q60 190 30 170 Z"/>
+    <path d="M110 130 H170 M140 130 V180"/>
+    <path d="M20 110 q10 -6 20 0 t20 0 t20 0 t20 0"/>
+    <path d="M110 195 H125 M130 195 H145 M150 195 H165 M170 195 H185"/>
+  </g>
+  <g id="breaks" fill="#ffffff">
+    <rect x="54.6" y="28" width="0.8" height="4"/>
+    <rect x="78" y="54.4" width="4" height="1.2"/>
+    <rect x="108" y="59.75" width="4" height="0.5"/>
+    <rect x="59.6" y="177" width="0.8" height="6"/>
+    <rect x="138" y="130.5" width="4" height="1"/>
+    <rect x="29.6" y="105" width="0.8" height="4"/>
+    <rect x="69.5" y="105" width="1" height="4"/>
+  </g>
+</svg>

@@ -105,6 +105,7 @@ export function checkSettings(x: unknown): Settings {
   for (const k of ['colors', 'speckle', 'smoothing', 'corners'] as const) if (typeof x[k] === 'number' && Number.isFinite(x[k])) out[k] = x[k] as number
   if (x.threshold === null || x.threshold === 'auto' || typeof x.threshold === 'number') out.threshold = x.threshold as Settings['threshold']
   if (typeof x.lightInk === 'boolean') out.lightInk = x.lightInk
+  if (typeof x.closeGaps === 'boolean') out.closeGaps = x.closeGaps
   if (typeof x.exact === 'boolean') out.exact = x.exact
   if (typeof x.removeBackground === 'boolean') out.removeBackground = x.removeBackground
   if (typeof x.aiUpscale === 'boolean') out.aiUpscale = x.aiUpscale

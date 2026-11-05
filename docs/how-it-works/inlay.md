@@ -57,6 +57,16 @@ colour rather than taking the paper's.
   least 0.25 from every colour around it (a letter, a dot) is a shape and
   stays, from an eighth of the speck size up (at least 6 px), so raising the
   setting still clears it.
+- **Gaps** (Line art, and Outline art's lines; `closeGaps`): the ink is
+  thinned to its skeleton, and each line end's direction and width are
+  measured a few widths back from it. Two ends that point at each other
+  across a gap join, and an end that points at other ink close by reaches it
+  (a T that stops short), painted at the line's width, shortest gap first.
+  A join must cross exactly one gap (ink, paper, ink), no wider than 1.6 line
+  widths and 5.5 px: a JPEG's or a faint pen's breaks are a few pixels on any
+  line, where dashes, and gaps of a width on a heavy line, are drawn. After
+  Fourey, Tschumperlé and Revoy (VMV 2018, GIMP's line art fill), on the
+  skeleton rather than the ink's border.
 - **Slivers** (flat art): regions under 2 px wide on average merge into a
   neighbour within 0.12 of their colour in OKLab, so a letter stem dark at its
   edges and lighter down its middle becomes one shape, not a spike-prone

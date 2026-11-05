@@ -88,6 +88,7 @@ export function cleanSettings(raw: unknown): Settings | null {
     colors: Math.round(num(s.colors, 2, 64, 8)),
     threshold: s.threshold === null || s.threshold === 'auto' ? s.threshold : Math.round(num(s.threshold, 0, 255, 128)),
     lightInk: s.lightInk === true,
+    closeGaps: s.closeGaps === true,
     speckle: num(s.speckle, 0, 256, 4),
     smoothing: num(s.smoothing, 0, 3, 1),
     corners: num(s.corners, 0, 180, 45),

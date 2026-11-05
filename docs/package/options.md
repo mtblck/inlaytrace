@@ -69,6 +69,15 @@ with nothing to split it falls back to 128. With `null`, each pixel is compared 
 paper under uneven light. For light ink on a dark background, invert the
 pixels first.
 
+### `closeGaps`
+
+With `closeGaps: true`, a line broken by a small gap is joined before it's
+traced: in line art's ink (`mode: 'binary'`), in Outline art's lines
+(`strokes: true`), and in `centerline`'s ink. Two line ends that point at each
+other across a gap join, and so does a line that stops just short of another
+(a T). A join crosses one gap only, at most 1.6 times the line's width and
+5.5 px, so dashes and gaps left on purpose stay open. Off by default.
+
 ## Starting points
 
 These are the Inlay app's presets.
@@ -77,8 +86,8 @@ These are the Inlay app's presets.
 | --- | --- |
 | Logo: few flat colours, crisp corners | `palette: peakPalette(px, 8, { width })`, `speckle: 8`, `tolerance: 1`, `cornerAngle: 45`, `shapes: true` |
 | Illustration: more colours, smooth curves | `palette: peakPalette(px, 16, { width })`, `speckle: 4`, `tolerance: 0.75`, `cornerAngle: 60`, `shapes: true` |
-| Outline art: outlines as lines | Illustration's, plus `strokes: true` |
-| Line art: one ink | `mode: 'binary'`, `threshold: 'auto'`, `speckle: 6`, `tolerance: 1`, `cornerAngle: 45`, `shapes: true` |
+| Outline art: outlines as lines | Illustration's, plus `strokes: true`, `closeGaps: true` |
+| Line art: one ink | `mode: 'binary'`, `threshold: 'auto'`, `speckle: 6`, `tolerance: 1`, `cornerAngle: 45`, `shapes: true`, `closeGaps: true` |
 | Pixel art | `palette: exactPalette(px, 32)`, `pixels: true`, `speckle: 0`, `tolerance: 0.25`, `cornerAngle: 0` |
 | Poster: a photo in flat colour bands | `palette: quantizePalette(px, 24)`, `stacked: true`, `photo: true`, `speckle: 8`, `tolerance: 0.75`, `cornerAngle: 90` |
 

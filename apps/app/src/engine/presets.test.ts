@@ -212,3 +212,17 @@ describe('your own colours', () => {
     expect(checkSettings(old)).toMatchObject({ ownColors: [], useOwnColors: false })
   })
 })
+
+describe('close small gaps (#145)', () => {
+  it('is on for Line art, Centerline and Outline art, and off when unticked', () => {
+    for (const p of PRESETS) {
+      const on = p.id === 'lineart' || p.id === 'centerline' || p.id === 'outline'
+      expect(toTraceOptions(settingsFor(p.id)).closeGaps, p.id).toBe(on ? true : undefined)
+      expect(toTraceOptions({ ...settingsFor(p.id), closeGaps: false }).closeGaps).toBeUndefined()
+    }
+  })
+
+  it('is kept in a saved session', () => {
+    expect(checkSettings({ ...settingsFor('lineart'), closeGaps: false })).toMatchObject({ closeGaps: false })
+  })
+})

@@ -127,6 +127,14 @@ Strokes can be recoloured, moved, scaled (their width scales with them) and
 node-edited like shapes; *Mirror* works on filled shapes only, so it's off for
 them. A 2048 px drawing with thick ink traces in about 1.5 s.
 
+**Close small gaps** (Line art, Centerline and Outline art; on by default):
+joins a line across a break of a few pixels before tracing, so an outline
+that came out in pieces (a JPEG, a faint stretch of pen, a stroke stopping just
+short of the one it meets) is one line again, and a *Fill* inside it stays
+inside. Only gaps up to about one and a half times the line's width, and 5.5 px
+at most, are closed, so dashed lines and gaps drawn on purpose stay open; turn
+it off to keep every gap as drawn.
+
 **Ignore specks** (0–32 px): regions smaller than this many pixels squared merge
 into their surroundings. Raise it for noisy scans or JPEG speckle. In Logo,
 Illustration and Outline art, small shapes that stand out from everything around them (letters,

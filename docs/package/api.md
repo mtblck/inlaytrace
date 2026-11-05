@@ -54,6 +54,7 @@ type InlayOptions = FitOptions & {
   strokes?: boolean
   scale?: number
   gradients?: boolean
+  closeGaps?: boolean // join lines' ends across small breaks before tracing: line art's ink (binary), and Outline art's lines (strokes)
   lines?: ArrayLike<number> // painted lines, one entry per pixel (from boostLines): a region mostly on them folds only into another such region (not one in the colour of a shape it touches), unless it is a sliver under 16 px across
 } & (
     | { mode: 'palette'; palette: string[]; merge?: Record<string, string> }
@@ -161,6 +162,7 @@ type CenterlineOptions = {
   cornerAngle: number // degrees
   strokeWidth?: number // px; measured from the ink when left out
   color?: string // default '#000000'
+  closeGaps?: boolean // join lines' ends across small breaks before tracing
 }
 type CenterlineResult = {
   width: number
