@@ -249,6 +249,35 @@ export function ownFill(hex: string, inks: InkEdits): string {
   return hex
 }
 
+/** A shape's own style (#209): fill (flat, out of its ink), stroke (null fills it again) and opacity (1 drops the field). */
+export function stylePath(p: DocPath, patch: { fill?: string; stroke?: number | null; opacity?: number }, inks: InkEdits): DocPath {
+  let q: DocPath = { ...p }
+  if (patch.fill) {
+    const { gradient: _, ...flat } = q
+    q = { ...flat, fill: ownFill(normalizeHex(patch.fill) ?? q.fill, inks) }
+  }
+  if (patch.stroke !== undefined) {
+    const { stroke: _, ...rest } = q
+    q = patch.stroke && patch.stroke > 0 ? { ...rest, stroke: patch.stroke } : rest
+  }
+  if (patch.opacity !== undefined) {
+    const { opacity: _, ...rest } = q
+    q = patch.opacity < 1 ? { ...rest, opacity: Math.max(0, patch.opacity) } : rest
+  }
+  return q
+}
+
+/**
+ * Hidden or locked ids after flagging `ids` on or off (#209): a group goes all
+ * together, and ids no longer in the doc drop out, so a later shape that
+ * happens to reuse one isn't born hidden.
+ */
+export function flagIds(doc: Doc, cur: string[], ids: string[], on: boolean): string[] {
+  const all = new Set(withGroups(doc, ids))
+  const exists = new Set(doc.paths.map((p) => p.id))
+  return (on ? [...new Set([...cur, ...all])] : cur.filter((id) => !all.has(id))).filter((id) => exists.has(id))
+}
+
 export const removeInk = (inks: InkEdits, hex: string): InkEdits =>
   inks.removed.includes(hex) ? inks : { ...inks, removed: [...inks.removed, hex] }
 

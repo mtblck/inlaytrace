@@ -1082,7 +1082,7 @@ if (process.env.FIXTURE) {
   await sp.waitForTimeout(1500)
   await sp.reload()
   await sp.locator('[data-shapes]').waitFor({ timeout: 15_000 })
-  check((await drawnCount()) === all - 1 && (await sp.locator('[data-shape-group="#eeeeee"] [data-flag="locked"][aria-pressed="true"]').count()) === 1, 'a reload keeps hidden and locked shapes')
+  check((await drawnCount()) === all - 1 && (await sp.locator('[data-shape-group="#eeeeee"] [data-flag="locked"][data-on]').count()) === 1, 'a reload keeps hidden and locked shapes')
   await sp.getByRole('button', { name: 'Show all', exact: true }).click()
   await sp.getByRole('button', { name: 'Unlock all', exact: true }).click()
   check((await drawnCount()) === all, 'Show all and Unlock all put them back')

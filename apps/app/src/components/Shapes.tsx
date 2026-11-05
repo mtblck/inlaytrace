@@ -194,11 +194,12 @@ const EYE_OFF = 'M2.5 2.5l13 13M7.2 4.3A7.7 7.7 0 019 4c4.8 0 7.5 5 7.5 5a12 12 
 const LOCK = 'M4.5 8h9v7.5h-9zM6.5 8V5.5a2.5 2.5 0 015 0V8'
 const UNLOCK = 'M4.5 8h9v7.5h-9zM6.5 8V5.5a2.5 2.5 0 014.9-.7'
 
+/** The label says what a click does ("Show shape 3"), so it isn't also a pressed toggle, which would read as the opposite. */
 function FlagButton(p: { flag: ShapeFlag; on: boolean; what: string; onClick: () => void }) {
   const label = p.flag === 'hidden' ? (p.on ? `Show ${p.what}` : `Hide ${p.what}`) : p.on ? `Unlock ${p.what}` : `Lock ${p.what}`
   const d = p.flag === 'hidden' ? (p.on ? EYE_OFF : EYE) : p.on ? LOCK : UNLOCK
   return (
-    <button className={`grid size-6 shrink-0 place-items-center rounded hover:bg-paper-sunk ${p.on ? 'text-ink' : 'text-ink-faint hover:text-ink'}`} aria-label={label} aria-pressed={p.on} title={label} onClick={p.onClick} data-flag={p.flag}>
+    <button className={`grid size-6 shrink-0 place-items-center rounded hover:bg-paper-sunk ${p.on ? 'text-ink' : 'text-ink-faint hover:text-ink'}`} aria-label={label} title={label} onClick={p.onClick} data-flag={p.flag} data-on={p.on ? '' : undefined}>
       <svg aria-hidden="true" width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d={d} />
       </svg>

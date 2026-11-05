@@ -150,7 +150,9 @@ export function checkEdits(x: unknown): Edits {
   const cleanup = checkCleanup(x.cleanup)
   // Path ids only, as the doc uses them.
   const ids = (v: unknown) => (Array.isArray(v) ? [...new Set(v.filter((i): i is string => typeof i === 'string' && /^[\w-]{1,64}$/.test(i)))] : [])
-  const hidden = ids(x.hidden)
-  const locked = ids(x.locked)
+  // Only shapes of the saved doc (they're kept with it, as setting one detaches it).
+  const inDoc = new Set(doc?.paths.map((p) => p.id) ?? [])
+  const hidden = ids(x.hidden).filter((i) => inDoc.has(i))
+  const locked = ids(x.locked).filter((i) => inDoc.has(i))
   return { inks: { recolor, removed }, doc, background, ...(cleanup?.length ? { cleanup } : {}), ...(hidden.length ? { hidden } : {}), ...(locked.length ? { locked } : {}) }
 }

@@ -19,7 +19,8 @@ import {
   docFromTrace,
   arrange,
   docOf,
-  ownFill,
+  flagIds,
+  stylePath,
   groupPaths,
   hasStrokes,
   reserveGroups,
@@ -851,7 +852,6 @@ export default function App() {
     [selectedPaths, nodesOfSelection],
   )
 
-  /** Group, ungroup and paint order: shape edits on the selection, each one undo step. */
   /**
    * Hide or show, lock or unlock shapes (#209): an edit, so it undoes. A group
    * goes all together, so it never splits. They're kept by shape id, and a
@@ -863,9 +863,7 @@ export default function App() {
       if (!traced) return
       commit((e) => {
         const d = docOf(e, traced)
-        const all = new Set(withGroups(d, ids))
-        const cur = e[flag] ?? []
-        const next = on ? [...new Set([...cur, ...all])] : cur.filter((id) => !all.has(id))
+        const next = flagIds(d, e[flag] ?? [], ids, on)
         const { [flag]: _, ...rest } = e
         return { ...rest, doc: d, ...(next.length ? { [flag]: next } : {}) }
       })
@@ -875,31 +873,9 @@ export default function App() {
   /** The selection's own fill, outline or opacity (#209). A slider's drag shares a key, so it undoes as one step. */
   const styleSelection = (patch: StylePatch, key: string) => {
     const ids = new Set(selectedIds)
-    editDoc(
-      (d) => ({
-        ...d,
-        paths: d.paths.map((p) => {
-          if (!ids.has(p.id)) return p
-          let q = { ...p }
-          if (patch.fill) {
-            // A colour of its own: flat, out of its ink and into that colour's.
-            const { gradient: _, ...flat } = q
-            q = { ...flat, fill: ownFill(normalizeHex(patch.fill) ?? q.fill, edits.inks) }
-          }
-          if (patch.stroke !== undefined) {
-            const { stroke: _, ...rest } = q
-            q = patch.stroke ? { ...rest, stroke: patch.stroke } : rest
-          }
-          if (patch.opacity !== undefined) {
-            const { opacity: _, ...rest } = q
-            q = patch.opacity < 1 ? { ...rest, opacity: Math.max(0, patch.opacity) } : rest
-          }
-          return q
-        }),
-      }),
-      key,
-    )
+    editDoc((d) => ({ ...d, paths: d.paths.map((p) => (ids.has(p.id) ? stylePath(p, patch, edits.inks) : p)) }), key)
   }
+  /** Group, ungroup and paint order: shape edits on the selection, each one undo step. */
   const groupSelection = () => selectedIds.length > 1 && editDoc((d) => groupPaths(d, selectedIds))
   const ungroupSelection = () => selectedIds.length && editDoc((d) => ungroupPaths(d, selectedIds))
   const arrangeSelection = (how: Arrange) => selectedIds.length && editDoc((d) => arrange(d, selectedIds, how))
