@@ -12,6 +12,12 @@ the next release are in [`.changeset/`](../.changeset/); the
 
 <!-- Written by scripts/changelog.mjs from packages/inlay/CHANGELOG.md: edit that (or the changesets), not this. -->
 
+## 0.3.1
+
+### Patch Changes
+
+- New `closeGaps` option: a line broken by a small gap (up to 1.6 times its width, and 5.5 px) is joined before tracing, in line art's ink (`mode: 'binary'`), Outline art's lines (`strokes`) and `centerline`. Dashes and gaps drawn on purpose stay open. Off by default.
+
 ## 0.3.0
 
 ### Minor Changes
