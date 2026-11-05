@@ -132,6 +132,16 @@ export default function App() {
   /** Opened as the SVG editor (/app/?mode=edit, from the site's /svg-editor/ page): the empty screen asks for an SVG, and the first file opens in Edit mode. */
   const [editEntry] = useState(() => typeof location !== 'undefined' && new URLSearchParams(location.search).get('mode') === 'edit')
   const editFirst = useRef(editEntry)
+  /**
+   * Once a file has opened, ?mode=edit has done its job: drop it from the URL,
+   * so a reload restores the work like any other session instead of starting empty.
+   */
+  const consumeEditEntry = () => {
+    editFirst.current = false
+    const url = new URL(location.href)
+    url.searchParams.delete('mode')
+    window.history.replaceState(window.history.state, '', url)
+  }
   /** The workspace's mode (components/Workspace.tsx): Trace sets up the trace, Edit fixes its shapes. */
   const [workMode, setWorkMode] = useState<WorkMode>('trace')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -223,7 +233,7 @@ export default function App() {
       setTool('select')
       // Opened from the SVG editor page (/app/?mode=edit): the first file opens in Edit, traced first if it's an image.
       const toEdit = !restore && editFirst.current
-      editFirst.current = false
+      if (editFirst.current) consumeEditEntry()
       setWorkMode(restore?.edits.doc || next.svg || toEdit ? 'edit' : 'trace')
       setMode(restore || toEdit ? 'vector' : 'split')
       viewChosen.current = !!restore || toEdit
@@ -252,7 +262,7 @@ export default function App() {
   }, [openNow, editEntry])
   // A batch isn't the first file: whatever opens after it opens as usual.
   useEffect(() => {
-    if (batch) editFirst.current = false
+    if (batch && editFirst.current) consumeEditEntry()
   }, [batch])
   // The image is stored once, after it has traced: one that can't be traced is never brought back.
   const imageSaved = useRef(false)

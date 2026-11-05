@@ -1378,6 +1378,13 @@ if (siteOrigin) {
   await editorPage.getByRole('button', { name: 'Try a sample' }).click()
   await editorPage.getByRole('tab', { name: /Edit/ }).waitFor()
   check((await editorPage.getByRole('tab', { name: /Edit/ }).getAttribute('aria-selected')) === 'true', 'and the first file opens in Edit mode')
+  // Having opened a file, the link is used up: a reload brings the work back rather than an empty editor.
+  check(!editorPage.url().includes('mode=edit'), 'opening a file drops ?mode=edit from the URL')
+  await traced(editorPage)
+  await editorPage.waitForTimeout(1500) // the session saves just after the trace
+  await editorPage.reload()
+  await editorPage.getByRole('tab', { name: /Edit/ }).waitFor({ timeout: 15000 }).catch(() => {})
+  check((await editorPage.getByRole('heading', { name: 'Drop an SVG to edit' }).count()) === 0 && (await editorPage.getByRole('tab', { name: /Edit/ }).count()) === 1, 'a reload afterwards restores the work')
   await editorPage.close()
   const footer = await landing.locator('footer a').evaluateAll((as) => as.map((a) => a.getAttribute('href')))
   check(footer.includes('/svg-editor/'), 'the footer links to the SVG editor page')
