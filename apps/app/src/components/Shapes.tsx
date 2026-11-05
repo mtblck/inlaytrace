@@ -309,3 +309,41 @@ function StrokeWidth(p: { width: number; onWidth: (v: number) => void }) {
     </label>
   )
 }
+
+/** The Fill tool's panel: what a click does, the colour, and why the last click did nothing. */
+export function BucketFields(p: { colour: string; onColour: (hex: string) => void; inks: string[]; busy: boolean; error: string | null }) {
+  const swatches = [...new Set(p.inks.map((h) => h.toLowerCase()))].slice(0, 16)
+  return (
+    <div className="space-y-3" data-bucket-fields="">
+      <p className="field-hint">
+        Click a shape to fill it with this colour, or click between shapes (inside an outline traced as Line art, say) to fill the area they enclose, behind the lines. A
+        break in a hand-drawn line lets the fill run into the next area.
+      </p>
+      <div className="flex items-center gap-2">
+        <input type="color" className="size-8 shrink-0 cursor-pointer rounded border border-rule" value={p.colour} onChange={(e) => p.onColour(e.target.value)} aria-label="Fill tool colour" />
+        <span className="num grow text-[13px]">{p.colour}</span>
+        {p.busy && <span className="text-[12.5px] text-ink-muted">Filling…</span>}
+      </div>
+      {swatches.length > 0 && (
+        <div className="flex flex-wrap gap-1" role="group" aria-label="Fill with a colour from the drawing">
+          {swatches.map((hex) => (
+            <button
+              key={hex}
+              className={`size-6 rounded border ${hex === p.colour.toLowerCase() ? 'border-ink ring-1 ring-ink' : 'border-rule'}`}
+              style={{ background: hex }}
+              title={hex}
+              aria-label={`Fill with ${hex}`}
+              aria-pressed={hex === p.colour.toLowerCase()}
+              onClick={() => p.onColour(hex)}
+            />
+          ))}
+        </div>
+      )}
+      {p.error && (
+        <p role="alert" className="text-[12.5px] text-accent" data-bucket-error="">
+          {p.error}
+        </p>
+      )}
+    </div>
+  )
+}

@@ -644,7 +644,7 @@ check((await page.locator('[data-rail]').count()) === 0, 'Trace mode has no tool
 await page.getByRole('tab', { name: /Edit/ }).click()
 check(await viewIs('Vector'), 'starting to edit switches to Vector, hiding the original')
 const rail = page.locator('[data-rail]')
-check((await rail.getByRole('radio').count()) === 3 && (await rail.getByRole('button', { name: 'Undo' }).count()) === 1, 'Edit mode shows the tool rail: Select, Nodes, Mirror, Undo and Redo')
+check((await rail.getByRole('radio').count()) === 4 && (await rail.getByRole('button', { name: 'Undo' }).count()) === 1, 'Edit mode shows the tool rail: Select, Nodes, Mirror, Fill, Undo and Redo')
 await rail.getByRole('radio', { name: 'Nodes' }).click()
 check((await page.locator('#panel-edit h2').first().innerText()) === 'Nodes', 'the panel follows the rail’s tool')
 // Leaving Edit puts its tools away: back on Select, nothing selected, so Delete can't act unseen.
@@ -1032,6 +1032,34 @@ if (process.env.FIXTURE) {
   await retrace(sv, () => sv.getByRole('button', { name: 'Trace it as an image instead' }).click())
   check((await sv.locator('[data-svg-opened]').count()) === 0, 'and it can be traced as an image instead')
   await sv.close()
+}
+
+// ---- Fill tool (#193): colour in a traced line drawing ---------------------------------
+{
+  const fp = await newPage({ width: 1440, height: 900 })
+  await fp.goto(url)
+  await fp.locator('input[type=file]').setInputFiles({ name: 'colouring.png', mimeType: 'image/png', buffer: Buffer.from(await fixturePng(fp, 'colouring.svg'), 'base64') })
+  await traced(fp)
+  await retrace(fp, () => fp.getByRole('radio', { name: /Line art/ }).click())
+  await fp.getByRole('tab', { name: 'Edit' }).click()
+  const before = await fp.locator(VECTOR).count()
+  await fp.keyboard.press('k')
+  check((await fp.locator('[data-bucket-fields]').count()) === 1, 'K picks the Fill tool')
+  await fp.getByLabel('Fill tool colour').fill('#33aa55')
+  // Inside the circle (centre 70, 70 of 200): the paper there, which Line art leaves undrawn.
+  const sheet = await fp.locator('svg[aria-label="Traced SVG"]').boundingBox()
+  await fp.mouse.click(sheet.x + sheet.width * 0.35, sheet.y + sheet.height * 0.35)
+  await fp.waitForFunction((n) => document.querySelectorAll('svg[aria-label="Traced SVG"] path').length > n, before, { timeout: 15000 }).catch(() => {})
+  check((await fp.locator(VECTOR).count()) === before + 1, `clicking the paper inside an outline adds a fill there (${before} → ${await fp.locator(VECTOR).count()})`)
+  const first = await fp.locator(VECTOR).first().getAttribute('fill')
+  check(first === '#33aa55', `the fill is painted at the back, under the line (${first})`)
+  const box = await fp.locator(VECTOR).first().boundingBox()
+  check(box.width < sheet.width * 0.5 && box.width > sheet.width * 0.35, `it fills the circle and stops at its line (${Math.round(box.width)} of ${Math.round(sheet.width)} px)`)
+  const svg = await exportSvg(fp)
+  check(/#33aa55|#3a5/i.test(svg), 'the fill exports')
+  await fp.keyboard.press(`${MOD}+z`)
+  check((await fp.locator(VECTOR).count()) === before, 'Undo takes the fill away')
+  await fp.close()
 }
 
 // ---- Shapes list, hide and lock, fill and stroke (#209), on a 2,500-shape drawing ----

@@ -42,7 +42,8 @@ import {
 import { push, redo, startHistory, undo, type History } from './lib/history'
 import { centreAxis, likelyAxis, mirrorDoc, type Axis } from './lib/mirror'
 import { booleanOp, type BooleanOp } from './lib/boolean'
-import { ShapesList, StyleFields, type ShapeFlag, type StylePatch } from './components/Shapes'
+import { BucketFields, ShapesList, StyleFields, type ShapeFlag, type StylePatch } from './components/Shapes'
+import { bucketFill } from './lib/bucket'
 import { addOp, BRUSH_DEFAULT, BRUSH_MAX, BRUSH_MIN, MAX_OPS, type BrushSettings, type CleanupOp } from './lib/cleanup'
 import type { CleanTool, CropDraft } from './components/CleanUp'
 import { loadPaper } from './lib/paper'
@@ -598,9 +599,9 @@ export default function App() {
   selectableRef.current = selectableIds
   const inks = useMemo(() => (doc ? inksOf(doc) : []), [doc])
   const strokes = useMemo(() => !!doc && hasStrokes(doc), [doc])
-  // Strokes can't be mirrored: leave the Mirror tool if a trace turns into them.
+  // Strokes can't be mirrored or bound a fill: leave those tools if a trace turns into them.
   useEffect(() => {
-    if (strokes && tool === 'mirror') setTool('select')
+    if (strokes && (tool === 'mirror' || tool === 'fill')) setTool('select')
   }, [strokes, tool])
 
   // Shapes that no longer exist (re-trace, undo past their creation), or are
@@ -903,6 +904,34 @@ export default function App() {
     }
   }
 
+  // ---- Fill tool (#193) -----------------------------------------------------------
+  const [fillColour, setFillColour] = useState('#f2c14e')
+  const [fillError, setFillError] = useState<string | null>(null)
+  const [filling, setFilling] = useState(false)
+  const fillingRef = useRef(false)
+  const drawnIds = useMemo(() => new Set(drawn.map((p) => p.id)), [drawn])
+  /** A click with the Fill tool: the shape there takes the colour, or the area the shapes enclose there becomes a shape. */
+  const fillAt = async (at: Pt) => {
+    if (fillingRef.current) return
+    fillingRef.current = true
+    setFilling(true)
+    setFillError(null)
+    try {
+      const paper = await loadPaper()
+      // The drawing as it is now, after the wait for paper.js.
+      const current = docRef.current
+      if (!current) return
+      const r = bucketFill(paper, current, edits.inks, drawnIds, lockedSet, at, fillColour)
+      if ('error' in r) return setFillError(r.error)
+      editDoc(() => r.doc)
+    } catch (error) {
+      setFillError(`That didn’t work: ${error instanceof Error ? error.message : String(error)}. Your drawing is unchanged.`)
+    } finally {
+      fillingRef.current = false
+      setFilling(false)
+    }
+  }
+
   const deleteSelection = useCallback(() => {
     if (!selectedPaths.length) return
     if (tool === 'nodes' && selectedNodes.length && editing) {
@@ -982,8 +1011,9 @@ export default function App() {
     // Nodes edits one shape and Mirror shows none, so neither keeps a
     // multi-selection that Delete could act on unseen.
     if (t === 'nodes') setSelectedIds((ids) => ids.slice(0, 1))
-    else if (t === 'mirror') setSelectedIds([])
-    if (t === 'mirror') void loadPaper().catch(() => {}) // warm it up while the user picks a side
+    else if (t === 'mirror' || t === 'fill') setSelectedIds([])
+    if (t === 'mirror' || t === 'fill') void loadPaper().catch(() => {}) // warm it up while the user picks a side or a colour
+    setFillError(null)
   }, [])
 
   /** Edit mode's tool rail: beside the canvas on a wide screen, in the mode bar on a phone (one or the other, never both). */
@@ -1094,8 +1124,8 @@ export default function App() {
       } else if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
         e.preventDefault()
         setShortcutsOpen(true)
-      } else if (hasDoc && !e.shiftKey && (key === 'v' || key === 'a' || key === 'm')) {
-        if (key !== 'm' || !strokes) chooseTool(key === 'v' ? 'select' : key === 'a' ? 'nodes' : 'mirror')
+      } else if (hasDoc && !e.shiftKey && (key === 'v' || key === 'a' || key === 'm' || key === 'k')) {
+        if ((key !== 'm' && key !== 'k') || !strokes) chooseTool(({ v: 'select', a: 'nodes', m: 'mirror', k: 'fill' } as const)[key])
         setWorkMode('edit')
         startEditing()
       }
@@ -1460,6 +1490,7 @@ export default function App() {
                     onAddNode={onAddNode}
                     picking={!!picking}
                     onPick={onPick}
+                    onFill={(at) => void fillAt(at)}
                     onAxis={moveAxis}
                   />
                   {busy && (
@@ -1618,6 +1649,7 @@ export default function App() {
             {doc && axis && (
               <EditPanel
                 tool={tool}
+                fillFields={<BucketFields colour={fillColour} onColour={setFillColour} inks={inks.map((i) => i.hex)} busy={filling} error={fillError} />}
                 detached={detached}
                 selection={
                   selectedPaths.length

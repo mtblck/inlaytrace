@@ -108,10 +108,13 @@ function divide(s: InstanceType<Paper['PaperScope']>, items: Item[], sel: DocPat
  * A contour inside an even number of others is an outline; one inside an odd
  * number is a hole, belonging to the smallest outline around it.
  */
-function separate(s: InstanceType<Paper['PaperScope']>, item: Item): Item[] {
+export function separate(s: InstanceType<Paper['PaperScope']>, item: Item): Item[] {
   const kids = ((item as unknown as { children?: Path[] }).children ?? [item as unknown as Path]).filter((c) => !c.isEmpty())
   if (kids.length < 2) return [item]
-  const inside = (c: Path, d: Path) => c !== d && d.contains(c.interiorPoint)
+  // Tested at a point on c's own outline: contours don't cross, so it's inside d or not. (An
+  // interior point won't do: nested contours can share one, the middle of a ring round a dot.)
+  const on = new Map(kids.map((c) => [c, c.getPointAt(c.length * 0.37) ?? c.interiorPoint]))
+  const inside = (c: Path, d: Path) => c !== d && d.contains(on.get(c)!)
   const depth = kids.map((c) => kids.filter((d) => inside(c, d)).length)
   const outlines = kids.filter((_, k) => depth[k] % 2 === 0)
   if (outlines.length < 2) return [item]
