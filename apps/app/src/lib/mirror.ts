@@ -215,6 +215,6 @@ function turnDoc(paper: Paper, doc: Doc, axis: TurnAxis): Doc {
 
 const areaOf = (item: Item) => Math.abs((item as InstanceType<Paper['Path']>).area ?? 0)
 
-export function isEmpty(item: Item) {
+function isEmpty(item: Item) {
   return !item.pathData || Math.abs((item as InstanceType<Paper['Path']>).area ?? 0) < 1e-6 || item.bounds.isEmpty()
 }

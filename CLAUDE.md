@@ -55,7 +55,7 @@ Marking it ready also triggers the Claude review workflow.
   `--dist` pass names any new hash to add. `npm run preview` is `scripts/serve.mjs`, which mimics Vercel.
 - **Edits = `{ inks, doc }`** (`apps/app/src/lib/doc.ts`): ink edits keyed by traced hex; `doc` null
   until a geometric edit detaches it, then settings changes must confirm. paper.js is
-  lazy-loaded for mirror only; keep it out of the main chunk.
+  lazy-loaded for Mirror and Combine (boolean ops) only; keep it out of the main chunk.
 - **Free, with a tip button (ADR 0004).** No accounts, pricing or paid UI anywhere; the `tipjar` package (Matt's, on npm) links
   to Ko-fi from the app's header (`components/Support.tsx`) and floats on the site's pages (`Page.astro`).
 - **HD mode (paid, shelved Nov 2026, `docs/hd-mode.md`):** the server side is dormant: `server/api.ts` answers 410 to everything but

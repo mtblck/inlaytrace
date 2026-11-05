@@ -78,9 +78,12 @@ it, cut a shape out of the background, join two halves.
   overlap, each in the colour that was on top there, so each can be
   recoloured, moved or deleted on its own.
 
-The back shape is the lowest in paint order. Unite, Subtract and Intersect
-leave one shape in its place, with its colour, gradient and group, and select
-it. Lines (Centerline and Outline art strokes) have no inside, so they can't
+The back shape is the lowest in paint order. Unite and Intersect leave one
+shape in its colour, gradient and group, painted where the topmost selected
+shape was (as Group does), so nothing that was above a selected shape ends up
+under it; Subtract leaves the back shape where it was. Divide makes one piece
+per separate area. The result is selected. If nothing would change (shapes
+that don't overlap), it says so and leaves the drawing alone. Lines (Centerline and Outline art strokes) have no inside, so they can't
 be combined. One undo step each, and they detach the drawing from the trace.
 
 ## Nodes: move nodes and bend curves

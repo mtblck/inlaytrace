@@ -41,17 +41,21 @@ const ok = (r: ReturnType<typeof booleanOp>) => {
 }
 
 describe('boolean ops', () => {
-  it('unites into one path in the back shape’s place, keeping its colour and group', () => {
+  it('unites into one path in the back shape’s colour and group, painted where the top one was', () => {
     const r = ok(booleanOp(paper, doc, ['a', 'b'], 'unite'))
-    expect(r.doc.paths.map((p) => p.id)).toEqual(['bg', 'a', 'mid', 'top'])
-    expect(r.doc.paths[1]).toMatchObject({ fill: '#ff0000', group: 'g1' })
-    expect(area(r.doc.paths[1].d)).toBeCloseTo(700, 0)
+    // mid sat under b, so it stays under the result.
+    expect(r.doc.paths.map((p) => p.id)).toEqual(['bg', 'mid', 'a', 'top'])
+    expect(r.doc.paths[2]).toMatchObject({ fill: '#ff0000', group: 'g1' })
+    expect(area(r.doc.paths[2].d)).toBeCloseTo(700, 0)
     expect(r.selected).toEqual(['a'])
   })
 
   it('subtracts the front shapes from the back one, leaving a hole when one sits inside', () => {
     const r = ok(booleanOp(paper, doc, ['a', 'b'], 'subtract'))
+    expect(r.doc.paths.map((p) => p.id)).toEqual(['bg', 'a', 'mid', 'top'])
     expect(area(r.doc.paths.find((p) => p.id === 'a')!.d)).toBeCloseTo(300, 0)
+    // Front shapes that miss the back one would just vanish: refused instead.
+    expect(booleanOp(paper, doc, ['a', 'top'], 'subtract')).toHaveProperty('error')
     // A shape inside the background cuts a hole: the background keeps its outline and loses the inner area.
     const holed = ok(booleanOp(paper, doc, ['bg', 'mid'], 'subtract'))
     expect(area(holed.doc.paths[0].d)).toBeCloseTo(10000 - 25, 0)
@@ -72,9 +76,20 @@ describe('boolean ops', () => {
     expect(pieces.map((p) => Math.round(area(p.d))).sort((x, y) => x - y)).toEqual([100, 300, 300])
     expect(pieces[0].id).toBe('a')
     expect(new Set(pieces.map((p) => p.id)).size).toBe(3)
-    // The pieces sit where the back shape was, the rest of the doc untouched.
-    expect(r.doc.paths[0].id).toBe('bg')
-    expect(r.doc.paths.slice(-2).map((p) => p.id)).toEqual(['mid', 'top'])
+    // The pieces sit where the top shape was, the rest of the doc in order.
+    expect(r.doc.paths.slice(0, 2).map((p) => p.id)).toEqual(['bg', 'mid'])
+    expect(r.doc.paths.at(-1)!.id).toBe('top')
+  })
+
+  it('divides a shape cut in two into two pieces, each movable on its own', () => {
+    const bar: Doc = { width: 100, height: 100, paths: [{ id: 'bar', fill: '#ff0000', d: 'M0 40L100 40L100 60L0 60Z' }, { id: 'sq', fill: '#0000ff', d: 'M40 30L60 30L60 70L40 70Z' }] }
+    const r = ok(booleanOp(paper, bar, ['bar', 'sq'], 'divide'))
+    const reds = r.doc.paths.filter((p) => p.fill === '#ff0000')
+    expect(reds.map((p) => Math.round(area(p.d)))).toEqual([800, 800])
+    // A ring keeps its hole: one piece, not an outline and a hole apart.
+    const ring: Doc = { width: 100, height: 100, paths: [{ id: 'big', fill: '#ff0000', d: square(0, 0, 60) }, { id: 'small', fill: '#0000ff', d: square(20, 20, 20) }] }
+    const rr = ok(booleanOp(paper, ring, ['big', 'small'], 'divide'))
+    expect(rr.doc.paths.map((p) => Math.round(area(p.d)))).toEqual([3600 - 400, 400])
   })
 
   it('needs two filled shapes', () => {

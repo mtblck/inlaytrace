@@ -755,12 +755,17 @@ export default function App() {
   const ungroupSelection = () => selectedIds.length && editDoc((d) => ungroupPaths(d, selectedIds))
   const arrangeSelection = (how: Arrange) => selectedIds.length && editDoc((d) => arrange(d, selectedIds, how))
   /** Unite, Subtract, Intersect or Divide the selection (#207); resolves to why it couldn't, or null. */
+  const combining = useRef(false)
   const combineSelection = async (op: BooleanOp): Promise<string | null> => {
-    if (!doc || selectedIds.length < 2) return null
+    const ids = selectedIds
+    if (combining.current || ids.length < 2) return null
+    combining.current = true
     try {
       const paper = await loadPaper()
-      // Combines the drawing as it was when the button was pressed, like Mirror.
-      const r = booleanOp(paper, doc, selectedIds, op)
+      // The drawing as it is now, after the wait for paper.js: edits made meanwhile are kept.
+      const current = docRef.current
+      if (!current) return null
+      const r = booleanOp(paper, current, ids, op)
       if ('error' in r) return r.error
       editDoc(() => r.doc)
       setSelectedIds(r.selected)
@@ -768,6 +773,8 @@ export default function App() {
       return null
     } catch (error) {
       return `That didn’t work: ${error instanceof Error ? error.message : String(error)}. Your drawing is unchanged.`
+    } finally {
+      combining.current = false
     }
   }
 
