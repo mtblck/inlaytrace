@@ -1,8 +1,8 @@
 /**
  * The workspace shell (#198): one canvas, a mode switcher above it, a tool
  * rail beside it and a properties panel in the sidebar, filled per mode.
- * Trace sets up the trace; Edit fixes its shapes. Clean up, for fixing the
- * image before tracing, joins them with #199. See docs/adr/0005-editor-scope.md.
+ * Clean up fixes the image before tracing (#199); Trace sets up the trace;
+ * Edit fixes its shapes. See docs/adr/0005-editor-scope.md.
  *
  * The modes are tabs: each controls its panel in the sidebar
  * (`panel-<mode>`), so the panel is announced with the mode it belongs to.
@@ -27,7 +27,7 @@ export function ModeSwitch({ modes, mode, onMode, edited }: { modes: WorkMode[];
           aria-selected={mode === m}
           aria-controls={`panel-${m}`}
           onClick={() => onMode(m)}
-          className={`flex items-center px-3.5 py-1 text-[13px] ${mode === m ? 'bg-paper font-medium text-accent' : 'bg-paper-sunk text-ink hover:bg-paper'}`}
+          className={`flex items-center px-2.5 py-1 text-[13px] sm:px-3.5 ${mode === m ? 'bg-paper font-medium text-accent' : 'bg-paper-sunk text-ink hover:bg-paper'}`}
         >
           {MODE_LABEL[m]}
           {m === 'edit' && edited && (
@@ -65,6 +65,12 @@ export const EDIT_TOOLS = (strokes: boolean): RailTool<Tool>[] => [
   },
 ]
 
+/** Clean up's tools by name (#199, #200). */
+export const CLEAN_TOOL_LABEL = { crop: 'Crop', straighten: 'Straighten' } as const
+export const CLEAN_TOOLS: RailTool<keyof typeof CLEAN_TOOL_LABEL>[] = [
+  { id: 'crop', label: CLEAN_TOOL_LABEL.crop, key: 'C', icon: icon('M5 1.5V13h11.5M1.5 5H13v11.5') },
+  { id: 'straighten', label: CLEAN_TOOL_LABEL.straighten, key: 'L', icon: icon('M2 12.5L16 5.5M2 15.5h14') },
+]
 
 /**
  * The tool rail: the mode's tools, then Undo and Redo. A column beside the

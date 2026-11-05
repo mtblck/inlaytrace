@@ -12,7 +12,7 @@ export const REDO_KEYS = MAC ? '⇧⌘ Z' : 'Ctrl Shift Z'
 type Row = { keys: string[]; does: string }
 
 /** The shortcuts panel's headings, in order: each workspace mode with shortcuts of its own, then those that work in all. */
-const MODES = ['Edit mode', 'Every mode'] as const
+const MODES = ['Clean up mode', 'Edit mode', 'Every mode'] as const
 
 /**
  * Every shortcut, grouped as the panel shows them. The handlers live in
@@ -20,6 +20,16 @@ const MODES = ['Edit mode', 'Every mode'] as const
  * step with them and with docs/features/keyboard-shortcuts.md.
  */
 export const SHORTCUTS: { mode: (typeof MODES)[number]; title: string; rows: Row[] }[] = [
+  {
+    mode: 'Clean up mode',
+    title: 'Clean up',
+    rows: [
+      { keys: ['C'], does: 'Crop: drag a box on the image' },
+      { keys: ['Enter'], does: 'Crop to the box' },
+      { keys: ['Esc'], does: 'Cancel the box' },
+      { keys: ['L'], does: 'Straighten: drag along a line that should be level or upright' },
+    ],
+  },
   {
     mode: 'Edit mode',
     title: 'Tools',

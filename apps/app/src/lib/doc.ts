@@ -16,6 +16,7 @@
  */
 import { checkGradient, gradientMarkup, moveGradient, normalizeHex, type Gradient, type Trace } from './svg'
 import { mapPoints, parsePath, serializePath, type Pt } from './pathdata'
+import type { CleanupOp } from './cleanup'
 
 /**
  * `fill` is the path's colour; with `stroke` (a width in px) the path is
@@ -34,7 +35,11 @@ export type InkEdits = { recolor: Record<string, string>; removed: string[] }
  * ink edits it never touches geometry, so it survives re-tracing; it only
  * shows where shapes are removed or a colour is deleted.
  */
-export type Edits = { inks: InkEdits; doc: Doc | null; background: string | null }
+/**
+ * `cleanup` is Clean up's list of edits to the image (lib/cleanup.ts), replayed
+ * onto the original before tracing; missing means none.
+ */
+export type Edits = { inks: InkEdits; doc: Doc | null; background: string | null; cleanup?: CleanupOp[] }
 /** `shaded`: every shape in it has a gradient, so its colour is an average, not one the tracer can merge. */
 export type Ink = { hex: string; count: number; shaded?: boolean }
 
