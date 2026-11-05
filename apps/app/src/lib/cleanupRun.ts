@@ -32,8 +32,9 @@ export function cleanedPixels(source: Source, ops: CleanupOp[]): Img {
   const hit = recent.find((r) => r.bitmap === source.bitmap && r.key === key)
   if (hit) return hit.img
   const img = replay(originalPixels(source), ops)
-  recent.unshift({ bitmap: source.bitmap, key, img })
-  recent.length = Math.min(recent.length, 3)
+  // Only this image's results are kept: another image's go with it.
+  const mine = recent.filter((r) => r.bitmap === source.bitmap).slice(0, 2)
+  recent.splice(0, recent.length, { bitmap: source.bitmap, key, img }, ...mine)
   return img
 }
 

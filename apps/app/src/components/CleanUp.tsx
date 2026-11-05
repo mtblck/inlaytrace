@@ -195,6 +195,7 @@ export function CleanPanel(p: {
   onShowOriginal: (on: boolean) => void
   /** The list differs from what was traced: leaving the mode re-traces. */
   pending: boolean
+  onSave: (blob: Blob, name: string) => void
 }) {
   const size = useMemo(() => cleanedPixels(p.source, p.ops), [p.source, p.ops])
   const [angle, setAngle] = useState('')
@@ -384,14 +385,7 @@ export function CleanPanel(p: {
             </button>
             <button
               className="btn"
-              onClick={async () => {
-                const blob = await pngOf(cleanedPixels(p.source, p.ops))
-                const a = document.createElement('a')
-                a.href = URL.createObjectURL(blob)
-                a.download = `${p.source.name}-cleaned.png`
-                a.click()
-                setTimeout(() => URL.revokeObjectURL(a.href), 1000)
-              }}
+              onClick={async () => p.onSave(await pngOf(cleanedPixels(p.source, p.ops)), `${p.source.name}-cleaned.png`)}
             >
               Download PNG
             </button>

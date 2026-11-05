@@ -117,6 +117,8 @@ describe('clean-up list', () => {
     expect(addOp(addOp([], { kind: 'flip', axis: 'vertical' }), { kind: 'flip', axis: 'vertical' })).toEqual([])
     // A straighten stays its own step.
     expect(addOp([{ kind: 'rotate', degrees: 2.5 }], { kind: 'rotate', degrees: 90 })).toHaveLength(2)
+    // Two straightens are one turn.
+    expect(addOp([{ kind: 'rotate', degrees: 2.5 }], { kind: 'rotate', degrees: -1 })).toEqual([{ kind: 'rotate', degrees: 1.5 }])
   })
 
   it('keeps one of each adjustment, edited in place', () => {

@@ -49,8 +49,9 @@ export function addOp(ops: CleanupOp[], op: Crop | Rotate | Flip): CleanupOp[] {
     const degrees = normDegrees(op.degrees)
     if (last?.kind === 'rotate') {
       const sum = normDegrees(last.degrees + degrees)
-      // Two quarter turns make a half turn; a straighten then a turn stay apart, so the fill stays where it was drawn.
-      if (isQuarter(last.degrees) && isQuarter(degrees)) return sum ? [...ops.slice(0, -1), { kind: 'rotate', degrees: sum }] : ops.slice(0, -1)
+      // Two quarter turns make a half turn, and two straightens one turn (resampled once, the canvas grown
+      // once). A straighten then a quarter turn stay apart, so the fill stays where it was drawn.
+      if (isQuarter(last.degrees) === isQuarter(degrees)) return sum ? [...ops.slice(0, -1), { kind: 'rotate', degrees: sum }] : ops.slice(0, -1)
     }
     return degrees ? [...ops, { kind: 'rotate', degrees }] : ops
   }

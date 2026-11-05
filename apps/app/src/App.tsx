@@ -375,43 +375,68 @@ export default function App() {
   // ---- Clean up -----------------------------------------------------------------
   // Clean up (#199) edits the image before tracing, as a list of ops in the
   // edits (so Undo and the session carry it). The trace follows the list
-  // outside the mode; inside it, the canvas previews the list and the trace
-  // waits, so leaving the mode re-traces once.
+  // outside the mode; inside it, the list it was traced from is held while the
+  // canvas previews the new one, so leaving the mode re-traces once.
   const cleanup = edits.cleanup ?? NO_CLEANUP
-  const [tracedCleanup, setTracedCleanup] = useState<CleanupOp[]>(NO_CLEANUP)
-  useEffect(() => {
-    if (workMode !== 'clean') setTracedCleanup(cleanup)
-  }, [workMode, cleanup])
+  const [heldCleanup, setHeldCleanup] = useState<CleanupOp[] | null>(null)
+  const tracedCleanup = workMode === 'clean' && heldCleanup ? heldCleanup : cleanup
   const cleanable = !!source && !source.svg
-  const cleanKey = cleanable && tracedCleanup.length ? `${source!.url}|${JSON.stringify(tracedCleanup)}` : null
+  const tracedJson = JSON.stringify(tracedCleanup)
+  /** The list differs from the one traced: leaving Clean up re-traces. Compared by content, so undoing back to it counts as no change. */
+  const cleanupPending = JSON.stringify(cleanup) !== tracedJson
+  const cleanKey = cleanable && tracedCleanup.length ? `${source!.url}|${tracedJson}` : null
   const [cleaned, setCleaned] = useState<{ key: string; source: Source } | null>(null)
   useEffect(() => {
-    if (!cleanKey || !source) return
+    const drop = (prev: { source: Source } | null) => {
+      if (prev && prev.source !== source) {
+        URL.revokeObjectURL(prev.source.url)
+        prev.source.bitmap.close()
+      }
+    }
+    // Nothing to clean (none, or another image): let the last cleaned image go.
+    if (!cleanKey || !source) return void setCleaned((prev) => (drop(prev), null))
     let live = true
     const ops = tracedCleanup
     void import('./lib/cleanupRun')
       .then((m) => m.cleanedSource(source, ops))
       .then((s) => {
-        if (!live) return URL.revokeObjectURL(s.url)
-        setCleaned((prev) => {
-          if (prev) URL.revokeObjectURL(prev.source.url)
-          return { key: cleanKey, source: s }
-        })
+        if (!live) return void (URL.revokeObjectURL(s.url), s.bitmap.close())
+        setCleaned((prev) => (drop(prev), { key: cleanKey, source: s }))
       })
-      .catch((error) => live && setLoadError(`Clean-up failed: ${error instanceof Error ? error.message : String(error)}`))
+      .catch((error) => {
+        if (!live) return
+        // Trace the original rather than nothing, and say why.
+        setLoadError(`Clean-up couldn’t be applied (${error instanceof Error ? error.message : String(error)}), so the original is traced.`)
+        setCleaned((prev) => (drop(prev), { key: cleanKey, source }))
+      })
     return () => {
       live = false
     }
     // The key names the source and the list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cleanKey])
+  }, [cleanKey, source])
   /** The image the rest of the pipeline sees: the cleaned one once it's ready, or the original when there's nothing to clean. */
   const base = !source ? null : cleanKey ? (cleaned?.key === cleanKey ? cleaned.source : null) : source
   const [cleanTool, setCleanTool] = useState<CleanTool>('crop')
   const [cropDraft, setCropDraft] = useState<CropDraft | null>(null)
   const [showOriginal, setShowOriginal] = useState(false)
   const cleanSeq = useRef(0)
-  const editCleanup = (next: CleanupOp[], key?: string) => commit((e) => ({ ...e, cleanup: next }), key ?? `cleanup-${++cleanSeq.current}`)
+  /**
+   * Change the list. The first change made over shape edits asks first, and
+   * clears them in the same step, so one Undo brings back both the edits and
+   * the image they were drawn on.
+   */
+  const editCleanup = (next: CleanupOp[], key?: string) => {
+    const k = key ?? `cleanup-${++cleanSeq.current}`
+    if (!detached) return commit((e) => ({ ...e, cleanup: next }), k)
+    guard('Cleaning up the image re-traces it, which replaces your shape edits. Undo brings them back.', 'Discard edits and clean up', () => {
+      commit((e) => ({ ...e, cleanup: next, doc: null }))
+      setSelectedIds([])
+      setSelectedNodes([])
+    })
+  }
+  // A crop box is drawn on the image as it is: any other change to it (a turn, an undo) puts the box away.
+  useEffect(() => setCropDraft(null), [cleanup])
   const applyCrop = () => {
     if (!cropDraft) return
     editCleanup(addOp(cleanup, { kind: 'crop', ...cropDraft }))
@@ -889,23 +914,9 @@ export default function App() {
   }
   const chooseMode = (m: WorkMode) => {
     if (m === workMode) return
-    // Leaving Clean up traces the cleaned image; with shape edits, that replaces them, so ask first.
-    if (workMode === 'clean' && cleanup !== tracedCleanup) {
-      setCropDraft(null)
-      setShowOriginal(false)
-      return guard('Tracing the cleaned image replaces your shape edits. Undo brings them back.', 'Discard edits and re-trace', () => {
-        if (detached) {
-          commit((e) => ({ ...e, doc: null }))
-          setSelectedIds([])
-          setSelectedNodes([])
-        }
-        enterMode(m)
-      })
-    }
-    enterMode(m)
-  }
-  const enterMode = (m: WorkMode) => {
     setWorkMode(m)
+    // Clean up holds the trace's list while you work; leaving lets it follow the edited one, which re-traces.
+    setHeldCleanup(m === 'clean' ? cleanup : null)
     setCropDraft(null)
     setShowOriginal(false)
     if (m === 'edit') return startEditing()
@@ -1010,7 +1021,7 @@ export default function App() {
         else if (key === 'c' || key === 'l') {
           setCleanTool(key === 'c' ? 'crop' : 'straighten')
           setCropDraft(null)
-        } else if (e.key === 'Enter' && cropDraft) {
+        } else if (e.key === 'Enter' && cropDraft && el?.tagName !== 'BUTTON' && el?.tagName !== 'A') {
           e.preventDefault()
           applyCrop()
         } else if (e.key === 'Escape') setCropDraft(null)
@@ -1527,7 +1538,8 @@ export default function App() {
                       onApplyCrop={applyCrop}
                       showOriginal={showOriginal}
                       onShowOriginal={setShowOriginal}
-                      pending={cleanup !== tracedCleanup}
+                      pending={cleanupPending}
+                      onSave={save}
                     />
                   </Suspense>
                 )}

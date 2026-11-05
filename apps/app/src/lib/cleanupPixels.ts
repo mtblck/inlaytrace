@@ -126,11 +126,26 @@ function rotate(img: Img, degrees: number): Img {
       const y1 = Math.min(y0 + 1, h - 1)
       const fx = clamp(sx - x0, 0, 1)
       const fy = clamp(sy - y0, 0, 1)
-      const a = (y0 * w + x0) * 4
-      const b = (y0 * w + x1) * 4
-      const c = (y1 * w + x0) * 4
-      const e = (y1 * w + x1) * 4
-      for (let k = 0; k < 4; k++) rgba[o + k] = (s[a + k] * (1 - fx) + s[b + k] * fx) * (1 - fy) + (s[c + k] * (1 - fx) + s[e + k] * fx) * fy
+      const corners = [(y0 * w + x0) * 4, (y0 * w + x1) * 4, (y1 * w + x0) * 4, (y1 * w + x1) * 4]
+      const weights = [(1 - fx) * (1 - fy), fx * (1 - fy), (1 - fx) * fy, fx * fy]
+      // Colour weighted by alpha too (premultiplied), so a transparent pixel's hidden colour never bleeds into an edge.
+      let r = 0
+      let g = 0
+      let bl = 0
+      let al = 0
+      for (let k = 0; k < 4; k++) {
+        const wa = weights[k] * s[corners[k] + 3]
+        r += s[corners[k]] * wa
+        g += s[corners[k] + 1] * wa
+        bl += s[corners[k] + 2] * wa
+        al += wa
+      }
+      rgba[o + 3] = al
+      if (al > 0) {
+        rgba[o] = r / al
+        rgba[o + 1] = g / al
+        rgba[o + 2] = bl / al
+      }
     }
   return { rgba, width: ow, height: oh }
 }
