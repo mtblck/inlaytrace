@@ -66,7 +66,6 @@ import { useTheme } from './lib/theme'
 type Status = { kind: 'idle' } | { kind: 'tracing' } | { kind: 'done'; ms: number } | { kind: 'opened' } | { kind: 'error'; message: string }
 
 const NO_TEXT: TextRun[] = []
-/** The workspace's modes, in order. Clean up joins them with #199. */
 // Clean up is loaded the first time it opens, with the replay it runs.
 const CleanCanvas = lazy(() => import('./components/CleanUp').then((m) => ({ default: m.CleanCanvas })))
 const CleanPanel = lazy(() => import('./components/CleanUp').then((m) => ({ default: m.CleanPanel })))

@@ -33,11 +33,9 @@ export type InkEdits = { recolor: Record<string, string>; removed: string[] }
 /**
  * `background` is a colour behind every shape, or null for transparent. Like
  * ink edits it never touches geometry, so it survives re-tracing; it only
- * shows where shapes are removed or a colour is deleted.
- */
-/**
- * `cleanup` is Clean up's list of edits to the image (lib/cleanup.ts), replayed
- * onto the original before tracing; missing means none.
+ * shows where shapes are removed or a colour is deleted. `cleanup` is Clean
+ * up's list of edits to the image (lib/cleanup.ts), replayed onto the original
+ * before tracing; missing means none.
  */
 export type Edits = { inks: InkEdits; doc: Doc | null; background: string | null; cleanup?: CleanupOp[] }
 /** `shaded`: every shape in it has a gradient, so its colour is an average, not one the tracer can merge. */
