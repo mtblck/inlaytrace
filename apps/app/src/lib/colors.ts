@@ -32,7 +32,8 @@ export function addColors(list: string[], more: string[]): string[] {
   return out
 }
 
-const rgbOf = (hex: string): [number, number, number] => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number]
+/** #rrggbb → [r, g, b], 0–255. */
+export const rgbOf = (hex: string): [number, number, number] => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number]
 
 /** The colour in `palette` nearest `hex` as the eye sees it (OKLab); `hex` itself when the palette is empty or it isn't a colour. */
 export function nearestColor(hex: string, palette: string[]): string {

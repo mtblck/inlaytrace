@@ -63,6 +63,9 @@ type Status = { kind: 'idle' } | { kind: 'tracing' } | { kind: 'done'; ms: numbe
 
 const NO_TEXT: TextRun[] = []
 
+/** Logo's defaults, keeping your own colours: they're about what you can print, not this image. */
+const keepOwnColors = (s: Settings): Settings => ({ ...settingsFor('logo'), ownColors: s.ownColors, useOwnColors: s.useOwnColors })
+
 export default function App() {
   const client = useMemo(() => new TraceClient(), [])
   useEffect(() => () => client.dispose(), [client])
@@ -82,6 +85,8 @@ export default function App() {
 
   const [source, setSource] = useState<Source | null>(null)
   const [settings, setSettings] = useState<Settings>(() => settingsFor('logo'))
+  const settingsRef = useRef(settings)
+  settingsRef.current = settings
   /** Whether a preset was chosen for the image on screen; until one is, a photo gets the Poster suggestion. */
   const [presetPicked, setPresetPicked] = useState(false)
   const [trace, setTrace] = useState<Trace | null>(null)
@@ -291,7 +296,7 @@ export default function App() {
         setHistory(startHistory(NO_EDITS))
         setSelectedIds([])
         setSelectedNodes([])
-        setSettings(settingsFor('logo'))
+        setSettings(keepOwnColors)
         setSessionNote(null)
         setExportSize(null)
         setPicking(null)
@@ -317,7 +322,7 @@ export default function App() {
   )
 
   const openSample = async () => {
-    setSettings(settingsFor('logo'))
+    setSettings(keepOwnColors)
     await open(await sampleImage(), 'sample-badge')
   }
 
@@ -900,9 +905,8 @@ export default function App() {
   const downloadPdf = () => save(new Blob([buildPdf(drawable(), size, source!.name) as BlobPart], { type: 'application/pdf' }), `${source!.name}.pdf`)
   const downloadDxf = () => save(new Blob([buildDxf(drawable(), size)], { type: 'application/dxf' }), `${source!.name}.dxf`)
   /** The colours as drawn (#192), so a designer can take the palette into other tools. */
-  const swatches = useMemo(() => (doc ? swatchColors(shown, edits.background) : []), [doc, shown, edits.background])
   const downloadSwatches = (format: SwatchFormat) => {
-    const f = swatchFile(format, swatches, source!.name)
+    const f = swatchFile(format, swatchColors(shown, edits.background), source!.name)
     save(new Blob([f.data as BlobPart], { type: f.type }), `${source!.name}-swatches.${f.ext}`)
   }
   const downloadEps = () => save(new Blob([buildEps(drawable(), size, source!.name)], { type: 'application/postscript' }), `${source!.name}.eps`)
@@ -1028,7 +1032,12 @@ export default function App() {
     const v = normalizeHex(hex)
     if (!v) return
     if (target === 'background') commit((e) => ({ ...e, background: v }))
-    else if (target === OWN_COLORS) changeSettings({ ...settings, ownColors: addColors(settings.ownColors, [v]) })
+    else if (target === OWN_COLORS) {
+      // The screen picker resolves later: build on the settings as they are then.
+      const now = settingsRef.current
+      const ownColors = addColors(now.ownColors, [v])
+      if (ownColors.length !== now.ownColors.length) changeSettings({ ...now, ownColors })
+    }
     else editInks((i) => recolorInk(i, target, v))
   }
   const onPick = (at: Pt) => {
@@ -1469,7 +1478,7 @@ export default function App() {
                   onEps={downloadEps}
                   onDxf={downloadDxf}
                   onSwatches={downloadSwatches}
-                  swatchCount={swatches.length}
+                  hasSwatches={shown.length > 0 || !!edits.background}
                 />
               )}
             </div>

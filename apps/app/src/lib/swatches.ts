@@ -3,6 +3,7 @@
  * tools: Adobe Swatch Exchange (.ase), a GIMP/Inkscape palette (.gpl), or CSS
  * custom properties. Built in the browser, like every other export.
  */
+import { rgbOf as rgb } from './colors'
 import { normalizeHex } from './svg'
 
 export type SwatchFormat = 'ase' | 'gpl' | 'css'
@@ -12,16 +13,16 @@ export type SwatchFormat = 'ase' | 'gpl' | 'css'
  * once. `paths` are the visible paths, so colour edits (replace, merge,
  * remove) are already applied.
  */
-export function swatchColors(paths: { fill: string }[], background: string | null = null): string[] {
-  const out: string[] = []
-  for (const c of [background, ...paths.map((p) => p.fill)]) {
+export function swatchColors(paths: { fill: string; gradient?: { stops: { color: string }[] } }[], background: string | null = null): string[] {
+  const seen = new Set<string>()
+  // A gradient shape is drawn in its stops' colours, not its flat fallback.
+  for (const c of [background, ...paths.flatMap((p) => (p.gradient ? p.gradient.stops.map((s) => s.color) : [p.fill]))]) {
     const hex = c ? normalizeHex(c) : null
-    if (hex && !out.includes(hex)) out.push(hex)
+    if (hex) seen.add(hex)
   }
-  return out
+  return [...seen]
 }
 
-const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
 
 /** A GIMP palette, which Inkscape and Krita read too. Each colour named by its hex. */
 export function toGpl(colors: string[], name: string): string {

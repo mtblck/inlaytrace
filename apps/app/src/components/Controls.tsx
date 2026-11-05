@@ -1,6 +1,6 @@
 import { useId, useState, type ReactNode } from 'react'
 import type { PrepStage } from '../engine/prep'
-import { MAX_OWN_COLORS, PRESETS, canOwnColors, hasExactShapes, isInk, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
+import { MAX_OWN_COLORS, PRESETS, canOwnColors, ownPaletteOf, hasExactShapes, isInk, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
 import { addColors, parseColorList } from '../lib/colors'
 import { PipetteIcon } from './IconButton'
 import type { Candidate, SizeSearch } from '../engine/targetSize'
@@ -111,7 +111,7 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
         <div className="space-y-4">
           {canOwnColors(p) && <OwnColors settings={settings} onChange={onChange} picking={!!pickingOwn} onPick={onPickOwn} />}
 
-          {!isInk(p) && !(canOwnColors(p) && settings.useOwnColors) && (
+          {!isInk(p) && !ownPaletteOf(settings) && (
             <Slider label="Colours" value={settings.colors} min={2} max={64} step={1} onChange={(v) => set('colors', v)} format={(v) => `${v}`} hint="Fewer means a smaller file. If two colours merge into one, raise this." />
           )}
 

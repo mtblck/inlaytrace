@@ -6,6 +6,10 @@ describe('swatchColors', () => {
     expect(swatchColors([{ fill: '#FF0000' }, { fill: '#00ff00' }, { fill: '#ff0000' }], '#fff')).toEqual(['#ffffff', '#ff0000', '#00ff00'])
     expect(swatchColors([{ fill: '#123456' }])).toEqual(['#123456'])
   })
+  it('lists a gradient shape by the colours it draws, its stops', () => {
+    const gradient = { stops: [{ color: '#ff0000' }, { color: '#0000ff' }] }
+    expect(swatchColors([{ fill: '#800080', gradient }, { fill: '#00ff00' }])).toEqual(['#ff0000', '#0000ff', '#00ff00'])
+  })
 })
 
 describe('GIMP palette', () => {

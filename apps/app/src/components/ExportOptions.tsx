@@ -18,9 +18,9 @@ type Props = {
   onPdf: () => void
   onEps: () => void
   onDxf: () => void
-  /** The colours as swatches, and how many there are. */
+  /** The colours as swatches; there are none to give with nothing drawn. */
   onSwatches: (format: SwatchFormat) => void
-  swatchCount: number
+  hasSwatches: boolean
 }
 
 const SWATCHES: [SwatchFormat, string, string][] = [
@@ -149,7 +149,7 @@ export function ExportOptions(p: Props) {
           <span className="field-label shrink-0">Swatches</span>
           <div className="grid flex-1 grid-cols-3 gap-2">
             {SWATCHES.map(([format, label, title]) => (
-              <button key={format} className="btn" disabled={p.disabled || !p.swatchCount} onClick={() => p.onSwatches(format)} title={`${title}: the ${p.swatchCount} colours as drawn`}>
+              <button key={format} className="btn" disabled={p.disabled || !p.hasSwatches} onClick={() => p.onSwatches(format)} title={`${title}: the colours as drawn`}>
                 {label}
               </button>
             ))}

@@ -46,7 +46,8 @@ and offers PNG, PDF, EPS, DXF and swatches.
   tools: `.ase` (Adobe Swatch Exchange, for Illustrator, Photoshop and
   InDesign), `.gpl` (GIMP palette, which Inkscape and Krita also read) or CSS
   custom properties (`--color-1d3557: #1d3557;`). Colours come in paint order,
-  the background first if you've added one, each named by its hex. They follow
+  the background first if you've added one, each named by its hex; a
+  gradient shape gives its stops' colours. They follow
   your colour edits: a replaced colour is listed as its new colour, a merged
   one isn't listed, and a removed one is left out.
 
