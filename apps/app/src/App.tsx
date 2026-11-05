@@ -118,7 +118,7 @@ export default function App() {
   const backgroundSeq = useRef(0)
   /**
    * A new image opens on Split, for comparing. The first time you start editing
-   * it (the Edit tab, or selecting a shape) the view switches to Vector, so the
+   * it (Edit mode, or selecting a shape) the view switches to Vector, so the
    * original is out of the way. Once per image, and never over a view you
    * picked yourself.
    */
@@ -516,7 +516,7 @@ export default function App() {
         return cur.includes(id) ? cur.filter((x) => !ids.includes(x)) : [...cur, ...ids.filter((x) => !cur.includes(x))]
       })
       setSelectedNodes([])
-      // The selection's tools live in the Edit tab.
+      // The selection’s tools live in Edit mode.
       if (id) {
         setWorkMode('edit')
         startEditing()
@@ -1663,7 +1663,7 @@ function SvgOpened({ svg, onTrace }: { svg: NonNullable<Source['svg']>; onTrace:
       <p className="text-[13px]">
         Opened {fills ? `${fills} ${fills === 1 ? 'shape' : 'shapes'}` : ''}
         {fills && strokes ? ' and ' : ''}
-        {strokes ? `${strokes} ${strokes === 1 ? 'stroke' : 'strokes'}` : ''}, ready in the Edit tab. Nothing is traced: the SVG’s own paths are the drawing.
+        {strokes ? `${strokes} ${strokes === 1 ? 'stroke' : 'strokes'}` : ''}, ready in Edit mode. Nothing is traced: the SVG’s own paths are the drawing.
       </p>
       {svg.notes.length > 0 && (
         <div className="text-[12.5px]" role="status">
