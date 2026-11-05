@@ -502,17 +502,17 @@ export function CleanCanvas(p: {
 
       {/* Zoom: the buttons for a mouse without a wheel, and the way back to the whole image. */}
       <div data-clean-controls="" className="absolute top-2 right-2 z-10 flex items-center gap-px overflow-hidden rounded-md border border-rule bg-paper text-[12.5px] shadow-sm" role="group" aria-label="Zoom">
-        <button className="grid h-7 w-7 place-items-center hover:bg-paper-2" onClick={() => zoomCentre(1 / ZOOM_STEP)} aria-label="Zoom out" disabled={view.k <= 1}>
+        <button className="grid h-7 w-7 place-items-center hover:bg-paper-sunk" onClick={() => zoomCentre(1 / ZOOM_STEP)} aria-label="Zoom out" disabled={view.k <= 1}>
           −
         </button>
         <span className="num w-12 text-center" data-clean-zoom-label="">
           {Math.round(pixelScale * 100)}%
         </span>
-        <button className="grid h-7 w-7 place-items-center hover:bg-paper-2" onClick={() => zoomCentre(ZOOM_STEP)} aria-label="Zoom in" disabled={view.k >= maxK}>
+        <button className="grid h-7 w-7 place-items-center hover:bg-paper-sunk" onClick={() => zoomCentre(ZOOM_STEP)} aria-label="Zoom in" disabled={view.k >= maxK}>
           +
         </button>
         {view.k > 1 && (
-          <button className="h-7 border-l border-rule px-2 hover:bg-paper-2" onClick={() => setView(FIT)}>
+          <button className="h-7 border-l border-rule px-2 hover:bg-paper-sunk" onClick={() => setView(FIT)}>
             Fit
           </button>
         )}
