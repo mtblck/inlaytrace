@@ -5,6 +5,9 @@ const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator
 export const MOD = MAC ? '⌘' : 'Ctrl'
 const ALT = MAC ? '⌥' : 'Alt'
 const SHIFT = MAC ? '⇧' : 'Shift'
+/** Undo and Redo's keys, for the panel and for tooltips. */
+export const UNDO_KEYS = `${MOD} Z`
+export const REDO_KEYS = MAC ? '⇧⌘ Z' : 'Ctrl Shift Z'
 
 type Row = { keys: string[]; does: string }
 
@@ -16,7 +19,7 @@ const MODES = ['Edit mode', 'Every mode'] as const
  * App.tsx (editing) and Canvas.tsx (zoom, drag modifiers); keep this list in
  * step with them and with docs/features/keyboard-shortcuts.md.
  */
-export const SHORTCUTS: { mode: 'Edit mode' | 'Every mode'; title: string; rows: Row[] }[] = [
+export const SHORTCUTS: { mode: (typeof MODES)[number]; title: string; rows: Row[] }[] = [
   {
     mode: 'Edit mode',
     title: 'Tools',
@@ -56,8 +59,8 @@ export const SHORTCUTS: { mode: 'Edit mode' | 'Every mode'; title: string; rows:
     mode: 'Every mode',
     title: 'History',
     rows: [
-      { keys: [`${MOD} Z`], does: 'Undo' },
-      { keys: [MAC ? '⇧⌘ Z' : 'Ctrl Shift Z', MAC ? '' : 'Ctrl Y'].filter(Boolean), does: 'Redo' },
+      { keys: [UNDO_KEYS], does: 'Undo' },
+      { keys: [REDO_KEYS, MAC ? '' : 'Ctrl Y'].filter(Boolean), does: 'Redo' },
     ],
   },
   {

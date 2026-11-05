@@ -5,6 +5,7 @@ import { MAX_ORDER, MIN_ORDER, sameAxis, type Axis, type MirrorAxis, type TurnAx
 import type { Box } from '../lib/transform'
 import { Section } from './Controls'
 import { MOD } from './Shortcuts'
+import { TOOL_LABEL } from './Workspace'
 
 type Props = {
   /** The rail's tool (components/Workspace.tsx); the panel shows its properties. */
@@ -44,8 +45,6 @@ type Props = {
 
 const mod = MOD === '⌘' ? '⌘' : 'Ctrl+'
 
-const TOOL_TITLE: Record<Tool, string> = { select: 'Select', nodes: 'Nodes', mirror: 'Mirror' }
-
 /**
  * Editing on top of the trace. Select moves and scales whole shapes; Nodes
  * reshapes one shape node by node; Mirror keeps one half and reflects it, or
@@ -57,7 +56,7 @@ export function EditPanel(p: Props) {
   const axis = p.axis
 
   return (
-    <Section title={TOOL_TITLE[p.tool]}>
+    <Section title={TOOL_LABEL[p.tool]}>
       {p.tool === 'select' && (
         <div className="space-y-2">
           {p.selection ? (

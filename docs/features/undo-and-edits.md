@@ -6,7 +6,7 @@ order: 6
 
 ## Undo and redo
 
-*Undo* and *Redo* at the foot of Edit mode's tool rail, or ⌘/Ctrl + Z and ⇧⌘Z / Ctrl + Y. Up to 100
+*Undo* and *Redo* at the end of Edit mode's tool rail, or ⌘/Ctrl + Z and ⇧⌘Z / Ctrl + Y. Up to 100
 steps.
 
 One step is one thing you meant to do: a whole node drag, one session in a

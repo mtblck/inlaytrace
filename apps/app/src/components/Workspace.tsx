@@ -9,7 +9,7 @@
  */
 import { useSyncExternalStore, type ReactNode } from 'react'
 import type { Tool } from './Canvas'
-import { MOD } from './Shortcuts'
+import { REDO_KEYS, UNDO_KEYS } from './Shortcuts'
 
 export type WorkMode = 'clean' | 'trace' | 'edit'
 
@@ -49,21 +49,22 @@ const icon = (d: string) => (
   </svg>
 )
 
+/** Edit mode's tools by name: the rail's buttons and the panel's heading. */
+export const TOOL_LABEL: Record<Tool, string> = { select: 'Select', nodes: 'Nodes', mirror: 'Mirror' }
+
 /** Edit mode's tools, as the rail shows them. */
 export const EDIT_TOOLS = (strokes: boolean): RailTool<Tool>[] => [
-  { id: 'select', label: 'Select', key: 'V', icon: icon('M4 2.5l10 6-4.5 1.2L7.2 14z') },
-  { id: 'nodes', label: 'Nodes', key: 'A', icon: icon('M3 13C5 5 13 13 15 5M2 12h2v2H2zM14 4h2v2h-2z') },
+  { id: 'select', label: TOOL_LABEL.select, key: 'V', icon: icon('M4 2.5l10 6-4.5 1.2L7.2 14z') },
+  { id: 'nodes', label: TOOL_LABEL.nodes, key: 'A', icon: icon('M3 13C5 5 13 13 15 5M2 12h2v2H2zM14 4h2v2h-2z') },
   {
     id: 'mirror',
-    label: 'Mirror',
+    label: TOOL_LABEL.mirror,
     key: 'M',
     icon: icon('M9 2v14M7 4L3 14h4zM11 4l4 10h-4z'),
     ...(strokes ? { disabled: 'Mirror works on filled shapes, and this trace has lines' } : {}),
   },
 ]
 
-const redoKeys = MOD === '⌘' ? '⇧⌘Z' : 'Ctrl+Shift+Z'
-const undoKeys = MOD === '⌘' ? '⌘Z' : 'Ctrl+Z'
 
 /**
  * The tool rail: the mode's tools, then Undo and Redo. A column beside the
@@ -92,10 +93,10 @@ export function ToolRail<T extends string>(p: { tools: RailTool<T>[]; tool: T; o
         ))}
       </div>
       <div role="group" aria-label="History" className="ml-auto flex gap-1 lg:mt-auto lg:ml-0 lg:flex-col">
-        <button className={`${btn} text-ink-muted hover:bg-paper-sunk hover:text-ink`} disabled={!p.canUndo} onClick={p.onUndo} aria-label="Undo" title={`Undo (${undoKeys})`}>
+        <button className={`${btn} text-ink-muted hover:bg-paper-sunk hover:text-ink`} disabled={!p.canUndo} onClick={p.onUndo} aria-label="Undo" title={`Undo (${UNDO_KEYS})`}>
           {icon('M6 4L3 7l3 3M3 7h7.5a4 4 0 010 8H8')}
         </button>
-        <button className={`${btn} text-ink-muted hover:bg-paper-sunk hover:text-ink`} disabled={!p.canRedo} onClick={p.onRedo} aria-label="Redo" title={`Redo (${redoKeys})`}>
+        <button className={`${btn} text-ink-muted hover:bg-paper-sunk hover:text-ink`} disabled={!p.canRedo} onClick={p.onRedo} aria-label="Redo" title={`Redo (${REDO_KEYS})`}>
           {icon('M12 4l3 3-3 3M15 7H7.5a4 4 0 000 8H10')}
         </button>
       </div>
@@ -104,15 +105,16 @@ export function ToolRail<T extends string>(p: { tools: RailTool<T>[]; tool: T; o
 }
 
 const WIDE = '(min-width: 1024px)'
+let wideQuery: MediaQueryList | null = null
+const wideQ = () => (wideQuery ??= window.matchMedia(WIDE))
 /** Whether the screen is wide enough for the desktop layout (Tailwind's lg), following resizes. */
 export function useWide(): boolean {
   return useSyncExternalStore(
     (on) => {
-      const m = window.matchMedia(WIDE)
-      m.addEventListener('change', on)
-      return () => m.removeEventListener('change', on)
+      wideQ().addEventListener('change', on)
+      return () => wideQ().removeEventListener('change', on)
     },
-    () => window.matchMedia(WIDE).matches,
+    () => wideQ().matches,
     () => true,
   )
 }

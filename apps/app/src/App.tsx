@@ -791,7 +791,13 @@ export default function App() {
   }
   const chooseMode = (m: WorkMode) => {
     setWorkMode(m)
-    if (m === 'edit') startEditing()
+    if (m === 'edit') return startEditing()
+    // Leaving Edit puts its tools away: no hidden selection for Delete or the
+    // arrows to act on, and no Nodes or Mirror on a canvas without a rail.
+    setTool('select')
+    setSelectedIds([])
+    setSelectedNodes([])
+    setPicking(null)
   }
   const chooseTool = useCallback((t: Tool) => {
     setTool(t)
@@ -1172,12 +1178,12 @@ export default function App() {
 
       <main className="flex min-h-0 flex-1 flex-col lg:flex-row" data-traces={traceCount}>
         {/* ---- Work surface ---- */}
-        {/* On a phone, 52vh plus the mode bar: the bar replaced the sidebar's tabs and mustn't cost the canvas its height. */}
-        <div className="relative flex min-h-[calc(52vh+44px)] min-w-0 flex-1 flex-col lg:min-h-0">
+        {/* On a phone, 52vh plus the mode bar when it shows: the bar replaced the sidebar's tabs and mustn't cost the canvas its height. */}
+        <div className={`relative flex min-w-0 flex-1 flex-col lg:min-h-0 ${source && trace ? 'min-h-[calc(52vh+44px)]' : 'min-h-[52vh]'}`}>
           {source && trace ? (
             <>
               {/* The mode switcher, above the canvas; on a phone the tool rail shares its row, to leave the canvas room. */}
-              <div className="flex items-center gap-3 border-b border-rule px-4 py-1.5 lg:py-2" data-workspace={workMode}>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-rule px-4 py-1.5 lg:py-2" data-workspace={workMode}>
                 <ModeSwitch modes={MODES} mode={workMode} onMode={chooseMode} edited={detached} />
                 {workMode === 'edit' && !wide && <div className="min-w-0 flex-1">{rail}</div>}
               </div>
