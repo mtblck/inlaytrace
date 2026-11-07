@@ -46,7 +46,7 @@
   "logos": {
     "mark": {
       "file": "mark.svg",
-      "dark": "mark.svg",
+      "dark": "mark-dark.svg",
       "black": "mark-mono.svg",
       "minWidth": 16
     },
@@ -64,9 +64,11 @@
     }
   },
   "icon": {
-    "file": "icon-art.svg",
+    "file": "mark.svg",
     "background": "#23443a",
-    "favicon": "mark.svg",
+    "scale": 1,
+    "maskableScale": 1,
+    "favicon": "favicon.svg",
     "themeColor": "#f5f6f2"
   },
   "clearSpace": 0.25,

@@ -1,6 +1,7 @@
-// Inlay's logo: a paper square with a yellow quarter-disc set into its corner.
+// Inlay's logo: a green square with a yellow quarter-disc set into its corner.
 // Two pieces, one shared edge, no gap and no overlap, which is what Inlay's
-// tracer guarantees. Drawn on a 208 tile in Inlay's mat green.
+// tracer guarantees. No tile around it: the square is the logo, and the app
+// icons use it full bleed.
 //
 //   BRAND_KIT=<brand-kit>/skills/logo/scripts node brand/draw.mjs
 //   node $BRAND_KIT/export.mjs brand/brand.json   (writes brand/kit/)
@@ -16,38 +17,36 @@ const out = (f) => join(here, f)
 
 const C = { mat: '#23443a', paper: '#f5f6f2', mark: '#f2c230', ink: '#16201c', text: '#eef2ee', night: '#131e1a', green: '#23614c' }
 
-// Geometry (208 grid): tile radius 46; the inlaid square is 128 (62 % of the
-// tile), centred; the quarter-disc has radius 72 (9/16 of the square), centred
-// on the square's bottom-right corner, so its arc is a true circle.
-const T = 208, SQ = 128, Q = 72
-function pieces(x, y, gap = 0) {
-  const x2 = x + SQ, y2 = y + SQ
-  // Paper: the square minus the quarter-disc (pulled back by the gap for one-colour use).
+// Geometry: a 128 square; the quarter-disc has radius 72 (9/16 of the side),
+// centred on the square's bottom-right corner, so its arc is a true circle.
+const SQ = 128, Q = 72
+function pieces(gap = 0) {
+  // Square minus the quarter-disc (pulled back by the gap for one-colour use).
   const r = Q + gap
-  const paper = `M${x} ${y}H${x2}V${y2 - r}A${r} ${r} 0 0 0 ${x2 - r} ${y2}H${x}Z`
-  const inlay = `M${x2} ${y2 - Q}V${y2}H${x2 - Q}A${Q} ${Q} 0 0 1 ${x2} ${y2 - Q}Z`
-  return { paper, inlay }
+  const square = `M0 0H${SQ}V${SQ - r}A${r} ${r} 0 0 0 ${SQ - r} ${SQ}H0Z`
+  const inlay = `M${SQ} ${SQ - Q}V${SQ}H${SQ - Q}A${Q} ${Q} 0 0 1 ${SQ} ${SQ - Q}Z`
+  return { square, inlay }
 }
-const tile = (fill) => `<path d="${rect(0, 0, T, T, 46)}" fill="${fill}"/>`
-const art = (x, y, paperFill, inlayFill, gap = 0) => {
-  const p = pieces(x, y, gap)
-  return `<path d="${p.paper}" fill="${paperFill}"/><path d="${p.inlay}" fill="${inlayFill}"/>`
+const art = (squareFill, inlayFill, gap = 0, cls = '') => {
+  const p = pieces(gap)
+  return `<path${cls ? ` class="${cls}"` : ''} d="${p.square}" fill="${squareFill}"/><path d="${p.inlay}" fill="${inlayFill}"/>`
 }
 
-const o = (T - SQ) / 2
-const markBody = tile(C.mat) + art(o, o, C.paper, C.mark)
-// The tile carries the contrast, so one mark works on light and dark grounds.
-write(out('mark.svg'), svg({ w: T, h: T, title: 'Inlay', body: markBody }))
-// App-icon art (the export puts it on a mat tile at 62 %): the two pieces alone.
-write(out('icon-art.svg'), svg({ w: SQ, h: SQ, title: 'Inlay', body: art(0, 0, C.paper, C.mark) }))
-// One colour: no tile; a gap of 8 tells the two pieces apart instead of colour.
-const mono = art(0, 0, '#000', '#000', 8)
+const markBody = art(C.mat, C.mark)
+// Light grounds: mat green. Dark grounds: the square turns paper.
+write(out('mark.svg'), svg({ w: SQ, h: SQ, title: 'Inlay', body: markBody }))
+write(out('mark-dark.svg'), svg({ w: SQ, h: SQ, title: 'Inlay', body: art(C.paper, C.mark) }))
+// Favicon: the mark, switching to the paper square in a dark browser theme.
+write(out('favicon.svg'), svg({ w: SQ, h: SQ, title: 'Inlay', body: `<style>@media (prefers-color-scheme: dark){.sq{fill:${C.paper}}}</style>` + art(C.mat, C.mark, 0, 'sq') }))
+// One colour: a gap of 8 tells the two pieces apart instead of colour.
+const mono = art('#000', '#000', 8)
 write(out('mark-mono.svg'), svg({ w: SQ, h: SQ, title: 'Inlay', body: mono }))
 
 const font = await loadFont('Archivo', 700)
 for (const [layout, name] of [['horizontal', 'logo-horizontal'], ['stacked', 'logo-stacked']]) {
   for (const [suffix, color] of [['', C.ink], ['-dark', C.text]]) {
-    const l = lockup({ mark: { body: markBody, w: T, h: T }, font, name: 'Inlay', layout, color, tracking: -0.02 })
+    const body = suffix ? art(C.paper, C.mark) : markBody
+    const l = lockup({ mark: { body, w: SQ, h: SQ }, font, name: 'Inlay', layout, color, tracking: -0.02 })
     write(out(`${name}${suffix}.svg`), svg({ w: l.w, h: l.h, title: 'Inlay', body: l.body }))
   }
   const m = lockup({ mark: { body: mono, w: SQ, h: SQ }, font, name: 'Inlay', layout, color: '#000', tracking: -0.02 })
@@ -67,11 +66,12 @@ write(out('brand.json'), JSON.stringify({
   ],
   type: { display: { family: 'Archivo', weight: 700 }, text: { family: 'Archivo', weight: 400 } },
   logos: {
-    mark: { file: 'mark.svg', dark: 'mark.svg', black: 'mark-mono.svg', minWidth: 16 },
+    mark: { file: 'mark.svg', dark: 'mark-dark.svg', black: 'mark-mono.svg', minWidth: 16 },
     horizontal: { file: 'logo-horizontal.svg', dark: 'logo-horizontal-dark.svg', black: 'logo-horizontal-mono.svg', minWidth: 96 },
     stacked: { file: 'logo-stacked.svg', dark: 'logo-stacked-dark.svg', black: 'logo-stacked-mono.svg', minWidth: 64 },
   },
-  icon: { file: 'icon-art.svg', background: C.mat, favicon: 'mark.svg', themeColor: C.paper },
+  // Full bleed: the square is the icon. Platforms round or mask the corners.
+  icon: { file: 'mark.svg', background: C.mat, scale: 1, maskableScale: 1, favicon: 'favicon.svg', themeColor: C.paper },
   clearSpace: 0.25,
   pngWidths: [512, 1024],
   out: 'kit',

@@ -1,8 +1,9 @@
 # Inlay brand
 
-Inlay's logo: a paper square with a yellow quarter-disc set into its corner, on
-the mat-green tile. Two pieces, one shared edge, no gap and no overlap, which
-is the promise of the tracer. The wordmark is Archivo 700 (the site's own
+Inlay's logo: a green square with a yellow quarter-disc set into its corner.
+Two pieces, one shared edge, no gap and no overlap, which is the promise of
+the tracer. On dark grounds the square turns paper; the app icons use the
+square full bleed, and the favicon switches with the browser's theme. The wordmark is Archivo 700 (the site's own
 typeface), outlined so it never depends on the font being installed.
 
 - `draw.mjs` draws every logo from code, and `brand.json` lists the logos,
