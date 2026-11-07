@@ -78,6 +78,11 @@ write(out('brand.json'), JSON.stringify({
   },
   // Full bleed: the square is the icon. Platforms round or mask the corners.
   icon: { file: 'mark.svg', background: C.mat, scale: 1, maskableScale: 1, favicon: 'favicon.svg', themeColor: C.paper },
+  website: 'inlaytrace.com',
+  // Placeholder person for the email signature and business card templates.
+  contact: { name: 'Your Name', role: 'Role', email: 'you@inlaytrace.com' },
+  // Templates sit on the mat green; the email logo is served by the site (apps/site/public/brand/).
+  templates: { background: C.mat, email: { logoUrl: 'https://inlaytrace.com/brand/email-logo.png' } },
   clearSpace: 0.25,
   pngWidths: [512, 1024],
   out: 'kit',

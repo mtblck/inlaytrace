@@ -79,6 +79,18 @@
     "favicon": "favicon.svg",
     "themeColor": "#f5f6f2"
   },
+  "website": "inlaytrace.com",
+  "contact": {
+    "name": "Your Name",
+    "role": "Role",
+    "email": "you@inlaytrace.com"
+  },
+  "templates": {
+    "background": "#23443a",
+    "email": {
+      "logoUrl": "https://inlaytrace.com/brand/email-logo.png"
+    }
+  },
   "clearSpace": 0.25,
   "pngWidths": [
     512,

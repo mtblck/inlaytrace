@@ -13,7 +13,9 @@ typeface), outlined so it never depends on the font being installed.
   also as HTML and one PNG per page), `check.png` is the small-size and dark
   tests, `svg/`, `png/` and `pdf/` hold every logo (light, dark, one-colour;
   PDFs are vector, for print), `icons/` holds the favicons, app icons and
-  manifest snippet, and `social/` the link-preview image and avatar. The export
+  manifest snippet, `social/` the link-preview image and avatar, and `templates/`
+  the email signature, business card (print PDF with bleed), slide template
+  (`.pptx`) and social posts (square, portrait, story, Ko-fi cover, X header). The export
   also writes `inlay-brand-kit.zip` of all of it; that one isn't committed.
 
 The favicons and app icons in `apps/app/public/` and `apps/site/public/` are
@@ -27,4 +29,6 @@ export BRAND_KIT=<path to plugins/brand-kit/skills/logo/scripts>
 node brand/draw.mjs && node "$BRAND_KIT/export.mjs" brand/brand.json
 ```
 
-Then copy the icons into the two `public/` folders again.
+Then copy the icons into the two `public/` folders again, and
+`kit/templates/email/logo.png` to `apps/site/public/brand/email-logo.png`
+(the email signature loads it from inlaytrace.com).
