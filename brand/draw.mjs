@@ -43,13 +43,17 @@ const mono = art('#000', '#000', 8)
 write(out('mark-mono.svg'), svg({ w: SQ, h: SQ, title: 'Inlay', body: mono }))
 
 const font = await loadFont('Archivo', 700)
+const HORIZ = (layout) => (layout === 'horizontal' ? { capRatio: 1, gap: 0.4 } : {})
 for (const [layout, name] of [['horizontal', 'logo-horizontal'], ['stacked', 'logo-stacked']]) {
   for (const [suffix, color] of [['', C.ink], ['-dark', C.text]]) {
     const body = suffix ? art(C.paper, C.mark) : markBody
-    const l = lockup({ mark: { body, w: SQ, h: SQ }, font, name: 'Inlay', layout, color, tracking: -0.02 })
+    // Horizontal: the square is exactly the cap height (top on the I's top,
+    // bottom on the baseline), so it reads as the first letter of the word.
+    // Stacked keeps a large mark over a smaller word.
+    const l = lockup({ mark: { body, w: SQ, h: SQ }, font, name: 'Inlay', layout, color, tracking: -0.02, ...HORIZ(layout) })
     write(out(`${name}${suffix}.svg`), svg({ w: l.w, h: l.h, title: 'Inlay', body: l.body }))
   }
-  const m = lockup({ mark: { body: mono, w: SQ, h: SQ }, font, name: 'Inlay', layout, color: '#000', tracking: -0.02 })
+  const m = lockup({ mark: { body: mono, w: SQ, h: SQ }, font, name: 'Inlay', layout, color: '#000', tracking: -0.02, ...HORIZ(layout) })
   write(out(`${name}-mono.svg`), svg({ w: m.w, h: m.h, title: 'Inlay', body: m.body }))
 }
 
@@ -67,7 +71,7 @@ write(out('brand.json'), JSON.stringify({
   type: { display: { family: 'Archivo', weight: 700 }, text: { family: 'Archivo', weight: 400 } },
   logos: {
     mark: { file: 'mark.svg', dark: 'mark-dark.svg', black: 'mark-mono.svg', minWidth: 16 },
-    horizontal: { file: 'logo-horizontal.svg', dark: 'logo-horizontal-dark.svg', black: 'logo-horizontal-mono.svg', minWidth: 96 },
+    horizontal: { file: 'logo-horizontal.svg', dark: 'logo-horizontal-dark.svg', black: 'logo-horizontal-mono.svg', minWidth: 120 },
     stacked: { file: 'logo-stacked.svg', dark: 'logo-stacked-dark.svg', black: 'logo-stacked-mono.svg', minWidth: 64 },
   },
   // Full bleed: the square is the icon. Platforms round or mask the corners.

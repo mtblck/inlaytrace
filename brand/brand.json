@@ -54,7 +54,7 @@
       "file": "logo-horizontal.svg",
       "dark": "logo-horizontal-dark.svg",
       "black": "logo-horizontal-mono.svg",
-      "minWidth": 96
+      "minWidth": 120
     },
     "stacked": {
       "file": "logo-stacked.svg",
