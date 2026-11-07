@@ -8,10 +8,13 @@ typeface), outlined so it never depends on the font being installed.
 
 - `draw.mjs` draws every logo from code, and `brand.json` lists the logos,
   colours, typeface and icon settings.
-- `kit/` is the generated output. `brand-guidelines.pdf` is the printable
-  guide (US Letter, three pages; also as HTML and one PNG per page), `check.png` is the small-size and dark tests, `svg/` and `png/` hold
-  every logo (light, dark, one-colour), and `icons/` holds the favicons, app
-  icons and manifest snippet.
+- `kit/` is the generated output, and `kit/README.md` says which file is for
+  what. `brand-guidelines.pdf` is the printable guide (US Letter, three pages;
+  also as HTML and one PNG per page), `check.png` is the small-size and dark
+  tests, `svg/`, `png/` and `pdf/` hold every logo (light, dark, one-colour;
+  PDFs are vector, for print), `icons/` holds the favicons, app icons and
+  manifest snippet, and `social/` the link-preview image and avatar. The export
+  also writes `inlay-brand-kit.zip` of all of it; that one isn't committed.
 
 The favicons and app icons in `apps/app/public/` and `apps/site/public/` are
 copied from `kit/icons/`.

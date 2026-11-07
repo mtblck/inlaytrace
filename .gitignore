@@ -10,3 +10,6 @@ apps/site/.astro/
 # HD model work (scripts/hd-models), made on a CI runner
 /models/
 /report/
+
+# brand-kit export: one zip of brand/kit, rebuilt on export
+brand/kit/*.zip
