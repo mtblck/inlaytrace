@@ -1,0 +1,34 @@
+# Inlay brand
+
+Inlay's logo: a green square with a yellow quarter-disc set into its corner.
+Two pieces, one shared edge, no gap and no overlap, which is the promise of
+the tracer. On dark grounds the square turns paper; the app icons use the
+square full bleed, and the favicon switches with the browser's theme. The wordmark is Archivo 700 (the site's own
+typeface), outlined so it never depends on the font being installed.
+
+- `draw.mjs` draws every logo from code, and `brand.json` lists the logos,
+  colours, typeface and icon settings.
+- `kit/` is the generated output, and `kit/README.md` says which file is for
+  what. `brand-guidelines.pdf` is the printable guide (US Letter, three pages;
+  also as HTML and one PNG per page), `check.png` is the small-size and dark
+  tests, `svg/`, `png/` and `pdf/` hold every logo (light, dark, one-colour;
+  PDFs are vector, for print), `icons/` holds the favicons, app icons and
+  manifest snippet, `social/` the link-preview image and avatar, and `templates/`
+  the email signature, business card (print PDF with bleed), slide template
+  (`.pptx`) and social posts (square, portrait, story, Ko-fi cover, X header). The export
+  also writes `inlay-brand-kit.zip` of all of it; that one isn't committed.
+
+The favicons and app icons in `apps/app/public/` and `apps/site/public/` are
+copied from `kit/icons/`.
+
+To change the logo, edit `draw.mjs` and regenerate with the
+[`brand-kit`](https://github.com/mtblck/brand-kit) plugin:
+
+```bash
+export BRAND_KIT=<path to brand-kit>/skills/logo/scripts
+node brand/draw.mjs && node "$BRAND_KIT/export.mjs" brand/brand.json
+```
+
+Then copy the icons into the two `public/` folders again, and
+`kit/templates/email/logo.png` to `apps/site/public/brand/email-logo.png`
+(the email signature loads it from inlaytrace.com).
