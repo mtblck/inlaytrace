@@ -8,8 +8,8 @@ typeface), outlined so it never depends on the font being installed.
 
 - `draw.mjs` draws every logo from code, and `brand.json` lists the logos,
   colours, typeface and icon settings.
-- `kit/` is the generated output. `brand-sheet.html` / `.png` is the one-page
-  guide, `check.png` is the small-size and dark tests, `svg/` and `png/` hold
+- `kit/` is the generated output. `brand-guidelines.pdf` is the printable
+  guide (US Letter, three pages; also as HTML and one PNG per page), `check.png` is the small-size and dark tests, `svg/` and `png/` hold
   every logo (light, dark, one-colour), and `icons/` holds the favicons, app
   icons and manifest snippet.
 

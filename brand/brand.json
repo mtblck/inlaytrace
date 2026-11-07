@@ -1,34 +1,42 @@
 {
   "name": "Inlay",
   "tagline": "Trace images into vector shapes that fit together.",
+  "about": "Inlay turns logos, illustrations, line art and pixel art into SVG. Every edge between two colours is traced once and shared by both shapes, so they fit together exactly, like inlaid wood: no gaps, no overlaps, no slivers.\n\nIt runs in the browser, keeps images on the device, and is free and open source, as an app and as the inlaytrace package.",
+  "construction": "A square with a quarter-disc set into its corner: the disc’s radius is 9/16 of the side and its centre is the square’s corner, so the two pieces share one true arc.",
   "colors": [
     {
       "name": "Ink",
+      "usage": "Text and the wordmark.",
       "hex": "#16201c",
       "role": "primary"
     },
     {
       "name": "Mat",
+      "usage": "The mark, dark panels and the app icon.",
       "hex": "#23443a",
       "role": "mat"
     },
     {
       "name": "Mark",
+      "usage": "The inlaid piece and small highlights only; never for text on white.",
       "hex": "#f2c230",
       "role": "accent"
     },
     {
       "name": "Paper",
+      "usage": "Backgrounds, and the mark on dark grounds.",
       "hex": "#f5f6f2",
       "role": "paper"
     },
     {
       "name": "Green",
+      "usage": "Links and secondary accents.",
       "hex": "#23614c",
       "role": "link"
     },
     {
       "name": "Night",
+      "usage": "Dark-mode backgrounds.",
       "hex": "#131e1a",
       "role": "dark"
     }

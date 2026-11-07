@@ -60,13 +60,15 @@ for (const [layout, name] of [['horizontal', 'logo-horizontal'], ['stacked', 'lo
 write(out('brand.json'), JSON.stringify({
   name: 'Inlay',
   tagline: 'Trace images into vector shapes that fit together.',
+  about: 'Inlay turns logos, illustrations, line art and pixel art into SVG. Every edge between two colours is traced once and shared by both shapes, so they fit together exactly, like inlaid wood: no gaps, no overlaps, no slivers.\n\nIt runs in the browser, keeps images on the device, and is free and open source, as an app and as the inlaytrace package.',
+  construction: 'A square with a quarter-disc set into its corner: the disc’s radius is 9/16 of the side and its centre is the square’s corner, so the two pieces share one true arc.',
   colors: [
-    { name: 'Ink', hex: C.ink, role: 'primary' },
-    { name: 'Mat', hex: C.mat, role: 'mat' },
-    { name: 'Mark', hex: C.mark, role: 'accent' },
-    { name: 'Paper', hex: C.paper, role: 'paper' },
-    { name: 'Green', hex: C.green, role: 'link' },
-    { name: 'Night', hex: C.night, role: 'dark' },
+    { name: 'Ink', usage: 'Text and the wordmark.', hex: C.ink, role: 'primary' },
+    { name: 'Mat', usage: 'The mark, dark panels and the app icon.', hex: C.mat, role: 'mat' },
+    { name: 'Mark', usage: 'The inlaid piece and small highlights only; never for text on white.', hex: C.mark, role: 'accent' },
+    { name: 'Paper', usage: 'Backgrounds, and the mark on dark grounds.', hex: C.paper, role: 'paper' },
+    { name: 'Green', usage: 'Links and secondary accents.', hex: C.green, role: 'link' },
+    { name: 'Night', usage: 'Dark-mode backgrounds.', hex: C.night, role: 'dark' },
   ],
   type: { display: { family: 'Archivo', weight: 700 }, text: { family: 'Archivo', weight: 400 } },
   logos: {
