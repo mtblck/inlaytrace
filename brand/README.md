@@ -21,11 +21,11 @@ typeface), outlined so it never depends on the font being installed.
 The favicons and app icons in `apps/app/public/` and `apps/site/public/` are
 copied from `kit/icons/`.
 
-To change the logo, edit `draw.mjs` and regenerate with the `brand-kit` plugin
-from [mtblck/claude-marketplace](https://github.com/mtblck/claude-marketplace):
+To change the logo, edit `draw.mjs` and regenerate with the
+[`brand-kit`](https://github.com/mtblck/brand-kit) plugin:
 
 ```bash
-export BRAND_KIT=<path to plugins/brand-kit/skills/logo/scripts>
+export BRAND_KIT=<path to brand-kit>/skills/logo/scripts
 node brand/draw.mjs && node "$BRAND_KIT/export.mjs" brand/brand.json
 ```
 

@@ -5,7 +5,7 @@
 //
 //   BRAND_KIT=<brand-kit>/skills/logo/scripts node brand/draw.mjs
 //   node $BRAND_KIT/export.mjs brand/brand.json   (writes brand/kit/)
-// BRAND_KIT is the scripts folder of the brand-kit plugin in mtblck/claude-marketplace.
+// BRAND_KIT is the scripts folder of the brand-kit plugin (github.com/mtblck/brand-kit).
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
