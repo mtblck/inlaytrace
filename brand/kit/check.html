@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Inlay: check sheet</title><style>
+body{margin:0;padding:32px;font:13px/1.4 system-ui,sans-serif;background:#f3f2ef;color:#333;width:1216px;box-sizing:border-box}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:#777;margin:28px 0 10px}
+.row{display:flex;gap:16px;flex-wrap:wrap;align-items:stretch}
+.ramp{display:flex;align-items:flex-end;gap:28px;padding:20px 24px;border-radius:10px}
+figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:6px}
+figcaption{font-size:11px;opacity:.6}
+.panel{padding:28px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:28px}
+.tab{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:8px 8px 0 0;width:200px;font-size:12px}
+.tab img{width:16px;height:16px}
+.home{display:grid;grid-template-columns:repeat(4,60px);gap:18px;padding:24px;border-radius:10px;background:linear-gradient(160deg,#7a8ca8,#3b4660)}
+.home i{width:60px;height:60px;border-radius:13.4px;background:rgba(255,255,255,.35)}
+.home img{width:60px;height:60px;border-radius:13.4px}
+.circ{border-radius:50%;overflow:hidden}
+</style></head><body>
+<h1 style="font-size:20px;margin:0">Inlay: check sheet</h1>
+<p>Everything at real pixel size. Read it at 100 %: if a detail is gone at 16 or 32, simplify the favicon.</p>
+<h2>Mark size ramp (light, dark)</h2><div class="row"><div class="ramp" style="background:#ffffff;color:#333"><figure><img src="svg/mark.svg" style="width:16px;height:auto;display:block" ><figcaption>16</figcaption></figure><figure><img src="svg/mark.svg" style="width:24px;height:auto;display:block" ><figcaption>24</figcaption></figure><figure><img src="svg/mark.svg" style="width:32px;height:auto;display:block" ><figcaption>32</figcaption></figure><figure><img src="svg/mark.svg" style="width:48px;height:auto;display:block" ><figcaption>48</figcaption></figure><figure><img src="svg/mark.svg" style="width:64px;height:auto;display:block" ><figcaption>64</figcaption></figure><figure><img src="svg/mark.svg" style="width:128px;height:auto;display:block" ><figcaption>128</figcaption></figure></div><div class="ramp" style="background:#131e1a;color:#ddd"><figure><img src="svg/mark-dark.svg" style="width:16px;height:auto;display:block" ><figcaption>16</figcaption></figure><figure><img src="svg/mark-dark.svg" style="width:24px;height:auto;display:block" ><figcaption>24</figcaption></figure><figure><img src="svg/mark-dark.svg" style="width:32px;height:auto;display:block" ><figcaption>32</figcaption></figure><figure><img src="svg/mark-dark.svg" style="width:48px;height:auto;display:block" ><figcaption>48</figcaption></figure><figure><img src="svg/mark-dark.svg" style="width:64px;height:auto;display:block" ><figcaption>64</figcaption></figure><figure><img src="svg/mark-dark.svg" style="width:128px;height:auto;display:block" ><figcaption>128</figcaption></figure></div></div>
+<h2>Logos on light and dark, at display size and at minimum width</h2>
+<div class="row" style="margin-bottom:16px"><div class="panel" style="background:#fff;flex:1"><img src="svg/horizontal.svg" style="width:385px;height:auto;display:block" ><img src="svg/horizontal.svg" style="width:96px;height:auto;display:block" ></div><div class="panel" style="background:#131e1a;flex:1"><img src="svg/horizontal-dark.svg" style="width:385px;height:auto;display:block" ><img src="svg/horizontal-dark.svg" style="width:96px;height:auto;display:block" ></div></div><div class="row" style="margin-bottom:16px"><div class="panel" style="background:#fff;flex:1"><img src="svg/stacked.svg" style="width:81px;height:auto;display:block" ><img src="svg/stacked.svg" style="width:64px;height:auto;display:block" ></div><div class="panel" style="background:#131e1a;flex:1"><img src="svg/stacked-dark.svg" style="width:81px;height:auto;display:block" ><img src="svg/stacked-dark.svg" style="width:64px;height:auto;display:block" ></div></div>
+<h2>One colour: black, white on ink, white on accent</h2><div class="row">
+<div class="panel" style="background:#fff"><img src="svg/mark-black.svg" style="width:96px;height:auto;display:block" ></div>
+<div class="panel" style="background:#16201c"><img src="svg/mark-white.svg" style="width:96px;height:auto;display:block" ></div>
+<div class="panel" style="background:#f2c230"><img src="svg/mark-white.svg" style="width:96px;height:auto;display:block" ></div>
+<div class="panel" style="background:#fff"><img src="svg/horizontal-black.svg" style="width:240px;height:auto;display:block" ></div></div>
+<h2>Favicon in a browser tab (16 px), light and dark</h2><div class="row">
+<div style="background:#dee1e6;padding:8px 8px 0;border-radius:10px 10px 0 0"><div class="tab" style="background:#fff;color:#333"><img src="icons/favicon-32.png">Inlay</div></div>
+<div style="background:#202124;padding:8px 8px 0;border-radius:10px 10px 0 0"><div class="tab" style="background:#35363a;color:#eee"><img src="icons/favicon-32.png">Inlay</div></div>
+<div class="ramp" style="background:#fff"><figure><img src="icons/favicon-16.png" style="width:16px"><figcaption>16</figcaption></figure><figure><img src="icons/favicon-32.png" style="width:32px"><figcaption>32</figcaption></figure><figure><img src="icons/favicon-48.png" style="width:48px"><figcaption>48</figcaption></figure></div></div>
+<h2>App icon: iOS home screen, Android circle mask, maskable safe zone</h2><div class="row">
+<div class="home"><i></i><img src="icons/app-icon-1024.png"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+<div class="panel" style="background:#e9e9ef"><img class="circ" src="icons/icon-maskable-512.png" style="width:108px"><img class="circ" src="icons/icon-maskable-512.png" style="width:48px"><img src="icons/icon-512.png" style="width:96px"><img src="icons/apple-touch-icon.png" style="width:60px;border-radius:13.4px"></div>
+</div></body></html>
