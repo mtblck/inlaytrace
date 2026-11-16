@@ -50,7 +50,7 @@ const icon = (d: string) => (
 )
 
 /** Edit mode's tools by name: the rail's buttons and the panel's heading. */
-export const TOOL_LABEL: Record<Tool, string> = { select: 'Select', nodes: 'Nodes', mirror: 'Mirror', fill: 'Fill', pen: 'Pen', shape: 'Shape' }
+export const TOOL_LABEL: Record<Tool, string> = { select: 'Select', nodes: 'Nodes', mirror: 'Mirror', fill: 'Fill', pen: 'Pen', shape: 'Shape', erase: 'Eraser', knife: 'Knife' }
 
 /** Edit mode's tools, as the rail shows them. */
 export const EDIT_TOOLS = (strokes: boolean, lineTrace = strokes): RailTool<Tool>[] => [
@@ -72,6 +72,20 @@ export const EDIT_TOOLS = (strokes: boolean, lineTrace = strokes): RailTool<Tool
   },
   { id: 'pen', label: TOOL_LABEL.pen, key: 'P', icon: icon('M9 2l5 9-5 5-5-5zM9 2v7M9 11.5a1 1 0 100-2 1 1 0 000 2z') },
   { id: 'shape', label: TOOL_LABEL.shape, key: 'U', icon: icon('M2 9.5h6.5V16H2zM12.5 8a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM11 10l5 6h-6z') },
+  {
+    id: 'erase',
+    label: TOOL_LABEL.erase,
+    key: 'E',
+    icon: icon('M10.5 3l4.5 4.5-7 7H4.5L2 12zM6 7.5L10.5 12M8 14.5h8'),
+    ...(lineTrace ? { disabled: 'The Eraser works on filled shapes, and this trace has lines' } : {}),
+  },
+  {
+    id: 'knife',
+    label: TOOL_LABEL.knife,
+    key: 'C',
+    icon: icon('M2 16L13 5l2.5 2.5L6 16zM13 5l2-2.5'),
+    ...(lineTrace ? { disabled: 'The Knife works on filled shapes, and this trace has lines' } : {}),
+  },
 ]
 
 /** Clean up's tools by name (#199, #200, #202, #205, #206, #204). */

@@ -58,6 +58,8 @@ export const SHORTCUTS: { mode: (typeof MODES)[number]; title: string; rows: Row
       { keys: ['Enter', 'Esc'], does: 'Pen: end an open path as a line' },
       { keys: ['U'], does: 'Shape: drag a rectangle, ellipse, polygon or line' },
       { keys: [`${SHIFT} drag`, `${ALT} drag`], does: 'Shape: square, circle or 45° line / draw from the centre' },
+      { keys: ['E'], does: 'Eraser: rub out part of the shapes (the selected ones, if any)' },
+      { keys: ['C'], does: 'Knife: drag a line through shapes to cut them in pieces' },
       { keys: ['Double-click'], does: 'Edit a shape’s nodes (Select); add a node on the outline (Nodes)' },
     ],
   },

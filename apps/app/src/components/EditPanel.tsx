@@ -22,12 +22,19 @@ export type DrawProps = {
   /** Arm the eyedropper for the drawing colour; `picking` while it is. */
   onPick: () => void
   picking: boolean
+  /** How many nodes the Pen has down, and the panel's Finish and Cancel for it. */
+  penNodes: number
+  onPenCommand: (kind: 'finish' | 'cancel') => void
 }
+
+/** The Eraser's and the Knife's settings (#211): the Eraser's width, and why the last drag changed nothing. */
+export type CutProps = { eraserWidth: number; onEraserWidth: (w: number) => void; error: string | null; selected: number }
 
 type Props = {
   /** The Fill tool's colour and messages (components/Shapes.tsx), shown while it's the tool. */
   fillFields?: ReactNode
   draw?: DrawProps
+  cut?: CutProps
   /** The rail's tool (components/Workspace.tsx); the panel shows its properties. */
   tool: Tool
   detached: boolean
@@ -133,6 +140,7 @@ export function EditPanel(p: Props) {
 
       {p.tool === 'fill' && p.fillFields}
       {(p.tool === 'pen' || p.tool === 'shape') && p.draw && <DrawFields tool={p.tool} {...p.draw} />}
+      {(p.tool === 'erase' || p.tool === 'knife') && p.cut && <CutFields tool={p.tool} {...p.cut} />}
 
       {p.tool === 'mirror' && (
         <div className="space-y-3">
@@ -203,6 +211,26 @@ function Choice<T extends string>(props: { label: string; value: T; options: [T,
 const round = (n: number) => Math.round(n * 100) / 100
 
 const SHIFT_HINT = `${SHIFT} makes it square, a circle or a 45° line; ${ALT} draws it from the centre.`
+/** The Eraser's and the Knife's fields (#211). */
+function CutFields(p: CutProps & { tool: 'erase' | 'knife' }) {
+  const on = p.selected ? 'the selected shapes' : 'any shape (select some to keep it to those)'
+  return (
+    <div className="space-y-3" data-cut-fields={p.tool}>
+      <p className="field-hint">
+        {p.tool === 'erase'
+          ? `Drag to rub out part of ${on}. A shape you rub out entirely is deleted. Lines are left alone.`
+          : `Drag a line right through ${on} to cut it into pieces that keep its colour. ${SHIFT} keeps the line to 45°. A cut that stops inside a shape leaves it whole.`}
+      </p>
+      {p.tool === 'erase' && <AxisNumber id="eraser-width" label="Eraser width" value={p.eraserWidth} min={1} max={500} step={1} onChange={p.onEraserWidth} />}
+      {p.error && (
+        <p role="alert" className="text-[12.5px] text-accent" data-cut-error="">
+          {p.error}
+        </p>
+      )}
+    </div>
+  )
+}
+
 const SHAPE_KINDS: [ShapeKind, string][] = [
   ['rect', 'Rectangle'],
   ['ellipse', 'Ellipse'],
@@ -222,6 +250,17 @@ function DrawFields(p: DrawProps & { tool: 'pen' | 'shape' }) {
           ? 'Click to put down corners, drag to pull out a curve. Click the first node to close the shape (filled), or press Enter or Esc to end it as a line. Backspace takes back a node.'
           : `Drag to draw. ${SHIFT_HINT} The new shape goes just above the selected one.`}
       </p>
+      {p.tool === 'pen' && p.penNodes > 0 && (
+        // For a Pen without a keyboard: what Enter (or Esc) and Backspace-all do.
+        <div className="grid grid-cols-2 gap-2">
+          <button className="btn" onClick={() => p.onPenCommand('finish')} disabled={p.penNodes < 2} title="End the path here, as a line (Enter)">
+            Finish line
+          </button>
+          <button className="btn" onClick={() => p.onPenCommand('cancel')} title="Drop the path you’re drawing">
+            Cancel
+          </button>
+        </div>
+      )}
       {p.tool === 'shape' && (
         <>
           <div className="space-y-1.5">

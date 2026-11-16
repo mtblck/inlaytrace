@@ -1,15 +1,14 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent } from 'react'
 import type { ShownPath } from '../lib/doc'
-import type { ShapeSettings } from '../lib/draw'
 import { turnRadius, turnSlice, type Axis } from '../lib/mirror'
 import { isSmooth, parsePath, type NodePart, type NodeRef, type Pt, type Subpath } from '../lib/pathdata'
 import { angleAt, HANDLE_SET, handlePoint, hasRef, normRect, pathBounds, rotateAbout, scaleFromHandle, translate, union, type Affine, type Box, type Handle } from '../lib/transform'
 import type { Gradient } from '../lib/svg'
-import { DrawLayer } from './DrawLayer'
+import { DrawLayer, type DrawLayerProps } from './DrawLayer'
 import { anchorScroll, effective, snap, step, wheelFactor, type Zoom } from '../lib/zoom'
 
 export type ViewMode = 'split' | 'difference' | 'vector'
-export type Tool = 'select' | 'nodes' | 'mirror' | 'fill' | 'pen' | 'shape'
+export type Tool = 'select' | 'nodes' | 'mirror' | 'fill' | 'pen' | 'shape' | 'erase' | 'knife'
 /** How a click or marquee combines with the current selection: Shift adds (or toggles), Alt removes. */
 export type SelectMode = 'set' | 'add' | 'toggle' | 'subtract'
 export type Overlays = { paths: boolean; pathColor: string; nodes: boolean; nodeColor: string }
@@ -62,10 +61,8 @@ type Props = {
   onFill: (at: Pt) => void
   /** The mirror axis or turn centre, dragged to a new place. */
   onAxis: (axis: Axis) => void
-  /** The Pen and Shape tools (#210): the shape to draw, its colour and a line's width (SVG units). */
-  draw?: { shape: ShapeSettings; colour: string; strokeWidth: number }
-  /** A shape the Pen or Shape tool finished: `open` ones are lines. */
-  onDrawn?: (d: string, open: boolean) => void
+  /** The Pen and Shape tools (#210), the Eraser and the Knife (#211): their settings and what they hand back. */
+  draw?: Omit<DrawLayerProps, 'tool' | 'width' | 'height' | 'unit' | 'toSvg'>
 }
 
 // On-screen sizes, constant at every zoom: divided by the sheet's scale to get
@@ -708,8 +705,8 @@ export function Canvas(props: Props) {
               />
             )}
             {aiming && crossShown && cross && <Crosshair at={cross} unit={unit} />}
-            {(tool === 'pen' || tool === 'shape') && !props.picking && props.draw && props.onDrawn && (
-              <DrawLayer tool={tool} width={width} height={height} unit={unit} toSvg={toSvg} {...props.draw} onDrawn={props.onDrawn} />
+            {(tool === 'pen' || tool === 'shape' || tool === 'erase' || tool === 'knife') && !props.picking && props.draw && (
+              <DrawLayer tool={tool} width={width} height={height} unit={unit} toSvg={toSvg} {...props.draw} />
             )}
           </svg>
 

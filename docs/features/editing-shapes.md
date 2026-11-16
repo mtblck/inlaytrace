@@ -6,7 +6,7 @@ order: 4
 
 Edit mode, from the *Trace · Edit* switch above the canvas. Its tools are in
 the rail beside the canvas (above it, on a phone): *Select* (V) for whole
-shapes, *Nodes* (A) for one shape's outline, *Mirror* (M), *Fill* (K), *Pen* (P) and *Shape* (U), then *Undo* and
+shapes, *Nodes* (A) for one shape's outline, *Mirror* (M), *Fill* (K), *Pen* (P), *Shape* (U), *Eraser* (E) and *Knife* (C), then *Undo* and
 *Redo*. The panel (on the right; below the canvas on a phone) shows the chosen tool's settings, then the
 colours. Selecting a shape from the canvas switches to Edit mode; going back
 to Trace mode deselects and puts the tool back to Select.
@@ -151,6 +151,30 @@ selected one (or on top of everything with nothing selected) and becomes the
 selection, so the next one lands above it. Each is one undo step, and is made
 of the same nodes and curves as a traced shape, so *Nodes* reshapes it and every
 export draws it.
+
+On a phone or tablet, where there's no Enter key, the panel has *Finish line*
+and *Cancel* while the Pen has nodes down.
+
+## Eraser (E) and Knife (C): rub out and cut
+
+The vector twins of Clean up's eraser: they change the shapes themselves, so
+nothing is traced again.
+
+The *Eraser* is a round brush (*Eraser width* in the panel). Drag over shapes to
+rub out what it covers. The edge it leaves is cut cleanly: anything thinner than
+half a pixel along it goes too, so there are no hairline slivers. A shape rubbed
+out entirely is deleted.
+
+The *Knife* cuts along a straight line (⇧ keeps it to 45°). Each shape the line
+goes right through comes apart into pieces that keep its colour, group and place
+in the paint order, and meet exactly along the cut. It cuts through holes (a
+ring cut across makes two halves), and a compound shape loses only the parts the
+line crosses. A cut that stops inside a shape leaves it whole.
+
+Both work on the selected shapes if there are any, and otherwise on every
+visible, unlocked shape. Lines (strokes) are left alone, since they have no
+inside, and both tools are off for traces made of lines. Each drag is one undo
+step.
 
 ## Shapes: find, hide and lock
 
