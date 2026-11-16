@@ -90,7 +90,7 @@ const stats = (svg: string) => {
 
 describe('pixel art', () => {
   it('Inlay draws every pixel exactly, on pixel corners, with fewer nodes than VTracer', () => {
-    const inlay = stats(runTrace(sprite(), W, H, { mode: 'palette', colors: 32, palette: 'exact', pixels: true, speckle: 0, tolerance: 0.25, cornerAngle: 0 }))
+    const inlay = stats(runTrace(sprite(), W, H, { preset: 'pixel', colors: 32 }))
     // VTracer's pixel mode, as the app used before pixel art moved to Inlay (a benchmark only now).
     const vt = stats(vtracer(sprite(), W, H, { mode: 'pixel', maxColors: 32, filterSpeckle: 0, hierarchical: 'stacked' }))
     console.log(`  pixel sprite 16×16, ${Object.keys(PAL).length} colours: Inlay ${inlay.wrong} wrong px, ${inlay.paths} paths, ${inlay.nodes} nodes, ${inlay.bytes} B; VTracer ${vt.wrong} wrong px, ${vt.paths} paths, ${vt.nodes} nodes, ${vt.bytes} B`)
@@ -113,7 +113,7 @@ describe('pixel art', () => {
       const red = i % n >= 25 && i % n < 35 && Math.floor(i / n) >= 25 && Math.floor(i / n) < 35
       px.set(red ? [200 + Math.round(rand() * 8), 30, 40, 255] : [g, g, g, 255], i * 4)
     }
-    const svg = runTrace(px, n, n, { mode: 'palette', colors: 4, palette: 'exact', pixels: true, speckle: 0, tolerance: 0.25, cornerAngle: 0 })
+    const svg = runTrace(px, n, n, { preset: 'pixel', colors: 4 })
     const fills = new Set([...svg.matchAll(/fill="(#[0-9a-f]{6})"/g)].map((m) => m[1]))
     expect([...fills].some((f) => parseInt(f.slice(1, 3), 16) > 180 && parseInt(f.slice(3, 5), 16) < 80)).toBe(true)
   })
@@ -134,7 +134,7 @@ describe('pixel art', () => {
       else if (halo) px.set([244 + 4 * Math.floor(rand() * 3), 248 + 2 * Math.floor(rand() * 3), 252, 255], i * 4)
       else px.set([255, 255, 255, 255], i * 4)
     }
-    const svg = runTrace(px, n, n, { mode: 'palette', colors: 8, palette: 'exact', pixels: true, speckle: 0, tolerance: 0.25, cornerAngle: 0 })
+    const svg = runTrace(px, n, n, { preset: 'pixel', colors: 8 })
     const fills = [...svg.matchAll(/fill="(#[0-9a-f]{6})"/g)].map((m) => m[1])
     expect(fills.some((f) => parseInt(f.slice(1, 3), 16) < 120)).toBe(true)
   })

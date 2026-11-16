@@ -109,7 +109,7 @@ describe('exact shapes setting', () => {
       expect(!!toTraceOptions(settingsFor(p.id)).shapes).toBe(on)
       // Turned on by hand, Poster and Pixel art still don't use it.
       expect(!!toTraceOptions({ ...settingsFor(p.id), exact: true }).shapes).toBe(on)
-      expect(toTraceOptions({ ...settingsFor(p.id), exact: false }).shapes).toBeUndefined()
+      expect(toTraceOptions({ ...settingsFor(p.id), exact: false }).shapes).toBe(false)
     }
   })
 
@@ -126,23 +126,22 @@ describe('Outline art', () => {
   })
 
   it('stacks Illustration and Outline art by default, but not Logo', () => {
-    for (const id of ['logo', 'illustration', 'outline'] as const) expect(toTraceOptions(settingsFor(id)).stacked).toBe(id !== 'logo')
+    for (const id of ['logo', 'illustration', 'outline'] as const) expect(toTraceOptions(settingsFor(id)).layers).toBe(id !== 'logo')
   })
 
   it('smooths painted shading only when asked, and only for the peak-palette presets', () => {
     for (const id of ['logo', 'illustration', 'outline'] as const) {
-      expect(toTraceOptions(settingsFor(id)).smooth).toBeUndefined()
-      expect(toTraceOptions({ ...settingsFor(id), smoothShading: true }).smooth).toBe(true)
+      expect(toTraceOptions(settingsFor(id)).smoothShading).toBeUndefined()
+      expect(toTraceOptions({ ...settingsFor(id), smoothShading: true }).smoothShading).toBe(true)
     }
-    for (const id of ['photo', 'pixel', 'lineart', 'centerline'] as const) expect(toTraceOptions({ ...settingsFor(id), smoothShading: true }).smooth).toBeUndefined()
+    for (const id of ['photo', 'pixel', 'lineart', 'centerline'] as const) expect(toTraceOptions({ ...settingsFor(id), smoothShading: true }).smoothShading).toBeUndefined()
   })
 
-  it('keeps painted outlines only when asked, looking wider on an enlarged image', () => {
-    expect(toTraceOptions(settingsFor('illustration')).outlines).toBeUndefined()
-    expect(toTraceOptions({ ...settingsFor('illustration'), keepOutlines: true }).outlines).toBe(2)
-    expect(toTraceOptions({ ...settingsFor('illustration'), keepOutlines: true }, 2).outlines).toBe(3)
-    expect(toTraceOptions({ ...settingsFor('illustration'), keepOutlines: true }, 8).outlines).toBe(4)
-    expect(toTraceOptions({ ...settingsFor('photo'), keepOutlines: true }).outlines).toBeUndefined()
+  it('keeps painted outlines only when asked, telling the package how far the image was enlarged', () => {
+    expect(toTraceOptions(settingsFor('illustration')).keepOutlines).toBeUndefined()
+    expect(toTraceOptions({ ...settingsFor('illustration'), keepOutlines: true }).keepOutlines).toBe(true)
+    expect(toTraceOptions({ ...settingsFor('illustration'), keepOutlines: true }, 2).scale).toBe(2)
+    expect(toTraceOptions({ ...settingsFor('photo'), keepOutlines: true }).keepOutlines).toBeUndefined()
   })
 
   it('passes on how far the image was enlarged, for its line widths', () => {
@@ -183,16 +182,18 @@ describe('your own colours', () => {
 
   it('reach the tracer only when switched on, offered and not empty', () => {
     const s = { ...settingsFor('logo'), ownColors: mine }
-    expect(toTraceOptions(s).own).toBeUndefined()
-    expect(toTraceOptions({ ...s, useOwnColors: true }).own).toEqual(mine)
-    expect(toTraceOptions({ ...s, ownColors: [], useOwnColors: true }).own).toBeUndefined()
+    expect(toTraceOptions(s).palette).toBeUndefined()
+    expect(toTraceOptions({ ...s, useOwnColors: true }).palette).toEqual(mine)
+    expect(toTraceOptions({ ...s, ownColors: [], useOwnColors: true }).palette).toBeUndefined()
     expect(ownPaletteOf({ ...s, preset: 'pixel', useOwnColors: true })).toBeNull()
-    expect(toTraceOptions({ ...s, preset: 'lineart', useOwnColors: true }).own).toBeUndefined()
+    expect(toTraceOptions({ ...s, preset: 'lineart', useOwnColors: true }).palette).toBeUndefined()
   })
 
   it('turn off gradients, whose stops would bring back the image’s colours', () => {
-    expect(toTraceOptions(settingsFor('illustration')).gradients).toBe(true)
+    // The package turns them off for a given palette; the app mustn't turn them back on.
     expect(toTraceOptions({ ...settingsFor('illustration'), ownColors: mine, useOwnColors: true }).gradients).toBeUndefined()
+    const t = trace(px, w, h, toTraceOptions({ ...settingsFor('illustration'), ownColors: mine, useOwnColors: true }))
+    expect(t.paths.some((p) => p.gradient)).toBe(false)
   })
 
   for (const id of ['logo', 'illustration', 'outline', 'photo'] as const)
@@ -218,7 +219,8 @@ describe('close small gaps (#145)', () => {
     for (const p of PRESETS) {
       const on = p.id === 'lineart' || p.id === 'centerline' || p.id === 'outline'
       expect(toTraceOptions(settingsFor(p.id)).closeGaps, p.id).toBe(on ? true : undefined)
-      expect(toTraceOptions({ ...settingsFor(p.id), closeGaps: false }).closeGaps).toBeUndefined()
+      // Off is said out loud where the package's preset would otherwise close gaps.
+      expect(toTraceOptions({ ...settingsFor(p.id), closeGaps: false }).closeGaps).toBe(on ? false : undefined)
     }
   })
 

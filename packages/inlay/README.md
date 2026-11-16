@@ -36,34 +36,34 @@ says what counts as what.
 ## Use
 
 ```ts
-import { trace, toSvg, peakPalette } from 'inlaytrace'
+import { trace, toSvg } from 'inlaytrace'
 
-// RGBA pixels, e.g. from canvas getImageData().data
-const result = trace(rgba, width, height, {
-  mode: 'palette',
-  palette: peakPalette(rgba, 8), // the image's main colours, as #rrggbb
-  speckle: 8,      // merge regions smaller than 8 × 8 px into their surroundings
-  tolerance: 1,    // px the fitted outline may stray from the pixels
-  cornerAngle: 45, // turns sharper than this stay corners
-})
+// Anything shaped like ImageData: { data: RGBA bytes, width, height }
+const result = trace(image, { preset: 'logo' })
 
 result.paths // [{ d: 'M…Z', fill: '#rrggbb' }, …] largest first, nonzero fill;
-             // with `strokes`, lines last: { d, fill, stroke: width }, stroked in `fill`, unfilled
+             // lines (Outline art, Centerline) are { d, fill, stroke: width }, stroked in `fill`, unfilled
 toSvg(result) // '<svg …>…</svg>'
 ```
 
-### Modes
+### Presets
 
-| Options | For |
+| Preset | For |
 | --- | --- |
-| `mode: 'palette', palette` | Flat colour art. `palette` is the colours to label pixels with: `peakPalette(rgba, n, { width })` takes the sharp peaks of the histogram (flat art's real colours), and given the image's width also pale tints found by their flatness (a light fill on white); `exactPalette(rgba, n)` takes the image's exact colours, most-used first. |
-| `mode: 'palette', palette, merge` | Fold colours together before regions are built, so the edge between them disappears: `{ '#from': '#into' }`. |
-| `mode: 'palette', palette: exactPalette(…), pixels: true` | Pixel art: no clean-up of lone pixels, no curve fitting; every boundary is its pixel staircase with straight runs joined. |
-| `mode: 'palette', palette, strokes: true` | Outline art: colours drawn mostly as thin, long lines (2.5–8 px wide; give `scale` if the image was enlarged) are traced down their middle as round-capped strokes at the measured width, and the shapes either side meet beneath them. Short marks, small lettering and solid shapes stay shapes. |
-| `mode: 'palette', palette, gradients: true` | Soft shading as gradients: neighbouring tints that are bands of one smooth shade become one shape with a linear or radial gradient (`path.gradient`; `fill` is its average colour), when the gradient fits far better than a flat colour. For screens and print, not cutters. |
-| `mode: 'palette', palette, stacked: true` | Flat art as layers: each shape whole, back to front. Which of two touching shapes is in front comes from the junctions where their edge ends, and a shape partly hidden is completed underneath (a circle, a corner, or a smooth continuation), so a disc behind a bar is a whole disc. |
-| `mode: 'palette', palette: quantizePalette(…), stacked: true, photo: true` | Photos as flat colour bands. `quantizePalette(rgba, n)` clusters the image's colours (k-means in OKLab, deterministic); `stacked` draws each shape whole, larger first, instead of cutting holes. |
-| `mode: 'binary', threshold` | Line art: ink darker than `threshold` (0–255), the image's own ink/paper split when `'auto'` (Otsu; coloured ink works too), or adaptive per neighbourhood when `null`. Only the ink is drawn. |
+| `logo` (default) | Few flat colours (8), crisp corners, shapes cut out to tile, exact circles and rectangles. |
+| `illustration` | More colours (24), smooth curves, shapes in layers (each whole, a disc behind a bar stays a disc), soft shading as gradients. |
+| `outline` | Illustration, with thin drawn outlines (2.5–8 px; give `scale` if the image was enlarged) traced down their middle as round-capped strokes, and the shapes either side meeting beneath them. |
+| `lineart` | Ink drawings and scans: ink darker than the image's own ink/paper split (Otsu; coloured ink works too), small breaks in lines closed. Only the ink is drawn. |
+| `centerline` | Single strokes down the middle of the ink, at the width measured from it, for pen plotters and engraving. |
+| `poster` | Photos as flat colour bands: colours clustered (k-means in OKLab, deterministic), each shape whole, larger first. |
+| `pixel` | Pixel art: exact colours, no clean-up of lone pixels, no curve fitting; every boundary is its pixel staircase. |
+
+Any option overrides the preset: `colors`, `palette` (your own colours, as
+`#rrggbb`), `merge` (`{ '#from': '#into' }`), `speckle`, `tolerance`,
+`cornerAngle`, `layers`, `shapes`, `strokes`, `gradients`, `closeGaps`,
+`threshold`, `invert`, `strokeWidth`, `smoothShading`, `keepOutlines` and
+`scale`. [Options](https://github.com/mtblck/inlaytrace/blob/main/docs/package/options.md)
+says what each does.
 
 ### Also exported
 

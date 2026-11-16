@@ -27,6 +27,9 @@ for (const p of result.paths) assert.ok(parsePath(p.d).length > 0, `parsable pat
 const disc = result.paths.find((p) => p.fill !== '#ffffff')
 const nodes = parsePath(disc.d).flatMap((s) => s.nodes).length
 assert.ok(nodes >= 4 && nodes <= 8, `the disc is ${nodes} nodes`)
+// The preset form (0.4): the same Logo trace from { data, width, height }.
+const viaPreset = trace({ data: rgba, width: w, height: h }, { preset: 'logo', speckle: 4 })
+assert.equal(viaPreset.paths.length, 2, 'the preset form traces the same two shapes')
 const svg = toSvg(result)
 assert.match(svg, /^<svg [^>]*viewBox="0 0 64 64"/)
 console.log(`  smoke ok: ${result.paths.length} shapes, the disc in ${nodes} nodes, ${svg.length} bytes of SVG`)

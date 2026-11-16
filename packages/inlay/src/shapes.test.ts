@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { trace, type InlayOptions } from './inlay'
+import { traceRaw as trace, type InlayOptions } from './inlay'
 import { pointAt, type Cubic } from './fit'
 import { parsePath } from './path'
 
