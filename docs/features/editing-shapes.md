@@ -183,6 +183,14 @@ underneath, visible handles above them, visible nodes on top. A neighbour's
 larger target can never take the press from the node under your pointer.
 Everything stays the same size on screen at any zoom.
 
+## Fix in image (F)
+
+When a shape is wrong because the image is (a speck, a gap in an outline, a
+blotchy fill), fixing the pixels is often quicker than fixing the shape.
+Select it and press **Fix in image** in the panel, or F: Clean up opens
+zoomed on it, with its outline picked out, and leaving Clean up traces again.
+See [Clean up](clean-up.md).
+
 ## Delete
 
 Delete or Backspace (or the button in the panel) removes what's selected:

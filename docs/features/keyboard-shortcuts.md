@@ -16,13 +16,20 @@ mode switches to Edit mode.
 | --- | --- |
 | C | Crop: drag a box on the image |
 | Enter | Crop to the box |
-| Esc | Cancel the box |
+| Esc | Cancel the box, or the wand's selection |
 | L | Straighten: drag along a line that should be level or upright |
 | B | Brush: paint over gaps, holes and blotches |
 | E | Eraser: paint the background colour over stray marks |
-| [ / ] | Brush smaller, bigger |
+| D | Despeckle: even out noise and specks where you paint |
+| J | Heal: fill a mark in from the pixels round it |
+| G | Fill: fill the area you click in the brush colour |
+| W | Magic wand: select an area of one colour (⇧ click adds) |
+| Delete | Clear the wand's selection to the background |
+| K | Keep: paint back in what Remove the background took |
+| R | Remove: take away what Remove the background left |
+| [ / ] | Brush smaller, bigger (every brush) |
 | Shift [ / Shift ] | Brush softer, harder |
-| ⌥ click | Pick the brush colour from the image |
+| ⌥ click | Pick the brush colour from the image (Brush, Fill, Magic wand) |
 | Space drag | Pan when zoomed in (or drag with the middle button) |
 | ⌘ + / ⌘ − / ⌘ 0 | Zoom the image in, out, back to fit (pinch and ⌘ wheel too) |
 
@@ -33,6 +40,7 @@ mode switches to Edit mode.
 | V | Select: pick, move and scale shapes |
 | A | Nodes: edit one shape's nodes and curves |
 | M | Mirror |
+| F | Fix in image: open Clean up zoomed on the selected shapes |
 | K | Fill: fill a shape, or the area between shapes, with a colour |
 | Tab, arrows, Enter | Fill or pick without a pointer: with Fill or the eyedropper on, Tab to the image, move the crosshair (⇧ for bigger steps), Enter fills or picks under it |
 | Double-click a shape | Edit its nodes (from Select) |

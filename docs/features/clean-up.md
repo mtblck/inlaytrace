@@ -16,6 +16,15 @@ Clean up (for Trace or Edit) traces the cleaned image once. If the drawing has
 shape edits, it asks first, because the new trace replaces them; Undo brings
 them back.
 
+## Fix in image (F)
+
+Some problems are easiest to spot in the trace: a ragged edge, a gap, a shape
+that came out the wrong colour. Select the shapes in Edit and press **Fix in
+image** in the panel (or F): Clean up opens zoomed on them, with their outline
+picked out over the image, so you can fix the pixels they came from. Leaving
+Clean up traces again, as it always does, and asks first if the drawing has
+shape edits.
+
 ## Crop (C)
 
 Drag a box on the image, then drag its edges or corners (or type X, Y, W and
@@ -49,6 +58,59 @@ faster.
   Apple Pencil's pressure sets the width as you draw.
 - Each stroke is one undo step.
 
+## Despeckle (D) and heal (J)
+
+Two more brushes, with the same size, hardness and pressure as the brush:
+
+- **Despeckle:** paint over JPEG noise and specks. Where you paint, the image
+  is smoothed with the tracer's own edge-preserving filter (the one behind
+  *Smooth shading*), then every patch of one colour smaller than a quarter of
+  the brush merges into the colour it shares the most edge with. It's
+  *Ignore specks* for one area: raising that for the whole image would wipe
+  out small detail elsewhere. Shapes bigger than that stay.
+- **Heal:** paint over a mark (a stain, a watermark, a stray pen line) to
+  fill it in from the pixels round it, a ring at a time from the outside in.
+  Each pixel takes the colour of a neighbour, not an average of them, so a
+  flat colour stays flat and an edge that runs through the mark carries on
+  sharp rather than blurring into a band the trace would pick up.
+
+While you paint, the stroke shows as a tint; the fix is worked out when you
+let go.
+
+## Keep (K) and Remove (R): fixing background removal
+
+*Remove the background* (in Trace) finds the subject with an AI model,
+U²-Net, which sometimes takes a pale edge or a thin part of the subject, or
+leaves a shadow behind. Once it's on, two more brushes in Clean up paint over
+its mask instead of running it again:
+
+- **Keep** paints back in what it took but should have kept.
+- **Remove** takes away what it left but should have taken.
+
+With either brush, the image shows what's removed as a tint. The strokes are
+part of the clean-up list, so Undo and the session carry them, and they're
+laid over the mask each time background removal runs, through any crop, turn
+or flip you make afterwards, so changing the image doesn't lose them. If you
+change the image's pixels, leave Clean up once to remove the background again
+before painting its mask. Painting the mask never runs the model again.
+
+## Fill (G) and the magic wand (W)
+
+- **Fill:** click the image to fill the area you click in the brush colour: a
+  blotchy background made one colour, a speckled fill made flat, a letter's
+  inside filled in. ⌥/Alt-click picks the colour, as with the brush.
+- **Magic wand:** click to select an area of one colour, shown tinted with its
+  edge drawn; ⇧ Shift-click adds another. Then **Fill** it in the brush
+  colour, or **Clear** it to the background colour (as the eraser does), so a
+  watermark, a stamp or a coloured backdrop traces as nothing. Delete clears,
+  Esc deselects.
+- **Tolerance** is how far a colour may stray from the one you clicked and
+  still count: 0 takes that exact colour, more takes in a JPEG's noise and
+  the soft pixels along an edge. With **Touching only** off, the click takes
+  that colour everywhere in the image, not just the area it's in. Both apply
+  to the wand's selection as you change them.
+- Each fill, and each fill or clear of a selection, is one undo step.
+
 To paint detail, zoom in: pinch, ⌘/Ctrl + the wheel (or a trackpad pinch),
 ⌘/Ctrl + and −, or the zoom buttons over the image; *Fit* or ⌘/Ctrl 0 goes
 back to the whole image. Two fingers, the wheel, Space-drag or a
@@ -75,7 +137,8 @@ original, as one undoable step.
 ## How it works
 
 Clean-up is a list of operations (crop, rotate, flip, levels, threshold,
-and brush and eraser strokes)
+brush, eraser, despeckle and heal strokes, fills, and Keep and Remove
+strokes)
 stored with your edits, so Undo and Redo step through it like any other edit,
 and it is saved with the session, so a reload brings it back
 (`apps/app/src/lib/cleanup.ts`). Replaying the list onto the original makes
@@ -94,4 +157,9 @@ with pen pressure) plus the brush's size and hardness, and replays as round
 dabs stamped along them into a coverage mask, so overlapping dabs don't build
 up; drawing uses the same code a segment at a time, so what you see while
 painting is what's traced. A new stroke replays only itself, on top of the
-last result. The mode's code loads the first time you open it.
+last result. Keep and Remove strokes change no pixels: the replay skips them, and
+they're carried point by point through the crops, turns and flips after them
+onto background removal's mask (`maskStrokes`). A fill is stored as the points clicked, the tolerance and
+whether only touching pixels count, and finds its area again on replay from
+the pixels as they are at that step, so it fills exactly what you saw
+selected. The mode's code loads the first time you open it.

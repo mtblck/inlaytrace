@@ -4,18 +4,21 @@
  * download. Loaded with Clean up (dynamic import), like the replay itself.
  */
 import { CLEANUP_MAX_EDGE, type CleanupOp, type Img } from './cleanup'
-import { replay } from './cleanupPixels'
+import { applyMaskStrokes, maskStrokes, replay } from './cleanupPixels'
 import type { Source } from './image'
 
-/** The original at clean-up size (long edge at most 2048 px), once per image. */
+/** The size clean-up works at: the original's, with the long edge at most 2048 px. */
+function cleanupSize({ width: w, height: h }: { width: number; height: number }) {
+  const scale = Math.min(1, CLEANUP_MAX_EDGE / Math.max(w, h))
+  return { width: Math.max(1, Math.round(w * scale)), height: Math.max(1, Math.round(h * scale)) }
+}
+
+/** The original at clean-up size, once per image. */
 const originals = new WeakMap<ImageBitmap, Img>()
 export function originalPixels(source: Source): Img {
   let img = originals.get(source.bitmap)
   if (!img) {
-    const { width: w, height: h } = source.bitmap
-    const scale = Math.min(1, CLEANUP_MAX_EDGE / Math.max(w, h))
-    const width = Math.max(1, Math.round(w * scale))
-    const height = Math.max(1, Math.round(h * scale))
+    const { width, height } = cleanupSize(source.bitmap)
     const ctx = new OffscreenCanvas(width, height).getContext('2d', { willReadFrequently: true })!
     ctx.imageSmoothingQuality = 'high'
     ctx.drawImage(source.bitmap, 0, 0, width, height)
@@ -72,4 +75,19 @@ export async function cleanedSource(source: Source, ops: CleanupOp[]): Promise<S
   const [bitmap, blob] = await Promise.all([createImageBitmap(toImageData(img)), pngOf(img)])
   const k = source.originalWidth / originalPixels(source).width
   return { name: source.name, url: URL.createObjectURL(blob), originalWidth: Math.round(img.width * k), originalHeight: Math.round(img.height * k), bitmap }
+}
+
+/**
+ * Background removal's result (`rgba`, `width` × `height`) with the list's
+ * Keep and Remove strokes laid over its alpha (#204), carried through the
+ * list's later crops and turns. `source` is the original, whose proportions
+ * the list started from. A copy; the result as it came stays as it was.
+ */
+export function withMaskStrokes(rgba: Uint8ClampedArray, width: number, height: number, source: Source, ops: CleanupOp[]): Uint8ClampedArray {
+  const size = cleanupSize(source.bitmap)
+  const strokes = maskStrokes(ops, size.width, size.height)
+  if (!strokes.length) return rgba
+  const out = rgba.slice()
+  applyMaskStrokes(out, width, height, strokes)
+  return out
 }

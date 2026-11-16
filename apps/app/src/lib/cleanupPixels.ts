@@ -3,14 +3,15 @@
  * list itself so it loads only once Clean up is used: the session check and
  * the mode's glue need the list, not the pixel loops.
  */
-import { clamp, isQuarter, normDegrees, type CleanupOp, type Crop, type Flip, type Img, type Levels, type Paint } from './cleanup'
+import { smoothShading } from 'inlaytrace'
+import { clamp, isQuarter, normDegrees, type CleanupOp, type Crop, type Fill, type Flip, type Img, type Levels, type MaskStroke, type Paint } from './cleanup'
 
 // ---- Replay -----------------------------------------------------------------
 
 export function replay(img: Img, ops: CleanupOp[]): Img {
   let out = img
   // A stroke paints in place on an image this replay made, rather than copying it once a stroke.
-  for (const op of ops) out = op.kind === 'paint' ? paint(out, op, out !== img) : apply(out, op)
+  for (const op of ops) out = op.kind === 'paint' ? paint(out, op, out !== img) : op.kind === 'fill' ? fill(out, op, out !== img) : apply(out, op)
   return out
 }
 
@@ -28,6 +29,11 @@ export function apply(img: Img, op: CleanupOp): Img {
       return levels(img, op)
     case 'threshold':
       return threshold(img, op.level)
+    case 'fill':
+      return fill(img, op, false)
+    case 'mask':
+      // Background removal's business, not the pixels'.
+      return img
   }
 }
 
@@ -332,6 +338,381 @@ function paint(img: Img, op: Paint, inPlace: boolean): Img {
     last = d
   }
   const out = inPlace ? img : { rgba: img.rgba.slice(), width: w, height: h }
-  if (rect) composite(out.rgba, img.rgba, w, mask, strokeColour(img, op), rect)
+  if (!rect) return out
+  if (op.tool === 'despeckle' || op.tool === 'heal') {
+    // Worked out from a copy, so the result doesn't depend on whether it paints in place.
+    const fixed = op.tool === 'heal' ? heal(img, mask, rect) : despeckle(img, rect, (Math.PI * dabs.reduce((r, d) => Math.max(r, d.r), 0) ** 2) / 4)
+    blend(out.rgba, img.rgba, w, mask, fixed, rect)
+  } else composite(out.rgba, img.rgba, w, mask, strokeColour(img, op), rect)
   return out
+}
+
+/**
+ * Lay `fixed` (the pixels of `rect`, row by row) over `base` through the mask,
+ * into `out`. Half cover or more counts as full: a mark the brush's edge only
+ * mostly covers would otherwise be left as a faint ghost, and the fixed pixels
+ * match those round them anyway.
+ */
+function blend(out: Uint8ClampedArray, base: Uint8ClampedArray, w: number, mask: Mask, fixed: Uint8ClampedArray, rect: Rect) {
+  const rw = rect.x1 - rect.x0
+  for (let y = rect.y0; y < rect.y1; y++)
+    for (let x = rect.x0; x < rect.x1; x++) {
+      const m = mask.data[(y - mask.y) * mask.w + x - mask.x]
+      if (!m) continue
+      const o = (y * w + x) * 4
+      const f = ((y - rect.y0) * rw + x - rect.x0) * 4
+      const c = Math.min(1, m / 128)
+      for (let k = 0; k < 4; k++) out[o + k] = base[o + k] + (fixed[f + k] - base[o + k]) * c
+    }
+}
+
+// ---- Despeckle and heal (#206) -------------------------------------------------------
+
+/** Two pixels are one colour for despeckling when no channel differs by more than this (JPEG noise left after smoothing). */
+const SPECK_TOLERANCE = 24
+/** Room round the stroke the smoothing and the specks' neighbours are read from. */
+const MARGIN = 6
+
+/**
+ * Despeckle: the stroke's box, smoothed (the tracer's own edge-preserving
+ * smoothShading, so JPEG noise evens out and edges stay put), then every patch
+ * of one colour smaller than `minArea` that lies inside the box taken over by
+ * the colour it shares the most edge with. Specks are judged on the pixels
+ * round the stroke too, so a dot the brush only half covers is still a dot.
+ * Returns the pixels of `rect`.
+ */
+export function despeckle(img: Img, rect: Rect, minArea: number): Uint8ClampedArray {
+  const { width: w, height: h } = img
+  const bx0 = Math.max(0, rect.x0 - MARGIN)
+  const by0 = Math.max(0, rect.y0 - MARGIN)
+  const bw = Math.min(w, rect.x1 + MARGIN) - bx0
+  const bh = Math.min(h, rect.y1 + MARGIN) - by0
+  const box = new Uint8ClampedArray(bw * bh * 4)
+  for (let y = 0; y < bh; y++) box.set(img.rgba.subarray(((by0 + y) * w + bx0) * 4, ((by0 + y) * w + bx0 + bw) * 4), y * bw * 4)
+  const px = smoothShading(box, bw, bh)
+  // A few rounds: a speck that joins a slightly larger one can leave that one still small.
+  for (let round = 0; round < 4; round++) if (!mergeSmall(px, bw, bh, Math.max(2, minArea))) break
+  const out = new Uint8ClampedArray((rect.x1 - rect.x0) * (rect.y1 - rect.y0) * 4)
+  const rw = rect.x1 - rect.x0
+  for (let y = rect.y0; y < rect.y1; y++) out.set(px.subarray(((y - by0) * bw + rect.x0 - bx0) * 4, ((y - by0) * bw + rect.x1 - bx0) * 4), (y - rect.y0) * rw * 4)
+  return out
+}
+
+/** One round of despeckling `px` in place; false when no speck was left. */
+function mergeSmall(px: Uint8ClampedArray, w: number, h: number, minArea: number): boolean {
+  // Patches of one colour: each grown from its first pixel, within the tolerance of that pixel's colour.
+  const label = new Int32Array(w * h).fill(-1)
+  const areas: number[] = []
+  const edge: boolean[] = []
+  const sums: number[][] = []
+  const stack = new Int32Array(w * h)
+  for (let start = 0; start < w * h; start++) {
+    if (label[start] >= 0) continue
+    const id = areas.length
+    const o = start * 4
+    const [r, g, b, a] = [px[o], px[o + 1], px[o + 2], px[o + 3]]
+    let n = 0
+    let area = 0
+    let touches = false
+    const sum = [0, 0, 0, 0]
+    stack[n++] = start
+    label[start] = id
+    while (n) {
+      const i = stack[--n]
+      area++
+      for (let k = 0; k < 4; k++) sum[k] += px[i * 4 + k]
+      const x = i % w
+      const y = (i - x) / w
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1) touches = true
+      for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1])
+        if (j >= 0 && label[j] < 0 && near(px, j * 4, r, g, b, a, SPECK_TOLERANCE)) {
+          label[j] = id
+          stack[n++] = j
+        }
+    }
+    areas.push(area)
+    edge.push(touches)
+    sums.push(sum)
+  }
+  // Each small patch inside the box takes the colour of the neighbour it shares most edge with, smallest first.
+  const small = areas.map((a, id) => ({ a, id })).filter((c) => c.a < minArea && !edge[c.id] && areas.length > 1)
+  if (!small.length) return false
+  const members: number[][] = areas.map(() => [])
+  for (let i = 0; i < w * h; i++) if (areas[label[i]] < minArea) members[label[i]].push(i)
+  const colour = (id: number) => sums[id].map((v) => Math.round(v / areas[id]))
+  const owner = Int32Array.from(label)
+  let changed = false
+  small.sort((p, q) => p.a - q.a)
+  for (const { id } of small) {
+    const votes = new Map<number, number>()
+    for (const i of members[id]) {
+      const x = i % w
+      for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w])
+        if (j >= 0 && j < w * h && owner[j] !== id) votes.set(owner[j], (votes.get(owner[j]) ?? 0) + 1)
+    }
+    let best = -1
+    let most = 0
+    for (const [l, v] of votes) if (v > most || (v === most && areas[l] > areas[best])) (most = v), (best = l)
+    if (best < 0) continue
+    const [r, g, b, a] = colour(best)
+    for (const i of members[id]) {
+      owner[i] = best
+      px[i * 4] = r
+      px[i * 4 + 1] = g
+      px[i * 4 + 2] = b
+      px[i * 4 + 3] = a
+    }
+    areas[best] += areas[id]
+    changed = true
+  }
+  return changed
+}
+
+/**
+ * Heal: the pixels under the stroke filled in from the pixels round it, a ring
+ * at a time from the outside in. Each takes the colour of the neighbour most
+ * like the rest of its filled-in neighbours (not their average), so a flat
+ * colour stays flat and where two colours meet the edge stays sharp rather
+ * than blurring to a third that would trace as a band. Returns the pixels of
+ * `rect`.
+ */
+export function heal(img: Img, mask: Mask, rect: Rect): Uint8ClampedArray {
+  const { width: w, height: h } = img
+  const rw = rect.x1 - rect.x0
+  const rh = rect.y1 - rect.y0
+  const out = new Uint8ClampedArray(rw * rh * 4)
+  // The pixels to fill: every one the stroke touches. Pixels round the rect are read from the image.
+  const known = (x: number, y: number) => x < 0 || y < 0 || x >= w || y >= h ? false : x < rect.x0 || y < rect.y0 || x >= rect.x1 || y >= rect.y1 ? true : done[(y - rect.y0) * rw + x - rect.x0] === 1
+  const done = new Uint8Array(rw * rh)
+  for (let y = 0; y < rh; y++)
+    for (let x = 0; x < rw; x++) {
+      const i = y * rw + x
+      const o = ((rect.y0 + y) * w + rect.x0 + x) * 4
+      for (let k = 0; k < 4; k++) out[i * 4 + k] = img.rgba[o + k]
+      if (!mask.data[(rect.y0 + y - mask.y) * mask.w + rect.x0 + x - mask.x]) done[i] = 1
+    }
+  const colourAt = (x: number, y: number, k: number) => (x >= rect.x0 && y >= rect.y0 && x < rect.x1 && y < rect.y1 ? out[((y - rect.y0) * rw + x - rect.x0) * 4 + k] : img.rgba[(y * w + x) * 4 + k])
+  // Only pixels beside a known one can fill this ring: start from those, then
+  // from the unfilled neighbours of each ring, so a big stroke isn't rescanned
+  // once a ring (#242 review).
+  const queued = new Uint8Array(rw * rh)
+  let frontier: number[] = []
+  const enqueue = (x: number, y: number) => {
+    if (x < 0 || y < 0 || x >= rw || y >= rh) return
+    const i = y * rw + x
+    if (done[i] || queued[i]) return
+    queued[i] = 1
+    frontier.push(i)
+  }
+  for (let y = 0; y < rh; y++)
+    for (let x = 0; x < rw; x++) {
+      if (done[y * rw + x]) continue
+      let edge = false
+      for (let dy = -1; dy <= 1 && !edge; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && known(rect.x0 + x + dx, rect.y0 + y + dy)) edge = true
+      if (edge) enqueue(x, y)
+    }
+  const ring: number[] = []
+  const cand: number[] = []
+  while (frontier.length) {
+    ring.length = 0
+    // In scan order, as a full pass over the rect would visit them.
+    frontier.sort((a, b) => a - b)
+    for (const i of frontier) {
+      queued[i] = 0
+      const gx = rect.x0 + (i % rw)
+      const gy = rect.y0 + Math.floor(i / rw)
+      cand.length = 0
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && known(gx + dx, gy + dy)) cand.push(gx + dx, gy + dy)
+      if (!cand.length) continue
+      // The medoid: the known neighbour nearest, in total, to the others.
+      let best = 0
+      let bestCost = Infinity
+      for (let a = 0; a < cand.length; a += 2) {
+        let cost = 0
+        for (let b = 0; b < cand.length; b += 2) for (let k = 0; k < 4; k++) cost += Math.abs(colourAt(cand[a], cand[a + 1], k) - colourAt(cand[b], cand[b + 1], k))
+        if (cost < bestCost) (bestCost = cost), (best = a)
+      }
+      ring.push(i, cand[best], cand[best + 1])
+    }
+    // Nothing known anywhere near (a stroke over the whole image): leave the rest as it is.
+    if (!ring.length) break
+    // The whole ring is worked out before any of it counts as known, so the fill doesn't lean one way.
+    for (let r = 0; r < ring.length; r += 3) for (let k = 0; k < 4; k++) out[ring[r] * 4 + k] = colourAt(ring[r + 1], ring[r + 2], k)
+    for (let r = 0; r < ring.length; r += 3) done[ring[r]] = 1
+    frontier = []
+    for (let r = 0; r < ring.length; r += 3) {
+      const x = ring[r] % rw
+      const y = Math.floor(ring[r] / rw)
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) enqueue(x + dx, y + dy)
+    }
+  }
+  return out
+}
+
+// ---- Fill and the magic wand -------------------------------------------------------
+//
+// One region finder for both: the Fill tool fills what one click finds, and the
+// wand shows what its clicks find until it's filled or cleared. Both are then
+// the same op, so a replay finds the same region from the same pixels.
+
+/** How far apart two pixels are: the most any channel differs, with every nearly transparent pixel alike whatever its hidden colour. */
+function near(s: Uint8ClampedArray, i: number, r: number, g: number, b: number, a: number, tolerance: number) {
+  const pa = s[i + 3]
+  if (pa < 8 && a < 8) return true
+  return Math.abs(s[i] - r) <= tolerance && Math.abs(s[i + 1] - g) <= tolerance && Math.abs(s[i + 2] - b) <= tolerance && Math.abs(pa - a) <= tolerance
+}
+
+/**
+ * The pixels each seed takes, joined: 1 where taken, 0 elsewhere. A seed is a
+ * point in fractions of the image; it takes the pixels within `tolerance` of
+ * its own colour, only those joined to it edge to edge when `contiguous`.
+ */
+export function regionOf(img: Img, seeds: number[], tolerance: number, contiguous: boolean): Uint8Array {
+  const { width: w, height: h, rgba: s } = img
+  const out = new Uint8Array(w * h)
+  const stack = new Int32Array(w * h)
+  let seen: Uint8Array | null = null
+  for (let k = 0; k + 1 < seeds.length; k += 2) {
+    const sx = clamp(Math.floor(seeds[k] * w), 0, w - 1)
+    const sy = clamp(Math.floor(seeds[k + 1] * h), 0, h - 1)
+    const at = sy * w + sx
+    const o = at * 4
+    const [r, g, b, a] = [s[o], s[o + 1], s[o + 2], s[o + 3]]
+    if (!contiguous) {
+      for (let i = 0; i < w * h; i++) if (!out[i] && near(s, i * 4, r, g, b, a, tolerance)) out[i] = 1
+      continue
+    }
+    if (out[at]) continue
+    // A flood from the seed, a pixel at a time; `seen` marks pixels already queued, so each is looked at once a seed.
+    if (seen) seen.fill(0)
+    else seen = new Uint8Array(w * h)
+    let n = 0
+    stack[n++] = at
+    seen[at] = 1
+    while (n) {
+      const i = stack[--n]
+      if (!near(s, i * 4, r, g, b, a, tolerance)) continue
+      out[i] = 1
+      const x = i % w
+      if (x > 0 && !seen[i - 1]) (seen[i - 1] = 1), (stack[n++] = i - 1)
+      if (x < w - 1 && !seen[i + 1]) (seen[i + 1] = 1), (stack[n++] = i + 1)
+      if (i >= w && !seen[i - w]) (seen[i - w] = 1), (stack[n++] = i - w)
+      if (i < w * (h - 1) && !seen[i + w]) (seen[i + w] = 1), (stack[n++] = i + w)
+    }
+  }
+  return out
+}
+
+/** The colour a fill lays down: its own, or the background of the image it fills. */
+export function fillColour(img: Img, op: Pick<Fill, 'color'>): [number, number, number, number] {
+  if (!op.color) return backgroundOf(img)
+  const n = parseInt(op.color.slice(1), 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 255]
+}
+
+/** Replay a fill. With `inPlace`, it fills `img` itself (the replay owns it). */
+function fill(img: Img, op: Fill, inPlace: boolean): Img {
+  const region = regionOf(img, op.seeds, op.tolerance, op.contiguous)
+  const [r, g, b, a] = fillColour(img, op)
+  const out = inPlace ? img : { rgba: img.rgba.slice(), width: img.width, height: img.height }
+  const d = out.rgba
+  for (let i = 0; i < region.length; i++)
+    if (region[i]) {
+      const o = i * 4
+      d[o] = r
+      d[o + 1] = g
+      d[o + 2] = b
+      d[o + 3] = a
+    }
+  return out
+}
+
+// ---- Mask strokes (#204) ---------------------------------------------------------------
+//
+// Keep and Remove strokes are drawn on the image as it is at their step, but
+// laid over background removal's mask, which is made from the image at the end
+// of the list. So each stroke is carried through the crops, turns and flips
+// after it, point by point, into fractions of the final image.
+
+/** Where the point (x, y), in pixels of a `w` × `h` image, lands after `op`, and the image's new size. */
+function movePoint(op: CleanupOp, w: number, h: number, x: number, y: number): { x: number; y: number; w: number; h: number } {
+  if (op.kind === 'crop') {
+    const b = cropBox(w, h, op)
+    return { x: x - b.x, y: y - b.y, w: b.w, h: b.h }
+  }
+  if (op.kind === 'flip') return op.axis === 'horizontal' ? { x: w - x, y, w, h } : { x, y: h - y, w, h }
+  if (op.kind !== 'rotate') return { x, y, w, h }
+  const d = normDegrees(op.degrees)
+  const size = rotatedSize(w, h, d)
+  if (isQuarter(d)) {
+    const turns = ((Math.round(d / 90) % 4) + 4) % 4
+    const [nx, ny] = turns === 0 ? [x, y] : turns === 1 ? [h - y, x] : turns === 2 ? [w - x, h - y] : [y, w - x]
+    return { x: nx, y: ny, ...size }
+  }
+  // The replay samples each new pixel at its inverse turn; this is the forward one.
+  const t = (d * Math.PI) / 180
+  const dx = x - w / 2
+  const dy = y - h / 2
+  return { x: Math.cos(t) * dx - Math.sin(t) * dy + size.w / 2, y: Math.sin(t) * dx + Math.cos(t) * dy + size.h / 2, ...size }
+}
+
+/**
+ * The list's mask strokes, carried into fractions of the image the list ends
+ * with (`width` × `height` is the original's size: only proportions matter).
+ * Brush sizes follow, as fractions of the final image's long edge.
+ */
+export function maskStrokes(ops: CleanupOp[], width: number, height: number): MaskStroke[] {
+  const out: MaskStroke[] = []
+  let w = width
+  let h = height
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i]
+    if (op.kind === 'mask') {
+      const pts = op.points.slice()
+      let cw = w
+      let ch = h
+      for (let k = 0; k < pts.length; k += 3) {
+        let p = { x: pts[k] * w, y: pts[k + 1] * h, w, h }
+        for (let j = i + 1; j < ops.length; j++) p = movePoint(ops[j], p.w, p.h, p.x, p.y)
+        pts[k] = p.x / p.w
+        pts[k + 1] = p.y / p.h
+        cw = p.w
+        ch = p.h
+      }
+      out.push({ ...op, size: (op.size * Math.max(w, h)) / Math.max(cw, ch), points: pts })
+      continue
+    }
+    if (op.kind === 'crop' || op.kind === 'rotate' || op.kind === 'flip') ({ w, h } = movePoint(op, w, h, 0, 0))
+  }
+  return out
+}
+
+/** Lay mask strokes over `rgba`'s alpha, in place: Remove takes it away, Keep brings it back to opaque. */
+export function applyMaskStrokes(rgba: Uint8ClampedArray, width: number, height: number, strokes: MaskStroke[]) {
+  const img = { width, height }
+  for (const op of strokes) {
+    let box: Rect | null = null
+    const dabs = []
+    for (let i = 0; i < op.points.length; i += 3) {
+      const d = dabAt(img, op, op.points[i], op.points[i + 1], op.points[i + 2])
+      dabs.push(d)
+      box = union(box, { x0: Math.floor(d.x - d.r), y0: Math.floor(d.y - d.r), x1: Math.ceil(d.x + d.r), y1: Math.ceil(d.y + d.r) })
+    }
+    const clip = box && { x0: Math.max(0, box.x0), y0: Math.max(0, box.y0), x1: Math.min(width, box.x1), y1: Math.min(height, box.y1) }
+    if (!clip || clip.x0 >= clip.x1 || clip.y0 >= clip.y1) continue
+    const mask = maskOver(clip)
+    let last: Dab | null = null
+    for (const d of dabs) {
+      stampSegment(mask, last, d, op.hardness)
+      last = d
+    }
+    for (let y = clip.y0; y < clip.y1; y++)
+      for (let x = clip.x0; x < clip.x1; x++) {
+        const m = mask.data[(y - mask.y) * mask.w + x - mask.x]
+        if (!m) continue
+        const o = (y * width + x) * 4 + 3
+        const c = m / 255
+        rgba[o] = op.tool === 'remove' ? rgba[o] * (1 - c) : rgba[o] + (255 - rgba[o]) * c
+      }
+  }
 }

@@ -35,6 +35,8 @@ type Props = {
   onSimplify: (tolerance: number) => void
   /** Rotate the selection about its centre, clockwise, in degrees. */
   onRotate: (degrees: number) => void
+  /** Open Clean up zoomed on the selection, to fix the pixels it was traced from (#208); absent for an SVG opened to edit. */
+  onFixInImage?: () => void
   axis: Axis
   width: number
   height: number
@@ -75,6 +77,14 @@ export function EditPanel(p: Props) {
               <ArrangeFields shapes={p.selection.shapes} grouped={p.grouped} onGroup={p.onGroup} onUngroup={p.onUngroup} onArrange={p.onArrange} />
               <CombineFields key={`combine-${p.selection.key}`} shapes={p.selection.shapes} onCombine={p.onCombine} />
               <SimplifyFields key={`simplify-${p.selection.key}`} now={p.selectionNodes} preview={p.simplifyPreview} onSimplify={p.onSimplify} />
+              {p.onFixInImage && (
+                <div className="space-y-1">
+                  <button className="btn w-full" onClick={p.onFixInImage} title="Open Clean up zoomed on this, to fix the pixels it was traced from (F)">
+                    Fix in image
+                  </button>
+                  <p className="field-hint">A ragged edge or a gap is often quicker to fix in the pixels. Leaving Clean up traces again.</p>
+                </div>
+              )}
               <button className="btn w-full" onClick={p.onDeleteSelection}>
                 {p.selection.shapes === 1 ? 'Delete shape' : `Delete ${p.selection.shapes} shapes`}
               </button>
