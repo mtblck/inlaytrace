@@ -16,6 +16,10 @@ import { parsePath, serializePath, type PathNode, type Pt, type Subpath } from '
 
 const key = (p: Pt) => `${Math.round(p.x * 1000)},${Math.round(p.y * 1000)}`
 const same = (a: Pt | null, b: Pt | null) => (!a || !b ? a === b : a.x === b.x && a.y === b.y)
+const segCount = (s: Subpath) => (s.closed ? s.nodes.length : s.nodes.length - 1)
+const ends = (s: Subpath, i: number): [PathNode, PathNode] => [s.nodes[i], s.nodes[(i + 1) % s.nodes.length]]
+/** A segment as it's written: its two ends and two handles (a missing handle is its node). */
+const segKey = (a: PathNode, b: PathNode) => `${key(a)}|${key(a.out ?? a)}|${key(b.in ?? b)}|${key(b)}`
 
 /** Every point of `before` that moved in `after`, old place → new; null when the outline changed shape (nodes added or taken away). */
 export function movedPoints(before: Subpath[], after: Subpath[]): Map<string, Pt> | null {
@@ -47,29 +51,67 @@ const parse = (d: string) => {
   return subs
 }
 
+/** A segment as it now runs: its ends and the handles between them (null where there's none). */
+type Seg = { a: Pt; ao: Pt | null; bi: Pt | null; b: Pt }
+
+/**
+ * Every segment of `before` whose handles changed in `after`, under the key a
+ * neighbour's copy (running back the other way) has. This catches a handle
+ * added or taken away (Smooth, Sharpen), which `movedPoints` can't: a missing
+ * handle has no point to move.
+ */
+export function changedSegments(before: Subpath[], after: Subpath[]): Map<string, Seg> {
+  const out = new Map<string, Seg>()
+  for (let s = 0; s < before.length; s++) {
+    const b = before[s]
+    const a = after[s]
+    for (let i = 0; i < segCount(b); i++) {
+      const [p, q] = ends(b, i)
+      const [p2, q2] = ends(a, i)
+      if (same(p.out, p2.out) && same(q.in, q2.in)) continue
+      out.set(`${key(q)}|${key(q.in ?? q)}|${key(p.out ?? p)}|${key(p)}`, { a: p2, ao: p2.out, bi: q2.in, b: q2 })
+    }
+  }
+  return out
+}
+
 /**
  * `doc` with every other shape's copy of a point that moved in shape `id`
- * (from `before` to `after`) moved with it. Lines (strokes) and `frozen`
- * shapes (locked ones) stay as they are.
+ * (from `before` to `after`) moved with it, and its copy of a segment whose
+ * handles changed given the same handles, running the other way. Lines
+ * (strokes) and `frozen` shapes (locked ones) stay as they are.
  */
 export function followShared(doc: Doc, id: string, before: Subpath[], after: Subpath[], frozen: ReadonlySet<string> = new Set()): Doc {
   const moved = movedPoints(before, after)
-  if (!moved?.size) return doc
+  if (!moved) return doc
+  const segs = changedSegments(before, after)
+  if (!moved.size && !segs.size) return doc
   const to = (p: Pt | null): Pt | null => (p ? (moved.get(key(p)) ?? p) : null)
+  const copy = (p: Pt | null): Pt | null => (p ? { x: p.x, y: p.y } : null)
   let changed = false
   const paths = doc.paths.map((p) => {
     if (p.id === id || p.stroke || frozen.has(p.id)) return p
     const subs = parse(p.d)
     let hit = false
-    const next = subs.map((s) => ({
-      closed: s.closed,
-      nodes: s.nodes.map((n): PathNode => {
+    const next = subs.map((s) => {
+      const nodes = s.nodes.map((n): PathNode => {
         const m = { at: to(n)!, in: to(n.in), out: to(n.out) }
         if (m.at === n && m.in === n.in && m.out === n.out) return n
         hit = true
         return { x: m.at.x, y: m.at.y, in: m.in, out: m.out }
-      }),
-    }))
+      })
+      // This copy of a changed segment runs from its `b` back to its `a`.
+      if (segs.size)
+        for (let i = 0; i < segCount(s); i++) {
+          const g = segs.get(segKey(...ends(s, i)))
+          if (!g) continue
+          const j = (i + 1) % nodes.length
+          nodes[i] = { ...nodes[i], out: copy(g.bi) }
+          nodes[j] = { ...nodes[j], in: copy(g.ao) }
+          hit = true
+        }
+      return { closed: s.closed, nodes }
+    })
     if (!hit) return p
     changed = true
     return { ...p, d: serializePath(next) }
@@ -85,10 +127,6 @@ export function followShared(doc: Doc, id: string, before: Subpath[], after: Sub
 // one running each way, so neighbours still meet exactly. The run's end nodes
 // stay put, since that's where three shapes meet.
 
-const segCount = (s: Subpath) => (s.closed ? s.nodes.length : s.nodes.length - 1)
-const ends = (s: Subpath, i: number): [PathNode, PathNode] => [s.nodes[i], s.nodes[(i + 1) % s.nodes.length]]
-/** A segment as it's written: its two ends and two handles (a missing handle is its node). */
-const segKey = (a: PathNode, b: PathNode) => `${key(a)}|${key(a.out ?? a)}|${key(b.in ?? b)}|${key(b)}`
 const reverseNodes = (nodes: PathNode[]): PathNode[] => [...nodes].reverse().map((n) => ({ x: n.x, y: n.y, in: n.out, out: n.in }))
 const loopArea = (nodes: Pt[]) => nodes.reduce((a, p, i) => a + p.x * nodes[(i + 1) % nodes.length].y - nodes[(i + 1) % nodes.length].x * p.y, 0)
 

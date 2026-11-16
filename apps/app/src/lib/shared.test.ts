@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Doc } from './doc'
-import { moveHandle, moveNode, parsePath } from './pathdata'
+import { sharpenNode, smoothNode } from './nodeops'
+import { moveHandle, moveNode, parsePath, serializePath } from './pathdata'
 import { followShared, movedPoints, simplifyShared } from './shared'
 
 // Two squares side by side sharing the edge x = 10 (each running its own way round), a third apart, and a line.
@@ -39,6 +40,26 @@ describe('shared edges', () => {
     }
     const out = edit(curved, 'a', (s) => moveHandle(s, { sub: 0, index: 1 }, 'out', { x: 15, y: 3 }, false))
     expect(d(out, 'b')).toBe('M10 0L20 0L20 10L10 10C12 7 15 3 10 0Z')
+  })
+
+  it('Smooth and Sharpen on a shared corner give the neighbour the same handles, and take them away again', () => {
+    // The edited shape's own change, and its neighbours following it.
+    const both = (x: Doc, f: (s: ReturnType<typeof parsePath>) => ReturnType<typeof parsePath>) => {
+      const after = f(parsePath(d(x, 'a')))
+      const out = edit(x, 'a', () => after)
+      return { ...out, paths: out.paths.map((p) => (p.id === 'a' ? { ...p, d: serializePath(after) } : p)) }
+    }
+    const smooth = both(doc, (s) => smoothNode(s, { sub: 0, index: 1 }))
+    const a = parsePath(d(smooth, 'a'))[0].nodes
+    const b = parsePath(d(smooth, 'b'))[0].nodes
+    // a's (10, 0) → (10, 10) is b's (10, 10) → (10, 0), handles the other way round.
+    expect(a[1].out).not.toBeNull()
+    expect(b[0].in).toEqual(a[1].out)
+    expect(b[3].out).toEqual(a[2].in)
+    // b's own top edge, which a doesn't share, keeps its straight line.
+    expect(b[0].out).toBeNull()
+    const sharp = both(smooth, (s) => sharpenNode(s, { sub: 0, index: 1 }))
+    expect(d(sharp, 'b')).toBe(d(doc, 'b'))
   })
 
   it('leaves locked shapes and outlines that changed shape alone', () => {
@@ -80,6 +101,37 @@ describe('simplify by shared edge', () => {
     expect(shared).toBe(nodes(out, 'l') - 3)
     expect(sharedSegs(out, 'r', 'l')).toBe(shared)
     expect(d(out, 'far')).toBe(d(two, 'far'))
+  })
+
+  it('re-fits an island once and writes it into the hole round it, running the other way', () => {
+    // A 10 px square island with a node every pixel, in a container with a matching hole.
+    const ring = [
+      ...Array.from({ length: 10 }, (_, i) => `${i} 0`),
+      ...Array.from({ length: 10 }, (_, i) => `10 ${i}`),
+      ...Array.from({ length: 10 }, (_, i) => `${10 - i} 10`),
+      ...Array.from({ length: 10 }, (_, i) => `0 ${10 - i}`),
+    ]
+    const loop = (pts: string[]) => `M${pts[0]}${pts.slice(1).map((q) => `L${q}`).join('')}Z`
+    const isl: Doc = {
+      width: 40,
+      height: 40,
+      paths: [
+        { id: 'box', fill: '#f00', d: `M-10 -10L20 -10L20 20L-10 20Z${loop([...ring].reverse())}` },
+        { id: 'isl', fill: '#0f0', d: loop(ring) },
+      ],
+    }
+    const out = simplifyShared(isl, ['isl'], 1)
+    const island = parsePath(d(out, 'isl'))[0].nodes
+    const hole = parsePath(d(out, 'box'))[1].nodes
+    expect(island.length).toBeLessThan(40)
+    expect(hole.length).toBe(island.length)
+    const area = (n: { x: number; y: number }[]) => n.reduce((s, p, i) => s + p.x * n[(i + 1) % n.length].y - n[(i + 1) % n.length].x * p.y, 0)
+    expect(Math.sign(area(hole))).toBe(-Math.sign(area(island)))
+    // Every segment of the island is a segment of the hole, running back.
+    const holeOnly: Doc = { ...out, paths: out.paths.map((p) => (p.id === 'box' ? { ...p, d: p.d.slice(p.d.indexOf('Z') + 1) } : p)) }
+    expect(sharedSegs(holeOnly, 'isl', 'box')).toBe(island.length)
+    // The container's outside is untouched.
+    expect(parsePath(d(out, 'box'))[0].nodes.length).toBe(4)
   })
 
   it('leaves a locked neighbour’s edge, and the selected shape along it, as they were', () => {
