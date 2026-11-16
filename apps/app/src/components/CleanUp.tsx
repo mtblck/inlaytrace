@@ -55,6 +55,8 @@ const MARK: [number, number, number, number] = [194, 65, 12, 110]
 const KEEP_MARK: [number, number, number, number] = [22, 163, 74, 110]
 /** Background removal's result, whose alpha is the mask Keep and Remove paint over. */
 export type BackgroundMask = { rgba: Uint8ClampedArray; width: number; height: number }
+/** Fix in image (#208): shapes picked in Edit, to zoom to and highlight. A new object each time, so picking the same shapes again zooms again. */
+export type CleanFocus = { x: number; y: number; width: number; height: number; ids: string[] }
 /** Where background removal stands, for Keep and Remove's panel. */
 export type MaskState = 'ready' | 'working' | 'stale' | 'off'
 /** The tools that lay down the brush colour, and so pick it with Alt-click. */
@@ -121,6 +123,8 @@ export function CleanCanvas(p: {
   onWand: (seeds: number[] | null) => void
   /** Background removal's result, while it was made from the image on screen; shown as a tint for Keep and Remove. */
   mask: BackgroundMask | null
+  /** Fix in image (#208): the shapes to zoom to and highlight, their bounds in fractions of the image. */
+  focus: CleanFocus | null
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -241,6 +245,17 @@ export function CleanCanvas(p: {
   zoomRef.current = zoomAt
   // A new size (a crop or a turn) starts from the whole image again.
   useEffect(() => setView(FIT), [img.width, img.height])
+  // Fix in image: zoom so the shapes fill most of the pane, centred, once the pane's size is known.
+  const focused = useRef<CleanFocus | null>(null)
+  useEffect(() => {
+    const f = p.focus
+    if (!f || focused.current === f || !w || !h) return
+    focused.current = f
+    const k = clamp(0.7 * Math.min(1 / Math.max(f.width, 1e-3), 1 / Math.max(f.height, 1e-3)), 1, maxK)
+    setView(fitView({ k, tx: -(f.x + f.width / 2 - 0.5) * w * k, ty: -(f.y + f.height / 2 - 0.5) * h * k }))
+    // fitView reads geo, a ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.focus, w, h, maxK])
 
   const hovering = useRef<Pt | null>(null)
   const space = useRef(false)
@@ -577,9 +592,10 @@ export function CleanCanvas(p: {
         )}
         {showOutline && (
           <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${p.outline!.width} ${p.outline!.height}`} preserveAspectRatio="none" aria-hidden="true">
-            {p.outline!.paths.map((s) => (
-              <path key={s.id} d={s.d} fill="none" stroke="var(--color-accent, #c2410c)" strokeOpacity={0.45} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-            ))}
+            {p.outline!.paths.map((s) => {
+              const hot = !!p.focus?.ids.includes(s.id)
+              return <path key={s.id} d={s.d} fill="none" stroke="var(--color-accent, #c2410c)" strokeOpacity={hot ? 1 : 0.45} strokeWidth={hot ? 2.5 : 1} vectorEffect="non-scaling-stroke" data-focus={hot ? '' : undefined} />
+            })}
           </svg>
         )}
         <svg

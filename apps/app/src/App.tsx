@@ -46,7 +46,7 @@ import { booleanOp, type BooleanOp } from './lib/boolean'
 import { BucketFields, ShapesList, StyleFields, type ShapeFlag, type StylePatch } from './components/Shapes'
 import { bucketFill } from './lib/bucket'
 import { addOp, BRUSH_DEFAULT, BRUSH_MAX, BRUSH_MIN, FILL_DEFAULT, MAX_OPS, pixelOps, type BrushSettings, type CleanupOp, type FillSettings } from './lib/cleanup'
-import type { CleanTool, CropDraft } from './components/CleanUp'
+import type { CleanFocus, CleanTool, CropDraft } from './components/CleanUp'
 /** Clean up's tool keys. */
 const CLEAN_KEYS = { c: 'crop', l: 'straighten', b: 'brush', e: 'eraser', d: 'despeckle', j: 'heal', g: 'fill', w: 'wand', k: 'keep', r: 'remove' } as const satisfies Record<string, CleanTool>
 import { loadPaper } from './lib/paper'
@@ -456,6 +456,8 @@ export default function App() {
   const [fillSettings, setFillSettings] = useState<FillSettings>(FILL_DEFAULT)
   /** The magic wand's clicks (x, y, … in fractions of the cleaned image), or null with nothing selected. */
   const [wand, setWand] = useState<number[] | null>(null)
+  /** Fix in image (#208): the shapes Clean up opened on, zoomed to and highlighted. */
+  const [cleanFocus, setCleanFocus] = useState<CleanFocus | null>(null)
   const chooseCleanTool = (t: CleanTool) => {
     setCleanTool(t)
     setCropDraft(null)
@@ -1057,9 +1059,20 @@ export default function App() {
       editPath(editing.id, (subs) => moveNodes(subs, refs, dx, dy), key)
     } else if (tool === 'select') transformSelection(translate(dx, dy), key)
   }
+  /** Fix in image (#208): Clean up, zoomed on the selected shapes with their outline picked out; leaving re-traces as usual. */
+  const fixInImage = () => {
+    if (!doc || !selectionBox || !cleanable) return
+    const pad = 0.02
+    const x = Math.max(0, selectionBox.x / doc.width - pad)
+    const y = Math.max(0, selectionBox.y / doc.height - pad)
+    const ids = selectedIds.slice()
+    chooseMode('clean')
+    setCleanFocus({ x, y, width: Math.min(1, (selectionBox.x + selectionBox.w) / doc.width + pad) - x, height: Math.min(1, (selectionBox.y + selectionBox.h) / doc.height + pad) - y, ids })
+  }
   const chooseMode = (m: WorkMode) => {
     if (m === workMode) return
     setWorkMode(m)
+    setCleanFocus(null)
     // Clean up holds the trace's list while you work; leaving lets it follow the edited one, which re-traces.
     setHeldCleanup(m === 'clean' ? cleanup : null)
     setCropDraft(null)
@@ -1183,6 +1196,9 @@ export default function App() {
           setCleanPick(false)
           setWand(null)
         }
+      } else if (key === 'f' && workMode === 'edit' && selectedIds.length && cleanable && !e.shiftKey) {
+        e.preventDefault()
+        fixInImage()
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length && tool !== 'mirror') {
         e.preventDefault()
         deleteSelection()
@@ -1545,6 +1561,7 @@ export default function App() {
                         wand={wand}
                         onWand={setWand}
                         mask={cleanMask}
+                        focus={cleanFocus}
                       />
                     </Suspense>
                   )}
@@ -1758,6 +1775,7 @@ export default function App() {
                 simplifyPreview={simplifyPreview}
                 onSimplify={simplifySelection}
                 onRotate={rotateSelection}
+                onFixInImage={cleanable ? fixInImage : undefined}
                 axis={axis}
                 width={doc.width}
                 height={doc.height}

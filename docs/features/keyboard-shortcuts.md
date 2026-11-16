@@ -40,6 +40,7 @@ mode switches to Edit mode.
 | V | Select: pick, move and scale shapes |
 | A | Nodes: edit one shape's nodes and curves |
 | M | Mirror |
+| F | Fix in image: open Clean up zoomed on the selected shapes |
 | K | Fill: fill a shape, or the area between shapes, with a colour |
 | Tab, arrows, Enter | Fill or pick without a pointer: with Fill or the eyedropper on, Tab to the image, move the crosshair (⇧ for bigger steps), Enter fills or picks under it |
 | Double-click a shape | Edit its nodes (from Select) |

@@ -16,6 +16,15 @@ Clean up (for Trace or Edit) traces the cleaned image once. If the drawing has
 shape edits, it asks first, because the new trace replaces them; Undo brings
 them back.
 
+## Fix in image (F)
+
+Some problems are easiest to spot in the trace: a ragged edge, a gap, a shape
+that came out the wrong colour. Select the shapes in Edit and press **Fix in
+image** in the panel (or F): Clean up opens zoomed on them, with their outline
+picked out over the image, so you can fix the pixels they came from. Leaving
+Clean up traces again, as it always does, and asks first if the drawing has
+shape edits.
+
 ## Crop (C)
 
 Drag a box on the image, then drag its edges or corners (or type X, Y, W and
