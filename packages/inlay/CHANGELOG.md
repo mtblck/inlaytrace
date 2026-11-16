@@ -1,5 +1,14 @@
 # inlaytrace
 
+## 0.4.0
+
+### Minor Changes
+
+- A command line: `npx inlaytrace logo.png -o logo.svg --preset logo`. PNGs are read with Node's own zlib, so the package still has no dependencies; JPEG, WebP, GIF and TIFF use sharp when it's installed beside it. `--help` lists the flags, which follow the trace options.
+- New `grayscale` option for the colour presets (not `pixel`): trace in greys only, `colors` of them, each pixel taken as the grey of its own OKLab lightness.
+- Presets in the package, and a simpler call: `trace(image, { preset: 'logo' })`. `image` is anything shaped like ImageData (`{ data, width, height }`). The seven presets the app uses (`logo`, `illustration`, `outline`, `lineart`, `centerline`, `poster`, `pixel`) each pick their own palette and carry their own defaults, and any option overrides them. `palette` traces in your own colours, `layers` replaces `stacked`, `invert` traces light ink, and `presets` lists every default. Centerline paths are now `{ d, fill, stroke }` like Outline art's lines (`fill` the colour, `stroke` the width). `trace(rgba, width, height, options)`, `traceCenterline` and `centerlineToSvg` still work but are deprecated, and go in 1.0.
+- The package entry no longer exports `mergeLabels`, `otsu`, `staircase` or `colorAt`. They were internals, exported for the app's tests and never documented. Everything left is in the API reference and stays through 1.0.
+
 ## 0.3.1
 
 ### Patch Changes
