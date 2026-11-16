@@ -28,7 +28,7 @@ export type DrawProps = {
 }
 
 /** The Eraser's and the Knife's settings (#211): the Eraser's width, and why the last drag changed nothing. */
-export type CutProps = { eraserWidth: number; onEraserWidth: (w: number) => void; error: string | null; selected: number }
+export type CutProps = { eraserWidth: number; onEraserWidth: (w: number) => void; error: string | null; selected: number; busy: boolean }
 
 type Props = {
   /** The Fill tool's colour and messages (components/Shapes.tsx), shown while it's the tool. */
@@ -53,6 +53,9 @@ type Props = {
   onBoxDone: () => void
   /** Smooth, sharpen or round every selected node (Nodes tool). */
   onNodeOp: (op: 'smooth' | 'sharpen' | 'round', radius?: number) => void
+  /** Shared edges (#212): whether a node moved on an edge two shapes share moves in both. */
+  shareEdges?: boolean
+  onShareEdges?: (on: boolean) => void
   /** Nodes in the selected shapes now, and after simplifying at a tolerance; null when too many shapes to count instantly. */
   selectionNodes: number | null
   simplifyPreview: (tolerance: number) => number | null
@@ -100,7 +103,7 @@ export function EditPanel(p: Props) {
               <RotateFields onRotate={p.onRotate} />
               <ArrangeFields shapes={p.selection.shapes} grouped={p.grouped} onGroup={p.onGroup} onUngroup={p.onUngroup} onArrange={p.onArrange} />
               <CombineFields key={`combine-${p.selection.key}`} shapes={p.selection.shapes} onCombine={p.onCombine} />
-              <SimplifyFields key={`simplify-${p.selection.key}`} now={p.selectionNodes} preview={p.simplifyPreview} onSimplify={p.onSimplify} />
+              <SimplifyFields key={`simplify-${p.selection.key}`} now={p.selectionNodes} preview={p.simplifyPreview} onSimplify={p.onSimplify} shared={p.shareEdges !== false} />
               {p.onFixInImage && (
                 <div className="space-y-1">
                   <button className="btn w-full" onClick={p.onFixInImage} title="Open Clean up zoomed on this, to fix the pixels it was traced from (F)">
@@ -128,6 +131,12 @@ export function EditPanel(p: Props) {
                 select several; double-click the outline to add one. {p.selection.nodes} nodes{p.selection.selectedNodes > 1 ? `, ${p.selection.selectedNodes} selected` : ''}.
               </p>
               {p.selection.selectedNodes > 0 && <NodeActions count={p.selection.selectedNodes} onOp={p.onNodeOp} />}
+              {p.onShareEdges && (
+                <label className="flex items-center gap-1.5 text-[12.5px] text-ink-muted" title="Shapes traced side by side share their edge: move it in both, so no gap opens">
+                  <input type="checkbox" className="accent-[var(--c-accent)]" checked={!!p.shareEdges} onChange={(e) => p.onShareEdges!(e.target.checked)} data-share-edges="" />
+                  Move shared edges with neighbours
+                </label>
+              )}
               <button className="btn w-full" onClick={p.onDeleteSelection}>
                 {p.selection.selectedNodes === 0 ? 'Delete shape' : p.selection.selectedNodes === 1 ? 'Delete node' : `Delete ${p.selection.selectedNodes} nodes`}
               </button>
@@ -222,6 +231,9 @@ function CutFields(p: CutProps & { tool: 'erase' | 'knife' }) {
           : `Drag a line right through ${on} to cut it into pieces that keep its colour. ${SHIFT} keeps the line to 45°. A cut that stops inside a shape leaves it whole.`}
       </p>
       {p.tool === 'erase' && <AxisNumber id="eraser-width" label="Eraser width" value={p.eraserWidth} min={1} max={500} step={1} onChange={p.onEraserWidth} />}
+      <p className="text-[12.5px] text-ink-muted" role="status">
+        {p.busy ? (p.tool === 'erase' ? 'Erasing…' : 'Cutting…') : ''}
+      </p>
       {p.error && (
         <p role="alert" className="text-[12.5px] text-accent" data-cut-error="">
           {p.error}
@@ -250,13 +262,14 @@ function DrawFields(p: DrawProps & { tool: 'pen' | 'shape' }) {
           ? 'Click to put down corners, drag to pull out a curve. Click the first node to close the shape (filled), or press Enter or Esc to end it as a line. Backspace takes back a node.'
           : `Drag to draw. ${SHIFT_HINT} The new shape goes just above the selected one.`}
       </p>
-      {p.tool === 'pen' && p.penNodes > 0 && (
-        // For a Pen without a keyboard: what Enter (or Esc) and Backspace-all do.
+      {p.tool === 'pen' && (
+        // For a Pen without a keyboard: what Enter (or Esc) and Backspace-all do. Always there, so focus
+        // stays put when a press ends the path and the buttons turn off.
         <div className="grid grid-cols-2 gap-2">
           <button className="btn" onClick={() => p.onPenCommand('finish')} disabled={p.penNodes < 2} title="End the path here, as a line (Enter)">
             Finish line
           </button>
-          <button className="btn" onClick={() => p.onPenCommand('cancel')} title="Drop the path you’re drawing">
+          <button className="btn" onClick={() => p.onPenCommand('cancel')} disabled={p.penNodes < 1} title="Drop the path you’re drawing">
             Cancel
           </button>
         </div>
@@ -439,7 +452,7 @@ function RotateFields({ onRotate }: { onRotate: (deg: number) => void }) {
 }
 
 /** Re-fit the selection with fewer nodes. Shows the count before and after, when that's quick to work out. */
-function SimplifyFields({ now, preview, onSimplify }: { now: number | null; preview: (t: number) => number | null; onSimplify: (t: number) => void }) {
+function SimplifyFields({ now, preview, onSimplify, shared }: { now: number | null; preview: (t: number) => number | null; onSimplify: (t: number) => void; shared: boolean }) {
   const [tolerance, setTolerance] = useState(1)
   // Worked out once things settle, not on every render: during a drag the
   // selection changes on every pointer move.
@@ -461,7 +474,11 @@ function SimplifyFields({ now, preview, onSimplify }: { now: number | null; prev
       <button className="btn w-full" onClick={() => onSimplify(tolerance)} disabled={now !== null && after !== null && after >= now}>
         {now !== null && after !== null ? (after < now ? `Simplify: ${now} → ${after} nodes` : `Already as simple (${now} nodes)`) : 'Simplify'}
       </button>
-      <p className="field-hint">Neighbouring shapes no longer share the simplified edges exactly.</p>
+      <p className="field-hint">
+        {shared
+          ? 'An edge shared with a neighbouring shape is re-fitted once, in both, so they still meet exactly.'
+          : 'Neighbouring shapes no longer share the simplified edges exactly (Move shared edges is off).'}
+      </p>
     </div>
   )
 }

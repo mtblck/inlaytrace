@@ -1153,6 +1153,16 @@ if (process.env.FIXTURE) {
   check((await dp.locator(VECTOR).count()) === 6 && (await dp.locator(VECTOR).last().getAttribute('fill')) === 'none', `Finish line in the panel ends the path as a line (${await dp.locator(VECTOR).count()}, ${await dp.locator(VECTOR).last().getAttribute('fill')})`)
   await dp.keyboard.press(`${MOD}+z`)
 
+  // Closing on the first node with a drag shapes the closing curve (#245 review).
+  await dp.mouse.click(...at(0.1, 0.4))
+  await dp.mouse.click(...at(0.3, 0.4))
+  await dp.mouse.click(...at(0.2, 0.55))
+  await drag([0.1, 0.4], [0.1, 0.3])
+  await dp.waitForFunction(() => document.querySelectorAll('[data-pen-node]').length === 0, null, { timeout: 5000 }).catch(() => {})
+  const closedD = await dp.locator(VECTOR).last().getAttribute('d')
+  check((await dp.locator(VECTOR).count()) === 6 && /^M[^LC]*C/.test(closedD) && /Z$/.test(closedD), `a drag from the first node closes the path with a curve there (${closedD})`)
+  await dp.keyboard.press(`${MOD}+z`)
+
   // ---- Knife and Eraser (#211) ----
   await dp.keyboard.press('Escape')
   await dp.keyboard.press('c')
@@ -1176,6 +1186,41 @@ if (process.env.FIXTURE) {
   const back = await dp.locator('svg[aria-label="Traced SVG"] path[fill="#dd2255"]').first().getAttribute('d')
   check((back.match(/M/g) ?? []).length === 1, 'one Undo puts it back')
   await dp.close()
+}
+
+// ---- Shared edges (#212): a node moved on an edge two shapes share moves in both ----------
+{
+  const ep = await newPage({ width: 1440, height: 900 })
+  await ep.goto(url)
+  const file = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120"><path d="M20 20L100 20L100 100L20 100Z" fill="#cc3333"/><path d="M100 20L180 20L180 100L100 100Z" fill="#3333cc"/></svg>'
+  await ep.locator('input[type=file]').setInputFiles({ name: 'pair.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(file) })
+  await ep.locator('[data-svg-opened]').waitFor({ state: 'attached', timeout: 15_000 })
+  const sheet = await ep.locator('svg[aria-label="Traced SVG"]').boundingBox()
+  const at = (x, y) => [sheet.x + (sheet.width * x) / 200, sheet.y + (sheet.height * y) / 120]
+  const red = ep.locator('svg[aria-label="Traced SVG"] path[fill="#cc3333"]')
+  const blue = ep.locator('svg[aria-label="Traced SVG"] path[fill="#3333cc"]')
+  await ep.mouse.click(...at(60, 60))
+  await ep.keyboard.press('a')
+  check(await ep.locator('[data-share-edges]').isChecked(), 'Nodes moves shared edges with neighbours by default')
+  await ep.mouse.move(...at(100, 20))
+  await ep.mouse.down()
+  await ep.mouse.move(...at(105, 30), { steps: 3 })
+  await ep.mouse.move(...at(110, 40), { steps: 3 })
+  await ep.mouse.up()
+  const [rd, bd] = [await red.getAttribute('d'), await blue.getAttribute('d')]
+  const moved = rd.match(/L(1[01]\d(?:\.\d+)?) (\d+(?:\.\d+)?)/)
+  check(moved && bd.startsWith(`M${moved[1]} ${moved[2]}`), `dragging the shared corner moves both shapes’ copy, so no gap opens (${rd} / ${bd})`)
+  await ep.keyboard.press(`${MOD}+z`)
+  check((await blue.getAttribute('d')) === 'M100 20L180 20L180 100L100 100Z' && (await red.getAttribute('d')) === 'M20 20L100 20L100 100L20 100Z', 'one Undo puts both back')
+  // Untick it, and the same drag reshapes the red square only.
+  await ep.locator('[data-share-edges]').uncheck()
+  await ep.mouse.move(...at(100, 20))
+  await ep.mouse.down()
+  await ep.mouse.move(...at(105, 30), { steps: 3 })
+  await ep.mouse.move(...at(110, 40), { steps: 3 })
+  await ep.mouse.up()
+  check((await red.getAttribute('d')) !== 'M20 20L100 20L100 100L20 100Z' && (await blue.getAttribute('d')) === 'M100 20L180 20L180 100L100 100Z', 'with it off, only the edited shape moves')
+  await ep.close()
 }
 
 // ---- Shapes list, hide and lock, fill and stroke (#209), on a 2,500-shape drawing ----

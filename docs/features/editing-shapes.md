@@ -38,8 +38,10 @@ to Trace mode deselects and puts the tool back to Select.
   Quarter turns are exact, so four of them put every point back.
 - **Simplify** re-fits the selected shapes with fewer nodes, using the tracer's
   own fitter at the tolerance on the slider. The button says how many nodes
-  you'll have before you press it. Neighbouring shapes no longer share the
-  simplified edges exactly, so a hairline can show between them.
+  you'll have before you press it. It works edge by edge: an edge a shape
+  shares with a neighbour is re-fitted once and changes in both, so they still
+  meet exactly (see *Shared edges* below). The nodes where three shapes meet
+  stay put.
 - **Double-click** a shape to edit its nodes.
 
 The box is the exact bounds of the drawn outline, not of the curve handles
@@ -218,6 +220,18 @@ Click a shape to show its nodes and handles.
   never overlap), shaped like a circular arc for that turn. Smooth nodes and
   the open ends of a line are left alone.
 - **Arrow keys** nudge the selected nodes.
+
+### Shared edges
+
+Inlay traces each boundary between two colours once, so neighbouring shapes
+share the very same edge, and they tile with no gap. Editing keeps it that
+way: moving a node or bending a handle on a shared edge moves the neighbour's
+copy too, and a node where three shapes meet moves in all three. Smooth,
+Sharpen and the arrow keys follow the same rule. Locked shapes keep their edge.
+
+To reshape one side only (pulling a shape away from its neighbour on
+purpose), untick *Move shared edges with neighbours* in the Nodes panel. It
+also turns off edge-by-edge Simplify.
 
 A press only becomes a drag after 3 px of movement, so clicking a node selects
 it without nudging it. The node keeps its offset from the pointer instead of
