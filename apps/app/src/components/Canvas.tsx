@@ -411,6 +411,33 @@ export function Canvas(props: Props) {
     e.preventDefault()
   }
 
+  // ---- Keyboard aiming for the Fill tool and the eyedropper (#223) -------------------------
+  // With the click target focused, arrow keys move a crosshair over the image
+  // and Enter or Space fills (or picks) under it, so neither needs a pointer.
+  const aiming = props.picking || tool === 'fill'
+  const [cross, setCross] = useState<Pt | null>(null)
+  const [crossShown, setCrossShown] = useState(false)
+  useEffect(() => {
+    if (!aiming) setCross(null)
+  }, [aiming])
+  const onAimKey = (e: KeyboardEvent) => {
+    const at = cross ?? { x: width / 2, y: height / 2 }
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      e.stopPropagation()
+      if (!e.repeat) (props.picking ? props.onPick : props.onFill)(at)
+      return
+    }
+    // A step is a fixed distance on screen at every zoom: 8 px, or 40 with Shift.
+    const d = (e.shiftKey ? 40 : 8) * unit
+    const dx = e.key === 'ArrowLeft' ? -d : e.key === 'ArrowRight' ? d : 0
+    const dy = e.key === 'ArrowUp' ? -d : e.key === 'ArrowDown' ? d : 0
+    if (!dx && !dy) return
+    e.preventDefault()
+    e.stopPropagation()
+    setCross({ x: Math.min(width, Math.max(0, at.x + dx)), y: Math.min(height, Math.max(0, at.y + dy)) })
+  }
+
   const vectorBox = `0 0 ${width} ${height}`
 
   return (
@@ -647,14 +674,23 @@ export function Canvas(props: Props) {
             {tool === 'mirror' && props.axis && <AxisOverlay axis={props.axis} width={width} height={height} unit={unit} onGrab={(e) => startDrag(e, { kind: 'axis' })} />}
 
             {/* The eyedropper and the Fill tool: over everything, so the click picks or fills instead of selecting. */}
-            {(props.picking || tool === 'fill') && (
+            {aiming && (
               <rect
                 width={width}
                 height={height}
                 fill="transparent"
                 data-picker={props.picking ? '' : undefined}
                 data-fill-target={props.picking ? undefined : ''}
-                style={{ cursor: props.picking ? 'crosshair' : 'cell' }}
+                style={{ cursor: props.picking ? 'crosshair' : 'cell', outline: 'none' }}
+                tabIndex={0}
+                role="application"
+                aria-label={props.picking ? 'Pick a colour. Arrow keys move the crosshair, Enter picks the colour under it.' : 'Fill. Arrow keys move the crosshair, Enter fills under it.'}
+                onKeyDown={onAimKey}
+                onFocus={() => {
+                  setCrossShown(true)
+                  setCross((c) => c ?? { x: width / 2, y: height / 2 })
+                }}
+                onBlur={() => setCrossShown(false)}
                 onPointerDown={(e) => {
                   // Left button (or a touch or pen) only: a right-click is for the menu, a middle-drag pans.
                   if (e.button !== 0) return
@@ -665,6 +701,7 @@ export function Canvas(props: Props) {
                 }}
               />
             )}
+            {aiming && crossShown && cross && <Crosshair at={cross} unit={unit} />}
           </svg>
 
           {allNodes && allNodes.length > MAX_OVERLAY_NODES && (
@@ -698,6 +735,23 @@ export function Canvas(props: Props) {
         </div>
       </div>
     </div>
+  )
+}
+
+/** The keyboard crosshair (#223): a ring with four ticks, light over dark so it shows on any artwork. */
+function Crosshair({ at, unit }: { at: Pt; unit: number }) {
+  const r = 7 * unit
+  const t = 14 * unit
+  const ticks = `M${at.x - t} ${at.y}H${at.x - r}M${at.x + r} ${at.y}H${at.x + t}M${at.x} ${at.y - t}V${at.y - r}M${at.x} ${at.y + r}V${at.y + t}`
+  return (
+    <g pointerEvents="none" data-crosshair={`${Math.round(at.x)},${Math.round(at.y)}`}>
+      {(['rgb(22 32 28 / 0.7)', 'white'] as const).map((stroke, i) => (
+        <g key={stroke} fill="none" stroke={stroke} strokeWidth={i ? 1.5 : 3.5} vectorEffect="non-scaling-stroke">
+          <circle cx={at.x} cy={at.y} r={r} />
+          <path d={ticks} />
+        </g>
+      ))}
+    </g>
   )
 }
 

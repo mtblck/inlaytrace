@@ -126,6 +126,11 @@ it with *Combine*. Lines traced as strokes (Centerline) have no inside, so Fill 
 for those traces. Each fill is one undo step and detaches the drawing from the
 trace.
 
+Fill works from the keyboard too. With the tool on, Tab to the image: a
+crosshair appears in the middle. The arrow keys move it (8 screen pixels a
+step, 40 with Shift) and Enter or Space fills under it. The eyedropper works
+the same way while it's armed.
+
 ## Shapes: find, hide and lock
 
 The *Shapes* list in the Edit panel lists every shape, by colour (as the

@@ -1059,6 +1059,21 @@ if (process.env.FIXTURE) {
   check(/#33aa55|#3a5/i.test(svg), 'the fill exports')
   await fp.keyboard.press(`${MOD}+z`)
   check((await fp.locator(VECTOR).count()) === before, 'Undo takes the fill away')
+  // The same fill from the keyboard (#223): focus the image, steer the crosshair into the circle, Enter.
+  await fp.locator('[data-fill-target]').focus()
+  const startAt = await fp.locator('[data-crosshair]').getAttribute('data-crosshair').catch(() => null)
+  check(startAt !== null, `focusing the image shows a crosshair (${startAt})`)
+  for (let i = 0; i < 3; i++) {
+    await fp.keyboard.press('Shift+ArrowLeft')
+    await fp.keyboard.press('Shift+ArrowUp')
+  }
+  const aimed = await fp.locator('[data-crosshair]').getAttribute('data-crosshair')
+  const [ax, ay] = aimed.split(',').map(Number)
+  const [sx, sy] = startAt.split(',').map(Number)
+  check(ax < sx && ay < sy, `arrow keys move the crosshair (${startAt} → ${aimed})`)
+  await fp.keyboard.press('Enter')
+  await fp.waitForFunction((n) => document.querySelectorAll('svg[aria-label="Traced SVG"] path').length > n, before, { timeout: 15000 }).catch(() => {})
+  check((await fp.locator(VECTOR).count()) === before + 1 && (await fp.locator(VECTOR).first().getAttribute('fill')) === '#33aa55', 'Enter fills under the crosshair')
   await fp.close()
 }
 
