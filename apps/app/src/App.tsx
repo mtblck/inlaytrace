@@ -1391,6 +1391,11 @@ export default function App() {
           <h1 className="leading-none">
             {/* The landing page and docs live beside the app, at the site root. */}
             <a href="/" className="wordmark rounded-sm hover:text-ink-muted" title="Inlay home">
+              {/* The mark from brand/mark-dark.svg; its square turns green in the light theme (brand/mark.svg). */}
+              <svg className="logo-mark" viewBox="0 0 128 128" aria-hidden="true">
+                <path className="logo-mark-square" d="M0 0H128V56A72 72 0 0 0 56 128H0Z" />
+                <path d="M128 56V128H56A72 72 0 0 1 128 56Z" fill="#f2c230" />
+              </svg>
               Inlay
             </a>
           </h1>
