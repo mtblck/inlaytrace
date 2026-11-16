@@ -115,11 +115,14 @@
   /* Brand mark: mark.svg's green square in light, mark-dark.svg's paper square in dark (as the site's). */
   .logo-mark {
     display: inline-block;
-    width: 1.15em;
-    height: 1.15em;
-    margin-right: 0.35em;
-    /* Inline, so the wordmark keeps its text baseline for the tagline beside it. */
-    vertical-align: -0.2em;
+    /* As tall as the I: the font's cap height (0.7em, Archivo's, where `cap` is unsupported). */
+    width: 0.7em;
+    height: 0.7em;
+    width: 1cap;
+    height: 1cap;
+    margin-right: 0.3em;
+    /* Bottom on the baseline, top at cap height; inline, so the wordmark keeps its text baseline. */
+    vertical-align: baseline;
   }
   .logo-mark-square {
     fill: #23443a;
