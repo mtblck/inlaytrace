@@ -153,8 +153,17 @@ export function visiblePaths(doc: Doc, inks: InkEdits, only?: string) {
 export function buildSvg(doc: Doc, inks: InkEdits = NO_INKS, only?: string, background: string | null = null): string {
   const w = Number(doc.width) || 0
   const h = Number(doc.height) || 0
+  return svgOf(visiblePaths(doc, inks, only), { x: 0, y: 0, w, h }, background)
+}
+
+/** Some of the paths as drawn (`ids`), on their own SVG cropped to `view`: one object of the drawing (#195). */
+export function buildSvgOf(doc: Doc, inks: InkEdits, ids: ReadonlySet<string>, view: { x: number; y: number; w: number; h: number }): string {
+  return svgOf(visiblePaths(doc, inks).filter((p) => ids.has(p.id)), view, null)
+}
+
+function svgOf(paths: ShownPath[], view: { x: number; y: number; w: number; h: number }, background: string | null): string {
+  const { w, h } = view
   const bg = background ? normalizeHex(background) : null
-  const paths = visiblePaths(doc, inks, only)
   const defs = paths.flatMap((p) => (p.gradient ? [gradientMarkup(p.gradient, gradientId(p.id))] : []))
   const body = [
     ...(defs.length ? ['<defs>', ...defs, '</defs>'] : []),
@@ -162,7 +171,7 @@ export function buildSvg(doc: Doc, inks: InkEdits = NO_INKS, only?: string, back
     ...(bg ? [`<rect width="${w}" height="${h}" fill="${bg}"/>`] : []),
     ...grouped(paths),
   ].join('\n')
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n${body}\n</svg>\n`
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${view.x} ${view.y} ${w} ${h}">\n${body}\n</svg>\n`
 }
 
 /** The id of a path's gradient in the exported SVG. */

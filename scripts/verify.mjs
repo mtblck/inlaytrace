@@ -1223,6 +1223,36 @@ if (process.env.FIXTURE) {
   await ep.close()
 }
 
+// ---- Group by object (#195): an icon sheet comes apart into one group per icon ----------
+{
+  const ob = await newPage({ width: 1440, height: 900 })
+  await ob.goto(url)
+  await ob.locator('input[type=file]').setInputFiles({ name: 'icons.png', mimeType: 'image/png', buffer: Buffer.from(await fixturePng(ob, 'icons.svg'), 'base64') })
+  await traced(ob)
+  // Each object as its own SVG, without grouping first: the two-colour badge, the triangle, and the three bars as one word.
+  const [oz] = await Promise.all([ob.waitForEvent('download'), ob.locator('[data-objects-zip]').click()])
+  check(oz.suggestedFilename() === 'icons-objects.zip', `objects download is a zip (${oz.suggestedFilename()})`)
+  const objects = Object.entries(unzipSync(readFileSync(await oz.path())))
+  check(objects.length === 3, `one SVG per icon, the bars kept as one (${objects.map(([n]) => n).join(', ')})`)
+  const first = new TextDecoder().decode(objects[0]?.[1] ?? new Uint8Array())
+  check(/viewBox="(\d+) (\d+) /.test(first) && !/viewBox="0 0 /.test(first), `each is cropped to its object (${first.match(/viewBox="[^"]*"/)?.[0]})`)
+  await ob.getByRole('tab', { name: 'Edit' }).click()
+  await ob.keyboard.press('v')
+  await ob.locator('[data-group-objects]').click()
+  const note = await ob.locator('[data-group-objects] + p').textContent()
+  check(/^3 objects, each now a group/.test(note), `Group by object finds the three icons (${note})`)
+  const svg = await exportSvg(ob)
+  // The optimiser merges the word's three same-colour bars into one path, so only the two-colour badge keeps its <g>.
+  check(/<g\b/.test(svg), 'the badge exports as a group')
+  // Clicking one bar selects the whole word.
+  const sheet = await ob.locator('svg[aria-label="Traced SVG"]').boundingBox()
+  await ob.mouse.click(sheet.x + sheet.width * (55 / 200), sheet.y + sheet.height * (145 / 200))
+  const sel = (await ob.getByText(/\d+ shapes selected/).textContent().catch(() => '')).match(/\d+/)?.[0]
+  check(Number(sel) >= 3, `clicking a bar selects its whole word (${sel} shapes)`)
+  await ob.keyboard.press(`${MOD}+z`)
+  await ob.close()
+}
+
 // ---- Shapes list, hide and lock, fill and stroke (#209), on a 2,500-shape drawing ----
 {
   const sp = await newPage({ width: 1440, height: 900 })

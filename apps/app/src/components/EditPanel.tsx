@@ -44,6 +44,9 @@ type Props = {
   /** Group the selection, ungroup it, or change its paint order. `grouped`: the selection includes a group. */
   onGroup: () => void
   onUngroup: () => void
+  /** Group by object (#195), for the whole drawing, and what it last found. */
+  onGroupObjects?: () => void
+  objectsNote?: string | null
   onArrange: (how: Arrange) => void
   /** Unite, Subtract, Intersect or Divide the selection; resolves to why it couldn't, or null. */
   onCombine: (op: BooleanOp) => Promise<string | null>
@@ -118,6 +121,16 @@ export function EditPanel(p: Props) {
             </>
           ) : (
             <p className="field-hint">Click a shape to select it, ⇧-click to add more, or drag round shapes from empty space. Double-click a shape to edit its nodes.</p>
+          )}
+          {p.onGroupObjects && (
+            <div className="space-y-1">
+              <button className="btn w-full" onClick={p.onGroupObjects} title="Put each set of touching shapes (each icon on a sheet, each sticker) in a group of its own" data-group-objects="">
+                Group by object
+              </button>
+              <p className="field-hint" role="status">
+                {p.objectsNote ?? 'Groups the whole drawing: shapes that touch, or sit close like the letters of a word, become one group. The background stays apart.'}
+              </p>
+            </div>
           )}
         </div>
       )}
