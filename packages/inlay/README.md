@@ -46,6 +46,17 @@ result.paths // [{ d: 'M…Z', fill: '#rrggbb' }, …] largest first, nonzero fi
 toSvg(result) // '<svg …>…</svg>'
 ```
 
+### Command line
+
+```bash
+npx inlaytrace logo.png -o logo.svg
+npx inlaytrace photo.jpg -o photo.svg --preset poster --colors 16
+```
+
+PNGs need nothing else. For JPEG, WebP, GIF or TIFF, install
+[sharp](https://sharp.pixelplumbing.com/) beside it (`npm install sharp`). Without
+`-o` the SVG goes to stdout. `npx inlaytrace --help` lists the options.
+
 ### Presets
 
 | Preset | For |
