@@ -50,6 +50,8 @@ import { addShape, SHAPE_DEFAULT, type ShapeSettings } from './lib/draw'
 import { eraseDoc, knifeDoc } from './lib/cut'
 import { followShared, simplifyShared } from './lib/shared'
 import { groupByObject, objectFiles } from './lib/objects'
+import { alignMoves, distributeMoves, type AlignHow, type DistributeHow } from './lib/align'
+import { SNAP_DEFAULT, type SnapSettings } from './lib/snap'
 import type { PenCommand } from './components/DrawLayer'
 import { addOp, BRUSH_DEFAULT, BRUSH_MAX, BRUSH_MIN, FILL_DEFAULT, MAX_OPS, pixelOps, type BrushSettings, type CleanupOp, type FillSettings } from './lib/cleanup'
 import type { CleanFocus, CleanTool, CropDraft } from './components/CleanUp'
@@ -966,6 +968,25 @@ export default function App() {
   const groupSelection = () => selectedIds.length > 1 && editDoc((d) => groupPaths(d, selectedIds))
   const ungroupSelection = () => selectedIds.length && editDoc((d) => ungroupPaths(d, selectedIds))
   const arrangeSelection = (how: Arrange) => selectedIds.length && editDoc((d) => arrange(d, selectedIds, how))
+  /** Align and distribute (#213): each shape or whole group is one item, moved as one undo step. */
+  const moveItems = (moves: (boxes: Box[]) => { dx: number; dy: number }[]) => {
+    if (!doc || !selectedIds.length) return
+    const sel = new Set(selectedIds)
+    const items = new Map<string, string[]>()
+    for (const p of doc.paths) if (sel.has(p.id)) items.set(p.group ?? p.id, [...(items.get(p.group ?? p.id) ?? []), p.id])
+    const ids = [...items.values()]
+    const byId = new Map(doc.paths.map((p) => [p.id, p]))
+    const boxes = ids.map((m) => union(m.map((id) => pathBounds(byId.get(id)!.d))))
+    if (boxes.some((b) => !b)) return
+    const by = new Map<string, { dx: number; dy: number }>()
+    moves(boxes as Box[]).forEach((m, i) => ids[i].forEach((id) => by.set(id, m)))
+    if ([...by.values()].every((m) => Math.abs(m.dx) < 1e-9 && Math.abs(m.dy) < 1e-9)) return
+    editDoc((d) => ({ ...d, paths: d.paths.map((p) => (by.has(p.id) ? { ...p, ...transformShape(p, translate(by.get(p.id)!.dx, by.get(p.id)!.dy)) } : p)) }))
+  }
+  const alignSelection = (how: AlignHow) => doc && moveItems((boxes) => alignMoves(boxes, how, { x: 0, y: 0, w: doc.width, h: doc.height }))
+  const distributeSelection = (how: DistributeHow) => moveItems((boxes) => distributeMoves(boxes, how))
+  /** Snapping (#213), remembered on this device. */
+  const [snapping, setSnapping] = usePersisted<SnapSettings>('inlay:snap', SNAP_DEFAULT)
   /** Group by object (#195): each set of touching shapes in one group, one undo step; says how many it found. */
   const [objectsNote, setObjectsNote] = useState<string | null>(null)
   const groupObjects = () => {
@@ -1388,12 +1409,19 @@ export default function App() {
     save(new Blob([zip.buffer as ArrayBuffer], { type: 'application/zip' }), `${source!.name}-layers.zip`)
   }
 
+  const [objectsError, setObjectsError] = useState<string | null>(null)
   /** One SVG per object (#195), each cropped to it and sized at the export's scale. */
   const downloadObjects = async () => {
     const files: Record<string, Uint8Array> = {}
     const sx = size.width / doc!.width
     const sy = size.height / doc!.height
-    for (const f of objectFiles(doc!, edits.inks, source!.name)) files[f.name] = strToU8(withSize(await optimizeHere(f.svg), { width: f.box.w * sx, height: f.box.h * sy, unit: size.unit }))
+    const objects = objectFiles(doc!, edits.inks, source!.name)
+    if (!objects.length) {
+      setObjectsError('Nothing to export: every shape is the background or a hidden colour.')
+      return
+    }
+    setObjectsError(null)
+    for (const f of objects) files[f.name] = strToU8(withSize(await optimizeHere(f.svg), { width: f.box.w * sx, height: f.box.h * sy, unit: size.unit }))
     const zip = zipSync(files, { level: 6 })
     save(new Blob([zip.buffer as ArrayBuffer], { type: 'application/zip' }), `${source!.name}-objects.zip`)
   }
@@ -1682,6 +1710,7 @@ export default function App() {
                     onMarquee={onMarquee}
                     onEnterNodes={enterNodes}
                     onDragNode={onDragNode}
+                    snapping={snapping}
                     onTransform={onTransform}
                     onAddNode={onAddNode}
                     picking={!!picking}
@@ -1876,6 +1905,10 @@ export default function App() {
                 onGroup={groupSelection}
                 onUngroup={ungroupSelection}
                 onGroupObjects={groupObjects}
+                onAlign={alignSelection}
+                onDistribute={distributeSelection}
+                snapping={snapping}
+                onSnapping={setSnapping}
                 objectsNote={objectsNote}
                 onArrange={arrangeSelection}
                 onCombine={combineSelection}
@@ -1993,6 +2026,11 @@ export default function App() {
                 <button className="btn col-span-2" disabled={!trace} onClick={downloadObjects} title="One SVG per object (each icon or sticker), cropped to it, in a .zip" data-objects-zip="">
                   Objects (.zip)
                 </button>
+                {objectsError && (
+                  <p role="alert" className="col-span-2 text-[12.5px] text-accent">
+                    {objectsError}
+                  </p>
+                )}
               </div>
               {doc && (
                 <ExportOptions

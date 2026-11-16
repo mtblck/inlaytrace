@@ -77,6 +77,29 @@ background and stays out of every group, and so do hidden colours. Shapes you
 grouped yourself stay together. The panel says how many objects it found;
 doing it again changes nothing. It's one undo step.
 
+## Align, distribute and snap
+
+With shapes selected, *Align* in the Edit panel lines them up on the
+selection's bounds: **Left**, **Centre** and **Right** side to side, **Top**,
+**Middle** and **Bottom** up and down. A group counts as one item and keeps
+its shape. With one shape or one group selected, it lines up with the drawing
+instead, so **Centre** then **Middle** centres it on the page. **Space
+across** and **Space down** (three or more items) make the gaps between them
+even; the two at the ends stay where they are. Each is one undo step.
+
+*Snap*, in the Select and Nodes panels, makes drags land exactly:
+
+- **To nodes** (on at first): a node or handle dragged within 6 screen pixels
+  of another shape's node lands on it, and a ring shows where. Moving shapes
+  snaps the same way, by whichever of their nodes is nearest a node of the
+  shapes standing still, so redrawn pieces meet their neighbours with no gap.
+- **To whole pixels**: a dragged node lands on a whole pixel of the trace, and
+  moved shapes keep the top-left of their box on one.
+
+Hold ⌘ (Ctrl on Windows and Linux) while dragging to turn snapping off for
+that drag. Both settings are remembered on this device. Scaling, rotating and
+the arrow keys don't snap.
+
 ## Combine: unite, subtract, intersect, divide
 
 With two or more filled shapes selected, *Combine* in the Edit panel joins or

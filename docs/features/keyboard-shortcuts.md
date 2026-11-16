@@ -71,6 +71,7 @@ mode switches to Edit mode.
 | ⇧ + arrows | Nudge 10 px |
 | ⇧ while dragging | Move along one axis; scale in proportion; rotate in 15° steps |
 | ⌥ while dragging | Scale from the centre; bend one handle on its own |
+| ⌘ while dragging | Don't snap this drag (Ctrl on Windows and Linux) |
 | Delete, Backspace | Delete the selected nodes or shapes |
 | ⌘G, ⇧⌘G | Group / ungroup the selected shapes |
 | ⌘], ⌘[ | Bring forward / send backward |

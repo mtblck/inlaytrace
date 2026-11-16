@@ -5,6 +5,8 @@ import type { BooleanOp } from '../lib/boolean'
 import { MAX_ORDER, MIN_ORDER, sameAxis, type Axis, type MirrorAxis, type TurnAxis } from '../lib/mirror'
 import { MAX_SIDES, MIN_SIDES, type ShapeKind, type ShapeSettings } from '../lib/draw'
 import type { Box } from '../lib/transform'
+import type { AlignHow, DistributeHow } from '../lib/align'
+import type { SnapSettings } from '../lib/snap'
 import { Section } from './Controls'
 import { ALT, MOD, SHIFT } from './Shortcuts'
 import { TOOL_LABEL } from './Workspace'
@@ -46,6 +48,11 @@ type Props = {
   onUngroup: () => void
   /** Group by object (#195), for the whole drawing, and what it last found. */
   onGroupObjects?: () => void
+  /** Align and distribute the selection (#213), and snapping for drags. */
+  onAlign?: (how: AlignHow) => void
+  onDistribute?: (how: DistributeHow) => void
+  snapping?: SnapSettings
+  onSnapping?: (s: SnapSettings) => void
   objectsNote?: string | null
   onArrange: (how: Arrange) => void
   /** Unite, Subtract, Intersect or Divide the selection; resolves to why it couldn't, or null. */
@@ -105,6 +112,8 @@ export function EditPanel(p: Props) {
               {p.selection.box && <BoxFields key={p.selection.key} box={p.selection.box} onBox={p.onBox} onDone={p.onBoxDone} />}
               <RotateFields onRotate={p.onRotate} />
               <ArrangeFields shapes={p.selection.shapes} grouped={p.grouped} onGroup={p.onGroup} onUngroup={p.onUngroup} onArrange={p.onArrange} />
+              {p.onAlign && p.onDistribute && <AlignFields onAlign={p.onAlign} onDistribute={p.onDistribute} />}
+              {p.snapping && p.onSnapping && <SnapFields value={p.snapping} onChange={p.onSnapping} />}
               <CombineFields key={`combine-${p.selection.key}`} shapes={p.selection.shapes} onCombine={p.onCombine} />
               <SimplifyFields key={`simplify-${p.selection.key}`} now={p.selectionNodes} preview={p.simplifyPreview} onSimplify={p.onSimplify} shared={p.shareEdges !== false} />
               {p.onFixInImage && (
@@ -127,8 +136,9 @@ export function EditPanel(p: Props) {
               <button className="btn w-full" onClick={p.onGroupObjects} title="Put each set of touching shapes (each icon on a sheet, each sticker) in a group of its own" data-group-objects="">
                 Group by object
               </button>
-              <p className="field-hint" role="status">
-                {p.objectsNote ?? 'Groups the whole drawing: shapes that touch, or sit close like the letters of a word, become one group. The background stays apart.'}
+              <p className="field-hint">Groups the whole drawing: shapes that touch, or sit close like the letters of a word, become one group. The background stays apart.</p>
+              <p className="field-hint text-ink" role="status" data-objects-note="">
+                {p.objectsNote ?? ''}
               </p>
             </div>
           )}
@@ -150,6 +160,7 @@ export function EditPanel(p: Props) {
                   Move shared edges with neighbours
                 </label>
               )}
+              {p.snapping && p.onSnapping && <SnapFields value={p.snapping} onChange={p.onSnapping} />}
               <button className="btn w-full" onClick={p.onDeleteSelection}>
                 {p.selection.selectedNodes === 0 ? 'Delete shape' : p.selection.selectedNodes === 1 ? 'Delete node' : `Delete ${p.selection.selectedNodes} nodes`}
               </button>
@@ -639,6 +650,55 @@ function CombineFields(p: { shapes: number; onCombine: (op: BooleanOp) => Promis
           {error}
         </p>
       )}
+    </div>
+  )
+}
+
+/** Align and distribute (#213): on the selection's bounds, or the drawing's for one shape or group. */
+function AlignFields(p: { onAlign: (how: AlignHow) => void; onDistribute: (how: DistributeHow) => void }) {
+  const align: [AlignHow, string, string][] = [
+    ['left', 'Left', 'Align left edges'],
+    ['centre', 'Centre', 'Align centres, side to side'],
+    ['right', 'Right', 'Align right edges'],
+    ['top', 'Top', 'Align top edges'],
+    ['middle', 'Middle', 'Align middles, top to bottom'],
+    ['bottom', 'Bottom', 'Align bottom edges'],
+  ]
+  return (
+    <div className="space-y-1.5">
+      <span className="field-label">Align</span>
+      <div className="grid grid-cols-3 gap-1" role="group" aria-label="Align">
+        {align.map(([how, label, title]) => (
+          <button key={how} className="btn h-7 px-1 text-[12px]" onClick={() => p.onAlign(how)} title={`${title} (one shape or group: to the drawing)`} data-align={how}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-1" role="group" aria-label="Distribute">
+        <button className="btn h-7 px-1 text-[12px]" onClick={() => p.onDistribute('horizontal')} title="Even gaps side to side (three or more)" data-distribute="horizontal">
+          Space across
+        </button>
+        <button className="btn h-7 px-1 text-[12px]" onClick={() => p.onDistribute('vertical')} title="Even gaps top to bottom (three or more)" data-distribute="vertical">
+          Space down
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Snapping for drags (#213), remembered on this device. */
+function SnapFields(p: { value: SnapSettings; onChange: (s: SnapSettings) => void }) {
+  return (
+    <div className="space-y-1" title={`Hold ${mod === '⌘' ? '⌘' : 'Ctrl'} while dragging to turn snapping off`}>
+      <span className="field-label">Snap</span>
+      <label className="flex items-center gap-1.5 text-[12.5px] text-ink-muted">
+        <input type="checkbox" className="accent-[var(--c-accent)]" checked={p.value.nodes} onChange={(e) => p.onChange({ ...p.value, nodes: e.target.checked })} data-snap-nodes="" />
+        To nodes
+      </label>
+      <label className="flex items-center gap-1.5 text-[12.5px] text-ink-muted">
+        <input type="checkbox" className="accent-[var(--c-accent)]" checked={p.value.grid} onChange={(e) => p.onChange({ ...p.value, grid: e.target.checked })} data-snap-grid="" />
+        To whole pixels
+      </label>
     </div>
   )
 }
