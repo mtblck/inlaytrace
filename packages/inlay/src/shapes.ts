@@ -146,7 +146,7 @@ export function fitShape(pts: Pt[], corners: Pt[], gate: 'strict' | 'loose' = 's
   // moments, and its corners are too blunt in pixels to find, so it passes as
   // a circle. Draw it as each polygon too, and keep the one that covers the
   // region clearly better (#147).
-  if (shape.kind === 'circle') {
+  if (shape.kind === 'circle' && f.area < Math.PI * POLYGON_MAX_R ** 2) {
     const poly = regularByArea(f, pts)
     if (poly && poly.apart < POLYGON_WINS * areaApart(circlePoints(shape.cubics), pts)) shape.kind = 'polygon', (shape.cubics = poly.vertices.map((a, i) => lineTo(a, poly.vertices[(i + 1) % poly.vertices.length])))
   }
@@ -159,6 +159,11 @@ export function fitShape(pts: Pt[], corners: Pt[], gate: 'strict' | 'loose' = 's
 
 /** A polygon replaces a circle only if it's off the region by less than this share of the circle's area apart. */
 const POLYGON_WINS = 0.6
+/**
+ * Past this radius (px) a polygon's corners are sharp enough for the fitter to
+ * find, so the search (which costs about R² per try) isn't needed.
+ */
+const POLYGON_MAX_R = 16
 
 const circlePoints = (cubics: Cubic[]) =>
   cubics.flatMap(([a, b, c, d]) =>

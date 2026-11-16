@@ -118,6 +118,14 @@ describe('exact shapes', () => {
     }
   })
 
+  it('keep a large circle quick: no polygon search past a few pixels across', () => {
+    const big = paint((x, y) => Math.hypot(x - 300.3, y - 299.6) < 250, 600, 600)
+    const t = performance.now()
+    const d = trace(big, 600, 600, { ...options, shapes: true } as InlayOptions).paths.find((p) => p.fill === '#1e3c8c')!.d
+    expect(parsePath(d)[0].nodes).toHaveLength(4)
+    expect(performance.now() - t).toBeLessThan(1500)
+  })
+
   it('measure how far apart two outlines are by the area only one covers', () => {
     const square = (x: number, y: number, s: number) => [
       { x, y },
