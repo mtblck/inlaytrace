@@ -7,7 +7,7 @@
  * so the package and the app can't drift apart.
  */
 import { centerline } from './centerline'
-import { toSvg, traceRaw, type InlayOptions, type InlayResult } from './inlay'
+import { run, toSvg, traceRaw, traceSteps, type InlayOptions, type InlayResult, type TraceStep } from './inlay'
 import { exactPalette, oklab, peakPalette, quantizePalette } from './palette'
 import { boostLines, smoothShading } from './smooth'
 
@@ -117,6 +117,11 @@ export const outlineRadius = (scale: number) => Math.min(4, Math.max(2, Math.rou
 
 /** The trace for `image` with `options`: a preset's recipe, with any option given in place of its default. */
 export function tracePreset(image: ImageLike, options: TraceOptions = {}): InlayResult & { measuredWidth?: number } {
+  return run(presetSteps(image, options))
+}
+
+/** `tracePreset` as steps (see `traceSteps`), for `traceAsync`. */
+function* presetSteps(image: ImageLike, options: TraceOptions = {}): Generator<TraceStep, InlayResult & { measuredWidth?: number }> {
   const name = options.preset ?? 'logo'
   const p = Object.hasOwn(presets, name) ? presets[name] : undefined
   if (!p) throw new Error(`Unknown preset "${String(name)}". Use one of: ${Object.keys(presets).join(', ')}.`)
@@ -134,8 +139,11 @@ export function tracePreset(image: ImageLike, options: TraceOptions = {}): Inlay
       px = flipped
     }
     const threshold = o.threshold === undefined ? 'auto' : o.threshold
-    if (p.kind === 'centerline') return centerline(px, width, height, { ...fit, threshold, closeGaps: !!o.closeGaps, scale, ...(o.strokeWidth ? { strokeWidth: o.strokeWidth } : {}) })
-    return traceRaw(px, width, height, { ...fit, shapes: !!o.shapes, mode: 'binary', threshold, closeGaps: !!o.closeGaps, scale })
+    if (p.kind === 'centerline') {
+      yield { stage: 'label', done: 0 }
+      return centerline(px, width, height, { ...fit, threshold, closeGaps: !!o.closeGaps, scale, ...(o.strokeWidth ? { strokeWidth: o.strokeWidth } : {}) })
+    }
+    return yield* traceSteps(px, width, height, { ...fit, shapes: !!o.shapes, mode: 'binary', threshold, closeGaps: !!o.closeGaps, scale })
   }
   // Greys only: each pixel becomes the grey of its own lightness, so every palette picked from it is grey.
   if (o.grayscale && name !== 'pixel' && !o.palette?.length) px = toGray(px)
@@ -144,6 +152,7 @@ export function tracePreset(image: ImageLike, options: TraceOptions = {}): Inlay
   if (lines) px = boostLines(px, width, height, outlineRadius(scale), lines)
   // Painted shading evened out first, so its noise doesn't fleck it with the neighbouring colour.
   if (o.smoothShading) px = smoothShading(px, width, height, lines)
+  yield { stage: 'palette', done: 0 }
   const picker = PICKER[name]!
   const colors = o.colors ?? 8
   const own = o.palette?.length ? o.palette : null
@@ -174,7 +183,7 @@ export function tracePreset(image: ImageLike, options: TraceOptions = {}): Inlay
     scale,
     ...(lines ? { lines } : {}),
   }
-  return traceRaw(px, width, height, raw)
+  return yield* traceSteps(px, width, height, raw)
 }
 
 /** sRGB (0–255) of the grey whose OKLab lightness is `l`: for a grey, L is the cube root of its linear light. */
@@ -223,4 +232,48 @@ export function traceInlay(image: ImageLike, options?: TraceOptions): string
 export function traceInlay(rgba: ArrayLike<number>, width: number, height: number, options: InlayOptions): string
 export function traceInlay(a: ImageLike | ArrayLike<number>, b?: TraceOptions | number, c?: number, d?: InlayOptions): string {
   return toSvg(typeof b === 'number' ? traceRaw(a as ArrayLike<number>, b, c!, d!) : tracePreset(a as ImageLike, b))
+}
+
+/** Anything shaped like an AbortSignal (an AbortController's `signal`). */
+export type AbortSignalLike = { readonly aborted: boolean; readonly reason?: unknown }
+
+export type TraceAsyncOptions = TraceOptions & {
+  /** Stops the trace at its next pause: the promise rejects with the signal's reason. */
+  signal?: AbortSignalLike
+  /** Called at each pause with the stage under way and how far through it (0 to 1). */
+  onProgress?: (step: TraceStep) => void
+}
+
+/** How long, in ms, the trace runs before letting the thread do other work. */
+const SLICE_MS = 12
+const later = () => new Promise<void>((resolve) => (globalThis as unknown as { setTimeout: (f: () => void, ms: number) => unknown }).setTimeout(resolve, 0))
+const stop = (signal: AbortSignalLike) => {
+  if (!signal.aborted) return
+  if (signal.reason !== undefined) throw signal.reason
+  throw Object.assign(new Error('The trace was aborted.'), { name: 'AbortError' })
+}
+
+/**
+ * `trace`, but it pauses between its stages (and every few hundred edges
+ * while fitting) to report progress and let the thread get on with other
+ * work, and it stops when `signal` aborts. Same result as `trace`.
+ *
+ *     const controller = new AbortController()
+ *     const result = await traceAsync(image, { preset: 'poster', signal: controller.signal, onProgress: (s) => console.log(s.stage, s.done) })
+ */
+export async function traceAsync(image: ImageLike, options: TraceAsyncOptions = {}): Promise<InlayResult> {
+  const { signal, onProgress, ...rest } = options
+  if (signal) stop(signal)
+  const steps = presetSteps(image, rest)
+  let since = Date.now()
+  for (;;) {
+    const r = steps.next()
+    if (r.done) return r.value
+    onProgress?.(r.value)
+    if (Date.now() - since >= SLICE_MS) {
+      await later()
+      since = Date.now()
+    }
+    if (signal) stop(signal)
+  }
 }

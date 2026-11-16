@@ -29,8 +29,8 @@ export class SnapIndex {
     }
   }
   private at = (x: number, y: number) => `${Math.floor(x / this.cell)},${Math.floor(y / this.cell)}`
-  /** The nearest point within `tol` of `p` (no further than a cell), or null. */
-  nearest(p: Pt, tol: number): Pt | null {
+  /** The nearest point within `tol` of `p` (no further than a cell) that `ok` allows, or null. */
+  nearest(p: Pt, tol: number, ok?: (q: Pt) => boolean): Pt | null {
     let best: Pt | null = null
     let bd = Math.min(tol, this.cell)
     const cx = Math.floor(p.x / this.cell)
@@ -39,7 +39,7 @@ export class SnapIndex {
       for (let y = cy - 1; y <= cy + 1; y++)
         for (const q of this.cells.get(`${x},${y}`) ?? []) {
           const d = Math.hypot(q.x - p.x, q.y - p.y)
-          if (d <= bd) {
+          if (d <= bd && (!ok || ok(q))) {
             bd = d
             best = q
           }
@@ -79,12 +79,12 @@ export function snapMove(
     let best: { dx: number; dy: number; d: number; at: Pt } | null = null
     for (let i = 0; i < moving.length; i += step) {
       const p = { x: moving[i].x + dx, y: moving[i].y + dy }
-      const q = index.nearest(p, best ? best.d : tol)
+      // On a held axis the node can only land on a still one already level with it.
+      const level = lockX || lockY ? (q: Pt) => (!lockX || Math.abs(q.x - p.x) <= 1e-6) && (!lockY || Math.abs(q.y - p.y) <= 1e-6) : undefined
+      const q = index.nearest(p, best ? best.d : tol, level)
       if (!q) continue
       const ndx = lockX ? 0 : dx + q.x - p.x
       const ndy = lockY ? 0 : dy + q.y - p.y
-      // On a locked axis the node can only land if it's already level with the still one.
-      if ((lockX && Math.abs(q.x - p.x) > 1e-6) || (lockY && Math.abs(q.y - p.y) > 1e-6)) continue
       const d = Math.hypot(q.x - p.x, q.y - p.y)
       if (!best || d < best.d) best = { dx: ndx, dy: ndy, d, at: q }
     }

@@ -192,11 +192,33 @@ export const traceInlay = (rgba: ArrayLike<number>, w: number, h: number, o: Inl
  * into filled shapes that share their edges exactly.
  */
 export function traceRaw(rgba: ArrayLike<number>, w: number, h: number, o: InlayOptions): InlayResult {
+  return run(traceSteps(rgba, w, h, o))
+}
+
+/** What a trace is doing: label the pixels, clean up the labels, find the regions and their edges, fit the edges, build the shapes. */
+export type TraceStage = 'palette' | 'label' | 'clean' | 'regions' | 'fit' | 'shapes'
+/** A point a trace can pause at: the stage, and how far through it (0 to 1). */
+export type TraceStep = { stage: TraceStage; done: number }
+/** Fitting, the longest stage, pauses after this many edges. */
+const FIT_STEP = 256
+
+/** A trace's steps run straight through, as the synchronous `trace` does. */
+export function run<T>(steps: Generator<TraceStep, T>): T {
+  for (;;) {
+    const r = steps.next()
+    if (r.done) return r.value
+  }
+}
+
+/** `traceRaw` as steps, pausing between stages (and every so many edges while fitting), so an async caller can report progress or stop. */
+export function* traceSteps(rgba: ArrayLike<number>, w: number, h: number, o: InlayOptions): Generator<TraceStep, InlayResult> {
+  yield { stage: 'label', done: 0 }
   const { labels, colors, drawn } = o.mode === 'palette' ? labelPalette(rgba, w, h, o.palette, !o.photo) : labelBinary(rgba, w, h, o.threshold)
   // Edges placed between pixels, from their anti-aliasing: only in an image saved without loss
   // (judged before merged inks and lines relabel pixels), and not for photos.
   const clean = o.mode === 'palette' && !o.pixels && !o.photo && lossless(rgba, labels, w, h, colors)
   if (o.mode === 'palette' && o.merge) mergeLabels(labels, colors, o.merge)
+  yield { stage: 'clean', done: 0 }
   // A lone pixel in pixel art is deliberate, not a stray.
   if (!o.pixels) despur(labels, w, h)
   // Not photos: there it traded 2% less error for 5% more size (score:photos).
@@ -208,6 +230,7 @@ export function traceRaw(rgba: ArrayLike<number>, w: number, h: number, o: Inlay
   if (labs && !o.pixels) mergeSlivers(labels, w, h, labs, o.lines)
   const lines = o.mode === 'palette' && o.strokes && labs && !o.pixels ? strokesOf(rgba, labels, w, h, colors, labs, drawn, o) : []
 
+  yield { stage: 'regions', done: 0 }
   // Final regions: 4-connected components of drawn labels. Everything else is VOID.
   let { comp, compLabel, compArea } = components(labels, w, h, (l) => drawn[l])
   // Soft shading: each run of bands that one gradient draws becomes one region, with a label of its own.
@@ -234,7 +257,9 @@ export function traceRaw(rgba: ArrayLike<number>, w: number, h: number, o: Inlay
   // Each chain is fitted once, then shared by every shape it bounds.
   const fitted: { chain: Chain; cubics: Cubic[]; back: Cubic[] }[] = []
   const chainsOf = new Map<number, number[]>()
-  for (const c of chains) {
+  for (let k = 0; k < chains.length; k++) {
+    if (k % FIT_STEP === 0) yield { stage: 'fit', done: k / chains.length }
+    const c = chains[k]
     const cubics = o.pixels ? staircase(c.pts, c.closed) : fitChain(c.pts, c.closed, o, rgbOf && flatSides(c) ? edgePoints(c, comp, w, rgba, rgbOf) : undefined)
     if (!cubics.length) continue
     const i = fitted.push({ chain: c, cubics, back: reverse(cubics) }) - 1
@@ -261,6 +286,7 @@ export function traceRaw(rgba: ArrayLike<number>, w: number, h: number, o: Inlay
     return assemble(out)
   }
 
+  yield { stage: 'shapes', done: 0 }
   const shapes: { subs: Subpath[]; fill: string; area: number; gradient?: Gradient }[] = []
   const paint = (id: number) => ({ fill: colors[compLabel[id]], ...(gradientOf.has(compLabel[id]) ? { gradient: gradientOf.get(compLabel[id]) } : {}) })
   if (!o.stacked) {
