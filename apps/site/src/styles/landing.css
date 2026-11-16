@@ -22,6 +22,7 @@
   --text-soft: var(--ink-soft);
   --line: var(--rule);
   --sunk: var(--paper-sunk);
+  --mark-square: #23443a;
   color-scheme: light dark;
 }
 /* Dark by preference, unless the docs' theme menu chose light; or dark when it chose dark. */
@@ -34,6 +35,7 @@
     --sunk: #1b2a24;
     --link: #f2c230;
     --focus: var(--mark);
+    --mark-square: var(--paper);
   }
 }
 :root[data-theme='dark'] {
@@ -44,6 +46,7 @@
   --sunk: #1b2a24;
   --link: #f2c230;
   --focus: var(--mark);
+  --mark-square: var(--paper);
   color-scheme: dark;
 }
 :root[data-theme='light'] {
@@ -98,6 +101,18 @@ main,
   font-size: 1.35rem;
   letter-spacing: -0.02em;
   text-decoration: none;
+}
+/* Brand mark: mark.svg's green square on light pages, mark-dark.svg's paper square on dark. */
+.logo-mark {
+  display: inline-block;
+  width: 1.15em;
+  height: 1.15em;
+  margin-right: 0.35em;
+  /* Inline, so the wordmark keeps its text baseline for the tagline beside it. */
+  vertical-align: -0.2em;
+}
+.logo-mark-square {
+  fill: var(--mark-square);
 }
 .top nav {
   display: flex;
