@@ -27,6 +27,11 @@ shows which commit built it.
 Versions are 0.x while the API settles: a minor version (0.1 → 0.2) may change
 it, and the [changelog](https://github.com/mtblck/inlaytrace/blob/main/packages/inlay/CHANGELOG.md)
 says how.
+From 1.0, a minor version can change the traced output (different paths or
+colours) but not the API, and never makes the measured quality worse; a major
+version is any change to an export, option, preset or result type. Pin an exact
+version if you need byte-identical SVGs. The [full policy](https://github.com/mtblck/inlaytrace/blob/main/docs/package.md#versions)
+says what counts as what.
 
 ## Use
 
