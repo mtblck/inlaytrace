@@ -48,6 +48,7 @@ import { BucketFields, ShapesList, StyleFields, type ShapeFlag, type StylePatch 
 import { bucketFill } from './lib/bucket'
 import { addShape, SHAPE_DEFAULT, type ShapeSettings } from './lib/draw'
 import { eraseDoc, knifeDoc } from './lib/cut'
+import { followShared, simplifyShared } from './lib/shared'
 import type { PenCommand } from './components/DrawLayer'
 import { addOp, BRUSH_DEFAULT, BRUSH_MAX, BRUSH_MIN, FILL_DEFAULT, MAX_OPS, pixelOps, type BrushSettings, type CleanupOp, type FillSettings } from './lib/cleanup'
 import type { CleanFocus, CleanTool, CropDraft } from './components/CleanUp'
@@ -749,13 +750,21 @@ export default function App() {
     },
     [commit, traced],
   )
-  /** Change one path's nodes, reading its current data at commit time. */
+  /** Shared edges (#212): a node or handle moved on an edge two shapes share moves in both, unless this is off. */
+  const [shareEdges, setShareEdges] = useState(true)
+  /**
+   * Change one path's nodes, reading its current data at commit time. Where it
+   * shares an edge with a neighbour, the neighbour's copy follows (#212).
+   */
   const editPath = (id: string, f: (subs: ReturnType<typeof parsePath>) => ReturnType<typeof parsePath>, key: string | null = null) =>
     editDoc((d) => {
       const p = d.paths.find((x) => x.id === id)
       if (!p) return d
-      const subs = f(parsePath(p.d))
-      return subs.length ? replacePath(d, id, serializePath(subs)) : deletePath(d, id)
+      const before = parsePath(p.d)
+      const subs = f(before)
+      if (!subs.length) return deletePath(d, id)
+      const next = replacePath(d, id, serializePath(subs))
+      return shareEdges ? followShared(next, id, before, subs, lockedSet) : next
     }, key)
 
   const onDragNode = (ref: NodeRef, part: NodePart, to: Pt, phase: 'move' | 'end', smooth: boolean) => {
@@ -903,7 +912,9 @@ export default function App() {
   const simplifySelection = (tolerance: number) => {
     if (!selectedPaths.length) return
     const ids = new Set(selectedPaths.map((p) => p.id))
-    editDoc((d) => ({ ...d, paths: d.paths.map((p) => (ids.has(p.id) ? { ...p, d: serializePath(simplifySubpaths(parsePath(p.d), tolerance)) } : p)) }))
+    // Edge by edge (#212), so a neighbour's side of a re-fitted edge changes with it and no gap opens.
+    if (shareEdges) editDoc((d) => simplifyShared(d, [...ids], tolerance, lockedSet))
+    else editDoc((d) => ({ ...d, paths: d.paths.map((p) => (ids.has(p.id) ? { ...p, d: serializePath(simplifySubpaths(parsePath(p.d), tolerance)) } : p)) }))
   }
   const rotateSelection = (degrees: number) => {
     if (selectionBox && degrees) transformSelection(rotateAbout({ x: selectionBox.x + selectionBox.w / 2, y: selectionBox.y + selectionBox.h / 2 }, degrees))
@@ -917,8 +928,14 @@ export default function App() {
     return n <= PREVIEW_NODES ? n : null
   }, [selectedPaths])
   const simplifyPreview = useCallback(
-    (tolerance: number) => (nodesOfSelection !== null ? selectedPaths.reduce((n, p) => n + nodeCount(simplifySubpaths(parsePath(p.d), tolerance)), 0) : null),
-    [selectedPaths, nodesOfSelection],
+    (tolerance: number) => {
+      if (nodesOfSelection === null || !doc) return null
+      if (!shareEdges) return selectedPaths.reduce((n, p) => n + nodeCount(simplifySubpaths(parsePath(p.d), tolerance)), 0)
+      const out = simplifyShared(doc, selectedIds, tolerance, lockedSet)
+      const ids = new Set(selectedIds)
+      return out.paths.reduce((n, p) => n + (ids.has(p.id) ? nodeCount(parsePath(p.d)) : 0), 0)
+    },
+    [selectedPaths, nodesOfSelection, shareEdges, doc, selectedIds, lockedSet],
   )
 
   /**
@@ -992,12 +1009,15 @@ export default function App() {
   // ---- Eraser and Knife (#211): on the selection, or every visible unlocked shape ----------
   const [eraserWidth, setEraserWidth] = useState(12)
   const [cutError, setCutError] = useState<string | null>(null)
+  const [cutting, setCutting] = useState(false)
   const cuttingRef = useRef(false)
   const cutInputs = useRef({ selectedIds, selectableIds })
   cutInputs.current = { selectedIds, selectableIds }
   const cutWith = async (run: (paper: Awaited<ReturnType<typeof loadPaper>>, doc: DocT, targets: string[]) => ReturnType<typeof eraseDoc>, keep: 'add' | 'trim') => {
-    if (cuttingRef.current) return
+    // One cut at a time; the panel says "Working…" meanwhile, so a drag made then isn't silently lost.
+    if (cuttingRef.current) return setCutError('Still working on the last one: try again in a moment.')
     cuttingRef.current = true
+    setCutting(true)
     setCutError(null)
     try {
       const paper = await loadPaper()
@@ -1014,6 +1034,7 @@ export default function App() {
       setCutError(`That didn’t work: ${error instanceof Error ? error.message : String(error)}. Your drawing is unchanged.`)
     } finally {
       cuttingRef.current = false
+      setCutting(false)
     }
   }
   const onErase = (points: Pt[]) => void cutWith((paper, doc, targets) => eraseDoc(paper, doc, targets, points, eraserWidth), 'trim')
@@ -1824,7 +1845,7 @@ export default function App() {
                   penNodes,
                   onPenCommand: (kind) => setPenCommand((c) => ({ kind, seq: (c?.seq ?? 0) + 1 })),
                 }}
-                cut={{ eraserWidth, onEraserWidth: setEraserWidth, error: cutError, selected: selectedIds.length }}
+                cut={{ eraserWidth, onEraserWidth: setEraserWidth, error: cutError, selected: selectedIds.length, busy: cutting }}
                 detached={detached}
                 selection={
                   selectedPaths.length
@@ -1840,6 +1861,8 @@ export default function App() {
                 onBox={setBox}
                 onBoxDone={boxDone}
                 onNodeOp={nodeOp}
+                shareEdges={shareEdges}
+                onShareEdges={setShareEdges}
                 selectionNodes={nodesOfSelection}
                 simplifyPreview={simplifyPreview}
                 onSimplify={simplifySelection}

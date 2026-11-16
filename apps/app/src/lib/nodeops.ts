@@ -224,7 +224,7 @@ export function roundNode(subs: Subpath[], ref: NodeRef, radius: number): Subpat
 // ---- Simplify ---------------------------------------------------------------------------------
 
 /** Points about a pixel apart along a subpath, for re-fitting. Closed loops don't repeat the start. */
-function sample(s: Subpath): Pt[] {
+export function sample(s: Subpath): Pt[] {
   const out: Pt[] = []
   for (let seg = 0; seg < segmentCount(s); seg++) {
     const c = cubicOf(...ends(s, seg))
@@ -237,7 +237,7 @@ function sample(s: Subpath): Pt[] {
 
 const r3 = (p: Pt): Pt => ({ x: Math.round(p.x * 1000) / 1000, y: Math.round(p.y * 1000) / 1000 })
 
-function fromCubics(cubics: Cubic[], closed: boolean): Subpath {
+export function fromCubics(cubics: Cubic[], closed: boolean): Subpath {
   const nodes: PathNode[] = []
   for (const c of cubics) {
     if (!nodes.length) nodes.push({ ...r3(c[0]), in: null, out: null })
