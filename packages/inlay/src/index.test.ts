@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import * as inlay from './index'
 import { exactPalette, parsePath, peakPalette, toSvg, trace } from './index'
 
 /** 40 × 20: a red square and a blue square side by side on white. */
@@ -15,6 +16,11 @@ function card() {
 }
 
 describe('the public API', () => {
+  it('exports only what docs/package/api.md documents (#161): anything added here is frozen at 1.0', () => {
+    expect(Object.keys(inlay).sort()).toEqual(
+      ['boostLines', 'centerline', 'centerlineToSvg', 'detectSymmetry', 'exactPalette', 'fitChain', 'isFlat', 'mapPoints', 'oklab', 'parsePath', 'peakPalette', 'pointAt', 'quantizePalette', 'serializePath', 'smoothShading', 'toSvg', 'trace', 'traceCenterline', 'traceInlay'].sort(),
+    )
+  })
   it('traces to shapes as data, largest first, sharing their edge exactly', () => {
     const { px, w, h } = card()
     const r = trace(px, w, h, { mode: 'palette', palette: exactPalette(px, 8), speckle: 0, tolerance: 1, cornerAngle: 45 })

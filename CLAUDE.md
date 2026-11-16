@@ -35,7 +35,7 @@ Marking it ready also triggers the Claude review workflow.
   of DOM and app imports. The app and the site import it by name, aliased to its `src/` (app Vite config +
   tsconfig paths, site astro.config), so no build in the dev loop; npm gets `dist/` from tsdown
   (`npm run build -w packages/inlay`, `check` runs publint + attw, `test/smoke.mjs` loads it in plain Node).
-  Releases (ADR 0006): a changeset per user-visible change; Claude opens the `npm run version-packages` PR and
+  Releases (ADR 0006): a changeset per user-visible change, its bump picked by `docs/package.md` § Versions; Claude opens the `npm run version-packages` PR and
   merges it only on Matt's go; merging publishes, tags and makes the GitHub release (release.yml, trusted publishing). Root devDeps pin `@emnapi/core`/`@emnapi/runtime` (optional peers of tsdown's
   compiler): without them npm versions disagree about the lockfile and `npm ci` fails on some (10, 11.4, 11.7).
 - **VTracer is a benchmark only** (devDependency `@visioncortex/vtracer`, loaded in Node by `scripts/vtracer.mjs`):
