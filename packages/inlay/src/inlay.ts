@@ -135,7 +135,13 @@ const VOID = -1 // outside the image, transparent pixels, and line art's paper
  */
 export type InlayPath = { d: string; fill: string; stroke?: number; gradient?: Gradient }
 /** A trace: the drawing's size in pixels and its shapes, largest first (paint order). */
-export type InlayResult = { width: number; height: number; paths: InlayPath[] }
+export type InlayResult = {
+  width: number
+  height: number
+  paths: InlayPath[]
+  /** Centerline only: the stroke width measured from the ink, in px (whatever `strokeWidth` asked for). */
+  measuredWidth?: number
+}
 
 /**
  * A value made safe inside a double-quoted attribute. Colours come from the
@@ -179,13 +185,13 @@ function gradientMarkup(g: Gradient, id: string): string {
 }
 
 /** Trace to an SVG string; `trace` gives the shapes as data. */
-export const traceInlay = (rgba: ArrayLike<number>, w: number, h: number, o: InlayOptions): string => toSvg(trace(rgba, w, h, o))
+export const traceInlay = (rgba: ArrayLike<number>, w: number, h: number, o: InlayOptions): string => toSvg(traceRaw(rgba, w, h, o))
 
 /**
  * Trace RGBA pixels (`w` × `h`, 4 bytes a pixel, as from canvas getImageData)
  * into filled shapes that share their edges exactly.
  */
-export function trace(rgba: ArrayLike<number>, w: number, h: number, o: InlayOptions): InlayResult {
+export function traceRaw(rgba: ArrayLike<number>, w: number, h: number, o: InlayOptions): InlayResult {
   const { labels, colors, drawn } = o.mode === 'palette' ? labelPalette(rgba, w, h, o.palette, !o.photo) : labelBinary(rgba, w, h, o.threshold)
   // Edges placed between pixels, from their anti-aliasing: only in an image saved without loss
   // (judged before merged inks and lines relabel pixels), and not for photos.

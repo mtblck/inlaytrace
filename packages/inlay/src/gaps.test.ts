@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { closeGaps } from './gaps'
 import { centerline } from './centerline'
-import { trace } from './inlay'
+import { traceRaw as trace } from './inlay'
 
 const W = 80
 const H = 60

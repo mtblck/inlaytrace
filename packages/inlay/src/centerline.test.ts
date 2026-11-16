@@ -108,12 +108,12 @@ describe('centerline', () => {
 
   it('uses the stroke width asked for, and writes round-capped strokes', () => {
     const r = centerline(paint((x, y) => seg(x, y, 20, 50, 80, 50) < 2), 100, 100, { ...options, strokeWidth: 2.5 })
-    expect(r.paths[0].strokeWidth).toBe(2.5)
+    expect(r.paths[0].stroke).toBe(2.5)
     expect(centerlineToSvg(r)).toContain('fill="none" stroke="#000000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"')
   })
 
   it("keeps a caller's size and colour inside their attributes", () => {
-    const svg = centerlineToSvg({ width: '2" onload="alert(1)' as unknown as number, height: 2, measuredWidth: 1, paths: [{ d: 'M0 0L2 2', stroke: '<x>', strokeWidth: 1 }] })
+    const svg = centerlineToSvg({ width: '2" onload="alert(1)' as unknown as number, height: 2, measuredWidth: 1, paths: [{ d: 'M0 0L2 2', fill: '<x>', stroke: 1 }] })
     expect(svg).not.toContain('" onload')
     expect(svg).toContain('width="2&quot; onload=&quot;alert(1)"')
     expect(svg).toContain('stroke="&lt;x>"')

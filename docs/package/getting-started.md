@@ -19,21 +19,15 @@ Inlay takes RGBA pixels, which a canvas gives you for any image the browser can
 decode:
 
 ```ts
-import { trace, toSvg, peakPalette } from 'inlaytrace'
+import { trace, toSvg } from 'inlaytrace'
 
 const bitmap = await createImageBitmap(file) // a File, Blob or <img>
 const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
 const ctx = canvas.getContext('2d')!
 ctx.drawImage(bitmap, 0, 0)
-const { data, width, height } = ctx.getImageData(0, 0, bitmap.width, bitmap.height)
+const image = ctx.getImageData(0, 0, bitmap.width, bitmap.height)
 
-const result = trace(data, width, height, {
-  mode: 'palette',
-  palette: peakPalette(data, 8), // the image's main colours
-  speckle: 8, // merge specks smaller than 8 × 8 px
-  tolerance: 1, // px the outline may stray from the pixels
-  cornerAngle: 45, // sharper turns stay corners
-})
+const result = trace(image, { preset: 'logo' })
 
 document.body.insertAdjacentHTML('beforeend', toSvg(result))
 ```
@@ -50,17 +44,11 @@ Decode the image with any library that gives raw RGBA pixels. With
 ```ts
 import sharp from 'sharp'
 import { writeFile } from 'node:fs/promises'
-import { trace, toSvg, peakPalette } from 'inlaytrace'
+import { trace, toSvg } from 'inlaytrace'
 
 const { data, info } = await sharp('logo.png').ensureAlpha().raw().toBuffer({ resolveWithObject: true })
 
-const result = trace(data, info.width, info.height, {
-  mode: 'palette',
-  palette: peakPalette(data, 8),
-  speckle: 8,
-  tolerance: 1,
-  cornerAngle: 45,
-})
+const result = trace({ data, width: info.width, height: info.height }, { preset: 'logo' })
 
 await writeFile('logo.svg', toSvg(result))
 console.log(`${result.paths.length} shapes`)
@@ -68,6 +56,29 @@ console.log(`${result.paths.length} shapes`)
 
 Run it as an ES module (`"type": "module"` in `package.json`, or a `.mjs`
 file) so the top-level `await` works.
+
+## Pick a preset
+
+The preset says what the image is, and brings the palette, the clean-up and
+the fitting the Inlay app uses for it:
+
+| Preset | For |
+| --- | --- |
+| `logo` (the default) | Few flat colours, crisp corners, shapes cut out to tile |
+| `illustration` | More colours, smooth curves, layered shapes, soft shading as gradients |
+| `outline` | Illustration with its drawn outlines as stroked lines |
+| `lineart` | Ink drawings and scans: one ink, only the ink drawn |
+| `centerline` | Single strokes down the ink's middle, for plotters and engraving |
+| `poster` | Photos flattened into colour bands |
+| `pixel` | Pixel art: exact colours, every pixel edge kept |
+
+Any [option](options.md) overrides the preset's default:
+
+```ts
+trace(image, { preset: 'poster', colors: 12 })
+trace(image, { preset: 'logo', palette: ['#111111', '#ffffff', '#e63946'] }) // your own colours
+trace(image, { preset: 'lineart', invert: true }) // light ink on a dark background
+```
 
 ## What you get
 

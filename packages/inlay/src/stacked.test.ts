@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { trace, type InlayResult } from './inlay'
+import { traceRaw as trace, type InlayResult } from './inlay'
 import { quantizePalette } from './palette'
 import { parsePath, type Pt } from './path'
 

@@ -139,15 +139,9 @@ const dot = crop.w / 90
           </div>
           <div>
             <h3>In your code</h3>
-            <pre><code>{`import { trace, toSvg, peakPalette } from 'inlaytrace'
+            <pre><code>{`import { trace, toSvg } from 'inlaytrace'
 
-const result = trace(rgba, width, height, {
-  mode: 'palette',
-  palette: peakPalette(rgba, 8),
-  speckle: 8,
-  tolerance: 1,
-  cornerAngle: 45,
-})
+const result = trace(imageData, { preset: 'logo' })
 
 result.paths // [{ d, fill }, …]
 toSvg(result) // '<svg …>'`}</code></pre>

@@ -19,7 +19,7 @@
  * Everything here is written for this project (MIT); no GPL tracer is used.
  */
 import { serializePath } from './path'
-import { attr, joinDiagonals, labelBinary, mergeSpecks } from './inlay'
+import { joinDiagonals, labelBinary, mergeSpecks, toSvg, type InlayResult } from './inlay'
 import { closeGaps } from './gaps'
 import { skeletonStrokes, thin } from './skeleton'
 
@@ -42,23 +42,21 @@ export type CenterlineOptions = {
   scale?: number
 }
 
-/** One stroked path: open subpaths (and closed loops), drawn with round caps and joins. */
-export type CenterlinePath = { d: string; stroke: string; strokeWidth: number }
-export type CenterlineResult = {
-  width: number
-  height: number
-  paths: CenterlinePath[]
-  /** The stroke width measured from the ink, in pixels (whatever `strokeWidth` asked for). */
-  measuredWidth: number
-}
+/**
+ * A centerline trace: the usual result, its paths stroked (`stroke` is the
+ * width, `fill` the colour, as Outline art's lines), and `measuredWidth`.
+ * @deprecated Since 0.4: it's `InlayResult`.
+ */
+export type CenterlineResult = InlayResult & { measuredWidth: number }
 
-/** Trace to an SVG string; `centerline` gives the strokes as data. */
-export const traceCenterline = (rgba: ArrayLike<number>, w: number, h: number, o: CenterlineOptions): string => centerlineToSvg(centerline(rgba, w, h, o))
+/**
+ * Trace to an SVG string; `centerline` gives the strokes as data.
+ * @deprecated Since 0.4: use `toSvg(trace(image, { preset: 'centerline' }))`.
+ */
+export const traceCenterline = (rgba: ArrayLike<number>, w: number, h: number, o: CenterlineOptions): string => toSvg(centerline(rgba, w, h, o))
 
-export function centerlineToSvg(r: CenterlineResult): string {
-  const paths = r.paths.map((p) => `<path d="${attr(p.d)}" fill="none" stroke="${attr(p.stroke)}" stroke-width="${attr(round(p.strokeWidth))}" stroke-linecap="round" stroke-linejoin="round"/>`)
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${attr(r.width)}" height="${attr(r.height)}" viewBox="0 0 ${attr(r.width)} ${attr(r.height)}">\n${paths.join('\n')}\n</svg>\n`
-}
+/** @deprecated Since 0.4: `toSvg` draws stroked paths the same way. */
+export const centerlineToSvg = (r: InlayResult): string => toSvg(r)
 
 const round = (n: number) => Math.round(n * 100) / 100
 
@@ -80,6 +78,6 @@ export function centerline(rgba: ArrayLike<number>, w: number, h: number, o: Cen
   }
   const { subs, measured } = skeletonStrokes(ink, w, h, o, joined ? undefined : skel)
   const width = o.strokeWidth && o.strokeWidth > 0 ? o.strokeWidth : measured
-  const paths = subs.length ? [{ d: serializePath(subs), stroke: o.color ?? '#000000', strokeWidth: round(width) }] : []
+  const paths = subs.length ? [{ d: serializePath(subs), fill: o.color ?? '#000000', stroke: round(width) }] : []
   return { width: w, height: h, paths, measuredWidth: round(measured) }
 }

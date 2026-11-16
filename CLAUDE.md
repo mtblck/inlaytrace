@@ -42,7 +42,9 @@ Marking it ready also triggers the Claude review workflow.
   `score`, `score:photos`, `site:assets` and two tests compare against it. The main app runs no WebAssembly; only the AI worker does (ONNX Runtime, Tesseract).
 - **Logo/Illustration palettes come from histogram peaks** (`packages/inlay/src/palette.ts`)
   (VTracer's quantizer drifted flat colours). Poster quantizes (`quantizePalette`, k-means in OKLab) and stacks
-  shapes (`stacked`). Re-score any preset change (`score`, and `score:photos` for Poster) before shipping.
+  shapes (`layers`). The presets' recipes live in the package (`packages/inlay/src/presets.ts`, `trace(image, { preset })`);
+  the app reads its defaults from there and must pass `shapes` and `closeGaps` explicitly, or the preset's default wins.
+  Re-score any preset change (`score`, and `score:photos` for Poster) before shipping.
 - **No GPL/AGPL in the bundle** (no Potrace, no `@imgly/*`); AI weights must be
   MIT/BSD/Apache (`apps/app/public/models/NOTICE.txt`: U²-Net Apache, Real-ESRGAN BSD). Repo is MIT.
 - **Paths:** one Vercel project (`img-to-svg`) at inlaytrace.com: site at `/`, docs at `/docs/`, app at

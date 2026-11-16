@@ -8,15 +8,23 @@ Everything `inlaytrace` exports. Types are TypeScript.
 
 ## Tracing
 
-### `trace(rgba, width, height, options)`
+### `trace(image, options?)`
 
 ```ts
-function trace(rgba: ArrayLike<number>, width: number, height: number, options: InlayOptions): InlayResult
+function trace(image: ImageLike, options?: TraceOptions): InlayResult
+type ImageLike = { data: ArrayLike<number>; width: number; height: number } // ImageData, or sharp's raw data with its info's size
 ```
 
-Traces RGBA pixels (4 bytes a pixel, row by row, as `getImageData().data` or
-sharp's raw output) into filled shapes that share their edges exactly. See
-[Options](options.md).
+Traces RGBA pixels (4 bytes a pixel, row by row) into filled shapes that share
+their edges exactly, or with the `centerline` preset into strokes. The preset
+(default `logo`) picks the palette, any steps before tracing and every
+default; any option given overrides it. See [Options](options.md). Throws on
+an unknown preset, or when `data` is shorter than `width × height × 4`. The
+image's pixels are never changed.
+
+The 0.3 form, `trace(rgba, width, height, options)` with `mode: 'palette'` or
+`'binary'` and a palette you pick yourself, still works but is deprecated: it
+goes in 1.0. Its options are below as `InlayOptions`.
 
 ### `toSvg(result)`
 
@@ -26,18 +34,30 @@ function toSvg(result: InlayResult): string
 
 The result as an SVG document, with `width`, `height` and a `viewBox`.
 
-### `traceInlay(rgba, width, height, options)`
+### `traceInlay(image, options?)`
 
 ```ts
-function traceInlay(rgba: ArrayLike<number>, width: number, height: number, options: InlayOptions): string
+function traceInlay(image: ImageLike, options?: TraceOptions): string
 ```
 
-`toSvg(trace(…))` in one call.
+`toSvg(trace(…))` in one call. Also takes the deprecated 0.3 form.
+
+### `presets`
+
+```ts
+const presets: Record<PresetName, PresetDefaults>
+type PresetName = 'logo' | 'illustration' | 'outline' | 'lineart' | 'centerline' | 'poster' | 'pixel'
+```
+
+Each preset's defaults (`colors`, `speckle`, `tolerance`, `cornerAngle`,
+`shapes`, `layers`, `strokes`, `gradients`, `closeGaps`, `threshold`) and its
+`kind`: `'colour'`, `'ink'` or `'centerline'`. Read-only; to change one, pass
+the option to `trace`.
 
 ### Types
 
 ```ts
-type InlayResult = { width: number; height: number; paths: InlayPath[] }
+type InlayResult = { width: number; height: number; paths: InlayPath[]; measuredWidth?: number } // measuredWidth: centerline only, the stroke width measured from the ink
 type InlayPath = { d: string; fill: string; stroke?: number; gradient?: Gradient } // absolute M/L/C/Z, nonzero fill; largest first. With `strokes`, lines come last: `stroke` is their width, `fill` their colour, unfilled. With `gradients`, a shaded shape has `gradient`, and `fill` is its average colour
 
 // In the trace's pixels (userSpaceOnUse); offsets 0–1, colours #rrggbb, interpolated in sRGB
@@ -46,6 +66,29 @@ type Gradient =
   | { type: 'radial'; cx: number; cy: number; r: number; stops: GradientStop[] }
 type GradientStop = { offset: number; color: string }
 
+type TraceOptions = {
+  preset?: PresetName
+  colors?: number
+  palette?: string[] // your own colours: traced with only these
+  merge?: Record<string, string>
+  speckle?: number
+  tolerance?: number
+  cornerAngle?: number
+  smoothing?: number
+  shapes?: boolean
+  layers?: boolean
+  strokes?: boolean
+  gradients?: boolean
+  closeGaps?: boolean
+  scale?: number
+  threshold?: number | 'auto' | null // lineart, centerline
+  invert?: boolean // lineart, centerline
+  strokeWidth?: number // centerline
+  smoothShading?: boolean
+  keepOutlines?: boolean
+}
+
+// The deprecated 0.3 form's options
 type InlayOptions = FitOptions & {
   speckle: number
   pixels?: boolean
@@ -164,13 +207,12 @@ type CenterlineOptions = {
   color?: string // default '#000000'
   closeGaps?: boolean // join lines' ends across small breaks before tracing
 }
-type CenterlineResult = {
-  width: number
-  height: number
-  paths: { d: string; stroke: string; strokeWidth: number }[]
-  measuredWidth: number // the ink's width, px
-}
+type CenterlineResult = InlayResult & { measuredWidth: number } // the ink's width, px
 ```
+
+Since 0.4 each path is `{ d, fill, stroke }` like Outline art's lines: `fill`
+is the colour and `stroke` the width. `trace(image, { preset: 'centerline' })`
+is the same trace with the preset's defaults.
 
 Single strokes down the middle of the ink, for pen plotters and engraving,
 instead of outlines round it. The ink is thinned to a one-pixel skeleton
@@ -182,8 +224,9 @@ fitter as outlines. The width is the ink's area over the skeleton's length.
 
 ### `traceCenterline(rgba, width, height, options)`, `centerlineToSvg(result)`
 
-The same as an SVG string: one `<path>` with `fill="none"`, the stroke colour
-and width, and round caps and joins.
+Deprecated since 0.4, going in 1.0: use `traceInlay(image, { preset: 'centerline' })`
+and `toSvg`, which draw the same `<path>` (`fill="none"`, the stroke colour and
+width, round caps and joins).
 
 ## Symmetry
 

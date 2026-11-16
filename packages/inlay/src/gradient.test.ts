@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { colorAt, fitShading } from './gradient'
-import { toSvg, trace } from './inlay'
+import { toSvg, traceRaw as trace } from './inlay'
 import type { Rgb } from './palette'
 
 const mix = (a: Rgb, b: Rgb, t: number): Rgb => [0, 1, 2].map((k) => a[k] + (b[k] - a[k]) * Math.max(0, Math.min(1, t))) as Rgb

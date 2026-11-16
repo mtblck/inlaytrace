@@ -26,6 +26,8 @@
  *    On a photo it was worse (9.9 to 15.3), so Poster kept the quantizer; since
  *    #53 it quantizes with Inlay (quantizePalette, k-means in OKLab).
  */
+import { presets, type PresetName, type TraceOptions } from 'inlaytrace'
+
 export type PresetId = 'logo' | 'illustration' | 'outline' | 'lineart' | 'centerline' | 'photo' | 'pixel'
 
 export type Settings = {
@@ -79,52 +81,34 @@ export type Preset = {
   defaults: Omit<Settings, 'preset' | 'merge' | 'removeBackground' | 'aiUpscale' | 'fineDetail' | 'smoothShading' | 'keepOutlines' | 'recogniseText' | 'ownColors' | 'useOwnColors'>
 }
 
-/** Illustration's defaults, which Outline art shares: it differs only in tracing lines as strokes. */
-const ILLUSTRATION: Preset['defaults'] = { colors: 24, threshold: null, lightInk: false, closeGaps: false, speckle: 4, smoothing: 1, corners: 60, shapes: 'stacked', exact: true, strokeWidth: 0 }
+/** The app's preset ids; Poster is the package's `poster`. */
+const PACKAGE_NAME: Record<PresetId, PresetName> = { logo: 'logo', illustration: 'illustration', outline: 'outline', lineart: 'lineart', centerline: 'centerline', photo: 'poster', pixel: 'pixel' }
+
+/** A preset's defaults, read from the package (#162) so the two can't drift: the fitting tolerance shown as the 0–3 Smoothing slider. */
+function defaultsOf(id: PresetId): Preset['defaults'] {
+  const p = presets[PACKAGE_NAME[id]]
+  return {
+    colors: p.colors ?? 2,
+    threshold: p.threshold === undefined ? null : p.threshold,
+    lightInk: false,
+    closeGaps: !!p.closeGaps,
+    speckle: p.speckle ?? 0,
+    smoothing: smoothingFor(p.tolerance ?? 1),
+    corners: p.cornerAngle ?? 45,
+    shapes: p.layers === false ? 'cutout' : 'stacked',
+    exact: !!p.shapes,
+    strokeWidth: 0,
+  }
+}
 
 export const PRESETS: Preset[] = [
-  {
-    id: 'logo',
-    label: 'Logo',
-    hint: 'Few flat colours, crisp corners',
-    defaults: { colors: 8, threshold: null, lightInk: false, closeGaps: false, speckle: 8, smoothing: 1.5, corners: 45, shapes: 'cutout', exact: true, strokeWidth: 0 },
-  },
-  {
-    id: 'illustration',
-    label: 'Illustration',
-    hint: 'More colours, smooth curves',
-    defaults: ILLUSTRATION,
-  },
-  {
-    id: 'outline',
-    label: 'Outline art',
-    hint: 'Drawn outlines kept as editable lines',
-    defaults: { ...ILLUSTRATION, closeGaps: true },
-  },
-  {
-    id: 'lineart',
-    label: 'Line art',
-    hint: 'Ink drawings and scans, one colour',
-    defaults: { colors: 2, threshold: 'auto', lightInk: false, closeGaps: true, speckle: 6, smoothing: 1.5, corners: 45, shapes: 'stacked', exact: true, strokeWidth: 0 },
-  },
-  {
-    id: 'centerline',
-    label: 'Centerline',
-    hint: 'Single strokes for plotters and engraving',
-    defaults: { colors: 2, threshold: 'auto', lightInk: false, closeGaps: true, speckle: 4, smoothing: 1.5, corners: 45, shapes: 'stacked', exact: false, strokeWidth: 0 },
-  },
-  {
-    id: 'photo',
-    label: 'Poster',
-    hint: 'Photos flattened into colour bands',
-    defaults: { colors: 24, threshold: null, lightInk: false, closeGaps: false, speckle: 8, smoothing: 1, corners: 90, shapes: 'stacked', exact: false, strokeWidth: 0 },
-  },
-  {
-    id: 'pixel',
-    label: 'Pixel art',
-    hint: 'Hard edges, nothing smoothed',
-    defaults: { colors: 32, threshold: null, lightInk: false, closeGaps: false, speckle: 0, smoothing: 0, corners: 0, shapes: 'stacked', exact: false, strokeWidth: 0 },
-  },
+  { id: 'logo', label: 'Logo', hint: 'Few flat colours, crisp corners', defaults: defaultsOf('logo') },
+  { id: 'illustration', label: 'Illustration', hint: 'More colours, smooth curves', defaults: defaultsOf('illustration') },
+  { id: 'outline', label: 'Outline art', hint: 'Drawn outlines kept as editable lines', defaults: defaultsOf('outline') },
+  { id: 'lineart', label: 'Line art', hint: 'Ink drawings and scans, one colour', defaults: defaultsOf('lineart') },
+  { id: 'centerline', label: 'Centerline', hint: 'Single strokes for plotters and engraving', defaults: defaultsOf('centerline') },
+  { id: 'photo', label: 'Poster', hint: 'Photos flattened into colour bands', defaults: defaultsOf('photo') },
+  { id: 'pixel', label: 'Pixel art', hint: 'Hard edges, nothing smoothed', defaults: defaultsOf('pixel') },
 ]
 
 export const presetById = (id: PresetId) => PRESETS.find((p) => p.id === id)!
@@ -147,12 +131,6 @@ export const canSetText = (id: PresetId) => id === 'logo' || id === 'illustratio
 
 export const hasExactShapes = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline' || id === 'lineart'
 
-/**
- * How wide a painted outline is looked for, by how many times the image was
- * enlarged: 2 px at its own size (lines up to about 4 px wide), 3 px at 2×.
- */
-export const outlineRadius = (scale: number) => Math.min(4, Math.max(2, Math.round(1.5 * scale)))
-
 /** Evening out painted shading: the presets whose palettes are histogram peaks. */
 export const canSmooth = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline'
 
@@ -174,69 +152,40 @@ export const ownPaletteOf = (s: Settings): string[] | null => (s.useOwnColors &&
  */
 export const toleranceFor = (smoothing: number) => 0.25 + 0.5 * smoothing
 
-/** What the worker traces with (run.ts turns it into Inlay's options). */
-export type TraceOptions = {
-  mode: 'palette' | 'binary' | 'centerline'
-  speckle: number
-  tolerance: number
-  cornerAngle: number
-  /** Palette mode: how many colours, and how they're picked from the image. */
-  colors?: number
-  palette?: 'peak' | 'exact' | 'quantize'
-  /** Palette mode: trace with exactly these colours (#rrggbb) instead of picking them; `palette` still says how they're cleaned up. */
-  own?: string[]
-  merge?: Record<string, string>
-  pixels?: boolean
-  stacked?: boolean
-  /** Draw circles, ellipses, (rounded) rectangles and regular polygons exactly. */
-  shapes?: boolean
-  /** Palette mode: trace thin outlines as stroked lines. */
-  strokes?: boolean
-  /** With strokes or closeGaps: how many times the image was enlarged for tracing, so line widths and gap sizes scale with it. */
-  scale?: number
-  /** Palette mode: soft shading as gradient fills (Illustration and Outline art, stacked). */
-  gradients?: boolean
-  /** Palette mode: even out painted shading (edge-preserving smoothing) before picking colours. */
-  smooth?: boolean
-  /** Palette mode: darken faint painted outlines up to about twice this many px wide, first. */
-  outlines?: number
-  /** Centerline mode: the stroke width in px; measured when left out. */
-  strokeWidth?: number
-  /** Binary and centerline modes. */
-  threshold?: number | 'auto' | null
-  /** Binary and centerline modes, and Outline art's lines: join lines' ends across small breaks. */
-  closeGaps?: boolean
-  invert?: boolean
+/** The Smoothing slider's value for a fitting tolerance: `toleranceFor`'s inverse. */
+export function smoothingFor(tolerance: number) {
+  return Math.round(((tolerance - 0.25) / 0.5) * 100) / 100
 }
 
+/** What the worker traces with: the package's options (#162), every one set from the UI. */
+export type { TraceOptions }
+
 /**
- * Translate the UI's settings into the worker's trace options. Every preset
+ * Translate the UI's settings into the package's trace options. Every preset
  * is Inlay now; they differ in how the palette is picked and how shapes are
- * drawn. Poster moved from VTracer in #53, where on three photos it was 17%
- * closer to the photo with 57% fewer shapes and a 30% smaller file.
+ * drawn, which the package's preset carries. Poster moved from VTracer in #53,
+ * where on three photos it was 17% closer to the photo with 57% fewer shapes
+ * and a 30% smaller file.
  *
  * `scale` is how many times the image was enlarged for tracing (a small
  * image upscaled, or HD's full size); Outline art's line widths grow with it.
  */
 export function toTraceOptions(s: Settings, scale = 1): TraceOptions {
-  const fit = { speckle: s.speckle, tolerance: toleranceFor(s.smoothing), cornerAngle: s.corners, ...(s.exact && hasExactShapes(s.preset) ? { shapes: true } : {}) }
-  const gaps = s.closeGaps ? { closeGaps: true, ...(scale > 1 ? { scale } : {}) } : {}
-  if (s.preset === 'centerline') return { ...fit, mode: 'centerline', threshold: s.threshold, ...gaps, ...(s.strokeWidth > 0 ? { strokeWidth: s.strokeWidth } : {}), ...(s.lightInk ? { invert: true } : {}) }
-  if (s.preset === 'lineart') return { ...fit, mode: 'binary', threshold: s.threshold, ...gaps, ...(s.lightInk ? { invert: true } : {}) }
-  const merge = Object.keys(s.merge ?? {}).length ? { merge: s.merge } : {}
-  // Your own colours replace the picked palette. Gradients are off: their stops
-  // are sampled from the image, so they'd bring back colours you don't have.
+  // `shapes` is always given: left out, the package's default (on for flat art) would win over the setting.
+  // `scale` only where it changes something: line widths (Outline art), gap sizes, and how wide an outline is looked for.
+  const scaled = scale > 1 && (s.preset === 'outline' || (isInk(s.preset) && s.closeGaps) || (canSmooth(s.preset) && s.keepOutlines))
+  const fit = { preset: PACKAGE_NAME[s.preset], speckle: s.speckle, tolerance: toleranceFor(s.smoothing), cornerAngle: s.corners, shapes: s.exact && hasExactShapes(s.preset), ...(scaled ? { scale } : {}) }
+  // Like `shapes`, `closeGaps` is given whenever the preset closes gaps by default, so unticking it holds.
+  const gaps = closesGaps(s.preset) ? { closeGaps: s.closeGaps } : {}
+  if (isInk(s.preset)) return { ...fit, threshold: s.threshold, ...gaps, ...(s.lightInk ? { invert: true } : {}), ...(s.preset === 'centerline' && s.strokeWidth > 0 ? { strokeWidth: s.strokeWidth } : {}) }
+  const merge = canMerge(s.preset) && Object.keys(s.merge ?? {}).length ? { merge: s.merge } : {}
+  // Your own colours replace the picked palette (and gradients go off with them: the package sees to that).
   const own = ownPaletteOf(s)
-  const ownOpts = own ? { own: [...own] } : {}
-  // Pixel art: its exact colours, every pixel kept, boundaries as pixel staircases.
-  if (s.preset === 'pixel') return { ...fit, mode: 'palette', colors: s.colors, palette: 'exact', pixels: true, ...merge }
-  // Poster: photos have no histogram peaks, so the palette is quantized (k-means in OKLab), and shapes stack by default.
-  if (s.preset === 'photo') return { ...fit, mode: 'palette', colors: s.colors, palette: 'quantize', stacked: s.shapes === 'stacked', ...ownOpts }
-  // Logo, Illustration and Outline art: flat art's real colours are the histogram's peaks.
-  // Outline art traces its thin outlines as stroked lines, the fills meeting beneath them.
-  // Illustration and Outline art, stacked, draw soft shading as gradients; cut out is for cutters, which can't.
-  const gradients = !own && s.shapes === 'stacked' && (s.preset === 'illustration' || s.preset === 'outline') ? { gradients: true } : {}
-  return { ...fit, mode: 'palette', colors: s.colors, palette: 'peak', stacked: s.shapes === 'stacked', ...ownOpts, ...merge, ...gradients, ...(s.smoothShading ? { smooth: true } : {}), ...(s.keepOutlines ? { outlines: outlineRadius(scale) } : {}), ...(s.preset === 'outline' ? { strokes: true, ...gaps, ...(scale > 1 ? { scale } : {}) } : {}) }
+  const colour = { ...fit, colors: s.colors, ...merge, ...(own ? { palette: [...own] } : {}) }
+  if (s.preset === 'pixel') return colour
+  if (s.preset === 'photo') return { ...colour, layers: s.shapes === 'stacked' }
+  // Logo, Illustration and Outline art. Gradients come with layers in Illustration and Outline art; cut out is for cutters, which can't draw them.
+  return { ...colour, layers: s.shapes === 'stacked', ...gaps, ...(s.preset === 'outline' ? { strokes: true } : {}), ...(s.smoothShading ? { smoothShading: true } : {}), ...(s.keepOutlines ? { keepOutlines: true } : {}) }
 }
 
 /** Pixel art keeps every source pixel; everything else is traced at this size at most. */

@@ -4,7 +4,23 @@ order: 2
 
 # Options
 
-Every trace takes the same fitting options and one of two modes.
+`trace(image, options)` starts from a preset and takes any of these to
+override it. Left out, each comes from the preset (`presets` lists them).
+
+## Preset and colours
+
+| Option | Type | What it does |
+| --- | --- | --- |
+| `preset` | `'logo'` (default), `'illustration'`, `'outline'`, `'lineart'`, `'centerline'`, `'poster'`, `'pixel'` | What the image is. Colour presets pick their palette from the image: `logo`, `illustration` and `outline` from the histogram's peaks (`peakPalette`), `poster` by clustering (`quantizePalette`), `pixel` from its exact colours (`exactPalette`, or clustering when they cover under 90% of it, as a JPEG's do). `lineart` and `centerline` trace one ink. |
+| `colors` | number | Colour presets: at most this many colours. Logo 8, Illustration, Outline and Poster 24, Pixel art 32. |
+| `palette` | `string[]` | Colour presets: your own colours (`#rrggbb`), traced with only these instead of picking from the image. Gradients go off with it, since their stops would bring back the image's colours. |
+| `merge` | `Record<string, string>` | See [`merge`](#mode-palette-colour-art) below. |
+| `layers` | boolean | Shapes in layers, each whole, instead of cut out to tile. See `stacked` below, which is what it sets. On for Illustration, Outline and Poster; off for Logo, since cutters and screen printers want cut-out shapes. |
+| `threshold` | number, `'auto'` or `null` | `lineart` and `centerline`: see [binary mode](#mode-binary-line-art). Default `'auto'`. |
+| `invert` | boolean | `lineart` and `centerline`: light ink on a dark background. A copy of the pixels is flipped; yours are left alone. |
+| `strokeWidth` | number, px | `centerline`: the stroke width; measured from the ink when left out. |
+| `smoothShading` | boolean | Colour presets: [`smoothShading`](api.md) first, so painted shading doesn't break into flecks. |
+| `keepOutlines` | boolean | Colour presets: [`boostLines`](api.md) first, so faint painted outlines stay apart from the shapes they part. Looks for wider lines on an enlarged image (`scale`). |
 
 ## Fitting
 
@@ -18,11 +34,14 @@ Every trace takes the same fitting options and one of two modes.
 | `strokes` | boolean (optional) | Lines as strokes, for flat outline art (palette mode, not with `photo` or `pixels`). A colour that stands out from the paper (0.25 in OKLab) and is at least 30% thin, long parts (up to 8 px wide and eight times as long; wider areas of it are left out first, so an outline running into a solid area still counts) becomes a line. Its anti-aliased edges and darker shades join it; each connected piece is then measured, and only pieces at least 2.5 px wide, eight times as long as wide and within 20% of the colour's usual width are traced, down their middle, as one stroked path `{ d, fill, stroke }` (`stroke` is the measured width), drawn after the shapes with round caps and joins. The rest (small lettering, short marks, a heading in the same ink) stays shapes. The shapes either side grow under the line to its middle. Default false. |
 | `scale` | number (optional) | With `strokes`: how many times the image was enlarged before tracing (an upscaled small image, a full-size trace). The widths above are multiplied by it. Default 1. |
 | `gradients` | boolean (optional) | Soft shading as gradients (palette mode, not with `pixels`). Neighbouring regions whose boundary is soft (across it the image changes by under 0.4 of their two colours' difference, or under 10 levels) are one shade; if a linear or a radial gradient, fitted by least squares on their pixels, at least halves the error of one flat colour and comes within 10% of the bands' own, they become one shape filled with it. A neighbour the gradient draws at least as well as its own colour joins it. The path gets `gradient` (`{ type: 'linear', x1, y1, x2, y2, stops }` or `{ type: 'radial', cx, cy, r, stops }`, in the trace's pixels, stops `{ offset: 0–1, color }`), and its `fill` is the shade's average colour; `toSvg` writes the gradients in `<defs>` with `gradientUnits="userSpaceOnUse"`, and fills the path with `url(#…) #rrggbb`, its average colour as the fallback. Default false: a cutter or a plotter can only draw flat colour. |
-| `pixels` | boolean (optional) | Pixel art: no clean-up and no curve fitting; every boundary is its exact pixel staircase. |
-| `photo` | boolean (optional) | Photos: a speck joins the colour it shares the most edge with, and slivers are left alone. Without it (flat art) a speck joins the nearest colour, and slivers under 2 px wide fold into a neighbour of nearly the same colour, so a thin stroke that lossy compression split into two shades of its ink stays whole. |
-| `stacked` | boolean (optional) | Stacked shapes, for photos: each shape is drawn whole, without the holes other shapes sit in, larger shapes first, and reaching under the neighbours drawn after it. The picture is the same as cut-out shapes, without the hairline seams where anti-aliased edges meet, for more path data. Holes onto transparency are kept. Default: cut out, which is what vinyl cutters and screen printers want. |
+| `pixels` | boolean (optional) | The 0.3 form only; the `pixel` preset sets it. Pixel art: no clean-up and no curve fitting; every boundary is its exact pixel staircase. |
+| `photo` | boolean (optional) | The 0.3 form only; the `poster` preset sets it. Photos: a speck joins the colour it shares the most edge with, and slivers are left alone. Without it (flat art) a speck joins the nearest colour, and slivers under 2 px wide fold into a neighbour of nearly the same colour, so a thin stroke that lossy compression split into two shades of its ink stays whole. |
+| `stacked` | boolean (optional) | The 0.3 form's name for `layers`. Stacked shapes, for photos: each shape is drawn whole, without the holes other shapes sit in, larger shapes first, and reaching under the neighbours drawn after it. The picture is the same as cut-out shapes, without the hairline seams where anti-aliased edges meet, for more path data. Holes onto transparency are kept. Default: cut out, which is what vinyl cutters and screen printers want. |
 
-## Modes
+## Modes (the 0.3 form)
+
+The deprecated `trace(rgba, width, height, options)` takes one of these two
+modes, with a palette you pick yourself. The presets choose them for you.
 
 ### `mode: 'palette'`: colour art
 
@@ -78,18 +97,19 @@ other across a gap join, and so does a line that stops just short of another
 (a T). A join crosses one gap only, at most 1.6 times the line's width and
 5.5 px, so dashes and gaps left on purpose stay open. Off by default.
 
-## Starting points
+## The presets
 
-These are the Inlay app's presets.
+These are the Inlay app's presets, and what each sets.
 
-| Image | Options |
+| Preset | Sets |
 | --- | --- |
-| Logo: few flat colours, crisp corners | `palette: peakPalette(px, 8, { width })`, `speckle: 8`, `tolerance: 1`, `cornerAngle: 45`, `shapes: true` |
-| Illustration: more colours, smooth curves | `palette: peakPalette(px, 16, { width })`, `speckle: 4`, `tolerance: 0.75`, `cornerAngle: 60`, `shapes: true` |
-| Outline art: outlines as lines | Illustration's, plus `strokes: true`, `closeGaps: true` |
-| Line art: one ink | `mode: 'binary'`, `threshold: 'auto'`, `speckle: 6`, `tolerance: 1`, `cornerAngle: 45`, `shapes: true`, `closeGaps: true` |
-| Pixel art | `palette: exactPalette(px, 32)`, `pixels: true`, `speckle: 0`, `tolerance: 0.25`, `cornerAngle: 0` |
-| Poster: a photo in flat colour bands | `palette: quantizePalette(px, 24)`, `stacked: true`, `photo: true`, `speckle: 8`, `tolerance: 0.75`, `cornerAngle: 90` |
+| `logo` | palette from peaks, `colors: 8`, `speckle: 8`, `tolerance: 1`, `cornerAngle: 45`, `shapes: true`, cut out |
+| `illustration` | palette from peaks, `colors: 24`, `speckle: 4`, `tolerance: 0.75`, `cornerAngle: 60`, `shapes: true`, `layers: true`, `gradients: true` |
+| `outline` | Illustration's, plus `strokes: true`, `closeGaps: true` |
+| `lineart` | one ink, `threshold: 'auto'`, `speckle: 6`, `tolerance: 1`, `cornerAngle: 45`, `shapes: true`, `closeGaps: true` |
+| `centerline` | one ink as strokes, `threshold: 'auto'`, `speckle: 4`, `tolerance: 1`, `cornerAngle: 45`, `closeGaps: true` |
+| `poster` | palette by clustering, photo clean-up, `colors: 24`, `speckle: 8`, `tolerance: 0.75`, `cornerAngle: 90`, `layers: true` |
+| `pixel` | exact colours, pixel staircases, `colors: 32`, `speckle: 0`, `tolerance: 0.25`, `cornerAngle: 0` |
 
 Small images trace better upscaled first: the app scales anything under 512 px
 up to about 1024 px, with smoothing, before tracing (except pixel art).
