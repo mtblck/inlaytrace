@@ -24,6 +24,17 @@ export type ShapeKind = 'circle' | 'ellipse' | 'rectangle' | 'rounded-rectangle'
 /** How closely an outline must follow a shape: RMS and worst distance, in px, of its pixel-edge midpoints. */
 const MAX_RMS = 0.3
 const MAX_OFF = 0.85
+/**
+ * A candidate within these looser limits isn't taken on trust: it's drawn,
+ * and kept only if it's as close to the region as the free fit (#147). A
+ * small hexagon's pixel edges stray further from its true sides than a big
+ * one's, so the strict limits turned it down, and its free fit came out lumpy.
+ */
+const LOOSE_RMS = 0.5
+const LOOSE_OFF = 1.4
+type Gate = { rms: number; off: number }
+const STRICT: Gate = { rms: MAX_RMS, off: MAX_OFF }
+const LOOSE: Gate = { rms: LOOSE_RMS, off: LOOSE_OFF }
 /** An ellipse whose axes differ by less than this is drawn as a circle. */
 const ROUND = 0.015
 const KAPPA = 0.5522847498307936 // handle length of a quarter circle, per unit radius
@@ -82,15 +93,15 @@ function midpoints(pts: Pt[]): Pt[] {
   return out
 }
 
-/** Whether every point is close to a shape, given its distance function. */
-function fits(points: Pt[], distance: (p: Pt) => number) {
+/** Whether every point is close to a shape, given its distance function: within `gate`. */
+function fits(points: Pt[], distance: (p: Pt) => number, gate: Gate) {
   let sum = 0
   for (const p of points) {
     const d = Math.abs(distance(p))
-    if (d > MAX_OFF) return false
+    if (d > gate.off) return false
     sum += d * d
   }
-  return Math.sqrt(sum / points.length) <= MAX_RMS
+  return Math.sqrt(sum / points.length) <= gate.rms
 }
 
 /** Into a frame centred on (cx, cy) and turned by `angle`. */
@@ -121,15 +132,24 @@ const reversed = (cubics: Cubic[]): Cubic[] => cubics.map(([a, b, c, d]) => [d, 
  * the same way round as the outline; otherwise null. `corners` are the corner
  * points the fitter found on it (a polygon's vertices; usually none for a round shape).
  */
-export function fitShape(pts: Pt[], corners: Pt[]): { kind: ShapeKind; cubics: Cubic[] } | null {
+export function fitShape(pts: Pt[], corners: Pt[], gate: 'strict' | 'loose' = 'strict'): { kind: ShapeKind; cubics: Cubic[] } | null {
   const f = moments(pts)
   if (!f) return null
   const mids = midpoints(pts)
   const p = principal(f)
+  const g = gate === 'loose' ? LOOSE : STRICT
   // Corners first; but the ends of a narrow ellipse can read as corners, so
   // the round shapes are tried whatever was found.
-  const shape = (corners.length >= 3 ? withCorners(f, corners, mids) : null) ?? roundShape(f, p, mids)
+  const shape = (corners.length >= 3 ? withCorners(f, corners, mids, g) : null) ?? roundShape(f, p, mids, g)
   if (!shape) return null
+  // A small regular polygon (a hexagon a few pixels across) has a circle's
+  // moments, and its corners are too blunt in pixels to find, so it passes as
+  // a circle. Draw it as each polygon too, and keep the one that covers the
+  // region clearly better (#147).
+  if (shape.kind === 'circle' && f.area < Math.PI * POLYGON_MAX_R ** 2) {
+    const poly = regularByArea(f, pts)
+    if (poly && poly.apart < POLYGON_WINS * areaApart(circlePoints(shape.cubics), pts)) shape.kind = 'polygon', (shape.cubics = poly.vertices.map((a, i) => lineTo(a, poly.vertices[(i + 1) % poly.vertices.length])))
+  }
   // Same direction round as the outline, so holes stay holes.
   let area = 0
   for (let i = 0; i < pts.length; i++) area += pts[i].x * pts[(i + 1) % pts.length].y - pts[(i + 1) % pts.length].x * pts[i].y
@@ -137,7 +157,58 @@ export function fitShape(pts: Pt[], corners: Pt[]): { kind: ShapeKind; cubics: C
   return shape
 }
 
-function roundShape(f: Frame, p: ReturnType<typeof principal>, mids: Pt[]): { kind: ShapeKind; cubics: Cubic[] } | null {
+/** A polygon replaces a circle only if it's off the region by less than this share of the circle's area apart. */
+const POLYGON_WINS = 0.6
+/**
+ * Past this radius (px) a polygon's corners are sharp enough for the fitter to
+ * find, so the search (which costs about R² per try) isn't needed.
+ */
+const POLYGON_MAX_R = 16
+
+const circlePoints = (cubics: Cubic[]) =>
+  cubics.flatMap(([a, b, c, d]) =>
+    Array.from({ length: 16 }, (_, k) => {
+      const t = k / 16
+      const u = 1 - t
+      return { x: u * u * u * a.x + 3 * u * u * t * b.x + 3 * u * t * t * c.x + t * t * t * d.x, y: u * u * u * a.y + 3 * u * u * t * b.y + 3 * u * t * t * c.y + t * t * t * d.y }
+    }),
+  )
+
+/**
+ * The regular polygon (3 to 8 sides) of the region's area and centroid that
+ * covers it best, turned to fit by trying its angle in steps; and how far
+ * apart it is from the region, in px².
+ */
+function regularByArea(f: Frame, pts: Pt[]): { vertices: Pt[]; apart: number } | null {
+  let best: { vertices: Pt[]; apart: number } | null = null
+  for (let k = 3; k <= 8; k++) {
+    const step = (2 * Math.PI) / k
+    const R = Math.sqrt((2 * f.area) / (k * Math.sin(step)))
+    if (R < 2.5) continue
+    const at = (phase: number) => Array.from({ length: k }, (_, i) => ({ x: f.cx + R * Math.cos(phase + i * step), y: f.cy + R * Math.sin(phase + i * step) }))
+    // Coarse turns, then finer round the best.
+    let phase = 0
+    let apart = Infinity
+    for (const [from, span, n] of [
+      [0, step, 24],
+      [-step / 24, step / 12, 12],
+    ] as const) {
+      const base = phase
+      for (let j = 0; j < n; j++) {
+        const t = (from === 0 ? 0 : base) + from + (span * j) / n
+        const e = areaApart(at(t), pts)
+        if (e < apart) {
+          apart = e
+          phase = t
+        }
+      }
+    }
+    if (!best || apart < best.apart) best = { vertices: at(phase), apart }
+  }
+  return best
+}
+
+function roundShape(f: Frame, p: ReturnType<typeof principal>, mids: Pt[], g: Gate): { kind: ShapeKind; cubics: Cubic[] } | null {
   const cos = Math.cos(p.angle)
   const sin = Math.sin(p.angle)
   // An ellipse with semi-axes a, b has variances a²/4 and b²/4.
@@ -153,7 +224,7 @@ function roundShape(f: Frame, p: ReturnType<typeof principal>, mids: Pt[]): { ki
       const g = 2 * Math.hypot(u / (a * a), v / (b * b))
       return g > 1e-12 ? F / g : Infinity
     }
-    if (fits(mids, off)) {
+    if (fits(mids, off, g)) {
       const cubics = [0, 1, 2, 3].map((k) => quarter(f.cx, f.cy, cos, sin, a, b, 0, 0, (k * Math.PI) / 2))
       return { kind: circle ? 'circle' : 'ellipse', cubics }
     }
@@ -178,7 +249,7 @@ function roundShape(f: Frame, p: ReturnType<typeof principal>, mids: Pt[]): { ki
     const qy = Math.abs(v) - (hh - r)
     return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r
   }
-  if (!fits(mids, off)) return null
+  if (!fits(mids, off, g)) return null
   const at = (u: number, v: number) => world(u, v, f.cx, f.cy, cos, sin)
   const iw = hw - r
   const ih = hh - r
@@ -200,7 +271,7 @@ function roundShape(f: Frame, p: ReturnType<typeof principal>, mids: Pt[]): { ki
   return { kind: 'rounded-rectangle', cubics }
 }
 
-function withCorners(f: Frame, corners: Pt[], mids: Pt[]): { kind: ShapeKind; cubics: Cubic[] } | null {
+function withCorners(f: Frame, corners: Pt[], mids: Pt[], g: Gate): { kind: ShapeKind; cubics: Cubic[] } | null {
   const k = corners.length
   if (k < 3 || k > 12) return null
   // Corners in order round the centre.
@@ -233,7 +304,7 @@ function withCorners(f: Frame, corners: Pt[], mids: Pt[]): { kind: ShapeKind; cu
       const qy = Math.abs(v) - hh
       return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0)
     }
-    if (!fits(mids, off)) return null
+    if (!fits(mids, off, g)) return null
     const c = [world(hw, -hh, f.cx, f.cy, cos, sin), world(hw, hh, f.cx, f.cy, cos, sin), world(-hw, hh, f.cx, f.cy, cos, sin), world(-hw, -hh, f.cx, f.cy, cos, sin)]
     return { kind: 'rectangle', cubics: c.map((a, i) => lineTo(a, c[(i + 1) % 4])) }
   }
@@ -265,6 +336,45 @@ function withCorners(f: Frame, corners: Pt[], mids: Pt[]): { kind: ShapeKind; cu
     }
     return best
   }
-  if (!fits(mids, off)) return null
+  if (!fits(mids, off, g)) return null
   return { kind: 'polygon', cubics: vertices.map((a, i) => lineTo(a, vertices[(i + 1) % k])) }
+}
+
+/**
+ * The area, in px², where two closed outlines differ (one covers and the other
+ * doesn't): each scanned in rows a quarter of a pixel apart, by where its
+ * edges cross the row (even-odd). How well a fit draws a region, measured the
+ * way it will be seen.
+ */
+export function areaApart(a: Pt[], b: Pt[]): number {
+  let y0 = Infinity
+  let y1 = -Infinity
+  for (const p of [...a, ...b]) {
+    if (p.y < y0) y0 = p.y
+    if (p.y > y1) y1 = p.y
+  }
+  const ROWS = 4
+  let sum = 0
+  for (let y = Math.floor(y0 * ROWS) / ROWS + 0.5 / ROWS; y < y1; y += 1 / ROWS) {
+    const xs: { x: number; w: number }[] = []
+    for (const [poly, w] of [
+      [a, 1],
+      [b, 2],
+    ] as const)
+      for (let i = 0; i < poly.length; i++) {
+        const p = poly[i]
+        const q = poly[(i + 1) % poly.length]
+        if (p.y > y !== q.y > y) xs.push({ x: p.x + ((y - p.y) * (q.x - p.x)) / (q.y - p.y), w })
+      }
+    xs.sort((m, n) => m.x - n.x)
+    // Walk the row: inside a, inside b, and add the length where exactly one is.
+    let inA = false
+    let inB = false
+    for (let k = 0; k < xs.length; k++) {
+      if (xs[k].w === 1) inA = !inA
+      else inB = !inB
+      if (inA !== inB && k + 1 < xs.length) sum += xs[k + 1].x - xs[k].x
+    }
+  }
+  return sum / ROWS
 }
