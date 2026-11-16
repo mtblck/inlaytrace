@@ -6,7 +6,7 @@ public: true
 
 - **Status:** Accepted
 - **Date:** 2026-10-27
-- **PR:** (this PR)
+- **PR:** [#167](https://github.com/mtblck/inlaytrace/pull/167)
 
 ## Context
 

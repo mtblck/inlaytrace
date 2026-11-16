@@ -50,7 +50,7 @@ restore.
 The app allows scripts only from itself, plus `worker-src 'self' blob:` for
 the worker. No inline scripts and no `eval` (paper.js is the core build, which
 has none). The page doesn't allow WebAssembly either. Only the AI worker
-(background removal and upscaling) compiles any, so only that one file is
+(background removal, upscaling and text recognition) compiles any, so only that one file is
 served with `'wasm-unsafe-eval'`, its policy otherwise the same as the app's.
 `'wasm-unsafe-eval'` lets a script compile WebAssembly; it doesn't allow
 `eval`, inline scripts or anything from another site, and the WebAssembly can
