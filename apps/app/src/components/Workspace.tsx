@@ -72,9 +72,10 @@ export const EDIT_TOOLS = (strokes: boolean, lineTrace = strokes): RailTool<Tool
   },
 ]
 
-/** Clean up's tools by name (#199, #200, #202, #205, #206). */
-export const CLEAN_TOOL_LABEL = { crop: 'Crop', straighten: 'Straighten', brush: 'Brush', eraser: 'Eraser', despeckle: 'Despeckle', heal: 'Heal', fill: 'Fill', wand: 'Magic wand' } as const
-export const CLEAN_TOOLS: RailTool<keyof typeof CLEAN_TOOL_LABEL>[] = [
+/** Clean up's tools by name (#199, #200, #202, #205, #206, #204). */
+export const CLEAN_TOOL_LABEL = { crop: 'Crop', straighten: 'Straighten', brush: 'Brush', eraser: 'Eraser', despeckle: 'Despeckle', heal: 'Heal', fill: 'Fill', wand: 'Magic wand', keep: 'Keep', remove: 'Remove' } as const
+/** Keep and Remove paint over Remove background's mask, so they wait for it to be on. */
+export const CLEAN_TOOLS = (removeBackground: boolean): RailTool<keyof typeof CLEAN_TOOL_LABEL>[] => [
   { id: 'crop', label: CLEAN_TOOL_LABEL.crop, key: 'C', icon: icon('M5 1.5V13h11.5M1.5 5H13v11.5') },
   { id: 'straighten', label: CLEAN_TOOL_LABEL.straighten, key: 'L', icon: icon('M2 12.5L16 5.5M2 15.5h14') },
   { id: 'brush', label: CLEAN_TOOL_LABEL.brush, key: 'B', icon: icon('M15.5 2.5L8 10M8 10c-2-.5-4 .5-4.5 3S2 16 2 16s2.5.5 5-.5 3-3 1-5.5') },
@@ -83,6 +84,20 @@ export const CLEAN_TOOLS: RailTool<keyof typeof CLEAN_TOOL_LABEL>[] = [
   { id: 'heal', label: CLEAN_TOOL_LABEL.heal, key: 'J', icon: icon('M4.5 11.5l7-7a2.1 2.1 0 013 3l-7 7a2.1 2.1 0 01-3-3zM7.5 8.5l3 3M8 6l.01.01M10 8l.01.01M6 10l.01.01M8 12l.01.01') },
   { id: 'fill', label: CLEAN_TOOL_LABEL.fill, key: 'G', icon: icon('M3.5 9.5L9 4l5.5 5.5L9 15zM9 4L7 2M14.5 9.5c.8 1.4 1.5 2.4 1.5 3.2a1.5 1.5 0 01-3 0c0-.8.7-1.8 1.5-3.2z') },
   { id: 'wand', label: CLEAN_TOOL_LABEL.wand, key: 'W', icon: icon('M2.5 15.5l8-8M9 6l2 2M12.5 1.5v3M15.5 4.5h-3M14.5 2.5l-1 1M15.5 8l-1-.5M8 2.5l.5 1') },
+  {
+    id: 'keep',
+    label: CLEAN_TOOL_LABEL.keep,
+    key: 'K',
+    icon: icon('M9 2.5l1.9 4 4.4.5-3.3 3 .9 4.3L9 12.2l-3.9 2.1.9-4.3-3.3-3 4.4-.5z'),
+    ...(removeBackground ? {} : { disabled: 'Keep paints over Remove the background’s mask: turn that on in Trace first' }),
+  },
+  {
+    id: 'remove',
+    label: CLEAN_TOOL_LABEL.remove,
+    key: 'R',
+    icon: icon('M9 2.5l1.9 4 4.4.5-3.3 3 .9 4.3L9 12.2l-3.9 2.1.9-4.3-3.3-3 4.4-.5zM2 16L16 2'),
+    ...(removeBackground ? {} : { disabled: 'Remove paints over Remove the background’s mask: turn that on in Trace first' }),
+  },
 ]
 
 /**

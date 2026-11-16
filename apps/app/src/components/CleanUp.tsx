@@ -34,20 +34,29 @@ import {
   type Fill,
   type FillSettings,
   type Img,
+  type MaskStroke,
   type Paint,
   type PaintTool,
 } from '../lib/cleanup'
 import { backgroundOf, composite, dabAt, maskOver, regionOf, stampSegment, strokeColour, type Dab, type Mask } from '../lib/cleanupPixels'
-import { cleanedPixels, originalPixels, pngOf } from '../lib/cleanupRun'
+import { cleanedPixels, originalPixels, pngOf, withMaskStrokes } from '../lib/cleanupRun'
 import type { Ink, ShownPath } from '../lib/doc'
 import type { Source } from '../lib/image'
 import { STEP as ZOOM_STEP, wheelFactor } from '../lib/zoom'
 import { Section, Slider } from './Controls'
 
-export type CleanTool = 'crop' | 'straighten' | PaintTool | 'fill' | 'wand'
-export const isPaintTool = (t: CleanTool): t is PaintTool => t === 'brush' || t === 'eraser' || t === 'despeckle' || t === 'heal'
-/** While Despeckle or Heal is drawn, the stroke shows as a tint; the fix is worked out from it when you let go. */
+/** The tools that paint strokes: on the pixels, or (Keep and Remove, #204) on background removal's mask. */
+export type BrushTool = PaintTool | 'keep' | 'remove'
+export type CleanTool = 'crop' | 'straighten' | BrushTool | 'fill' | 'wand'
+export const isPaintTool = (t: CleanTool): t is BrushTool => t === 'brush' || t === 'eraser' || t === 'despeckle' || t === 'heal' || t === 'keep' || t === 'remove'
+const isMaskTool = (t: CleanTool): t is 'keep' | 'remove' => t === 'keep' || t === 'remove'
+/** While Despeckle, Heal or Remove is drawn, the stroke shows as a tint (Keep's green); the result is worked out when you let go. */
 const MARK: [number, number, number, number] = [194, 65, 12, 110]
+const KEEP_MARK: [number, number, number, number] = [22, 163, 74, 110]
+/** Background removal's result, whose alpha is the mask Keep and Remove paint over. */
+export type BackgroundMask = { rgba: Uint8ClampedArray; width: number; height: number }
+/** Where background removal stands, for Keep and Remove's panel. */
+export type MaskState = 'ready' | 'working' | 'stale' | 'off'
 /** The tools that lay down the brush colour, and so pick it with Alt-click. */
 const usesColour = (t: CleanTool) => t === 'brush' || t === 'fill' || t === 'wand'
 
@@ -86,7 +95,7 @@ type Drag =
   | { kind: 'new' | 'move' | 'resize'; start: Pt; from: CropDraft | null; hx: number; hy: number }
   | { kind: 'line'; start: Pt }
   | { kind: 'pan'; x: number; y: number; view: View }
-type Stroke = { op: Paint; base: Img; mask: Mask; touched: boolean; pressure: number; out: Uint8ClampedArray; data: ImageData; colour: [number, number, number, number]; last: Dab | null }
+type Stroke = { op: Paint | MaskStroke; base: Img; mask: Mask; touched: boolean; pressure: number; out: Uint8ClampedArray; data: ImageData; colour: [number, number, number, number]; last: Dab | null }
 
 export function CleanCanvas(p: {
   source: Source
@@ -101,7 +110,7 @@ export function CleanCanvas(p: {
   onStraighten: (degrees: number) => void
   brush: BrushSettings
   onBrush: (b: BrushSettings) => void
-  onStroke: (op: Paint) => void
+  onStroke: (op: Paint | MaskStroke) => void
   /** The next click picks the brush colour from the image. */
   picking: boolean
   onPick: (hex: string) => void
@@ -110,6 +119,8 @@ export function CleanCanvas(p: {
   /** The magic wand's clicks, in fractions of the image (x, y, x, y, …), or null with nothing selected. */
   wand: number[] | null
   onWand: (seeds: number[] | null) => void
+  /** Background removal's result, while it was made from the image on screen; shown as a tint for Keep and Remove. */
+  mask: BackgroundMask | null
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -142,6 +153,32 @@ export function CleanCanvas(p: {
   }, [img])
   const imgRef = useRef(img)
   imgRef.current = img
+
+  // Background removal's mask, with the list's Keep and Remove strokes over it: what it removes, tinted.
+  const maskRef = useRef<HTMLCanvasElement>(null)
+  const maskShown = p.mask && isMaskTool(p.tool) && !p.showOriginal ? p.mask : null
+  const maskAlpha = useMemo(() => (maskShown ? withMaskStrokes(maskShown.rgba, maskShown.width, maskShown.height, p.source, p.ops) : null), [maskShown, p.source, p.ops])
+  const removed = useMemo(() => {
+    if (!maskAlpha) return 0
+    let n = 0
+    for (let i = 3; i < maskAlpha.length; i += 4) if (maskAlpha[i] < 128) n++
+    return n / (maskAlpha.length / 4)
+  }, [maskAlpha])
+  useEffect(() => {
+    const c = maskRef.current
+    if (!c || !maskAlpha || !maskShown) return
+    c.width = maskShown.width
+    c.height = maskShown.height
+    const out = new ImageData(maskShown.width, maskShown.height)
+    const d = out.data
+    for (let i = 0; i < d.length; i += 4) {
+      d[i] = 194
+      d[i + 1] = 65
+      d[i + 2] = 12
+      d[i + 3] = (255 - maskAlpha[i + 3]) * 0.55
+    }
+    c.getContext('2d')!.putImageData(out, 0, 0)
+  }, [maskAlpha, maskShown])
 
   // The wand's selection, tinted with its edge drawn solid, on a canvas of its own over the image.
   const selRef = useRef<HTMLCanvasElement>(null)
@@ -320,17 +357,15 @@ export function CleanCanvas(p: {
     canvasRef.current?.getContext('2d')!.putImageData(s.data, 0, 0, r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0)
   }
   const startStroke = (pt: Pt, pressure: number) => {
-    const t = p.tool as PaintTool
-    const op: Paint = {
-      kind: 'paint',
-      tool: t,
-      ...(t === 'brush' ? { color: p.brush.color.toLowerCase() } : {}),
-      size: round(Math.min(1, p.brush.size / Math.max(img.width, img.height)), 6),
-      hardness: round(p.brush.hardness, 2),
-      points: [],
-    }
+    const t = p.tool as BrushTool
+    const size = round(Math.min(1, p.brush.size / Math.max(img.width, img.height)), 6)
+    const hardness = round(p.brush.hardness, 2)
+    const op: Paint | MaskStroke = isMaskTool(t)
+      ? { kind: 'mask', tool: t, size, hardness, points: [] }
+      : { kind: 'paint', tool: t, ...(t === 'brush' ? { color: p.brush.color.toLowerCase() } : {}), size, hardness, points: [] }
+    const colour = op.kind === 'mask' ? (op.tool === 'keep' ? KEEP_MARK : MARK) : t === 'despeckle' || t === 'heal' ? MARK : strokeColour(img, op)
     const out = img.rgba.slice()
-    const s: Stroke = { op, base: img, mask: maskOver({ x0: 0, y0: 0, x1: img.width, y1: img.height }), touched: false, pressure, out, data: new ImageData(out as Uint8ClampedArray<ArrayBuffer>, img.width, img.height), colour: t === 'despeckle' || t === 'heal' ? MARK : strokeColour(img, op), last: null }
+    const s: Stroke = { op, base: img, mask: maskOver({ x0: 0, y0: 0, x1: img.width, y1: img.height }), touched: false, pressure, out, data: new ImageData(out as Uint8ClampedArray<ArrayBuffer>, img.width, img.height), colour, last: null }
     stroke.current = s
     addPoint(s, pt, pressure)
   }
@@ -522,6 +557,15 @@ export function CleanCanvas(p: {
           aria-label={p.showOriginal ? 'The original image' : 'The cleaned image'}
           role="img"
         />
+        {maskAlpha && (
+          <canvas
+            ref={maskRef}
+            className="pointer-events-none absolute inset-0 h-full w-full"
+            style={pixelScale >= 2 ? { imageRendering: 'pixelated' } : undefined}
+            data-mask-removed={round(removed, 3)}
+            aria-hidden="true"
+          />
+        )}
         {selection && (
           <canvas
             ref={selRef}
@@ -640,6 +684,7 @@ export function CleanPanel(p: {
   onFill: (f: FillSettings) => void
   wand: number[] | null
   onWand: (seeds: number[] | null) => void
+  mask: MaskState
 }) {
   const size = useMemo(() => cleanedPixels(p.source, p.ops), [p.source, p.ops])
   const [angle, setAngle] = useState('')
@@ -653,7 +698,7 @@ export function CleanPanel(p: {
 
   return (
     <>
-      <Section title={{ crop: 'Crop', straighten: 'Straighten', brush: 'Brush', eraser: 'Eraser', despeckle: 'Despeckle', heal: 'Heal', fill: 'Fill', wand: 'Magic wand' }[p.tool]}>
+      <Section title={{ crop: 'Crop', straighten: 'Straighten', brush: 'Brush', eraser: 'Eraser', despeckle: 'Despeckle', heal: 'Heal', fill: 'Fill', wand: 'Magic wand', keep: 'Keep', remove: 'Remove' }[p.tool]}>
         {isPaintTool(p.tool) ? (
           <BrushFields {...p} tool={p.tool} background={backgroundOf(size)} />
         ) : p.tool === 'fill' || p.tool === 'wand' ? (
@@ -850,7 +895,8 @@ export function CleanPanel(p: {
 }
 
 function BrushFields(p: {
-  tool: PaintTool
+  tool: BrushTool
+  mask: MaskState
   brush: BrushSettings
   onBrush: (b: BrushSettings) => void
   inks: Ink[]
@@ -869,10 +915,17 @@ function BrushFields(p: {
             ? 'Paint over JPEG noise and specks: they even out and merge into the colour round them, only where you paint. Shapes more than a quarter of the brush’s size stay.'
             : p.tool === 'heal'
               ? 'Paint over a mark (a stain, a watermark, a stray line) to fill it in from the pixels round it, keeping edges that run through it sharp.'
-              : bg
+              : isMaskTool(p.tool)
+                ? `${p.tool === 'keep' ? 'Paint over what Remove the background took but should have kept, such as a pale edge or a thin part.' : 'Paint over what Remove the background left but should have taken, such as a shadow or a gap between shapes.'} The tint shows what’s removed. Your strokes apply each time it runs, so changing the image doesn’t lose them.`
+                : bg
             ? `Paints the background colour, ${bg}, so stray marks, dust and signatures trace as nothing.`
             : 'Paints the background, which is transparent here, so stray marks trace as nothing.'}
       </p>
+      {isMaskTool(p.tool) && p.mask !== 'ready' && (
+        <p className="field-hint" data-mask-state={p.mask}>
+          {p.mask === 'working' ? 'Removing the background…' : p.mask === 'stale' ? 'The image has changed since the background was removed: leave Clean up to remove it again, then come back to paint its mask.' : 'Turn on Remove the background (in Trace) first.'}
+        </p>
+      )}
       <Slider label="Size" value={sizeToSlider(b.size)} min={0} max={1} step={0.005} hint="[ and ] make it smaller and bigger." format={() => `${b.size} px`} onChange={(v) => p.onBrush({ ...b, size: sliderToSize(v) })} />
       <Slider
         label="Hardness"

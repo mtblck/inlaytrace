@@ -25,7 +25,9 @@ mode switches to Edit mode.
 | G | Fill: fill the area you click in the brush colour |
 | W | Magic wand: select an area of one colour (⇧ click adds) |
 | Delete | Clear the wand's selection to the background |
-| [ / ] | Brush smaller, bigger (Brush, Eraser, Despeckle, Heal) |
+| K | Keep: paint back in what Remove the background took |
+| R | Remove: take away what Remove the background left |
+| [ / ] | Brush smaller, bigger (every brush) |
 | Shift [ / Shift ] | Brush softer, harder |
 | ⌥ click | Pick the brush colour from the image (Brush, Fill, Magic wand) |
 | Space drag | Pan when zoomed in (or drag with the middle button) |

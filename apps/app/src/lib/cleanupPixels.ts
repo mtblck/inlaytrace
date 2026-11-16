@@ -4,7 +4,7 @@
  * the mode's glue need the list, not the pixel loops.
  */
 import { smoothShading } from 'inlaytrace'
-import { clamp, isQuarter, normDegrees, type CleanupOp, type Crop, type Fill, type Flip, type Img, type Levels, type Paint } from './cleanup'
+import { clamp, isQuarter, normDegrees, type CleanupOp, type Crop, type Fill, type Flip, type Img, type Levels, type MaskStroke, type Paint } from './cleanup'
 
 // ---- Replay -----------------------------------------------------------------
 
@@ -31,6 +31,9 @@ export function apply(img: Img, op: CleanupOp): Img {
       return threshold(img, op.level)
     case 'fill':
       return fill(img, op, false)
+    case 'mask':
+      // Background removal's business, not the pixels'.
+      return img
   }
 }
 
@@ -598,4 +601,94 @@ function fill(img: Img, op: Fill, inPlace: boolean): Img {
       d[o + 3] = a
     }
   return out
+}
+
+// ---- Mask strokes (#204) ---------------------------------------------------------------
+//
+// Keep and Remove strokes are drawn on the image as it is at their step, but
+// laid over background removal's mask, which is made from the image at the end
+// of the list. So each stroke is carried through the crops, turns and flips
+// after it, point by point, into fractions of the final image.
+
+/** Where the point (x, y), in pixels of a `w` × `h` image, lands after `op`, and the image's new size. */
+function movePoint(op: CleanupOp, w: number, h: number, x: number, y: number): { x: number; y: number; w: number; h: number } {
+  if (op.kind === 'crop') {
+    const b = cropBox(w, h, op)
+    return { x: x - b.x, y: y - b.y, w: b.w, h: b.h }
+  }
+  if (op.kind === 'flip') return op.axis === 'horizontal' ? { x: w - x, y, w, h } : { x, y: h - y, w, h }
+  if (op.kind !== 'rotate') return { x, y, w, h }
+  const d = normDegrees(op.degrees)
+  const size = rotatedSize(w, h, d)
+  if (isQuarter(d)) {
+    const turns = ((Math.round(d / 90) % 4) + 4) % 4
+    const [nx, ny] = turns === 0 ? [x, y] : turns === 1 ? [h - y, x] : turns === 2 ? [w - x, h - y] : [y, w - x]
+    return { x: nx, y: ny, ...size }
+  }
+  // The replay samples each new pixel at its inverse turn; this is the forward one.
+  const t = (d * Math.PI) / 180
+  const dx = x - w / 2
+  const dy = y - h / 2
+  return { x: Math.cos(t) * dx - Math.sin(t) * dy + size.w / 2, y: Math.sin(t) * dx + Math.cos(t) * dy + size.h / 2, ...size }
+}
+
+/**
+ * The list's mask strokes, carried into fractions of the image the list ends
+ * with (`width` × `height` is the original's size: only proportions matter).
+ * Brush sizes follow, as fractions of the final image's long edge.
+ */
+export function maskStrokes(ops: CleanupOp[], width: number, height: number): MaskStroke[] {
+  const out: MaskStroke[] = []
+  let w = width
+  let h = height
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i]
+    if (op.kind === 'mask') {
+      const pts = op.points.slice()
+      let cw = w
+      let ch = h
+      for (let k = 0; k < pts.length; k += 3) {
+        let p = { x: pts[k] * w, y: pts[k + 1] * h, w, h }
+        for (let j = i + 1; j < ops.length; j++) p = movePoint(ops[j], p.w, p.h, p.x, p.y)
+        pts[k] = p.x / p.w
+        pts[k + 1] = p.y / p.h
+        cw = p.w
+        ch = p.h
+      }
+      out.push({ ...op, size: (op.size * Math.max(w, h)) / Math.max(cw, ch), points: pts })
+      continue
+    }
+    if (op.kind === 'crop' || op.kind === 'rotate' || op.kind === 'flip') ({ w, h } = movePoint(op, w, h, 0, 0))
+  }
+  return out
+}
+
+/** Lay mask strokes over `rgba`'s alpha, in place: Remove takes it away, Keep brings it back to opaque. */
+export function applyMaskStrokes(rgba: Uint8ClampedArray, width: number, height: number, strokes: MaskStroke[]) {
+  const img = { width, height }
+  for (const op of strokes) {
+    let box: Rect | null = null
+    const dabs = []
+    for (let i = 0; i < op.points.length; i += 3) {
+      const d = dabAt(img, op, op.points[i], op.points[i + 1], op.points[i + 2])
+      dabs.push(d)
+      box = union(box, { x0: Math.floor(d.x - d.r), y0: Math.floor(d.y - d.r), x1: Math.ceil(d.x + d.r), y1: Math.ceil(d.y + d.r) })
+    }
+    const clip = box && { x0: Math.max(0, box.x0), y0: Math.max(0, box.y0), x1: Math.min(width, box.x1), y1: Math.min(height, box.y1) }
+    if (!clip || clip.x0 >= clip.x1 || clip.y0 >= clip.y1) continue
+    const mask = maskOver(clip)
+    let last: Dab | null = null
+    for (const d of dabs) {
+      stampSegment(mask, last, d, op.hardness)
+      last = d
+    }
+    for (let y = clip.y0; y < clip.y1; y++)
+      for (let x = clip.x0; x < clip.x1; x++) {
+        const m = mask.data[(y - mask.y) * mask.w + x - mask.x]
+        if (!m) continue
+        const o = (y * width + x) * 4 + 3
+        const c = m / 255
+        rgba[o] = op.tool === 'remove' ? rgba[o] * (1 - c) : rgba[o] + (255 - rgba[o]) * c
+      }
+  }
 }

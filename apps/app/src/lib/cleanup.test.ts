@@ -1,7 +1,7 @@
 import jpeg from 'jpeg-js'
 import { describe, expect, it } from 'vitest'
-import { addOp, adjustmentOf, checkCleanup, sameGeometry, setAdjustment, straightenAngle, type CleanupOp, type Img } from './cleanup'
-import { backgroundOf, composite, dabAt, maskOver, regionOf, replay, sizeAfter, stampSegment, strokeColour, type Dab } from './cleanupPixels'
+import { addOp, adjustmentOf, checkCleanup, pixelOps, sameGeometry, setAdjustment, straightenAngle, type CleanupOp, type Img } from './cleanup'
+import { applyMaskStrokes, backgroundOf, composite, dabAt, maskOver, maskStrokes, regionOf, replay, sizeAfter, stampSegment, strokeColour, type Dab } from './cleanupPixels'
 
 /** A w × h image where pixel (x, y) is grey level `f(x, y)`, opaque. */
 function image(w: number, h: number, f: (x: number, y: number) => number): Img {
@@ -237,6 +237,57 @@ describe('despeckle and heal (#206)', () => {
   })
 })
 
+describe('mask strokes over background removal (#204)', () => {
+  it('leave the pixels alone', () => {
+    const ops: CleanupOp[] = [{ kind: 'mask', tool: 'remove', size: 0.5, hardness: 1, points: [0.5, 0.5, 1] }]
+    expect(grid(replay(small(), ops))).toEqual(grid(small()))
+    expect(pixelOps(ops)).toEqual([])
+  })
+
+  it('bring back an edge the mask missed, and take away what it kept', () => {
+    // A mask that kept the left half and lost the right, as U²-Net does with a pale edge on pale paper.
+    const w = 40
+    const rgba = new Uint8ClampedArray(w * w * 4)
+    for (let i = 0; i < w * w; i++) rgba[i * 4 + 3] = i % w < 20 ? 255 : 0
+    applyMaskStrokes(rgba, w, w, [
+      { kind: 'mask', tool: 'keep', size: 0.25, hardness: 1, points: [0.75, 0.2, 1, 0.75, 0.8, 1] },
+      { kind: 'mask', tool: 'remove', size: 0.25, hardness: 1, points: [0.25, 0.5, 1] },
+    ])
+    const alpha = (x: number, y: number) => rgba[(y * w + x) * 4 + 3]
+    expect(alpha(30, 20)).toBe(255)
+    expect(alpha(30, 2)).toBe(0) // past the stroke's end
+    expect(alpha(10, 20)).toBe(0)
+    expect(alpha(2, 20)).toBe(255)
+  })
+
+  it('follow the crops, turns and flips made after them', () => {
+    // A dot painted, and a Remove stroke over it at the same step; then the image is cut and turned every way.
+    const at0 = [0.3, 0.35, 1]
+    const ops: CleanupOp[] = [
+      { kind: 'paint', tool: 'brush', color: '#000000', size: 0.12, hardness: 1, points: at0 },
+      { kind: 'mask', tool: 'remove', size: 0.12, hardness: 1, points: at0 },
+      { kind: 'crop', x: 0.1, y: 0.05, width: 0.7, height: 0.9 },
+      { kind: 'rotate', degrees: 90 },
+      { kind: 'flip', axis: 'horizontal' },
+      { kind: 'rotate', degrees: -7 },
+      { kind: 'flip', axis: 'vertical' },
+    ]
+    const out = replay(image(90, 60, () => 255), ops)
+    const strokes = maskStrokes(ops, 90, 60)
+    const rgba = new Uint8ClampedArray(out.width * out.height * 4).fill(255)
+    applyMaskStrokes(rgba, out.width, out.height, strokes)
+    let dot = 0
+    let miss = 0
+    for (let i = 0; i < out.width * out.height; i++)
+      if (out.rgba[i * 4] < 64) {
+        dot++
+        if (rgba[i * 4 + 3] > 64) miss++
+      }
+    expect(dot).toBeGreaterThan(30)
+    expect(miss).toBeLessThanOrEqual(2)
+  })
+})
+
 describe('fill and the magic wand (#205)', () => {
   // 40 × 20: two black rings on white, the left one 30 grey inside, the right one 60 grey inside.
   const rings = () =>
@@ -328,6 +379,9 @@ describe('clean-up list', () => {
     expect(checkCleanup([{ ...stroke, tool: 'smudge' }])).toBeNull()
     expect(checkCleanup([{ kind: 'paint', tool: 'heal', size: 0.05, hardness: 1, points: [0.5, 0.5, 1] }])).toHaveLength(1)
     expect(checkCleanup([{ ...stroke, tool: 'despeckle' }])).toBeNull() // only the brush has a colour
+    expect(checkCleanup([{ kind: 'mask', tool: 'keep', size: 0.05, hardness: 1, points: [0.5, 0.5, 1] }])).toEqual([{ kind: 'mask', tool: 'keep', size: 0.05, hardness: 1, points: [0.5, 0.5, 1] }])
+    expect(checkCleanup([{ kind: 'mask', tool: 'brush', size: 0.05, hardness: 1, points: [0.5, 0.5, 1] }])).toBeNull()
+    expect(checkCleanup([{ kind: 'paint', tool: 'keep', size: 0.05, hardness: 1, points: [0.5, 0.5, 1] }])).toBeNull()
     expect(checkCleanup('nope')).toBeNull()
     const fill = { kind: 'fill', seeds: [0.1, 0.2, 0.3, 0.4], tolerance: 32, contiguous: true, color: '#FF0000' }
     expect(checkCleanup([fill])).toEqual([{ ...fill, color: '#ff0000' }])

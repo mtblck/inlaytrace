@@ -1313,6 +1313,25 @@ if (process.env.FIXTURE) {
   check(prep && /script-src 'self' 'wasm-unsafe-eval';/.test(prepCsp), "the AI worker's own CSP allows WebAssembly")
   check(requests.every((u) => u.origin === new URL(url).origin || u.protocol === 'blob:' || u.protocol === 'data:'), 'everything the AI step loads comes from this site; nothing else is contacted')
 
+  // The mask brush (#204): Keep paints back in what U²-Net took, without running it again.
+  await ai.getByRole('tab', { name: 'Clean up' }).click()
+  await ai.locator('[data-clean-canvas]').waitFor()
+  await ai.keyboard.press('k')
+  const removed = () => ai.locator('[data-mask-removed]').getAttribute('data-mask-removed').then(Number)
+  const before = await removed()
+  check(before > 0.05, `Keep shows the mask, tinted where it removes (${before})`)
+  for (let i = 0; i < 6; i++) await ai.keyboard.press(']')
+  const models = requests.length
+  const mb = await ai.locator('[data-clean-overlay]').boundingBox()
+  await ai.mouse.move(mb.x + 2, mb.y + 2)
+  await ai.mouse.down()
+  await ai.mouse.move(mb.x + mb.width * 0.3, mb.y + 2, { steps: 8 })
+  await ai.mouse.up()
+  check((await removed()) < before, `a Keep stroke takes the tint off where it paints (${before} → ${await removed()})`)
+  await retrace(ai, () => ai.getByRole('tab', { name: 'Trace' }).click())
+  check((await alphaAt(ai, await exportSvg(ai), 2, 2)) === 255, 'leaving Clean up traces the kept corner, drawn again')
+  check(!requests.slice(models).some((u) => /\.onnx$|\/models\//.test(u.pathname)), 'painting the mask doesn’t run background removal again')
+
   // Upscaling is for small images: a 120 px mark.
   const small = await ai.evaluate(async () => {
     const c = new OffscreenCanvas(120, 80)
@@ -1443,7 +1462,8 @@ const siteOrigin = process.env.SITE ?? (new URL(url).hostname.endsWith('mattblac
   await cp.getByRole('tab', { name: 'Clean up' }).click()
   await cp.locator('[data-clean-canvas]').waitFor()
   const rail = cp.locator('[data-rail]')
-  check((await rail.getByRole('radio').allInnerTexts()).join() === 'Crop,Straighten,Brush,Eraser,Despeckle,Heal,Fill,Magic wand', 'Clean up has Crop, Straighten, Brush, Eraser, Despeckle, Heal, Fill and Magic wand in its rail')
+  check((await rail.getByRole('radio').allInnerTexts()).join() === 'Crop,Straighten,Brush,Eraser,Despeckle,Heal,Fill,Magic wand,Keep,Remove', 'Clean up has Crop, Straighten, Brush, Eraser, Despeckle, Heal, Fill, Magic wand, Keep and Remove in its rail')
+  check((await rail.getByRole('radio', { name: 'Keep' }).isDisabled()) && (await rail.getByRole('radio', { name: 'Remove' }).isDisabled()), 'Keep and Remove wait for Remove the background')
   check((await size()) === '640x640', `Clean up shows the image at its own size (${await size()})`)
   // Crop: draw a box, then apply it.
   const ov = await cp.locator('[data-clean-overlay]').boundingBox()

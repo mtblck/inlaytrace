@@ -45,10 +45,10 @@ import { centreAxis, likelyAxis, mirrorDoc, type Axis } from './lib/mirror'
 import { booleanOp, type BooleanOp } from './lib/boolean'
 import { BucketFields, ShapesList, StyleFields, type ShapeFlag, type StylePatch } from './components/Shapes'
 import { bucketFill } from './lib/bucket'
-import { addOp, BRUSH_DEFAULT, BRUSH_MAX, BRUSH_MIN, FILL_DEFAULT, MAX_OPS, type BrushSettings, type CleanupOp, type FillSettings } from './lib/cleanup'
+import { addOp, BRUSH_DEFAULT, BRUSH_MAX, BRUSH_MIN, FILL_DEFAULT, MAX_OPS, pixelOps, type BrushSettings, type CleanupOp, type FillSettings } from './lib/cleanup'
 import type { CleanTool, CropDraft } from './components/CleanUp'
 /** Clean up's tool keys. */
-const CLEAN_KEYS = { c: 'crop', l: 'straighten', b: 'brush', e: 'eraser', d: 'despeckle', j: 'heal', g: 'fill', w: 'wand' } as const satisfies Record<string, CleanTool>
+const CLEAN_KEYS = { c: 'crop', l: 'straighten', b: 'brush', e: 'eraser', d: 'despeckle', j: 'heal', g: 'fill', w: 'wand', k: 'keep', r: 'remove' } as const satisfies Record<string, CleanTool>
 import { loadPaper } from './lib/paper'
 import { deleteNodes, moveHandle, moveNode, moveNodes, parsePath, serializePath, nodeCount, type NodePart, type NodeRef, type Pt } from './lib/pathdata'
 import { addNode, nearestOnPath, roundNode, sharpenNode, simplifySubpaths, smoothNode } from './lib/nodeops'
@@ -87,8 +87,11 @@ export default function App() {
   const prepClient = useMemo(() => new PrepClient(), [])
   useEffect(() => () => prepClient.stop(), [prepClient])
   // `text`: lines found in the image, drawn as type (recognise text), in the prepared image's pixels.
-  const [prepared, setPrepared] = useState<{ key: string; source: Source; text: TextRun[] } | null>(null)
-  const preparedRef = useRef<{ key: string; source: Source; text: TextRun[] } | null>(null)
+  // The worker's result as it came back (`prepRaw`), then with the mask strokes laid over it (`prepared`, keyed by both).
+  type PrepRaw = { key: string; source: Source; rgba: Uint8ClampedArray; width: number; height: number; text: TextRun[] }
+  const [prepRaw, setPrepRaw] = useState<PrepRaw | null>(null)
+  const prepRawRef = useRef<PrepRaw | null>(null)
+  const [prepared, setPrepared] = useState<{ key: string; mask: string; source: Source; text: TextRun[] } | null>(null)
   const [prepStatus, setPrepStatus] = useState<{ stage: PrepStage; done: number; total: number } | null>(null)
   const [prepError, setPrepError] = useState<string | null>(null)
   // Target size runs dozens of traces: on a worker of its own, so tracing stays responsive.
@@ -407,7 +410,11 @@ export default function App() {
   const cleanupJson = useMemo(() => JSON.stringify(cleanup), [cleanup])
   /** The list differs from the one traced: leaving Clean up re-traces. Compared by content, so undoing back to it counts as no change. */
   const cleanupPending = cleanupJson !== tracedJson
-  const cleanKey = cleanable && tracedCleanup.length ? `${source!.url}|${tracedJson}` : null
+  // Mask strokes (#204) change no pixels, so they're left out of the cleaned image's key: painting the mask doesn't run background removal again.
+  const tracedPixels = useMemo(() => pixelOps(tracedCleanup), [tracedCleanup])
+  const tracedPixelJson = useMemo(() => JSON.stringify(tracedPixels), [tracedPixels])
+  const cleanupPixelJson = useMemo(() => JSON.stringify(pixelOps(cleanup)), [cleanup])
+  const cleanKey = cleanable && tracedPixels.length ? `${source!.url}|${tracedPixelJson}` : null
   const [cleaned, setCleaned] = useState<{ key: string; source: Source } | null>(null)
   useEffect(() => {
     const drop = (prev: { source: Source } | null) => {
@@ -419,7 +426,7 @@ export default function App() {
     // Nothing to clean (none, or another image): let the last cleaned image go.
     if (!cleanKey || !source) return void setCleaned((prev) => (drop(prev), null))
     let live = true
-    const ops = tracedCleanup
+    const ops = tracedPixels
     void import('./lib/cleanupRun')
       .then((m) => m.cleanedSource(source, ops))
       .then((s) => {
@@ -472,6 +479,10 @@ export default function App() {
     })
   }
   // A crop box is drawn on the image as it is: any other change to it (a turn, an undo) puts the box away.
+  // Keep and Remove go with Remove the background.
+  useEffect(() => {
+    if (!settings.removeBackground && (cleanTool === 'keep' || cleanTool === 'remove')) setCleanTool('brush')
+  }, [settings.removeBackground, cleanTool])
   // So is the wand's selection: it was found in pixels that have changed.
   useEffect(() => {
     setCropDraft(null)
@@ -500,7 +511,7 @@ export default function App() {
       setPrepError(null)
       return
     }
-    if (preparedRef.current?.key === prepKey) {
+    if (prepRawRef.current?.key === prepKey) {
       // Back to a copy already made: stop anything still running for another one.
       prepClient.stop()
       setPrepStatus(null)
@@ -520,14 +531,8 @@ export default function App() {
           setPrepError(r.message)
           return
         }
-        const img = new ImageData(r.rgba as Uint8ClampedArray<ArrayBuffer>, r.width, r.height)
-        const canvas = new OffscreenCanvas(r.width, r.height)
-        canvas.getContext('2d')!.putImageData(img, 0, 0)
-        const [bitmap, blob] = await Promise.all([createImageBitmap(img), canvas.convertToBlob({ type: 'image/png' })])
-        if (!live) return
-        if (preparedRef.current) URL.revokeObjectURL(preparedRef.current.source.url)
-        preparedRef.current = { key: prepKey, source: { ...source, url: URL.createObjectURL(blob), bitmap }, text: r.text }
-        setPrepared(preparedRef.current)
+        prepRawRef.current = { key: prepKey, source, rgba: r.rgba, width: r.width, height: r.height, text: r.text }
+        setPrepRaw(prepRawRef.current)
         setPrepStatus(null)
       })
     return () => {
@@ -536,9 +541,36 @@ export default function App() {
     // Settings other than the steps don't change what's prepared.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base, prepKey, prepClient])
+  // The Keep and Remove strokes over the mask (#204): the traced list's, so they apply on leaving Clean up, like its other changes.
+  const maskKey = settings.removeBackground && tracedCleanup.some((o) => o.kind === 'mask') ? tracedJson : ''
+  useEffect(() => {
+    const raw = prepRaw
+    if (!raw || !source) return
+    let live = true
+    void (async () => {
+      const rgba = maskKey ? (await import('./lib/cleanupRun')).withMaskStrokes(raw.rgba, raw.width, raw.height, source, tracedCleanup) : raw.rgba
+      const img = new ImageData(rgba as Uint8ClampedArray<ArrayBuffer>, raw.width, raw.height)
+      const canvas = new OffscreenCanvas(raw.width, raw.height)
+      canvas.getContext('2d')!.putImageData(img, 0, 0)
+      const [bitmap, blob] = await Promise.all([createImageBitmap(img), canvas.convertToBlob({ type: 'image/png' })])
+      if (!live) return void bitmap.close()
+      setPrepared((prev) => {
+        if (prev) URL.revokeObjectURL(prev.source.url)
+        return { key: raw.key, mask: maskKey, source: { ...raw.source, url: URL.createObjectURL(blob), bitmap }, text: raw.text }
+      })
+    })()
+    return () => {
+      live = false
+    }
+    // maskKey names the strokes (and the list they're carried through).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prepRaw, maskKey])
+  const preparedNow = prepared?.key === prepKey && prepared.mask === maskKey ? prepared : null
   /** What gets traced: the prepared image when a step is on (none until it's ready), else the (cleaned) original. */
-  const traceSource = prepKey ? (prepared?.key === prepKey ? prepared.source : null) : base
-  const foundText = wantText && prepared?.key === prepKey ? prepared.text : NO_TEXT
+  const traceSource = prepKey ? (preparedNow?.source ?? null) : base
+  const foundText = wantText && preparedNow ? preparedNow.text : NO_TEXT
+  /** Background removal's mask for Clean up to show and paint over, while the image it was made from is the one on screen. */
+  const cleanMask = settings.removeBackground && prepRaw?.key === prepKey && cleanupPixelJson === tracedPixelJson ? prepRaw : null
   // Tracing to your own colours: text set as type takes the nearest of them too.
   const ownKey = ownPaletteOf(settings)?.join() ?? ''
   const traceText = useMemo(() => {
@@ -1067,7 +1099,7 @@ export default function App() {
   )
   const cleanRail = (
     <ToolRail
-      tools={CLEAN_TOOLS}
+      tools={CLEAN_TOOLS(settings.removeBackground)}
       tool={cleanTool}
       onTool={chooseCleanTool}
       canUndo={history.past.length > 0}
@@ -1129,8 +1161,8 @@ export default function App() {
       } else if (workMode === 'clean') {
         // Clean up's own keys; Edit's tool keys don't reach past it, so leaving always goes through the mode switch.
         if (e.key === '?' || (e.key === '/' && e.shiftKey)) setShortcutsOpen(true)
-        else if (Object.hasOwn(CLEAN_KEYS, key)) chooseCleanTool(CLEAN_KEYS[key as keyof typeof CLEAN_KEYS])
-        else if ((e.code === 'BracketLeft' || e.code === 'BracketRight') && (cleanTool === 'brush' || cleanTool === 'eraser' || cleanTool === 'despeckle' || cleanTool === 'heal')) {
+        else if (Object.hasOwn(CLEAN_KEYS, key) && (settings.removeBackground || (key !== 'k' && key !== 'r'))) chooseCleanTool(CLEAN_KEYS[key as keyof typeof CLEAN_KEYS])
+        else if ((e.code === 'BracketLeft' || e.code === 'BracketRight') && ['brush', 'eraser', 'despeckle', 'heal', 'keep', 'remove'].includes(cleanTool)) {
           // [ ] size, Shift + [ ] hardness, as in most paint programs.
           e.preventDefault()
           const up = e.code === 'BracketRight'
@@ -1512,6 +1544,7 @@ export default function App() {
                         onFill={(op) => editCleanup(addOp(cleanup, op))}
                         wand={wand}
                         onWand={setWand}
+                        mask={cleanMask}
                       />
                     </Suspense>
                   )}
@@ -1695,6 +1728,7 @@ export default function App() {
                       onFill={setFillSettings}
                       wand={wand}
                       onWand={setWand}
+                      mask={!settings.removeBackground ? 'off' : cleanMask ? 'ready' : cleanupPixelJson !== tracedPixelJson ? 'stale' : 'working'}
                     />
                   </Suspense>
                 )}
@@ -1781,7 +1815,7 @@ export default function App() {
                 onPreset={choosePreset}
                 suggestPoster={suggestPoster}
                 measuredStroke={settings.preset === 'centerline' && settings.strokeWidth === 0 ? (trace?.paths[0]?.stroke ?? null) : null}
-                prep={{ smallImage: !!base && Math.max(base.bitmap.width, base.bitmap.height) < UPSCALE_BELOW, finer: !!base && settings.preset !== 'pixel' && canTraceFiner(base, maxTraceEdge(settings.preset)), textPreset: canSetText(settings.preset), smoothable: canSmooth(settings.preset), text: wantText && prepared?.key === prepKey ? prepared.text : null, status: prepStatus, error: prepError }}
+                prep={{ smallImage: !!base && Math.max(base.bitmap.width, base.bitmap.height) < UPSCALE_BELOW, finer: !!base && settings.preset !== 'pixel' && canTraceFiner(base, maxTraceEdge(settings.preset)), textPreset: canSetText(settings.preset), smoothable: canSmooth(settings.preset), text: wantText && preparedNow ? preparedNow.text : null, status: prepStatus, error: prepError }}
                 currentBytes={stats?.bytes ?? null}
                 sizeRun={sizeRun}
                 onFindSize={findSize}

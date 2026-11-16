@@ -28,6 +28,11 @@
  *    the tolerance and whether only touching pixels count. The region is found
  *    again on replay, from the pixels as they are at that step, so it is
  *    exactly the region that was shown.
+ *  - mask (#204): a Keep or Remove stroke over Remove background's mask.
+ *    It leaves the pixels alone: the replay skips it, and it is laid over the
+ *    mask each time background removal runs, carried through any crop, turn
+ *    or flip made after it (maskStrokes in cleanupPixels.ts). So painting the
+ *    mask never runs the model again.
  *
  * Levels and threshold are adjustments: there is at most one of each, edited
  * in place as their sliders move. Crop, rotate, flip and strokes are appended.
@@ -57,7 +62,12 @@ export type Paint = { kind: 'paint'; tool: PaintTool; color?: string; size: numb
  * the eraser does.
  */
 export type Fill = { kind: 'fill'; seeds: number[]; tolerance: number; contiguous: boolean; color?: string }
-export type CleanupOp = Crop | Rotate | Flip | Levels | Threshold | Paint | Fill
+/** A stroke over Remove background's mask: shaped like a Paint stroke, with `tool` saying which way. */
+export type MaskStroke = { kind: 'mask'; tool: 'keep' | 'remove'; size: number; hardness: number; points: number[] }
+export type CleanupOp = Crop | Rotate | Flip | Levels | Threshold | Paint | Fill | MaskStroke
+
+/** The ops that change pixels: all but mask strokes, which only background removal reads. */
+export const pixelOps = (ops: CleanupOp[]) => (ops.some((o) => o.kind === 'mask') ? ops.filter((o) => o.kind !== 'mask') : ops)
 
 /** Fill and the magic wand as the panel sets them. */
 export type FillSettings = { tolerance: number; contiguous: boolean }
@@ -86,7 +96,7 @@ export const THRESHOLD_DEFAULT: Threshold = { kind: 'threshold', level: 128 }
 // ---- The list ---------------------------------------------------------------
 
 /** Append a geometric op, folding it into the last one where that's exact. */
-export function addOp(ops: CleanupOp[], op: Crop | Rotate | Flip | Paint | Fill): CleanupOp[] {
+export function addOp(ops: CleanupOp[], op: Crop | Rotate | Flip | Paint | Fill | MaskStroke): CleanupOp[] {
   const last = ops[ops.length - 1]
   if (op.kind === 'rotate') {
     const degrees = normDegrees(op.degrees)
@@ -137,15 +147,17 @@ export function straightenAngle(a: { x: number; y: number }, b: { x: number; y: 
 const num = (v: unknown, lo: number, hi: number) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi
 const HEX = /^#[0-9a-f]{6}$/i
 
-function checkPaint(o: Record<string, unknown>): Paint | null {
+function checkPaint(o: Record<string, unknown>): Paint | MaskStroke | null {
   const { tool, color, size, hardness, points } = o
-  if (tool !== 'brush' && tool !== 'eraser' && tool !== 'despeckle' && tool !== 'heal') return null
+  const mask = o.kind === 'mask'
+  if (mask ? tool !== 'keep' && tool !== 'remove' : tool !== 'brush' && tool !== 'eraser' && tool !== 'despeckle' && tool !== 'heal') return null
   if (tool === 'brush' ? typeof color !== 'string' || !HEX.test(color) : color !== undefined) return null
   if (!num(size, 1e-6, 1) || !num(hardness, 0, 1)) return null
   if (!Array.isArray(points) || !points.length || points.length % 3 || points.length > MAX_STROKE_POINTS * 3) return null
   // A stroke can start or pass just outside the image (its brush still reaches in).
   for (let i = 0; i < points.length; i += 3) if (!num(points[i], -1, 2) || !num(points[i + 1], -1, 2) || !num(points[i + 2], 0, 1)) return null
-  return { kind: 'paint', tool, ...(tool === 'brush' ? { color: (color as string).toLowerCase() } : {}), size: size as number, hardness: hardness as number, points: (points as number[]).slice() }
+  if (mask) return { kind: 'mask', tool: tool as MaskStroke['tool'], size: size as number, hardness: hardness as number, points: (points as number[]).slice() }
+  return { kind: 'paint', tool: tool as Paint['tool'], ...(tool === 'brush' ? { color: (color as string).toLowerCase() } : {}), size: size as number, hardness: hardness as number, points: (points as number[]).slice() }
 }
 
 function checkFill(o: Record<string, unknown>): Fill | null {
@@ -169,8 +181,8 @@ export function checkCleanup(value: unknown): CleanupOp[] | null {
     else if (o.kind === 'levels' && num(o.black, 0, 254) && num(o.white, 1, 255) && (o.black as number) < (o.white as number) && num(o.gamma, 0.1, 10))
       out.push({ kind: 'levels', black: o.black as number, white: o.white as number, gamma: o.gamma as number })
     else if (o.kind === 'threshold' && num(o.level, 1, 255)) out.push({ kind: 'threshold', level: o.level as number })
-    else if (o.kind === 'paint' || o.kind === 'fill') {
-      const p = o.kind === 'paint' ? checkPaint(o) : checkFill(o)
+    else if (o.kind === 'paint' || o.kind === 'mask' || o.kind === 'fill') {
+      const p = o.kind === 'fill' ? checkFill(o) : checkPaint(o)
       if (!p) return null
       out.push(p)
     } else return null

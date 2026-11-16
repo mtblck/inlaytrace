@@ -68,6 +68,23 @@ Two more brushes, with the same size, hardness and pressure as the brush:
 While you paint, the stroke shows as a tint; the fix is worked out when you
 let go.
 
+## Keep (K) and Remove (R): fixing background removal
+
+*Remove the background* (in Trace) finds the subject with an AI model,
+U²-Net, which sometimes takes a pale edge or a thin part of the subject, or
+leaves a shadow behind. Once it's on, two more brushes in Clean up paint over
+its mask instead of running it again:
+
+- **Keep** paints back in what it took but should have kept.
+- **Remove** takes away what it left but should have taken.
+
+With either brush, the image shows what's removed as a tint. The strokes are
+part of the clean-up list, so Undo and the session carry them, and they're
+laid over the mask each time background removal runs, through any crop, turn
+or flip you make afterwards, so changing the image doesn't lose them. If you
+change the image's pixels, leave Clean up once to remove the background again
+before painting its mask. Painting the mask never runs the model again.
+
 ## Fill (G) and the magic wand (W)
 
 - **Fill:** click the image to fill the area you click in the brush colour: a
@@ -111,7 +128,8 @@ original, as one undoable step.
 ## How it works
 
 Clean-up is a list of operations (crop, rotate, flip, levels, threshold,
-brush, eraser, despeckle and heal strokes, and fills)
+brush, eraser, despeckle and heal strokes, fills, and Keep and Remove
+strokes)
 stored with your edits, so Undo and Redo step through it like any other edit,
 and it is saved with the session, so a reload brings it back
 (`apps/app/src/lib/cleanup.ts`). Replaying the list onto the original makes
@@ -130,7 +148,9 @@ with pen pressure) plus the brush's size and hardness, and replays as round
 dabs stamped along them into a coverage mask, so overlapping dabs don't build
 up; drawing uses the same code a segment at a time, so what you see while
 painting is what's traced. A new stroke replays only itself, on top of the
-last result. A fill is stored as the points clicked, the tolerance and
+last result. Keep and Remove strokes change no pixels: the replay skips them, and
+they're carried point by point through the crops, turns and flips after them
+onto background removal's mask (`maskStrokes`). A fill is stored as the points clicked, the tolerance and
 whether only touching pixels count, and finds its area again on replay from
 the pixels as they are at that step, so it fills exactly what you saw
 selected. The mode's code loads the first time you open it.
