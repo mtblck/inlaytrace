@@ -755,6 +755,13 @@ check((await page.locator('rect[data-background]').count()) === 0, 'then takes t
   await page.locator('[data-picking]').waitFor()
   await page.keyboard.press('Escape')
   check((await page.locator('[data-picking]').count()) === 0, 'Esc puts the eyedropper away')
+  // From the keyboard (#223): arm it, Tab to the image, Esc; focus goes back to the pipette, not the page.
+  const pipette = target.getByRole('button', { name: /Pick a colour/ })
+  await pipette.focus()
+  await page.keyboard.press('Enter')
+  await page.locator('[data-picker]').focus()
+  await page.keyboard.press('Escape')
+  check(await pipette.evaluate((el) => el === document.activeElement), 'putting the eyedropper away from the image hands focus back to its button')
   await target.getByRole('button', { name: /Pick a colour/ }).click()
   await page.mouse.click(spot.x, spot.y)
   const shown = (await target.locator('.font-mono').first().innerText()).trim()
