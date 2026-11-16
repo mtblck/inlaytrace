@@ -7,8 +7,9 @@
  * with the current trace as a faint outline while its geometry still matches.
  * Crop draws a box (handles to adjust, Enter or the panel to apply);
  * Straighten draws a line along something that should be level or upright;
- * Brush and Eraser paint, a stroke at a time. It zooms (pinch, ⌘/Ctrl + wheel
- * or the buttons) and pans (two fingers, the wheel, or Space or the middle
+ * Brush and Eraser paint, a stroke at a time; Fill fills what a click finds,
+ * and the Magic wand shows it as a selection to fill or clear. It zooms
+ * (pinch, ⌘/Ctrl + wheel or the buttons) and pans (two fingers, the wheel, or Space or the middle
  * button and drag) on its own, since painting needs a close look. The panel
  * holds the rest: quarter turns, an angle, flips, the brush, levels,
  * threshold, before and after, and the cleaned PNG.
@@ -21,6 +22,7 @@ import {
   BRUSH_MIN,
   clamp,
   LEVELS_DEFAULT,
+  MAX_SEEDS,
   MAX_STROKE_POINTS,
   MIN_CROP_PX,
   sameGeometry,
@@ -29,18 +31,36 @@ import {
   THRESHOLD_DEFAULT,
   type BrushSettings,
   type CleanupOp,
+  type Fill,
+  type FillSettings,
   type Img,
   type Paint,
 } from '../lib/cleanup'
-import { backgroundOf, composite, dabAt, maskOver, stampSegment, strokeColour, type Dab, type Mask } from '../lib/cleanupPixels'
+import { backgroundOf, composite, dabAt, maskOver, regionOf, stampSegment, strokeColour, type Dab, type Mask } from '../lib/cleanupPixels'
 import { cleanedPixels, originalPixels, pngOf } from '../lib/cleanupRun'
 import type { Ink, ShownPath } from '../lib/doc'
 import type { Source } from '../lib/image'
 import { STEP as ZOOM_STEP, wheelFactor } from '../lib/zoom'
 import { Section, Slider } from './Controls'
 
-export type CleanTool = 'crop' | 'straighten' | 'brush' | 'eraser'
+export type CleanTool = 'crop' | 'straighten' | 'brush' | 'eraser' | 'fill' | 'wand'
 export const isPaintTool = (t: CleanTool): t is 'brush' | 'eraser' => t === 'brush' || t === 'eraser'
+/** The tools that lay down the brush colour, and so pick it with Alt-click. */
+const usesColour = (t: CleanTool) => t === 'brush' || t === 'fill' || t === 'wand'
+
+/** The magic wand's selection: the pixels its clicks take, worked out once for the canvas and the panel together. */
+let lastSelection: { img: Img; seeds: number[]; tolerance: number; contiguous: boolean; region: Uint8Array; count: number } | null = null
+export function selectionOf(img: Img, seeds: number[], f: FillSettings) {
+  const l = lastSelection
+  if (l && l.img === img && l.seeds === seeds && l.tolerance === f.tolerance && l.contiguous === f.contiguous) return l
+  const region = regionOf(img, seeds, f.tolerance, f.contiguous)
+  let count = 0
+  for (const v of region) count += v
+  lastSelection = { img, seeds, ...f, region, count }
+  return lastSelection
+}
+/** The fill op for clicks `seeds`: in `color`, or cleared to the background without one. */
+export const fillOp = (seeds: number[], f: FillSettings, color?: string): Fill => ({ kind: 'fill', seeds, tolerance: f.tolerance, contiguous: f.contiguous, ...(color ? { color: color.toLowerCase() } : {}) })
 /** A crop box being drawn, in fractions of the cleaned image. */
 export type CropDraft = { x: number; y: number; width: number; height: number }
 
@@ -82,6 +102,11 @@ export function CleanCanvas(p: {
   /** The next click picks the brush colour from the image. */
   picking: boolean
   onPick: (hex: string) => void
+  fill: FillSettings
+  onFill: (op: Fill) => void
+  /** The magic wand's clicks, in fractions of the image (x, y, x, y, …), or null with nothing selected. */
+  wand: number[] | null
+  onWand: (seeds: number[] | null) => void
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -114,6 +139,31 @@ export function CleanCanvas(p: {
   }, [img])
   const imgRef = useRef(img)
   imgRef.current = img
+
+  // The wand's selection, tinted with its edge drawn solid, on a canvas of its own over the image.
+  const selRef = useRef<HTMLCanvasElement>(null)
+  const selection = p.wand && p.tool === 'wand' && !p.showOriginal ? selectionOf(img, p.wand, p.fill) : null
+  useEffect(() => {
+    const c = selRef.current
+    if (!c || !selection) return
+    const { width: w, height: h } = img
+    c.width = w
+    c.height = h
+    const out = new ImageData(w, h)
+    const d = new Uint32Array(out.data.buffer)
+    const m = selection.region
+    // Little-endian RGBA: the accent (#c2410c) faint inside, solid on the edge.
+    const tint = 0x60_0c_41_c2
+    const edge = 0xff_0c_41_c2
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x
+        if (!m[i]) continue
+        const rim = x === 0 || y === 0 || x === w - 1 || y === h - 1 || !m[i - 1] || !m[i + 1] || !m[i - w] || !m[i + w]
+        d[i] = rim ? edge : tint
+      }
+    c.getContext('2d')!.putImageData(out, 0, 0)
+  }, [selection, img])
 
   const scale = room.w && room.h ? Math.min(room.w / img.width, room.h / img.height) : 0
   const w = img.width * scale
@@ -335,7 +385,14 @@ export function CleanCanvas(p: {
     }
     if (p.showOriginal || e.button !== 0) return
     const pt = at(e)
-    if (isPaintTool(p.tool) && (p.picking || e.altKey)) return p.onPick(pixelHex(img, pt.x, pt.y))
+    if (usesColour(p.tool) && (p.picking || e.altKey)) return p.onPick(pixelHex(img, pt.x, pt.y))
+    if (p.tool === 'fill' || p.tool === 'wand') {
+      if (pt.x < 0 || pt.y < 0 || pt.x >= 1 || pt.y >= 1) return
+      const seed = [Math.min(round(pt.x, 5), 0.99999), Math.min(round(pt.y, 5), 0.99999)]
+      if (p.tool === 'fill') return p.onFill(fillOp(seed, p.fill, p.brush.color))
+      // Shift-click adds to the selection.
+      return p.onWand(e.shiftKey && p.wand && p.wand.length < MAX_SEEDS * 2 ? [...p.wand, ...seed] : seed)
+    }
     capture(e)
     if (isPaintTool(p.tool)) return startStroke(pt, pressureOf(e))
     if (p.tool === 'straighten') {
@@ -462,6 +519,15 @@ export function CleanCanvas(p: {
           aria-label={p.showOriginal ? 'The original image' : 'The cleaned image'}
           role="img"
         />
+        {selection && (
+          <canvas
+            ref={selRef}
+            className="pointer-events-none absolute inset-0 h-full w-full"
+            style={pixelScale >= 2 ? { imageRendering: 'pixelated' } : undefined}
+            data-wand-selection={selection.count}
+            aria-hidden="true"
+          />
+        )}
         {showOutline && (
           <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${p.outline!.width} ${p.outline!.height}`} preserveAspectRatio="none" aria-hidden="true">
             {p.outline!.paths.map((s) => (
@@ -567,6 +633,10 @@ export function CleanPanel(p: {
   inks: Ink[]
   picking: boolean
   onPicking: (on: boolean) => void
+  fill: FillSettings
+  onFill: (f: FillSettings) => void
+  wand: number[] | null
+  onWand: (seeds: number[] | null) => void
 }) {
   const size = useMemo(() => cleanedPixels(p.source, p.ops), [p.source, p.ops])
   const [angle, setAngle] = useState('')
@@ -580,9 +650,11 @@ export function CleanPanel(p: {
 
   return (
     <>
-      <Section title={{ crop: 'Crop', straighten: 'Straighten', brush: 'Brush', eraser: 'Eraser' }[p.tool]}>
+      <Section title={{ crop: 'Crop', straighten: 'Straighten', brush: 'Brush', eraser: 'Eraser', fill: 'Fill', wand: 'Magic wand' }[p.tool]}>
         {isPaintTool(p.tool) ? (
           <BrushFields {...p} tool={p.tool} background={backgroundOf(size)} />
+        ) : p.tool === 'fill' || p.tool === 'wand' ? (
+          <FillFields {...p} tool={p.tool} img={size} background={backgroundOf(size)} />
         ) : p.tool === 'crop' ? (
           <div className="space-y-2">
             <p className="field-hint">Drag a box on the image; drag its edges or corners to adjust. Cutting away borders and watermarks also makes the trace quicker.</p>
@@ -785,7 +857,6 @@ function BrushFields(p: {
 }) {
   const b = p.brush
   const bg = p.background[3] ? `#${p.background.slice(0, 3).map(hex2).join('')}` : null
-  const swatches = [...new Set(p.inks.map((i) => i.hex.toLowerCase()))].slice(0, 16)
   return (
     <div className="space-y-3" data-brush-fields={p.tool}>
       <p className="field-hint">
@@ -806,37 +877,117 @@ function BrushFields(p: {
         format={(v) => `${v}%`}
         onChange={(v) => p.onBrush({ ...b, hardness: v / 100 })}
       />
-      {p.tool === 'brush' && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <input type="color" className="size-8 shrink-0 cursor-pointer rounded border border-rule" value={b.color} onChange={(e) => p.onBrush({ ...b, color: e.target.value })} aria-label="Brush colour" />
-            <span className="num grow text-[13px]" data-brush-colour="">
-              {b.color}
-            </span>
-            <button className="btn h-8 px-3 text-[12.5px]" aria-pressed={p.picking} onClick={() => p.onPicking(!p.picking)}>
-              {p.picking ? 'Click the image…' : 'Pick from image'}
-            </button>
+      {p.tool === 'brush' && <ColourFields {...p} />}
+    </div>
+  )
+}
+
+/** The brush colour, which Fill and the wand use too: the picker, the image, or the trace's own colours. */
+function ColourFields(p: { brush: BrushSettings; onBrush: (b: BrushSettings) => void; inks: Ink[]; picking: boolean; onPicking: (on: boolean) => void }) {
+  const b = p.brush
+  const swatches = [...new Set(p.inks.map((i) => i.hex.toLowerCase()))].slice(0, 16)
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <input type="color" className="size-8 shrink-0 cursor-pointer rounded border border-rule" value={b.color} onChange={(e) => p.onBrush({ ...b, color: e.target.value })} aria-label="Brush colour" />
+        <span className="num grow text-[13px]" data-brush-colour="">
+          {b.color}
+        </span>
+        <button className="btn h-8 px-3 text-[12.5px]" aria-pressed={p.picking} onClick={() => p.onPicking(!p.picking)}>
+          {p.picking ? 'Click the image…' : 'Pick from image'}
+        </button>
+      </div>
+      {swatches.length > 0 && (
+        <div>
+          <p className="field-label mb-1">The trace’s colours</p>
+          <div className="flex flex-wrap gap-1" role="group" aria-label="Brush colour from the trace">
+            {swatches.map((hex) => (
+              <button
+                key={hex}
+                className={`size-6 rounded border ${hex === b.color.toLowerCase() ? 'border-ink ring-1 ring-ink' : 'border-rule'}`}
+                style={{ background: hex }}
+                title={hex}
+                aria-label={`Paint in ${hex}`}
+                aria-pressed={hex === b.color.toLowerCase()}
+                onClick={() => p.onBrush({ ...b, color: hex })}
+              />
+            ))}
           </div>
-          {swatches.length > 0 && (
-            <div>
-              <p className="field-label mb-1">The trace’s colours</p>
-              <div className="flex flex-wrap gap-1" role="group" aria-label="Brush colour from the trace">
-                {swatches.map((hex) => (
-                  <button
-                    key={hex}
-                    className={`size-6 rounded border ${hex === b.color.toLowerCase() ? 'border-ink ring-1 ring-ink' : 'border-rule'}`}
-                    style={{ background: hex }}
-                    title={hex}
-                    aria-label={`Paint in ${hex}`}
-                    aria-pressed={hex === b.color.toLowerCase()}
-                    onClick={() => p.onBrush({ ...b, color: hex })}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
+    </div>
+  )
+}
+
+/** Fill and the magic wand: tolerance, touching only, the colour, and for the wand what to do with what it took. */
+function FillFields(p: {
+  tool: 'fill' | 'wand'
+  img: Img
+  fill: FillSettings
+  onFill: (f: FillSettings) => void
+  wand: number[] | null
+  onWand: (seeds: number[] | null) => void
+  ops: CleanupOp[]
+  onOps: (ops: CleanupOp[], key?: string) => void
+  brush: BrushSettings
+  onBrush: (b: BrushSettings) => void
+  inks: Ink[]
+  picking: boolean
+  onPicking: (on: boolean) => void
+  background: [number, number, number, number]
+}) {
+  const f = p.fill
+  const sel = p.tool === 'wand' && p.wand ? selectionOf(p.img, p.wand, f) : null
+  const bg = p.background[3] ? `the background colour, #${p.background.slice(0, 3).map(hex2).join('')}` : 'transparent'
+  const apply = (color?: string) => {
+    if (!p.wand) return
+    p.onOps(addOp(p.ops, fillOp(p.wand, f, color)))
+    p.onWand(null)
+  }
+  return (
+    <div className="space-y-3" data-fill-fields={p.tool}>
+      <p className="field-hint">
+        {p.tool === 'fill'
+          ? 'Click the image to fill the area you click in the brush colour: a blotchy background, a speckled fill, a letter’s inside. Alt-click picks the colour.'
+          : 'Click the image to select an area of one colour; Shift-click to add another. Then fill it in the brush colour, or clear it to the background.'}
+      </p>
+      <Slider
+        label="Tolerance"
+        value={f.tolerance}
+        min={0}
+        max={128}
+        step={1}
+        hint="How far a colour may stray from the one you clicked and still count. Raise it to take in a JPEG’s noise or an edge’s soft pixels."
+        format={String}
+        onChange={(v) => p.onFill({ ...f, tolerance: v })}
+      />
+      <div>
+        <label className="flex items-center gap-2 text-[13px]">
+          <input type="checkbox" checked={f.contiguous} onChange={(e) => p.onFill({ ...f, contiguous: e.target.checked })} />
+          Touching only
+        </label>
+        <p className="field-hint">Off, it takes that colour everywhere in the image.</p>
+      </div>
+      {p.tool === 'wand' && (
+        <div className="space-y-2" data-wand-actions="">
+          <p className="field-hint" data-wand-count="">
+            {sel ? `${sel.count.toLocaleString()} px selected.` : 'Nothing selected.'}
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            <button className="btn px-1" disabled={!sel?.count} onClick={() => apply(p.brush.color)} title={`Fill the selection with ${p.brush.color}`}>
+              Fill
+            </button>
+            <button className="btn px-1" disabled={!sel?.count} onClick={() => apply()} title={`Clear the selection to ${bg}`}>
+              Clear
+            </button>
+            <button className="btn px-1" disabled={!p.wand} onClick={() => p.onWand(null)}>
+              Deselect
+            </button>
+          </div>
+          <p className="field-hint">Clear paints {bg}, so what it takes traces as nothing. Delete clears; Esc deselects.</p>
+        </div>
+      )}
+      <ColourFields {...p} />
     </div>
   )
 }

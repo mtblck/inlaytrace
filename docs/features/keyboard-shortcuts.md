@@ -16,13 +16,16 @@ mode switches to Edit mode.
 | --- | --- |
 | C | Crop: drag a box on the image |
 | Enter | Crop to the box |
-| Esc | Cancel the box |
+| Esc | Cancel the box, or the wand's selection |
 | L | Straighten: drag along a line that should be level or upright |
 | B | Brush: paint over gaps, holes and blotches |
 | E | Eraser: paint the background colour over stray marks |
+| G | Fill: fill the area you click in the brush colour |
+| W | Magic wand: select an area of one colour (⇧ click adds) |
+| Delete | Clear the wand's selection to the background |
 | [ / ] | Brush smaller, bigger |
 | Shift [ / Shift ] | Brush softer, harder |
-| ⌥ click | Pick the brush colour from the image |
+| ⌥ click | Pick the brush colour from the image (Brush, Fill, Magic wand) |
 | Space drag | Pan when zoomed in (or drag with the middle button) |
 | ⌘ + / ⌘ − / ⌘ 0 | Zoom the image in, out, back to fit (pinch and ⌘ wheel too) |
 

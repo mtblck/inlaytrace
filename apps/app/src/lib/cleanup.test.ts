@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { addOp, adjustmentOf, checkCleanup, sameGeometry, setAdjustment, straightenAngle, type CleanupOp, type Img } from './cleanup'
-import { backgroundOf, composite, dabAt, maskOver, replay, sizeAfter, stampSegment, strokeColour, type Dab } from './cleanupPixels'
+import { backgroundOf, composite, dabAt, maskOver, regionOf, replay, sizeAfter, stampSegment, strokeColour, type Dab } from './cleanupPixels'
 
 /** A w × h image where pixel (x, y) is grey level `f(x, y)`, opaque. */
 function image(w: number, h: number, f: (x: number, y: number) => number): Img {
@@ -178,6 +178,51 @@ describe('brush and eraser', () => {
   })
 })
 
+describe('fill and the magic wand (#205)', () => {
+  // 40 × 20: two black rings on white, the left one 30 grey inside, the right one 60 grey inside.
+  const rings = () =>
+    image(40, 20, (x, y) => {
+      const r = Math.max(Math.abs((x % 20) - 10), Math.abs(y - 10))
+      return r === 6 ? 0 : r < 6 ? (x < 20 ? 30 : 60) : 255
+    })
+  const count = (m: Uint8Array) => m.reduce((n, v) => n + v, 0)
+  const centre = [0.26, 0.51]
+
+  it('takes the touching pixels within the tolerance of the one clicked', () => {
+    const img = rings()
+    // The left ring's inside: 11 × 11, stopped by the black ring.
+    expect(count(regionOf(img, centre, 0, true))).toBe(121)
+    // A tolerance of 30 reaches black from 30 grey, so the ring joins in; it still stops at the white beyond.
+    expect(count(regionOf(img, centre, 30, true))).toBe(169)
+    // Not touching: both insides, since 60 is within 30 of 30.
+    expect(count(regionOf(img, centre, 30, false))).toBe(2 * 169)
+    expect(count(regionOf(img, centre, 0, false))).toBe(121)
+  })
+
+  it('joins the regions of every point clicked, each by its own colour', () => {
+    const both = regionOf(rings(), [...centre, 0.76, 0.51], 0, true)
+    expect(count(both)).toBe(242)
+    expect(count(regionOf(rings(), [0.01, 0.01], 0, true))).toBe(40 * 20 - 2 * 169)
+  })
+
+  it('fills in a colour, or clears to the background, and replays the same', () => {
+    const filled = replay(rings(), [{ kind: 'fill', seeds: centre, tolerance: 0, contiguous: true, color: '#ff0000' }])
+    expect(Array.from(filled.rgba.slice((10 * 40 + 10) * 4, (10 * 40 + 10) * 4 + 4))).toEqual([255, 0, 0, 255])
+    expect(at(filled, 30, 10)).toBe(60)
+    expect(at(filled, 4, 10)).toBe(0)
+    // Cleared: the ring and its inside become the white round them.
+    const cleared = replay(rings(), [{ kind: 'fill', seeds: [0.11, 0.51], tolerance: 0, contiguous: true }, { kind: 'fill', seeds: centre, tolerance: 0, contiguous: true }])
+    expect(grid(cleared).slice(0, 20).every((row) => row.slice(0, 20).every((v) => v === 255))).toBe(true)
+    expect(at(cleared, 30, 10)).toBe(60)
+  })
+
+  it('treats every transparent pixel alike, whatever colour it hides', () => {
+    const img = image(10, 1, (x) => x * 20)
+    for (let x = 0; x < 6; x++) img.rgba[x * 4 + 3] = 0
+    expect(count(regionOf(img, [0.05, 0.5], 0, true))).toBe(6)
+  })
+})
+
 describe('clean-up list', () => {
   it('folds quarter turns together and cancels a repeated flip', () => {
     let ops = addOp([], { kind: 'rotate', degrees: 90 })
@@ -223,5 +268,13 @@ describe('clean-up list', () => {
     expect(checkCleanup([{ ...stroke, tool: 'eraser' }])).toBeNull() // an eraser has no colour of its own
     expect(checkCleanup([{ ...stroke, tool: 'smudge' }])).toBeNull()
     expect(checkCleanup('nope')).toBeNull()
+    const fill = { kind: 'fill', seeds: [0.1, 0.2, 0.3, 0.4], tolerance: 32, contiguous: true, color: '#FF0000' }
+    expect(checkCleanup([fill])).toEqual([{ ...fill, color: '#ff0000' }])
+    expect(checkCleanup([{ ...fill, color: undefined }])).toEqual([{ kind: 'fill', seeds: fill.seeds, tolerance: 32, contiguous: true }])
+    expect(checkCleanup([{ ...fill, seeds: [0.1] }])).toBeNull()
+    expect(checkCleanup([{ ...fill, seeds: [] }])).toBeNull()
+    expect(checkCleanup([{ ...fill, seeds: [1.2, 0] }])).toBeNull()
+    expect(checkCleanup([{ ...fill, tolerance: 300 }])).toBeNull()
+    expect(checkCleanup([{ ...fill, contiguous: 'yes' }])).toBeNull()
   })
 })

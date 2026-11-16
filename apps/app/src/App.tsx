@@ -45,7 +45,7 @@ import { centreAxis, likelyAxis, mirrorDoc, type Axis } from './lib/mirror'
 import { booleanOp, type BooleanOp } from './lib/boolean'
 import { BucketFields, ShapesList, StyleFields, type ShapeFlag, type StylePatch } from './components/Shapes'
 import { bucketFill } from './lib/bucket'
-import { addOp, BRUSH_DEFAULT, BRUSH_MAX, BRUSH_MIN, MAX_OPS, type BrushSettings, type CleanupOp } from './lib/cleanup'
+import { addOp, BRUSH_DEFAULT, BRUSH_MAX, BRUSH_MIN, FILL_DEFAULT, MAX_OPS, type BrushSettings, type CleanupOp, type FillSettings } from './lib/cleanup'
 import type { CleanTool, CropDraft } from './components/CleanUp'
 import { loadPaper } from './lib/paper'
 import { deleteNodes, moveHandle, moveNode, moveNodes, parsePath, serializePath, nodeCount, type NodePart, type NodeRef, type Pt } from './lib/pathdata'
@@ -444,10 +444,14 @@ export default function App() {
   const [brush, setBrush] = useState<BrushSettings>(BRUSH_DEFAULT)
   /** The next click on the image picks the brush colour. */
   const [cleanPick, setCleanPick] = useState(false)
+  const [fillSettings, setFillSettings] = useState<FillSettings>(FILL_DEFAULT)
+  /** The magic wand's clicks (x, y, … in fractions of the cleaned image), or null with nothing selected. */
+  const [wand, setWand] = useState<number[] | null>(null)
   const chooseCleanTool = (t: CleanTool) => {
     setCleanTool(t)
     setCropDraft(null)
     setCleanPick(false)
+    setWand(null)
   }
   const cleanSeq = useRef(0)
   /**
@@ -466,7 +470,11 @@ export default function App() {
     })
   }
   // A crop box is drawn on the image as it is: any other change to it (a turn, an undo) puts the box away.
-  useEffect(() => setCropDraft(null), [cleanup])
+  // So is the wand's selection: it was found in pixels that have changed.
+  useEffect(() => {
+    setCropDraft(null)
+    setWand(null)
+  }, [cleanup])
   const applyCrop = () => {
     if (!cropDraft) return
     editCleanup(addOp(cleanup, { kind: 'crop', ...cropDraft }))
@@ -1119,7 +1127,8 @@ export default function App() {
       } else if (workMode === 'clean') {
         // Clean up's own keys; Edit's tool keys don't reach past it, so leaving always goes through the mode switch.
         if (e.key === '?' || (e.key === '/' && e.shiftKey)) setShortcutsOpen(true)
-        else if (key === 'c' || key === 'l' || key === 'b' || key === 'e') chooseCleanTool(({ c: 'crop', l: 'straighten', b: 'brush', e: 'eraser' } as const)[key])
+        else if (key === 'c' || key === 'l' || key === 'b' || key === 'e' || key === 'g' || key === 'w')
+          chooseCleanTool(({ c: 'crop', l: 'straighten', b: 'brush', e: 'eraser', g: 'fill', w: 'wand' } as const)[key])
         else if ((e.code === 'BracketLeft' || e.code === 'BracketRight') && (cleanTool === 'brush' || cleanTool === 'eraser')) {
           // [ ] size, Shift + [ ] hardness, as in most paint programs.
           e.preventDefault()
@@ -1132,9 +1141,14 @@ export default function App() {
         } else if (e.key === 'Enter' && cropDraft && el?.tagName !== 'BUTTON' && el?.tagName !== 'A') {
           e.preventDefault()
           applyCrop()
+        } else if ((e.key === 'Delete' || e.key === 'Backspace') && wand && cleanTool === 'wand') {
+          // Delete clears the selection to the background, as in most paint programs.
+          e.preventDefault()
+          editCleanup(addOp(cleanup, { kind: 'fill', seeds: wand, tolerance: fillSettings.tolerance, contiguous: fillSettings.contiguous }))
         } else if (e.key === 'Escape') {
           setCropDraft(null)
           setCleanPick(false)
+          setWand(null)
         }
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length && tool !== 'mirror') {
         e.preventDefault()
@@ -1493,6 +1507,10 @@ export default function App() {
                           setBrush((b) => ({ ...b, color: hex }))
                           setCleanPick(false)
                         }}
+                        fill={fillSettings}
+                        onFill={(op) => editCleanup(addOp(cleanup, op))}
+                        wand={wand}
+                        onWand={setWand}
                       />
                     </Suspense>
                   )}
@@ -1672,6 +1690,10 @@ export default function App() {
                       inks={inks}
                       picking={cleanPick}
                       onPicking={setCleanPick}
+                      fill={fillSettings}
+                      onFill={setFillSettings}
+                      wand={wand}
+                      onWand={setWand}
                     />
                   </Suspense>
                 )}

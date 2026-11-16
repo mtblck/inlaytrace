@@ -3,14 +3,14 @@
  * list itself so it loads only once Clean up is used: the session check and
  * the mode's glue need the list, not the pixel loops.
  */
-import { clamp, isQuarter, normDegrees, type CleanupOp, type Crop, type Flip, type Img, type Levels, type Paint } from './cleanup'
+import { clamp, isQuarter, normDegrees, type CleanupOp, type Crop, type Fill, type Flip, type Img, type Levels, type Paint } from './cleanup'
 
 // ---- Replay -----------------------------------------------------------------
 
 export function replay(img: Img, ops: CleanupOp[]): Img {
   let out = img
   // A stroke paints in place on an image this replay made, rather than copying it once a stroke.
-  for (const op of ops) out = op.kind === 'paint' ? paint(out, op, out !== img) : apply(out, op)
+  for (const op of ops) out = op.kind === 'paint' ? paint(out, op, out !== img) : op.kind === 'fill' ? fill(out, op, out !== img) : apply(out, op)
   return out
 }
 
@@ -28,6 +28,8 @@ export function apply(img: Img, op: CleanupOp): Img {
       return levels(img, op)
     case 'threshold':
       return threshold(img, op.level)
+    case 'fill':
+      return fill(img, op, false)
   }
 }
 
@@ -333,5 +335,83 @@ function paint(img: Img, op: Paint, inPlace: boolean): Img {
   }
   const out = inPlace ? img : { rgba: img.rgba.slice(), width: w, height: h }
   if (rect) composite(out.rgba, img.rgba, w, mask, strokeColour(img, op), rect)
+  return out
+}
+
+// ---- Fill and the magic wand -------------------------------------------------------
+//
+// One region finder for both: the Fill tool fills what one click finds, and the
+// wand shows what its clicks find until it's filled or cleared. Both are then
+// the same op, so a replay finds the same region from the same pixels.
+
+/** How far apart two pixels are: the most any channel differs, with every nearly transparent pixel alike whatever its hidden colour. */
+function near(s: Uint8ClampedArray, i: number, r: number, g: number, b: number, a: number, tolerance: number) {
+  const pa = s[i + 3]
+  if (pa < 8 && a < 8) return true
+  return Math.abs(s[i] - r) <= tolerance && Math.abs(s[i + 1] - g) <= tolerance && Math.abs(s[i + 2] - b) <= tolerance && Math.abs(pa - a) <= tolerance
+}
+
+/**
+ * The pixels each seed takes, joined: 1 where taken, 0 elsewhere. A seed is a
+ * point in fractions of the image; it takes the pixels within `tolerance` of
+ * its own colour, only those joined to it edge to edge when `contiguous`.
+ */
+export function regionOf(img: Img, seeds: number[], tolerance: number, contiguous: boolean): Uint8Array {
+  const { width: w, height: h, rgba: s } = img
+  const out = new Uint8Array(w * h)
+  const stack = new Int32Array(w * h)
+  let seen: Uint8Array | null = null
+  for (let k = 0; k + 1 < seeds.length; k += 2) {
+    const sx = clamp(Math.floor(seeds[k] * w), 0, w - 1)
+    const sy = clamp(Math.floor(seeds[k + 1] * h), 0, h - 1)
+    const at = sy * w + sx
+    const o = at * 4
+    const [r, g, b, a] = [s[o], s[o + 1], s[o + 2], s[o + 3]]
+    if (!contiguous) {
+      for (let i = 0; i < w * h; i++) if (!out[i] && near(s, i * 4, r, g, b, a, tolerance)) out[i] = 1
+      continue
+    }
+    if (out[at]) continue
+    // A flood from the seed, a pixel at a time; `seen` marks pixels already queued, so each is looked at once a seed.
+    if (seen) seen.fill(0)
+    else seen = new Uint8Array(w * h)
+    let n = 0
+    stack[n++] = at
+    seen[at] = 1
+    while (n) {
+      const i = stack[--n]
+      if (!near(s, i * 4, r, g, b, a, tolerance)) continue
+      out[i] = 1
+      const x = i % w
+      if (x > 0 && !seen[i - 1]) (seen[i - 1] = 1), (stack[n++] = i - 1)
+      if (x < w - 1 && !seen[i + 1]) (seen[i + 1] = 1), (stack[n++] = i + 1)
+      if (i >= w && !seen[i - w]) (seen[i - w] = 1), (stack[n++] = i - w)
+      if (i < w * (h - 1) && !seen[i + w]) (seen[i + w] = 1), (stack[n++] = i + w)
+    }
+  }
+  return out
+}
+
+/** The colour a fill lays down: its own, or the background of the image it fills. */
+export function fillColour(img: Img, op: Pick<Fill, 'color'>): [number, number, number, number] {
+  if (!op.color) return backgroundOf(img)
+  const n = parseInt(op.color.slice(1), 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 255]
+}
+
+/** Replay a fill. With `inPlace`, it fills `img` itself (the replay owns it). */
+function fill(img: Img, op: Fill, inPlace: boolean): Img {
+  const region = regionOf(img, op.seeds, op.tolerance, op.contiguous)
+  const [r, g, b, a] = fillColour(img, op)
+  const out = inPlace ? img : { rgba: img.rgba.slice(), width: img.width, height: img.height }
+  const d = out.rgba
+  for (let i = 0; i < region.length; i++)
+    if (region[i]) {
+      const o = i * 4
+      d[o] = r
+      d[o + 1] = g
+      d[o + 2] = b
+      d[o + 3] = a
+    }
   return out
 }

@@ -49,6 +49,23 @@ faster.
   Apple Pencil's pressure sets the width as you draw.
 - Each stroke is one undo step.
 
+## Fill (G) and the magic wand (W)
+
+- **Fill:** click the image to fill the area you click in the brush colour: a
+  blotchy background made one colour, a speckled fill made flat, a letter's
+  inside filled in. ⌥/Alt-click picks the colour, as with the brush.
+- **Magic wand:** click to select an area of one colour, shown tinted with its
+  edge drawn; ⇧ Shift-click adds another. Then **Fill** it in the brush
+  colour, or **Clear** it to the background colour (as the eraser does), so a
+  watermark, a stamp or a coloured backdrop traces as nothing. Delete clears,
+  Esc deselects.
+- **Tolerance** is how far a colour may stray from the one you clicked and
+  still count: 0 takes that exact colour, more takes in a JPEG's noise and
+  the soft pixels along an edge. With **Touching only** off, the click takes
+  that colour everywhere in the image, not just the area it's in. Both apply
+  to the wand's selection as you change them.
+- Each fill, and each fill or clear of a selection, is one undo step.
+
 To paint detail, zoom in: pinch, ⌘/Ctrl + the wheel (or a trackpad pinch),
 ⌘/Ctrl + and −, or the zoom buttons over the image; *Fit* or ⌘/Ctrl 0 goes
 back to the whole image. Two fingers, the wheel, Space-drag or a
@@ -75,7 +92,7 @@ original, as one undoable step.
 ## How it works
 
 Clean-up is a list of operations (crop, rotate, flip, levels, threshold,
-and brush and eraser strokes)
+brush and eraser strokes, and fills)
 stored with your edits, so Undo and Redo step through it like any other edit,
 and it is saved with the session, so a reload brings it back
 (`apps/app/src/lib/cleanup.ts`). Replaying the list onto the original makes
@@ -94,4 +111,7 @@ with pen pressure) plus the brush's size and hardness, and replays as round
 dabs stamped along them into a coverage mask, so overlapping dabs don't build
 up; drawing uses the same code a segment at a time, so what you see while
 painting is what's traced. A new stroke replays only itself, on top of the
-last result. The mode's code loads the first time you open it.
+last result. A fill is stored as the points clicked, the tolerance and
+whether only touching pixels count, and finds its area again on replay from
+the pixels as they are at that step, so it fills exactly what you saw
+selected. The mode's code loads the first time you open it.

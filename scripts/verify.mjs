@@ -1443,7 +1443,7 @@ const siteOrigin = process.env.SITE ?? (new URL(url).hostname.endsWith('mattblac
   await cp.getByRole('tab', { name: 'Clean up' }).click()
   await cp.locator('[data-clean-canvas]').waitFor()
   const rail = cp.locator('[data-rail]')
-  check((await rail.getByRole('radio').allInnerTexts()).join() === 'Crop,Straighten,Brush,Eraser', 'Clean up has Crop, Straighten, Brush and Eraser in its rail')
+  check((await rail.getByRole('radio').allInnerTexts()).join() === 'Crop,Straighten,Brush,Eraser,Fill,Magic wand', 'Clean up has Crop, Straighten, Brush, Eraser, Fill and Magic wand in its rail')
   check((await size()) === '640x640', `Clean up shows the image at its own size (${await size()})`)
   // Crop: draw a box, then apply it.
   const ov = await cp.locator('[data-clean-overlay]').boundingBox()
@@ -1499,6 +1499,27 @@ const siteOrigin = process.env.SITE ?? (new URL(url).hostname.endsWith('mattblac
   for (let i = 0; i < 3; i++) await cp.keyboard.press(']')
   await stroke(0.5)
   check((await pixel(0.5, 0.5)) === corner, `the eraser paints the background colour back (${await pixel(0.5, 0.5)} vs ${corner})`)
+  // Fill and the magic wand (#205): a click fills the area it's in; the wand selects, then fills.
+  const click = async (fx, fy, opts) => {
+    const box = await cp.locator('[data-clean-overlay]').boundingBox()
+    await cp.mouse.click(box.x + box.width * fx, box.y + box.height * fy, opts)
+  }
+  await cp.keyboard.press('g')
+  await cp.locator('[data-fill-fields]').getByLabel('Brush colour', { exact: true }).fill('#00ff00')
+  await click(0.02, 0.02)
+  check((await pixel(0.02, 0.02)) === '0,255,0,255', `Fill fills the area clicked in the brush colour (${await pixel(0.02, 0.02)})`)
+  await cp.keyboard.press(`${MOD}+z`)
+  check((await pixel(0.02, 0.02)) === corner, 'Undo takes the fill away')
+  await cp.keyboard.press('w')
+  await click(0.02, 0.02)
+  const selected = () => cp.locator('[data-wand-selection]').getAttribute('data-wand-selection').catch(() => null)
+  check(Number(await selected()) > 0, `the magic wand selects the area clicked (${await selected()} px)`)
+  await cp.keyboard.press('Escape')
+  check((await cp.locator('[data-wand-selection]').count()) === 0, 'Esc deselects')
+  await click(0.02, 0.02)
+  await cp.locator('[data-wand-actions]').getByRole('button', { name: 'Fill', exact: true }).click()
+  check((await pixel(0.02, 0.02)) === '0,255,0,255' && (await cp.locator('[data-wand-selection]').count()) === 0, 'Fill fills the selection and puts it away')
+  await cp.keyboard.press(`${MOD}+z`)
   // Zoom: the buttons, and Fit back.
   const zoom = () => cp.locator('[data-clean-canvas]').getAttribute('data-clean-zoom').then(Number)
   await cp.getByRole('button', { name: 'Zoom in' }).click()

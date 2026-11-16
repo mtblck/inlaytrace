@@ -21,6 +21,11 @@
  *    the image at that step, with pen pressure) plus the brush's size and
  *    hardness. The eraser paints the image's background colour, worked out at
  *    that step, so what it erases traces as nothing.
+ *  - fill (#205): the Fill tool's click, or a magic-wand selection filled or
+ *    cleared, as the points clicked (fractions of the image at that step) plus
+ *    the tolerance and whether only touching pixels count. The region is found
+ *    again on replay, from the pixels as they are at that step, so it is
+ *    exactly the region that was shown.
  *
  * Levels and threshold are adjustments: there is at most one of each, edited
  * in place as their sliders move. Crop, rotate, flip and strokes are appended.
@@ -40,7 +45,22 @@ export type Threshold = { kind: 'threshold'; level: number }
  * the image's long edge; `hardness` 1 is a crisp edge, 0 a soft one.
  */
 export type Paint = { kind: 'paint'; tool: 'brush' | 'eraser'; color?: string; size: number; hardness: number; points: number[] }
-export type CleanupOp = Crop | Rotate | Flip | Levels | Threshold | Paint
+/**
+ * A fill. `seeds` is flat, two numbers a point clicked: x and y as fractions
+ * of the image's width and height. Each seed takes the pixels within
+ * `tolerance` (0–255, on every channel) of its own colour: touching it when
+ * `contiguous`, anywhere in the image when not. With a `color` they're filled
+ * with it; without one they're cleared to the image's background colour, as
+ * the eraser does.
+ */
+export type Fill = { kind: 'fill'; seeds: number[]; tolerance: number; contiguous: boolean; color?: string }
+export type CleanupOp = Crop | Rotate | Flip | Levels | Threshold | Paint | Fill
+
+/** Fill and the magic wand as the panel sets them. */
+export type FillSettings = { tolerance: number; contiguous: boolean }
+export const FILL_DEFAULT: FillSettings = { tolerance: 32, contiguous: true }
+/** Points one wand selection takes (Shift-click adds one). */
+export const MAX_SEEDS = 64
 
 /** The brush as the panel sets it: size in pixels of the cleaned image, hardness 0–1, colour as hex. */
 export type BrushSettings = { size: number; hardness: number; color: string }
@@ -63,7 +83,7 @@ export const THRESHOLD_DEFAULT: Threshold = { kind: 'threshold', level: 128 }
 // ---- The list ---------------------------------------------------------------
 
 /** Append a geometric op, folding it into the last one where that's exact. */
-export function addOp(ops: CleanupOp[], op: Crop | Rotate | Flip | Paint): CleanupOp[] {
+export function addOp(ops: CleanupOp[], op: Crop | Rotate | Flip | Paint | Fill): CleanupOp[] {
   const last = ops[ops.length - 1]
   if (op.kind === 'rotate') {
     const degrees = normDegrees(op.degrees)
@@ -125,6 +145,14 @@ function checkPaint(o: Record<string, unknown>): Paint | null {
   return { kind: 'paint', tool, ...(tool === 'brush' ? { color: (color as string).toLowerCase() } : {}), size: size as number, hardness: hardness as number, points: (points as number[]).slice() }
 }
 
+function checkFill(o: Record<string, unknown>): Fill | null {
+  const { seeds, tolerance, contiguous, color } = o
+  if (color !== undefined && (typeof color !== 'string' || !HEX.test(color))) return null
+  if (!num(tolerance, 0, 255) || typeof contiguous !== 'boolean') return null
+  if (!Array.isArray(seeds) || !seeds.length || seeds.length % 2 || seeds.length > MAX_SEEDS * 2 || !seeds.every((v) => num(v, 0, 1))) return null
+  return { kind: 'fill', seeds: (seeds as number[]).slice(), tolerance: tolerance as number, contiguous, ...(color !== undefined ? { color: (color as string).toLowerCase() } : {}) }
+}
+
 /** A saved list, checked op by op; null if anything in it isn't one of ours. */
 export function checkCleanup(value: unknown): CleanupOp[] | null {
   if (!Array.isArray(value) || value.length > MAX_OPS) return null
@@ -138,8 +166,8 @@ export function checkCleanup(value: unknown): CleanupOp[] | null {
     else if (o.kind === 'levels' && num(o.black, 0, 254) && num(o.white, 1, 255) && (o.black as number) < (o.white as number) && num(o.gamma, 0.1, 10))
       out.push({ kind: 'levels', black: o.black as number, white: o.white as number, gamma: o.gamma as number })
     else if (o.kind === 'threshold' && num(o.level, 1, 255)) out.push({ kind: 'threshold', level: o.level as number })
-    else if (o.kind === 'paint') {
-      const p = checkPaint(o)
+    else if (o.kind === 'paint' || o.kind === 'fill') {
+      const p = o.kind === 'paint' ? checkPaint(o) : checkFill(o)
       if (!p) return null
       out.push(p)
     } else return null
