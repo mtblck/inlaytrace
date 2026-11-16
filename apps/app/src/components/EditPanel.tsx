@@ -3,14 +3,31 @@ import type { Tool } from './Canvas'
 import type { Arrange } from '../lib/doc'
 import type { BooleanOp } from '../lib/boolean'
 import { MAX_ORDER, MIN_ORDER, sameAxis, type Axis, type MirrorAxis, type TurnAxis } from '../lib/mirror'
+import { MAX_SIDES, MIN_SIDES, type ShapeKind, type ShapeSettings } from '../lib/draw'
 import type { Box } from '../lib/transform'
 import { Section } from './Controls'
-import { MOD } from './Shortcuts'
+import { ALT, MOD, SHIFT } from './Shortcuts'
 import { TOOL_LABEL } from './Workspace'
+
+/** The Pen and Shape tools' settings (#210): what shape, its colour (shared with Fill) and a line's width. */
+export type DrawProps = {
+  shape: ShapeSettings
+  onShape: (s: ShapeSettings) => void
+  strokeWidth: number
+  onStrokeWidth: (w: number) => void
+  colour: string
+  onColour: (hex: string) => void
+  /** Colours in the drawing, offered as swatches. */
+  inks: string[]
+  /** Arm the eyedropper for the drawing colour; `picking` while it is. */
+  onPick: () => void
+  picking: boolean
+}
 
 type Props = {
   /** The Fill tool's colour and messages (components/Shapes.tsx), shown while it's the tool. */
   fillFields?: ReactNode
+  draw?: DrawProps
   /** The rail's tool (components/Workspace.tsx); the panel shows its properties. */
   tool: Tool
   detached: boolean
@@ -115,6 +132,7 @@ export function EditPanel(p: Props) {
       )}
 
       {p.tool === 'fill' && p.fillFields}
+      {(p.tool === 'pen' || p.tool === 'shape') && p.draw && <DrawFields tool={p.tool} {...p.draw} />}
 
       {p.tool === 'mirror' && (
         <div className="space-y-3">
@@ -183,6 +201,75 @@ function Choice<T extends string>(props: { label: string; value: T; options: [T,
 }
 
 const round = (n: number) => Math.round(n * 100) / 100
+
+const SHIFT_HINT = `${SHIFT} makes it square, a circle or a 45° line; ${ALT} draws it from the centre.`
+const SHAPE_KINDS: [ShapeKind, string][] = [
+  ['rect', 'Rectangle'],
+  ['ellipse', 'Ellipse'],
+  ['polygon', 'Polygon'],
+  ['line', 'Line'],
+]
+
+/** The Pen and Shape tools' fields (#210). */
+function DrawFields(p: DrawProps & { tool: 'pen' | 'shape' }) {
+  const swatches = [...new Set(p.inks.map((h) => h.toLowerCase()))].slice(0, 16)
+  const set = (patch: Partial<ShapeSettings>) => p.onShape({ ...p.shape, ...patch })
+  const lines = p.tool === 'pen' || p.shape.kind === 'line'
+  return (
+    <div className="space-y-3" data-draw-fields={p.tool}>
+      <p className="field-hint">
+        {p.tool === 'pen'
+          ? 'Click to put down corners, drag to pull out a curve. Click the first node to close the shape (filled), or press Enter or Esc to end it as a line. Backspace takes back a node.'
+          : `Drag to draw. ${SHIFT_HINT} The new shape goes just above the selected one.`}
+      </p>
+      {p.tool === 'shape' && (
+        <>
+          <div className="space-y-1.5">
+            <span className="field-label">Shape</span>
+            <div role="radiogroup" aria-label="Shape" className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-rule bg-rule">
+              {SHAPE_KINDS.map(([v, l]) => (
+                <button
+                  key={v}
+                  role="radio"
+                  aria-checked={p.shape.kind === v}
+                  onClick={() => set({ kind: v })}
+                  className={`py-1.5 text-[13px] ${p.shape.kind === v ? 'bg-paper font-medium text-accent' : 'bg-paper-sunk text-ink hover:bg-paper'}`}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+          {p.shape.kind === 'rect' && <AxisNumber id="shape-radius" label="Corner radius" value={p.shape.radius} min={0} max={10000} step={1} onChange={(n) => set({ radius: n })} />}
+          {p.shape.kind === 'polygon' && <AxisNumber id="shape-sides" label="Sides" value={p.shape.sides} min={MIN_SIDES} max={MAX_SIDES} step={1} onChange={(n) => set({ sides: Math.round(n) })} />}
+        </>
+      )}
+      {lines && <AxisNumber id="draw-stroke" label="Line width" value={p.strokeWidth} min={0.5} max={500} step={0.5} onChange={p.onStrokeWidth} />}
+      <div className="flex items-center gap-2">
+        <input type="color" className="size-8 shrink-0 cursor-pointer rounded border border-rule" value={p.colour} onChange={(e) => p.onColour(e.target.value)} aria-label="Drawing colour" />
+        <span className="num grow text-[13px]">{p.colour}</span>
+        <button className={`btn ${p.picking ? 'text-accent' : ''}`} onClick={p.onPick} aria-pressed={p.picking} title="Pick the colour from the original image">
+          Pick
+        </button>
+      </div>
+      {swatches.length > 0 && (
+        <div className="flex flex-wrap gap-1" role="group" aria-label="Draw with a colour from the drawing">
+          {swatches.map((hex) => (
+            <button
+              key={hex}
+              className={`size-6 rounded border ${hex === p.colour.toLowerCase() ? 'border-ink ring-1 ring-ink' : 'border-rule'}`}
+              style={{ background: hex }}
+              title={hex}
+              aria-label={`Draw with ${hex}`}
+              aria-pressed={hex === p.colour.toLowerCase()}
+              onClick={() => p.onColour(hex)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 /**
  * X, Y, W and H of the selection's bounds, in pixels of the trace. Each field

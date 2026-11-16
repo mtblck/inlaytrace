@@ -29,6 +29,7 @@ import {
   type Arrange,
   inksOf,
   layerFiles,
+  newId,
   NO_EDITS,
   NO_INKS,
   recolorInk,
@@ -45,8 +46,11 @@ import { centreAxis, likelyAxis, mirrorDoc, type Axis } from './lib/mirror'
 import { booleanOp, type BooleanOp } from './lib/boolean'
 import { BucketFields, ShapesList, StyleFields, type ShapeFlag, type StylePatch } from './components/Shapes'
 import { bucketFill } from './lib/bucket'
+import { addShape, SHAPE_DEFAULT, type ShapeSettings } from './lib/draw'
 import { addOp, BRUSH_DEFAULT, BRUSH_MAX, BRUSH_MIN, FILL_DEFAULT, MAX_OPS, pixelOps, type BrushSettings, type CleanupOp, type FillSettings } from './lib/cleanup'
 import type { CleanFocus, CleanTool, CropDraft } from './components/CleanUp'
+/** The eyedropper's target for the Pen and Shape tools' colour (#210). */
+const DRAW_COLOUR = 'draw-colour'
 /** Clean up's tool keys. */
 const CLEAN_KEYS = { c: 'crop', l: 'straighten', b: 'brush', e: 'eraser', d: 'despeckle', j: 'heal', g: 'fill', w: 'wand', k: 'keep', r: 'remove' } as const satisfies Record<string, CleanTool>
 import { loadPaper } from './lib/paper'
@@ -968,6 +972,18 @@ export default function App() {
 
   // ---- Fill tool (#193) -----------------------------------------------------------
   const [fillColour, setFillColour] = useState('#f2c14e')
+  // ---- Pen and Shape tools (#210): they draw in the Fill tool's colour --------------
+  const [shape, setShape] = useState<ShapeSettings>(SHAPE_DEFAULT)
+  const [drawStroke, setDrawStroke] = useState(4)
+  /** A finished Pen or Shape path joins the drawing just above the selection, and becomes the selection. */
+  const onDrawn = (d: string, open: boolean) => {
+    const id = newId()
+    const above = selectedIds
+    editDoc((doc) => addShape(doc, d, fillColour, open ? drawStroke : null, above, id).doc)
+    setSelectedIds([id])
+    setSelectedNodes([])
+    startEditing()
+  }
   const [fillError, setFillError] = useState<string | null>(null)
   const [filling, setFilling] = useState(false)
   const fillingRef = useRef(false)
@@ -1213,8 +1229,8 @@ export default function App() {
       } else if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
         e.preventDefault()
         setShortcutsOpen(true)
-      } else if (hasDoc && !e.shiftKey && (key === 'v' || key === 'a' || key === 'm' || key === 'k')) {
-        if (!(key === 'm' && strokes) && !(key === 'k' && lineTrace)) chooseTool(({ v: 'select', a: 'nodes', m: 'mirror', k: 'fill' } as const)[key])
+      } else if (hasDoc && !e.shiftKey && (key === 'v' || key === 'a' || key === 'm' || key === 'k' || key === 'p' || key === 'u')) {
+        if (!(key === 'm' && strokes) && !(key === 'k' && lineTrace)) chooseTool(({ v: 'select', a: 'nodes', m: 'mirror', k: 'fill', p: 'pen', u: 'shape' } as const)[key])
         setWorkMode('edit')
         startEditing()
       }
@@ -1387,6 +1403,7 @@ export default function App() {
     const v = normalizeHex(hex)
     if (!v) return
     if (target === 'background') commit((e) => ({ ...e, background: v }))
+    else if (target === DRAW_COLOUR) setFillColour(v)
     else if (target === OWN_COLORS) {
       // The screen picker resolves later: build on the settings as they are then.
       const now = settingsRef.current
@@ -1398,7 +1415,7 @@ export default function App() {
   const onPick = (at: Pt) => {
     if (!picking || !source || !doc) return
     // An ink that a re-trace took away has nothing to recolour.
-    if (picking.target !== 'background' && picking.target !== OWN_COLORS && !inks.some((i) => i.hex === picking.target)) return setPicking(null)
+    if (picking.target !== 'background' && picking.target !== OWN_COLORS && picking.target !== DRAW_COLOUR && !inks.some((i) => i.hex === picking.target)) return setPicking(null)
     const hex = colourAt(traceSource ?? base ?? source, at.x / doc.width, at.y / doc.height)
     // A transparent pixel has no colour: stay armed for another click.
     if (!hex) return
@@ -1593,6 +1610,8 @@ export default function App() {
                     onPick={onPick}
                     onFill={(at) => void fillAt(at)}
                     onAxis={moveAxis}
+                    draw={{ shape, colour: fillColour, strokeWidth: drawStroke }}
+                    onDrawn={onDrawn}
                   />
                   {busy && (
                     <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
@@ -1756,6 +1775,17 @@ export default function App() {
               <EditPanel
                 tool={tool}
                 fillFields={<BucketFields colour={fillColour} onColour={setFillColour} inks={shownInks} busy={filling} error={fillError} />}
+                draw={{
+                  shape,
+                  onShape: setShape,
+                  strokeWidth: drawStroke,
+                  onStrokeWidth: setDrawStroke,
+                  colour: fillColour,
+                  onColour: setFillColour,
+                  inks: shownInks,
+                  onPick: () => setPicking((p) => (p?.target === DRAW_COLOUR ? null : { target: DRAW_COLOUR })),
+                  picking: picking?.target === DRAW_COLOUR,
+                }}
                 detached={detached}
                 selection={
                   selectedPaths.length
