@@ -367,11 +367,13 @@ async function selectChecks(page, label, id, n) {
   const b0 = await boxOf(page)
   const d0 = await page.locator(`path[data-path-id="${id}"]`).getAttribute('d')
 
-  // Move by dragging the shape.
+  // Move by dragging the shape (snapping off, ⌘/Ctrl held: a traced shape's nodes sit among its neighbours', so it would snap to one).
   await page.mouse.move(at.x, at.y)
+  await page.keyboard.down(MOD)
   await page.mouse.down()
   for (let i = 1; i <= 5; i++) await page.mouse.move(at.x + i * 6, at.y + i * 4)
   await page.mouse.up()
+  await page.keyboard.up(MOD)
   const b1 = await boxOf(page)
   check(near(b1.x - b0.x, 30) && near(b1.y - b0.y, 20), `${label}: dragging a shape moves it with the pointer (${(b1.x - b0.x).toFixed(1)}, ${(b1.y - b0.y).toFixed(1)})`)
   await page.keyboard.press(`${MOD}+z`)
@@ -1223,6 +1225,50 @@ if (process.env.FIXTURE) {
   await ep.close()
 }
 
+// ---- Align, distribute and snap (#213) ------------------------------------------------
+{
+  const al = await newPage({ width: 1440, height: 900 })
+  await al.goto(url)
+  const file = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120"><path d="M20 20L50 20L50 50L20 50Z" fill="#aa1111"/><path d="M80 40L110 40L110 70L80 70Z" fill="#11aa11"/><path d="M150 60L170 60L170 80L150 80Z" fill="#1111aa"/></svg>'
+  await al.locator('input[type=file]').setInputFiles({ name: 'three.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(file) })
+  await al.locator('[data-svg-opened]').waitFor({ state: 'attached', timeout: 15_000 })
+  const shape = (fill) => al.locator(`svg[aria-label="Traced SVG"] path[fill="${fill}"]`)
+  const sheet = await al.locator('svg[aria-label="Traced SVG"]').boundingBox()
+  const at = (x, y) => [sheet.x + (sheet.width * x) / 200, sheet.y + (sheet.height * y) / 120]
+  await al.mouse.click(...at(35, 35))
+  await al.keyboard.press(`${MOD}+a`)
+  await al.locator('[data-align="top"]').click()
+  const tops = await Promise.all(['#aa1111', '#11aa11', '#1111aa'].map(async (f) => (await shape(f).getAttribute('d')).match(/^M[\d.]+ ([\d.]+)/)[1]))
+  check(tops.every((t) => t === '20'), `Align top lines the three up on the highest (${tops.join(', ')})`)
+  await al.locator('[data-distribute="horizontal"]').click()
+  // 20..50, 80..110, 150..170: 150 of span, 80 of shapes, so gaps of 35 put the middle one at 85.
+  check((await shape('#11aa11').getAttribute('d')).startsWith('M85 20'), `Space across evens the gaps (${await shape('#11aa11').getAttribute('d')})`)
+  await al.keyboard.press(`${MOD}+z`)
+  await al.keyboard.press(`${MOD}+z`)
+  check((await shape('#11aa11').getAttribute('d')) === 'M80 40L110 40L110 70L80 70Z', 'each is one undo step')
+  // Snap: drag the red square so its corner comes within a few pixels of the green one's; it lands exactly.
+  check(await al.locator('[data-snap-nodes]').isChecked(), 'snapping to nodes is on by default')
+  await al.mouse.click(...at(35, 35))
+  await al.mouse.move(...at(35, 35))
+  await al.mouse.down()
+  await al.mouse.move(...at(50, 40), { steps: 4 })
+  await al.mouse.move(...at(64.6, 55.7), { steps: 4 })
+  const ring = await al.locator('[data-snap-at]').count()
+  await al.mouse.up()
+  check((await shape('#aa1111').getAttribute('d')).startsWith('M50 40L80 40'), `a dragged shape snaps its corner onto a neighbour’s (${await shape('#aa1111').getAttribute('d')}, ring ${ring})`)
+  await al.keyboard.press(`${MOD}+z`)
+  // With ⌘/Ctrl held, the same drag doesn't snap.
+  await al.mouse.move(...at(35, 35))
+  await al.keyboard.down(MOD)
+  await al.mouse.down()
+  await al.mouse.move(...at(50, 40), { steps: 4 })
+  await al.mouse.move(...at(64.6, 55.7), { steps: 4 })
+  await al.mouse.up()
+  await al.keyboard.up(MOD)
+  check(!(await shape('#aa1111').getAttribute('d')).startsWith('M50 40L'), `holding ${MOD} turns snapping off for the drag (${await shape('#aa1111').getAttribute('d')})`)
+  await al.close()
+}
+
 // ---- Group by object (#195): an icon sheet comes apart into one group per icon ----------
 {
   const ob = await newPage({ width: 1440, height: 900 })
@@ -1239,7 +1285,7 @@ if (process.env.FIXTURE) {
   await ob.getByRole('tab', { name: 'Edit' }).click()
   await ob.keyboard.press('v')
   await ob.locator('[data-group-objects]').click()
-  const note = await ob.locator('[data-group-objects] + p').textContent()
+  const note = await ob.locator('[data-objects-note]').textContent()
   check(/^3 objects, each now a group/.test(note), `Group by object finds the three icons (${note})`)
   const svg = await exportSvg(ob)
   // The optimiser merges the word's three same-colour bars into one path, so only the two-colour badge keeps its <g>.

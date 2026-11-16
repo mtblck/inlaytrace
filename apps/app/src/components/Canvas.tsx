@@ -6,6 +6,7 @@ import { angleAt, HANDLE_SET, handlePoint, hasRef, normRect, pathBounds, rotateA
 import type { Gradient } from '../lib/svg'
 import { DrawLayer, type DrawLayerProps } from './DrawLayer'
 import { anchorScroll, effective, snap, step, wheelFactor, type Zoom } from '../lib/zoom'
+import { SNAP_PX, SnapIndex, snapMove, snapPoint, type SnapSettings } from '../lib/snap'
 
 export type ViewMode = 'split' | 'difference' | 'vector'
 export type Tool = 'select' | 'nodes' | 'mirror' | 'fill' | 'pen' | 'shape' | 'erase' | 'knife'
@@ -61,6 +62,8 @@ type Props = {
   onFill: (at: Pt) => void
   /** The mirror axis or turn centre, dragged to a new place. */
   onAxis: (axis: Axis) => void
+  /** Snapping for node and shape drags (#213); ⌘/Ctrl held turns it off for that drag. */
+  snapping?: SnapSettings
   /** The Pen and Shape tools (#210), the Eraser and the Knife (#211): their settings and what they hand back. */
   draw?: Omit<DrawLayerProps, 'tool' | 'width' | 'height' | 'unit' | 'toSvg'>
 }
@@ -109,16 +112,19 @@ export function Canvas(props: Props) {
     // until the pointer travels DRAG_PX, so a plain click selects without editing.
     // `smooth` is decided once, at the press: a drag that bends a handle past the
     // threshold shouldn't suddenly let go of its partner.
-    | { kind: 'node'; ref: NodeRef; part: NodePart; grab: Pt; from: { x: number; y: number }; moved: boolean; smooth: boolean; reselect: boolean }
+    // `origin` is where the node or handle was; `snap`, the nodes it can land on, gathered on the first move.
+    | { kind: 'node'; ref: NodeRef; part: NodePart; grab: Pt; origin: Pt; from: { x: number; y: number }; moved: boolean; smooth: boolean; reselect: boolean; snap?: SnapIndex | null }
     // Moving the selected shapes; `reselect` narrows a multi-selection to the
     // pressed shape if the press turns out to be a click.
     // `last` is the latest transform sent, so a drag the browser cancels still ends where it was.
-    | { kind: 'move'; id: string; start: Pt; from: { x: number; y: number }; moved: boolean; reselect: boolean; last: Affine | null }
+    | { kind: 'move'; id: string; start: Pt; from: { x: number; y: number }; moved: boolean; reselect: boolean; last: Affine | null; snap?: { index: SnapIndex | null; moving: Pt[]; box: Box | null } }
     | { kind: 'scale'; handle: Handle; box: Box; grab: Pt; from: { x: number; y: number }; moved: boolean; last: Affine | null }
     | { kind: 'rotate'; centre: Pt; start: number; from: { x: number; y: number }; moved: boolean; last: Affine | null }
     | { kind: 'marquee'; start: Pt; from: { x: number; y: number }; moved: boolean; mode: SelectMode; clickId: string | null }
   >(null)
   const [marquee, setMarquee] = useState<Box | null>(null)
+  /** The node a drag has snapped to, ringed while it holds. */
+  const [snapAt, setSnapAt] = useState<Pt | null>(null)
 
   useLayoutEffect(() => {
     const mat = matRef.current
@@ -289,6 +295,47 @@ export function Canvas(props: Props) {
 
   // ---- Pointer handling ----------------------------------------------------
   const far = (d: { from: { x: number; y: number } }, e: { clientX: number; clientY: number }) => Math.hypot(e.clientX - d.from.x, e.clientY - d.from.y) >= DRAG_PX
+  // ---- Snapping (#213) ----
+  const snapOn = (e: { ctrlKey: boolean; metaKey: boolean }) => !!props.snapping && (props.snapping.nodes || props.snapping.grid) && !e.ctrlKey && !e.metaKey
+  const nodesOf = (paths: ShownPath[]) => paths.flatMap((p) => parsePath(p.d).flatMap((s) => s.nodes.map(({ x, y }) => ({ x, y }))))
+  const at3 = (q: Pt) => `${Math.round(q.x * 1000)},${Math.round(q.y * 1000)}`
+  /** Where a dragged node or handle goes: under the pointer, or snapped to a node (not one moving with it) or the grid. */
+  const nodeTarget = (d: Extract<NonNullable<typeof drag.current>, { kind: 'node' }>, p: Pt, e: RPointerEvent): Pt => {
+    const to = { x: p.x + d.grab.x, y: p.y + d.grab.y }
+    if (!snapOn(e)) {
+      setSnapAt(null)
+      return to
+    }
+    if (d.snap === undefined) {
+      // Not where it started (a neighbour's copy of a shared node moves with it), nor the other selected nodes it carries.
+      const skip = new Set([at3(d.origin)])
+      if (d.part === 'anchor') for (const r of props.selectedNodes) if (selectedSubs[r.sub]?.nodes[r.index]) skip.add(at3(selectedSubs[r.sub].nodes[r.index]))
+      d.snap = props.snapping!.nodes ? new SnapIndex(nodesOf(props.paths).filter((q) => !skip.has(at3(q))), SNAP_PX * unit) : null
+    }
+    const s = snapPoint(to, d.snap, props.snapping!.grid, SNAP_PX * unit)
+    setSnapAt(s.node ? s.at : null)
+    return s.at
+  }
+  /** Moving shapes: by the drag, snapped so one of their nodes lands on a still shape's node, or onto whole pixels. */
+  const moveTarget = (d: Extract<NonNullable<typeof drag.current>, { kind: 'move' }>, p: Pt, e: RPointerEvent): Affine => {
+    const m = moveBy(d.start, p, e.shiftKey)
+    if (!snapOn(e)) {
+      setSnapAt(null)
+      return m
+    }
+    if (!d.snap) {
+      const sel = props.paths.filter((q) => selectedSet.has(q.id))
+      const rest = props.paths.filter((q) => !selectedSet.has(q.id))
+      const nodes = props.snapping!.nodes
+      d.snap = { index: nodes ? new SnapIndex(nodesOf(rest), SNAP_PX * unit) : null, moving: nodes ? nodesOf(sel) : [], box: union(sel.map((q) => pathBounds(q.d))) }
+    }
+    const dx = p.x - d.start.x
+    const dy = p.y - d.start.y
+    const held = { x: e.shiftKey && Math.abs(dx) < Math.abs(dy), y: e.shiftKey && Math.abs(dx) >= Math.abs(dy) }
+    const r = snapMove(m.e, m.f, held, d.snap.moving, d.snap.box, d.snap.index, props.snapping!.grid, SNAP_PX * unit)
+    setSnapAt(r.at)
+    return translate(r.dx, r.dy)
+  }
   const onMove = (e: RPointerEvent) => {
     const d = drag.current
     if (!d) return
@@ -302,11 +349,11 @@ export function Canvas(props: Props) {
     if (d.kind === 'node') {
       if (!d.moved && !far(d, e)) return
       d.moved = true
-      props.onDragNode(d.ref, d.part, { x: p.x + d.grab.x, y: p.y + d.grab.y }, 'move', d.smooth && !e.altKey)
+      props.onDragNode(d.ref, d.part, nodeTarget(d, p, e), 'move', d.smooth && !e.altKey)
     } else if (d.kind === 'move') {
       if (!d.moved && !far(d, e)) return
       d.moved = true
-      d.last = moveBy(d.start, p, e.shiftKey)
+      d.last = moveTarget(d, p, e)
       props.onTransform(d.last, 'move')
     } else if (d.kind === 'scale') {
       // Like a node, a handle only starts scaling after DRAG_PX: a click on it changes nothing.
@@ -330,12 +377,13 @@ export function Canvas(props: Props) {
     drag.current = null
     if (!d) return
     const p = toSvg(e)
+    setSnapAt(null)
     // A press that never became a drag only selected; it changes nothing.
     if (d.kind === 'node') {
-      if (d.moved && p) props.onDragNode(d.ref, d.part, { x: p.x + d.grab.x, y: p.y + d.grab.y }, 'end', d.smooth && !e.altKey)
+      if (d.moved && p) props.onDragNode(d.ref, d.part, nodeTarget(d, p, e), 'end', d.smooth && !e.altKey)
       else if (!d.moved && d.reselect) props.onSelectNodes([d.ref], 'set')
     } else if (d.kind === 'move') {
-      if (d.moved) props.onTransform(e.type === 'pointerup' && p ? moveBy(d.start, p, e.shiftKey) : d.last!, 'end')
+      if (d.moved) props.onTransform(e.type === 'pointerup' && p ? moveTarget(d, p, e) : d.last!, 'end')
       else if (d.reselect) props.onSelect(d.id, 'set')
     } else if (d.kind === 'scale') {
       if (d.moved)
@@ -362,7 +410,7 @@ export function Canvas(props: Props) {
       else reselect = props.selectedNodes.length > 1
     } else if (!already) props.onSelectNodes([ref], 'set')
     const p = toSvg(e) ?? at
-    startDrag(e, { kind: 'node', ref, part, grab: { x: at.x - p.x, y: at.y - p.y }, from: { x: e.clientX, y: e.clientY }, moved: false, smooth: part !== 'anchor' && isSmooth(node), reselect })
+    startDrag(e, { kind: 'node', ref, part, grab: { x: at.x - p.x, y: at.y - p.y }, origin: at, from: { x: e.clientX, y: e.clientY }, moved: false, smooth: part !== 'anchor' && isSmooth(node), reselect })
   }
   const startDrag = (e: RPointerEvent, next: NonNullable<typeof drag.current>) => {
     e.stopPropagation()
@@ -670,6 +718,7 @@ export function Canvas(props: Props) {
               </g>
             )}
 
+            {snapAt && <circle cx={snapAt.x} cy={snapAt.y} r={6 * unit} fill="none" stroke="var(--c-accent)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" pointerEvents="none" data-snap-at="" />}
             {marquee && (
               <rect x={marquee.x} y={marquee.y} width={marquee.w} height={marquee.h} fill="var(--c-accent-dim)" stroke="var(--c-accent)" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" pointerEvents="none" data-marquee="" />
             )}
