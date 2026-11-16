@@ -492,35 +492,59 @@ export function heal(img: Img, mask: Mask, rect: Rect): Uint8ClampedArray {
       if (!mask.data[(rect.y0 + y - mask.y) * mask.w + rect.x0 + x - mask.x]) done[i] = 1
     }
   const colourAt = (x: number, y: number, k: number) => (x >= rect.x0 && y >= rect.y0 && x < rect.x1 && y < rect.y1 ? out[((y - rect.y0) * rw + x - rect.x0) * 4 + k] : img.rgba[(y * w + x) * 4 + k])
-  let left = done.reduce((n, v) => n + (v ? 0 : 1), 0)
+  // Only pixels beside a known one can fill this ring: start from those, then
+  // from the unfilled neighbours of each ring, so a big stroke isn't rescanned
+  // once a ring (#242 review).
+  const queued = new Uint8Array(rw * rh)
+  let frontier: number[] = []
+  const enqueue = (x: number, y: number) => {
+    if (x < 0 || y < 0 || x >= rw || y >= rh) return
+    const i = y * rw + x
+    if (done[i] || queued[i]) return
+    queued[i] = 1
+    frontier.push(i)
+  }
+  for (let y = 0; y < rh; y++)
+    for (let x = 0; x < rw; x++) {
+      if (done[y * rw + x]) continue
+      let edge = false
+      for (let dy = -1; dy <= 1 && !edge; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && known(rect.x0 + x + dx, rect.y0 + y + dy)) edge = true
+      if (edge) enqueue(x, y)
+    }
   const ring: number[] = []
   const cand: number[] = []
-  while (left) {
+  while (frontier.length) {
     ring.length = 0
-    for (let y = 0; y < rh; y++)
-      for (let x = 0; x < rw; x++) {
-        if (done[y * rw + x]) continue
-        const gx = rect.x0 + x
-        const gy = rect.y0 + y
-        cand.length = 0
-        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && known(gx + dx, gy + dy)) cand.push(gx + dx, gy + dy)
-        if (!cand.length) continue
-        // The medoid: the known neighbour nearest, in total, to the others.
-        let best = 0
-        let bestCost = Infinity
-        for (let a = 0; a < cand.length; a += 2) {
-          let cost = 0
-          for (let b = 0; b < cand.length; b += 2) for (let k = 0; k < 4; k++) cost += Math.abs(colourAt(cand[a], cand[a + 1], k) - colourAt(cand[b], cand[b + 1], k))
-          if (cost < bestCost) (bestCost = cost), (best = a)
-        }
-        ring.push(y * rw + x, cand[best], cand[best + 1])
+    // In scan order, as a full pass over the rect would visit them.
+    frontier.sort((a, b) => a - b)
+    for (const i of frontier) {
+      queued[i] = 0
+      const gx = rect.x0 + (i % rw)
+      const gy = rect.y0 + Math.floor(i / rw)
+      cand.length = 0
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && known(gx + dx, gy + dy)) cand.push(gx + dx, gy + dy)
+      if (!cand.length) continue
+      // The medoid: the known neighbour nearest, in total, to the others.
+      let best = 0
+      let bestCost = Infinity
+      for (let a = 0; a < cand.length; a += 2) {
+        let cost = 0
+        for (let b = 0; b < cand.length; b += 2) for (let k = 0; k < 4; k++) cost += Math.abs(colourAt(cand[a], cand[a + 1], k) - colourAt(cand[b], cand[b + 1], k))
+        if (cost < bestCost) (bestCost = cost), (best = a)
       }
+      ring.push(i, cand[best], cand[best + 1])
+    }
     // Nothing known anywhere near (a stroke over the whole image): leave the rest as it is.
     if (!ring.length) break
     // The whole ring is worked out before any of it counts as known, so the fill doesn't lean one way.
     for (let r = 0; r < ring.length; r += 3) for (let k = 0; k < 4; k++) out[ring[r] * 4 + k] = colourAt(ring[r + 1], ring[r + 2], k)
     for (let r = 0; r < ring.length; r += 3) done[ring[r]] = 1
-    left -= ring.length / 3
+    frontier = []
+    for (let r = 0; r < ring.length; r += 3) {
+      const x = ring[r] % rw
+      const y = Math.floor(ring[r] / rw)
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) enqueue(x + dx, y + dy)
+    }
   }
   return out
 }
