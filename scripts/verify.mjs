@@ -755,6 +755,13 @@ check((await page.locator('rect[data-background]').count()) === 0, 'then takes t
   await page.locator('[data-picking]').waitFor()
   await page.keyboard.press('Escape')
   check((await page.locator('[data-picking]').count()) === 0, 'Esc puts the eyedropper away')
+  // From the keyboard (#223): arm it, Tab to the image, Esc; focus goes back to the pipette, not the page.
+  const pipette = target.getByRole('button', { name: /Pick a colour/ })
+  await pipette.focus()
+  await page.keyboard.press('Enter')
+  await page.locator('[data-picker]').focus()
+  await page.keyboard.press('Escape')
+  check(await pipette.evaluate((el) => el === document.activeElement), 'putting the eyedropper away from the image hands focus back to its button')
   await target.getByRole('button', { name: /Pick a colour/ }).click()
   await page.mouse.click(spot.x, spot.y)
   const shown = (await target.locator('.font-mono').first().innerText()).trim()
@@ -1059,6 +1066,21 @@ if (process.env.FIXTURE) {
   check(/#33aa55|#3a5/i.test(svg), 'the fill exports')
   await fp.keyboard.press(`${MOD}+z`)
   check((await fp.locator(VECTOR).count()) === before, 'Undo takes the fill away')
+  // The same fill from the keyboard (#223): focus the image, steer the crosshair into the circle, Enter.
+  await fp.locator('[data-fill-target]').focus()
+  const startAt = await fp.locator('[data-crosshair]').getAttribute('data-crosshair').catch(() => null)
+  check(startAt !== null, `focusing the image shows a crosshair (${startAt})`)
+  for (let i = 0; i < 3; i++) {
+    await fp.keyboard.press('Shift+ArrowLeft')
+    await fp.keyboard.press('Shift+ArrowUp')
+  }
+  const aimed = await fp.locator('[data-crosshair]').getAttribute('data-crosshair')
+  const [ax, ay] = aimed.split(',').map(Number)
+  const [sx, sy] = startAt.split(',').map(Number)
+  check(ax < sx && ay < sy, `arrow keys move the crosshair (${startAt} → ${aimed})`)
+  await fp.keyboard.press('Enter')
+  await fp.waitForFunction((n) => document.querySelectorAll('svg[aria-label="Traced SVG"] path').length > n, before, { timeout: 15000 }).catch(() => {})
+  check((await fp.locator(VECTOR).count()) === before + 1 && (await fp.locator(VECTOR).first().getAttribute('fill')) === '#33aa55', 'Enter fills under the crosshair')
   await fp.close()
 }
 

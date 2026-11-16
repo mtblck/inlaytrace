@@ -160,6 +160,21 @@ export default function App() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   /** The eyedropper is armed for an ink (its traced hex) or the background. */
   const [picking, setPicking] = useState<{ target: string } | null>(null)
+  // When the eyedropper is put away (a pick, Esc, Cancel), the canvas's
+  // keyboard target unmounts and focus would fall to the page: hand it back to
+  // whatever armed the eyedropper (#223).
+  const pickOpener = useRef<HTMLElement | null>(null)
+  const armed = !!picking
+  useEffect(() => {
+    if (armed) {
+      pickOpener.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null
+      return
+    }
+    const opener = pickOpener.current
+    pickOpener.current = null
+    const active = document.activeElement
+    if (opener?.isConnected && (!active || active === document.body)) opener.focus()
+  }, [armed])
   const [axis, setAxis] = useState<Axis | null>(null)
   /** The likeliest symmetry in the traced pixels, and which pixels it was found in. */
   const [detected, setDetected] = useState<{ pixels: Pixels; axis: (Axis & { score: number }) | null } | null>(null)

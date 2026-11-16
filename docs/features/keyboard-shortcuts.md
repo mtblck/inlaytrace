@@ -34,6 +34,7 @@ mode switches to Edit mode.
 | A | Nodes: edit one shape's nodes and curves |
 | M | Mirror |
 | K | Fill: fill a shape, or the area between shapes, with a colour |
+| Tab, arrows, Enter | Fill or pick without a pointer: with Fill or the eyedropper on, Tab to the image, move the crosshair (⇧ for bigger steps), Enter fills or picks under it |
 | Double-click a shape | Edit its nodes (from Select) |
 | Double-click the outline | Add a node there (Nodes) |
 
