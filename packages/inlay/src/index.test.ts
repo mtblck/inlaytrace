@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import * as inlay from './index'
 import { exactPalette, parsePath, peakPalette, toSvg, trace, traceAsync, type TraceStep } from './index'
 
@@ -93,6 +93,26 @@ describe('traceAsync (#239)', () => {
     })
     await expect(run).rejects.toThrow('stop')
     expect(seen).not.toContain('fit')
+  })
+
+  it('gives the thread back once a slice is used up, so an abort from outside lands at the next pause', async () => {
+    // Each step looks 20 ms after the last, so every pause hands the thread back.
+    let now = 0
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => (now += 20))
+    try {
+      const controller = new AbortController()
+      // Queued before the trace starts: it runs at the first hand-back, as a Cancel click would.
+      const timer = setTimeout(() => controller.abort(new Error('cancelled')), 0)
+      const seen: string[] = []
+      await expect(traceAsync(image(), { signal: controller.signal, onProgress: (s) => seen.push(s.stage) })).rejects.toThrow('cancelled')
+      clearTimeout(timer)
+      expect(seen).toEqual(['palette'])
+      // Not aborted, every step hands back and it still finishes with trace's result.
+      const r = await traceAsync(image(), { preset: 'poster' })
+      expect(r).toEqual(trace(image(), { preset: 'poster' }))
+    } finally {
+      clock.mockRestore()
+    }
   })
 
   it('doesn’t start when the signal has already aborted, and rejects bad input', async () => {
