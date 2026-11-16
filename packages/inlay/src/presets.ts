@@ -116,7 +116,7 @@ export const outlineRadius = (scale: number) => Math.min(4, Math.max(2, Math.rou
 /** The trace for `image` with `options`: a preset's recipe, with any option given in place of its default. */
 export function tracePreset(image: ImageLike, options: TraceOptions = {}): InlayResult & { measuredWidth?: number } {
   const name = options.preset ?? 'logo'
-  const p = presets[name]
+  const p = Object.hasOwn(presets, name) ? presets[name] : undefined
   if (!p) throw new Error(`Unknown preset "${String(name)}". Use one of: ${Object.keys(presets).join(', ')}.`)
   const { width, height } = image
   if (!(width > 0 && height > 0) || image.data.length < width * height * 4) throw new Error(`The image needs ${width} × ${height} × 4 bytes of RGBA, and has ${image.data.length}.`)

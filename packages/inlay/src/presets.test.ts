@@ -86,6 +86,7 @@ describe('trace(image, { preset }) (#162, #163)', () => {
 
   it('says what went wrong with an unknown preset or too few bytes', () => {
     expect(() => trace(card(), { preset: 'nope' as 'logo' })).toThrow(/Unknown preset "nope"/)
+    expect(() => trace(card(), { preset: 'toString' as 'logo' })).toThrow(/Unknown preset "toString"/)
     expect(() => trace({ data: new Uint8Array(10), width: 4, height: 4 })).toThrow(/4 × 4 × 4 bytes/)
   })
 
