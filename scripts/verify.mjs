@@ -644,7 +644,7 @@ check((await page.locator('[data-rail]').count()) === 0, 'Trace mode has no tool
 await page.getByRole('tab', { name: /Edit/ }).click()
 check(await viewIs('Vector'), 'starting to edit switches to Vector, hiding the original')
 const rail = page.locator('[data-rail]')
-check((await rail.getByRole('radio').count()) === 4 && (await rail.getByRole('button', { name: 'Undo' }).count()) === 1, 'Edit mode shows the tool rail: Select, Nodes, Mirror, Fill, Undo and Redo')
+check((await rail.getByRole('radio').count()) === 6 && (await rail.getByRole('button', { name: 'Undo' }).count()) === 1, 'Edit mode shows the tool rail: Select, Nodes, Mirror, Fill, Pen, Shape, Undo and Redo')
 await rail.getByRole('radio', { name: 'Nodes' }).click()
 check((await page.locator('#panel-edit h2').first().innerText()) === 'Nodes', 'the panel follows the rail’s tool')
 // Leaving Edit puts its tools away: back on Select, nothing selected, so Delete can't act unseen.
@@ -1082,6 +1082,70 @@ if (process.env.FIXTURE) {
   await fp.waitForFunction((n) => document.querySelectorAll('svg[aria-label="Traced SVG"] path').length > n, before, { timeout: 15000 }).catch(() => {})
   check((await fp.locator(VECTOR).count()) === before + 1 && (await fp.locator(VECTOR).first().getAttribute('fill')) === '#33aa55', 'Enter fills under the crosshair')
   await fp.close()
+}
+
+// ---- Pen and Shape tools (#210): draw new shapes ----------------------------------------
+{
+  const dp = await newPage({ width: 1440, height: 900 })
+  await dp.goto(url)
+  const file = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect width="200" height="200" fill="#eeeeee"/><rect x="20" y="20" width="40" height="40" fill="#113388"/></svg>'
+  await dp.locator('input[type=file]').setInputFiles({ name: 'blank.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(file) })
+  await dp.locator('[data-svg-opened]').waitFor({ state: 'attached', timeout: 15_000 })
+  const sheet = await dp.locator('svg[aria-label="Traced SVG"]').boundingBox()
+  const at = (fx, fy) => [sheet.x + sheet.width * fx, sheet.y + sheet.height * fy]
+  const drag = async (from, to, mods = []) => {
+    for (const m of mods) await dp.keyboard.down(m)
+    await dp.mouse.move(...at(...from))
+    await dp.mouse.down()
+    await dp.mouse.move(...at((from[0] + to[0]) / 2, (from[1] + to[1]) / 2), { steps: 3 })
+    await dp.mouse.move(...at(...to), { steps: 3 })
+    await dp.mouse.up()
+    for (const m of mods) await dp.keyboard.up(m)
+  }
+  const nodesOf = (d) => (d.match(/[MLCZ]/gi) ?? []).filter((c) => !/[MZ]/i.test(c)).length
+  await dp.keyboard.press('u')
+  check((await dp.locator('[data-draw-fields="shape"]').count()) === 1, 'U picks the Shape tool')
+  await dp.getByLabel('Drawing colour').fill('#dd2255')
+  await drag([0.5, 0.5], [0.9, 0.7])
+  check((await dp.locator(VECTOR).count()) === 3, `a drag draws a rectangle (${await dp.locator(VECTOR).count()} shapes)`)
+  const rect = dp.locator(VECTOR).last()
+  check((await rect.getAttribute('fill')) === '#dd2255', `in the drawing colour, on top (${await rect.getAttribute('fill')})`)
+  const rb = await rect.boundingBox()
+  check(Math.abs(rb.width - sheet.width * 0.4) < 3 && Math.abs(rb.height - sheet.height * 0.2) < 3, `the size of the drag (${Math.round(rb.width)} × ${Math.round(rb.height)})`)
+  await dp.keyboard.press('v')
+  check((await dp.locator('[data-selection-box]').getAttribute('data-selection-box')) === '1', 'the new shape is selected')
+  await dp.keyboard.press('u')
+  // ⇧: a circle; it lands just above the selected rectangle.
+  await dp.locator('[data-draw-fields]').getByRole('radio', { name: 'Ellipse' }).click()
+  await drag([0.1, 0.6], [0.3, 0.95], ['Shift'])
+  const eb = await dp.locator(VECTOR).last().boundingBox()
+  check(Math.abs(eb.width - eb.height) < 2 && Math.abs(eb.width - sheet.width * 0.35) < 3, `⇧ draws a circle (${Math.round(eb.width)} × ${Math.round(eb.height)})`)
+  check(nodesOf(await dp.locator(VECTOR).last().getAttribute('d')) === 4, 'an ellipse is four nodes')
+  // The Pen: three clicks and the first node again close a filled triangle.
+  await dp.keyboard.press('p')
+  check((await dp.locator('[data-draw-fields="pen"]').count()) === 1, 'P picks the Pen')
+  await dp.mouse.click(...at(0.6, 0.1))
+  await dp.mouse.click(...at(0.9, 0.1))
+  await drag([0.75, 0.4], [0.85, 0.45])
+  check((await dp.locator('[data-pen-node]').count()) === 3, 'each click or drag puts down a node')
+  await dp.mouse.click(...at(0.6, 0.1))
+  check((await dp.locator(VECTOR).count()) === 5 && (await dp.locator('[data-pen-node]').count()) === 0, 'clicking the first node closes the shape')
+  const tri = await dp.locator(VECTOR).last().getAttribute('d')
+  check(/z\s*$/i.test(tri) && /C/i.test(tri), `closed, with a curve where the Pen dragged (${tri})`)
+  // Two clicks and Esc: an open path, drawn as a line.
+  await dp.locator('[data-draw-fields]').getByLabel('Line width').fill('6')
+  await dp.mouse.click(...at(0.1, 0.1))
+  await dp.mouse.click(...at(0.4, 0.3))
+  await dp.keyboard.press('Escape')
+  const line = dp.locator(VECTOR).last()
+  check((await dp.locator(VECTOR).count()) === 6 && (await line.getAttribute('fill')) === 'none' && (await line.getAttribute('stroke-width')) === '6', 'Esc ends an open path as a line, the width asked')
+  check((await dp.locator('[data-draw-fields="pen"]').count()) === 1, 'Esc with a path under way doesn’t put the Pen away')
+  const svg = await exportSvg(dp)
+  // The optimiser merges the three same-coloured fills into one path; the line stays a stroke.
+  check(/fill="#d25"/.test(svg) && /stroke="#d25"[^>]*stroke-width="6"/.test(svg), 'drawn shapes export, the line as a stroke')
+  await dp.keyboard.press(`${MOD}+z`)
+  check((await dp.locator(VECTOR).count()) === 5, 'Undo takes the line away')
+  await dp.close()
 }
 
 // ---- Shapes list, hide and lock, fill and stroke (#209), on a 2,500-shape drawing ----

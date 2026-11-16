@@ -50,7 +50,7 @@ const icon = (d: string) => (
 )
 
 /** Edit mode's tools by name: the rail's buttons and the panel's heading. */
-export const TOOL_LABEL: Record<Tool, string> = { select: 'Select', nodes: 'Nodes', mirror: 'Mirror', fill: 'Fill' }
+export const TOOL_LABEL: Record<Tool, string> = { select: 'Select', nodes: 'Nodes', mirror: 'Mirror', fill: 'Fill', pen: 'Pen', shape: 'Shape' }
 
 /** Edit mode's tools, as the rail shows them. */
 export const EDIT_TOOLS = (strokes: boolean, lineTrace = strokes): RailTool<Tool>[] => [
@@ -70,6 +70,8 @@ export const EDIT_TOOLS = (strokes: boolean, lineTrace = strokes): RailTool<Tool
     icon: icon('M3.5 9.5L9 4l5.5 5.5L9 15zM9 4L7 2M14.5 9.5c.8 1.4 1.5 2.4 1.5 3.2a1.5 1.5 0 01-3 0c0-.8.7-1.8 1.5-3.2z'),
     ...(lineTrace ? { disabled: 'Fill needs filled outlines, and this trace has lines (try Line art)' } : {}),
   },
+  { id: 'pen', label: TOOL_LABEL.pen, key: 'P', icon: icon('M9 2l5 9-5 5-5-5zM9 2v7M9 11.5a1 1 0 100-2 1 1 0 000 2z') },
+  { id: 'shape', label: TOOL_LABEL.shape, key: 'U', icon: icon('M2 9.5h6.5V16H2zM12.5 8a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM11 10l5 6h-6z') },
 ]
 
 /** Clean up's tools by name (#199, #200, #202, #205, #206, #204). */

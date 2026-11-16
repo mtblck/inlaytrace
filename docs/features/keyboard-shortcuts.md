@@ -43,6 +43,11 @@ mode switches to Edit mode.
 | F | Fix in image: open Clean up zoomed on the selected shapes |
 | K | Fill: fill a shape, or the area between shapes, with a colour |
 | Tab, arrows, Enter | Fill or pick without a pointer: with Fill or the eyedropper on, Tab to the image, move the crosshair (⇧ for bigger steps), Enter fills or picks under it |
+| P | Pen: click for corners, drag for curves, click the first node to close |
+| Enter or Esc | Pen: end an open path as a line |
+| Backspace | Pen: take back the last node |
+| U | Shape: drag a rectangle, ellipse, polygon or line |
+| ⇧ drag, ⌥ drag | Shape: a square, circle or 45° line; from the centre |
 | Double-click a shape | Edit its nodes (from Select) |
 | Double-click the outline | Add a node there (Nodes) |
 

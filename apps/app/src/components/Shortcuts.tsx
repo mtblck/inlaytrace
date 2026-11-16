@@ -3,8 +3,8 @@ import { useEffect, useRef } from 'react'
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 /** The platform's command key, for labels: ⌘ on a Mac, Ctrl elsewhere. */
 export const MOD = MAC ? '⌘' : 'Ctrl'
-const ALT = MAC ? '⌥' : 'Alt'
-const SHIFT = MAC ? '⇧' : 'Shift'
+export const ALT = MAC ? '⌥' : 'Alt'
+export const SHIFT = MAC ? '⇧' : 'Shift'
 /** Undo and Redo's keys, for the panel and for tooltips. */
 export const UNDO_KEYS = `${MOD} Z`
 export const REDO_KEYS = MAC ? '⇧⌘ Z' : 'Ctrl Shift Z'
@@ -54,6 +54,10 @@ export const SHORTCUTS: { mode: (typeof MODES)[number]; title: string; rows: Row
       { keys: ['F'], does: 'Fix in image: open Clean up zoomed on the selected shapes' },
       { keys: ['K'], does: 'Fill: fill a shape, or the area between shapes, with a colour' },
       { keys: ['Tab', '← ↑ → ↓', 'Enter'], does: 'Fill or pick by keyboard: focus the image, move the crosshair, fill (or pick) under it' },
+      { keys: ['P'], does: 'Pen: click for corners, drag for curves, click the first node to close' },
+      { keys: ['Enter', 'Esc'], does: 'Pen: end an open path as a line' },
+      { keys: ['U'], does: 'Shape: drag a rectangle, ellipse, polygon or line' },
+      { keys: [`${SHIFT} drag`, `${ALT} drag`], does: 'Shape: square, circle or 45° line / draw from the centre' },
       { keys: ['Double-click'], does: 'Edit a shape’s nodes (Select); add a node on the outline (Nodes)' },
     ],
   },
