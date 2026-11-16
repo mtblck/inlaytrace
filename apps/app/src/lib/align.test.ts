@@ -48,6 +48,9 @@ describe('snapping', () => {
     // Held level: y can't change, so only a node already level with a still one can land: (0, 10) + (9, 0) on (10, 10).
     expect(snapMove(9, 0, { x: false, y: true }, [{ x: 0, y: 10 }], null, index, false, 3)).toEqual({ dx: 10, dy: 0, at: { x: 10, y: 10 } })
     expect(snapMove(9, 0, { x: false, y: true }, [{ x: 0, y: 11 }], null, index, false, 3)).toEqual({ dx: 9, dy: 0, at: null })
+    // A nearer still node that isn't level doesn't hide one that is.
+    const two = new SnapIndex([{ x: 10, y: 11 }, { x: 12, y: 10 }], 3)
+    expect(snapMove(9, 0, { x: false, y: true }, [{ x: 0, y: 10 }], null, two, false, 3)).toEqual({ dx: 12, dy: 0, at: { x: 12, y: 10 } })
     // Nothing near: the grid puts the box's corner on whole pixels.
     expect(snapMove(20.3, 0.6, { x: false, y: false }, moving, { x: 0.5, y: 0, w: 40, h: 41 }, index, true, 3)).toEqual({ dx: 20.5, dy: 1, at: null })
   })

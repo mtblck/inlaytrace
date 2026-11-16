@@ -5,8 +5,8 @@
  *
  * Pure TypeScript, no DOM: runs in browsers, workers and Node.
  */
-export { trace, traceInlay, presets, type TraceOptions, type ImageLike, type PresetName, type PresetDefaults } from './presets'
-export { toSvg, type InlayOptions, type InlayPath, type InlayResult } from './inlay'
+export { trace, traceAsync, traceInlay, presets, type TraceOptions, type TraceAsyncOptions, type AbortSignalLike, type ImageLike, type PresetName, type PresetDefaults } from './presets'
+export { toSvg, type InlayOptions, type InlayPath, type InlayResult, type TraceStage, type TraceStep } from './inlay'
 export type { Gradient, GradientStop } from './gradient'
 export { peakPalette, exactPalette, quantizePalette, oklab, type Rgb } from './palette'
 export { boostLines, smoothShading } from './smooth'

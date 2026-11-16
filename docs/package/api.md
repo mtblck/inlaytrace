@@ -42,6 +42,40 @@ function traceInlay(image: ImageLike, options?: TraceOptions): string
 
 `toSvg(trace(…))` in one call. Also takes the deprecated 0.3 form.
 
+### `traceAsync(image, options?)`
+
+```ts
+function traceAsync(image: ImageLike, options?: TraceAsyncOptions): Promise<InlayResult>
+type TraceAsyncOptions = TraceOptions & {
+  signal?: AbortSignalLike // an AbortController's signal: stops the trace, rejecting with the signal's reason
+  onProgress?: (step: TraceStep) => void // called at each pause
+}
+type AbortSignalLike = { readonly aborted: boolean; readonly reason?: unknown }
+type TraceStep = { stage: TraceStage; done: number } // done: how far through the stage, 0 to 1
+type TraceStage = 'palette' | 'label' | 'clean' | 'regions' | 'fit' | 'shapes'
+```
+
+`trace` that can be stopped and reports progress: it gives the same result,
+but pauses between its stages (and every few hundred edges while fitting),
+calling `onProgress`. About every 12 ms it lets the thread get on with other
+work, so a page that traces on its main thread can keep responding, and a
+Cancel button can abort it. When `signal` aborts, it rejects at the next pause
+with the signal's `reason` (an `Error` named `AbortError` when there is none),
+and it doesn't start at all on a signal that has already aborted. Bad input
+rejects with the error `trace` would throw. The centerline preset reports only
+its start. In a Web Worker, terminating the worker stops a trace too, without
+this.
+
+```ts
+const controller = new AbortController()
+cancelButton.onclick = () => controller.abort()
+const result = await traceAsync(imageData, {
+  preset: 'poster',
+  signal: controller.signal,
+  onProgress: ({ stage, done }) => (status.textContent = `${stage} ${Math.round(done * 100)}%`),
+})
+```
+
 ### `presets`
 
 ```ts
