@@ -45,6 +45,8 @@ export function decodePng(b) {
   const bpp = Math.max(1, (channels * depth) >> 3) // bytes per pixel, for filtering
   const stride = Math.ceil((width * channels * depth) / 8)
   const raw = inflateSync(Buffer.concat(idat))
+  // Checked before anything is sized from the header, so a cut-off download or a lying header fails here.
+  if (raw.length < (stride + 1) * height) throw new Error('the PNG is truncated')
   const rows = Buffer.alloc(stride * height)
   let prev = Buffer.alloc(stride)
   for (let y = 0; y < height; y++) {
@@ -73,7 +75,13 @@ export function decodePng(b) {
     const v = (row[bit >> 3] >> (8 - depth - (bit & 7))) & ((1 << depth) - 1)
     return type === 3 ? v : Math.round((v * 255) / ((1 << depth) - 1))
   }
-  const raw16 = (row, i) => (depth === 16 ? row.readUInt16BE(i * 2) : depth === 8 ? row[i] : null)
+  // A sample as stored, unscaled, to compare with tRNS's key colour.
+  const stored = (row, i) => {
+    if (depth === 16) return row.readUInt16BE(i * 2)
+    if (depth === 8) return row[i]
+    const bit = i * depth
+    return (row[bit >> 3] >> (8 - depth - (bit & 7))) & ((1 << depth) - 1)
+  }
   const data = new Uint8ClampedArray(width * height * 4)
   for (let y = 0; y < height; y++) {
     const row = rows.subarray(y * stride, (y + 1) * stride)
@@ -89,13 +97,13 @@ export function decodePng(b) {
       } else if (type === 0 || type === 4) {
         r = g = bl = sample(row, x * channels)
         if (type === 4) al = sample(row, x * channels + 1)
-        else if (trns && depth >= 8 && raw16(row, x) === trns.readUInt16BE(0)) al = 0
+        else if (trns && stored(row, x) === trns.readUInt16BE(0)) al = 0
       } else {
         r = sample(row, x * channels)
         g = sample(row, x * channels + 1)
         bl = sample(row, x * channels + 2)
         if (type === 6) al = sample(row, x * channels + 3)
-        else if (trns && depth >= 8 && raw16(row, x * 3) === trns.readUInt16BE(0) && raw16(row, x * 3 + 1) === trns.readUInt16BE(2) && raw16(row, x * 3 + 2) === trns.readUInt16BE(4)) al = 0
+        else if (trns && stored(row, x * 3) === trns.readUInt16BE(0) && stored(row, x * 3 + 1) === trns.readUInt16BE(2) && stored(row, x * 3 + 2) === trns.readUInt16BE(4)) al = 0
       }
       data[o] = r
       data[o + 1] = g

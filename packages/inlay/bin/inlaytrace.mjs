@@ -99,14 +99,27 @@ try {
 
 let image
 try {
-  image = isPng(bytes) ? decodePng(bytes) : await decodeWithSharp(bytes, input)
+  try {
+    image = isPng(bytes) ? decodePng(bytes) : await decodeWithSharp(bytes, input)
+  } catch (e) {
+    if (!e.interlaced) throw e
+    image = await decodeWithSharp(bytes, 'an interlaced PNG')
+  }
 } catch (e) {
-  if (e.interlaced) image = await decodeWithSharp(bytes, 'an interlaced PNG')
-  else fail(`can't decode ${input}: ${e.message}`)
+  fail(`can't decode ${input}: ${e.message}`)
 }
-const svg = toSvg(trace(image, options))
+let svg
+try {
+  svg = toSvg(trace(image, options))
+} catch (e) {
+  fail(`can't trace ${input}: ${e.message}`)
+}
 if (values.output) {
-  await writeFile(values.output, svg)
+  try {
+    await writeFile(values.output, svg)
+  } catch (e) {
+    fail(`can't write ${values.output}: ${e.code ?? e.message}`)
+  }
   console.error(`inlaytrace: ${input} → ${values.output} (${image.width} × ${image.height}, ${(svg.length / 1024).toFixed(1)} KB)`)
 } else process.stdout.write(svg)
 
@@ -117,6 +130,7 @@ async function decodeWithSharp(b, name) {
   } catch {
     fail(`${name} isn't a PNG. For JPEG, WebP and other formats, install sharp next to inlaytrace (npm install sharp), or convert it to PNG.`)
   }
-  const { data, info } = await sharp(b).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+  // rotate() with no angle turns a phone photo upright by its EXIF orientation.
+  const { data, info } = await sharp(b).rotate().ensureAlpha().raw().toBuffer({ resolveWithObject: true })
   return { data, width: info.width, height: info.height }
 }

@@ -104,6 +104,28 @@ describe('the CLI’s PNG decoder', () => {
     expect(Array.from(ga.data.slice((3 * W + 5) * 4, (3 * W + 5) * 4 + 4))).toEqual([150, 150, 150, 120])
   })
 
+  it('keys out tRNS’s grey at 2 bits, and stops at a cut-off file', () => {
+    // Greys 0–3, four to a byte; tRNS makes 2 (as stored) transparent.
+    const rows = Array.from({ length: H }, (_, y) => {
+      const r = Buffer.alloc(Math.ceil(W / 4))
+      for (let x = 0; x < W; x++) r[x >> 2]! |= ((x + y) % 4) << (6 - 2 * (x & 3))
+      return r
+    })
+    const trns = Buffer.alloc(2)
+    trns.writeUInt16BE(2, 0)
+    const d = decodePng(png(W, H, 2, 0, rows, [chunk('tRNS', trns)]))
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const v = (x + y) % 4
+        expect([d.data[(y * W + x) * 4], d.data[(y * W + x) * 4 + 3]]).toEqual([v * 85, v === 2 ? 0 : 255])
+      }
+    // A header for a far bigger image than the data holds.
+    const big = png(W, H, 8, 2, Array.from({ length: H }, () => Buffer.alloc(W * 3)))
+    big.writeUInt32BE(100000, 16)
+    big.writeUInt32BE(crc32(big.subarray(12, 29)), 29)
+    expect(() => decodePng(big)).toThrow(/truncated/)
+  })
+
   it('knows a PNG from anything else, and leaves interlaced files to sharp', () => {
     expect(isPng(Buffer.from('GIF89a........'))).toBe(false)
     const one = png(1, 1, 8, 2, [Buffer.from([1, 2, 3])])
