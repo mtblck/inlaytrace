@@ -49,6 +49,7 @@ import { bucketFill } from './lib/bucket'
 import { addShape, SHAPE_DEFAULT, type ShapeSettings } from './lib/draw'
 import { eraseDoc, knifeDoc } from './lib/cut'
 import { followShared, simplifyShared } from './lib/shared'
+import { groupByObject, objectFiles } from './lib/objects'
 import type { PenCommand } from './components/DrawLayer'
 import { addOp, BRUSH_DEFAULT, BRUSH_MAX, BRUSH_MIN, FILL_DEFAULT, MAX_OPS, pixelOps, type BrushSettings, type CleanupOp, type FillSettings } from './lib/cleanup'
 import type { CleanFocus, CleanTool, CropDraft } from './components/CleanUp'
@@ -965,6 +966,15 @@ export default function App() {
   const groupSelection = () => selectedIds.length > 1 && editDoc((d) => groupPaths(d, selectedIds))
   const ungroupSelection = () => selectedIds.length && editDoc((d) => ungroupPaths(d, selectedIds))
   const arrangeSelection = (how: Arrange) => selectedIds.length && editDoc((d) => arrange(d, selectedIds, how))
+  /** Group by object (#195): each set of touching shapes in one group, one undo step; says how many it found. */
+  const [objectsNote, setObjectsNote] = useState<string | null>(null)
+  const groupObjects = () => {
+    if (!doc) return
+    const { doc: next, objects } = groupByObject(doc, edits.inks)
+    if (next !== doc) editDoc((d) => (d === doc ? next : groupByObject(d, edits.inks).doc))
+    setObjectsNote(!objects ? 'No separate objects found.' : `${objects === 1 ? '1 object' : `${objects} objects`}${next === doc ? ', already grouped.' : ', each now a group.'}`)
+    setTimeout(() => setObjectsNote(null), 6000)
+  }
   /** Unite, Subtract, Intersect or Divide the selection (#207); resolves to why it couldn't, or null. */
   const combining = useRef(false)
   const combineSelection = async (op: BooleanOp): Promise<string | null> => {
@@ -1376,6 +1386,16 @@ export default function App() {
     files[`${source!.name}-all.svg`] = strToU8(await finalSvg())
     const zip = zipSync(files, { level: 6 })
     save(new Blob([zip.buffer as ArrayBuffer], { type: 'application/zip' }), `${source!.name}-layers.zip`)
+  }
+
+  /** One SVG per object (#195), each cropped to it and sized at the export's scale. */
+  const downloadObjects = async () => {
+    const files: Record<string, Uint8Array> = {}
+    const sx = size.width / doc!.width
+    const sy = size.height / doc!.height
+    for (const f of objectFiles(doc!, edits.inks, source!.name)) files[f.name] = strToU8(withSize(await optimizeHere(f.svg), { width: f.box.w * sx, height: f.box.h * sy, unit: size.unit }))
+    const zip = zipSync(files, { level: 6 })
+    save(new Blob([zip.buffer as ArrayBuffer], { type: 'application/zip' }), `${source!.name}-objects.zip`)
   }
 
   /**
@@ -1855,6 +1875,8 @@ export default function App() {
                 onDeleteSelection={deleteSelection}
                 onGroup={groupSelection}
                 onUngroup={ungroupSelection}
+                onGroupObjects={groupObjects}
+                objectsNote={objectsNote}
                 onArrange={arrangeSelection}
                 onCombine={combineSelection}
                 grouped={!!doc && doc.paths.some((p) => p.group && selectedIds.includes(p.id))}
@@ -1967,6 +1989,9 @@ export default function App() {
                 </button>
                 <button className="btn" disabled={!trace} onClick={downloadLayers} title="One SVG per ink, in a .zip">
                   Layers (.zip)
+                </button>
+                <button className="btn col-span-2" disabled={!trace} onClick={downloadObjects} title="One SVG per object (each icon or sticker), cropped to it, in a .zip" data-objects-zip="">
+                  Objects (.zip)
                 </button>
               </div>
               {doc && (

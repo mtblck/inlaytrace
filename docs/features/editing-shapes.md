@@ -65,6 +65,18 @@ With shapes selected, *Arrange* in the Edit panel:
 Both are shape edits: one undo step each, and they detach the drawing from
 the trace like any other.
 
+### Group by object
+
+**Group by object**, at the foot of the Select panel, groups the whole drawing
+at once: each set of shapes that touch (sharing an edge, crossing, or one
+inside another) becomes one group, so a sheet of icons or stickers comes apart
+into pieces you can click, move and export one at a time. Pieces closer than a
+quarter of their size, like the letters of a word or the dot of an *i*, count
+as one object, so a logo stays whole. A shape as big as the drawing is the
+background and stays out of every group, and so do hidden colours. Shapes you
+grouped yourself stay together. The panel says how many objects it found;
+doing it again changes nothing. It's one undo step.
+
 ## Combine: unite, subtract, intersect, divide
 
 With two or more filled shapes selected, *Combine* in the Edit panel joins or

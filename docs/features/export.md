@@ -11,6 +11,7 @@ The bottom of the panel, with live **Paths**, **Nodes** and **Size**.
 | **Download SVG** | `<name>.svg`, optimised |
 | **Copy SVG** | The same markup on the clipboard |
 | **Layers (.zip)** | One SVG per colour, plus the background and the whole drawing |
+| **Objects (.zip)** | One SVG per object (each icon or sticker), cropped to it |
 
 ## Size and other formats
 
@@ -77,3 +78,13 @@ colour:
 
 With every preset but Poster, neighbouring layers share their edges exactly, so
 they register perfectly when printed or cut.
+
+## The objects zip
+
+For a sheet of icons, stickers or logos, **Objects (.zip)** writes each object
+as `<name>-object-01.svg`, `-02-…`, bottom of the paint order first. An object
+is the same set of shapes **Group by object** in the Edit tab would group:
+shapes that touch, or sit as close as the letters of a word. Each file is
+cropped to its object, rounded out to whole pixels, at the scale *Size* sets.
+The background (a shape as big as the drawing, or the colour behind it) isn't
+in any of them. You don't need to group first.
