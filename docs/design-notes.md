@@ -336,7 +336,26 @@ passes but finds no solid pixels beside its edges, so traces the same. Poster
 never uses it. On the PNG
 badge, emblem, outline and overlap fixtures wrong pixels fall 2–16% for the
 same nodes; brightness alone gives the blend where the colours differ in it.
-Render-and-score for exact shapes, the other half of #147, is still to do.
+
+**Exact shapes are chosen by drawing them, near the limit (#147).** The strict
+limits on how far a shape may stray from its pixel edges (RMS 0.3 px, worst
+0.85 px) stay, and a shape inside them is used as before. A shape inside
+looser limits (0.5 px, 1.4 px) is now drawn as well as the free fit, and each
+is scored by the area where it and the region's outline differ (`areaApart`
+in `shapes.ts`: scanlines a quarter of a pixel apart, even-odd); the shape is
+kept if it is off by no more than 0.9 of the free fit's. And a region taken
+for a circle is also drawn as each regular polygon of 3 to 8 sides, of its
+area and centroid, turned to the angle that fits it best; a polygon replaces the circle
+only when it is off by less than 0.6 of the circle's area. That catches the
+small hexagon: 5 to 8 px across, its corners are too blunt in pixels to find,
+its moments are a circle's, and it came out round. Anti-aliased, it now comes
+out a hexagon from 5 px; drawn with hard pixel edges it stays round under
+about 10 px, where the pixels can't tell the two apart. Circles of every size
+tried stay circles. The score: the outline fixture 2.02% to 2.00% wrong
+(Logo; Illustration and Outline art the same 0.01–0.02 better), the PNG
+overlap fixture 0.19% to 0.16% with Illustration, nodes unchanged
+everywhere; Line art on the 3.2 px junctions 3.11% to 3.13%. Open Vectorizer
+as a second benchmark in `score` is not done.
 
 **Nearly straight lines snap to 0°, 45° and 90°.** People draw those with a
 snap, but a fit to the pixels leaves them a fraction of a degree off, more

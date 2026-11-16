@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { traceRaw as trace, type InlayOptions } from './inlay'
 import { pointAt, type Cubic } from './fit'
 import { parsePath } from './path'
+import { areaApart } from './shapes'
 
 /** A two-colour picture of a shape, anti-aliased like a real render (4×4 samples a pixel). */
 function paint(inside: (x: number, y: number) => boolean, w = 100, h = 100) {
@@ -98,6 +99,37 @@ describe('exact shapes', () => {
       const sides = nodes.map((a, i) => Math.hypot(nodes[(i + 1) % k].x - a.x, nodes[(i + 1) % k].y - a.y))
       expect(Math.max(...sides) - Math.min(...sides)).toBeLessThan(0.05)
     }
+  })
+
+  it('draw a small hexagon as a hexagon, not a circle, and a small circle as a circle (#147)', () => {
+    for (const R of [5, 6, 8]) {
+      const hexagon = paint((x, y) => {
+        for (let i = 0; i < 6; i++) {
+          const a = (i * Math.PI) / 3 + 0.2
+          if ((x - 50.3) * Math.cos(a) + (y - 49.7) * Math.sin(a) > R) return false
+        }
+        return true
+      })
+      const nodes = parsePath(shapeOf(hexagon))[0].nodes
+      expect(nodes).toHaveLength(6)
+      expect(nodes.every((n) => !n.in && !n.out)).toBe(true)
+      const circle = paint((x, y) => Math.hypot(x - 50.3, y - 49.7) <= R)
+      expect(parsePath(shapeOf(circle))[0].nodes).toHaveLength(4)
+    }
+  })
+
+  it('measure how far apart two outlines are by the area only one covers', () => {
+    const square = (x: number, y: number, s: number) => [
+      { x, y },
+      { x: x + s, y },
+      { x: x + s, y: y + s },
+      { x, y: y + s },
+    ]
+    expect(areaApart(square(0, 0, 10), square(0, 0, 10))).toBeCloseTo(0)
+    // Moved 1 px across: a 1 × 10 strip each side.
+    expect(areaApart(square(0, 0, 10), square(1, 0, 10))).toBeCloseTo(20)
+    // One inside the other: the ring between them.
+    expect(areaApart(square(0, 0, 10), square(2, 2, 6))).toBeCloseTo(64)
   })
 
   it('leave shapes that are only nearly one of these as fitted', () => {

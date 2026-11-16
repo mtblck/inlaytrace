@@ -31,7 +31,7 @@
  * points. That is what lets two shapes share one fitted edge exactly.
  */
 import type { Pt } from './path'
-import { fitShape } from './shapes'
+import { areaApart, fitShape } from './shapes'
 
 export type FitOptions = {
   /** Max distance in pixels between the outline and the fitted path. */
@@ -120,6 +120,12 @@ function loopArea(pts: Pt[]) {
   return a / 2
 }
 
+/** A shape within the loose limits is kept if it's off the region by no more than this share of the free fit's area apart. */
+const LOOSE_WINS = 0.9
+
+/** A fitted loop as points: each line's start, sixteen along each curve. */
+const dense = (cubics: Cubic[]) => cubics.flatMap((c) => (isFlat(c) ? [c[0]] : Array.from({ length: 16 }, (_, k) => pointAt(c, k / 16))))
+
 /** A fitted loop as points, four along each cubic. */
 const sampled = (cubics: Cubic[]) => cubics.flatMap((c) => [0, 0.25, 0.5, 0.75].map((t) => pointAt(c, t)))
 
@@ -142,8 +148,15 @@ function fitOnce(points: Pt[], closed: boolean, o: FitOptions, smoothLoop: boole
   const corners = smoothLoop ? [] : findCorners(pts, closed, o.cornerAngle).filter((c) => closed || (dist(c.at, pts[0]) >= MIN_GAP && dist(c.at, pts[n - 1]) >= MIN_GAP))
 
   if (closed && o.shapes) {
-    const shape = fitShape(fine ?? points, corners.map((c) => c.at))
+    const at = corners.map((c) => c.at)
+    const shape = fitShape(fine ?? points, at)
     if (shape) return shape.cubics
+    // Near enough to a shape to be worth drawing both (#147): keep the shape if it covers the region as well as the free fit does.
+    const loose = fitShape(fine ?? points, at, 'loose')
+    if (loose) {
+      const free = fitOnce(points, closed, { ...o, shapes: false }, smoothLoop, fine)
+      return areaApart(dense(loose.cubics), fine ?? points) <= LOOSE_WINS * areaApart(dense(free), fine ?? points) ? loose.cubics : free
+    }
   }
 
   if (closed && corners.length === 0) {
