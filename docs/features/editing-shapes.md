@@ -6,7 +6,7 @@ order: 4
 
 Edit mode, from the *Trace · Edit* switch above the canvas. Its tools are in
 the rail beside the canvas (above it, on a phone): *Select* (V) for whole
-shapes, *Nodes* (A) for one shape's outline, *Mirror* (M), then *Undo* and
+shapes, *Nodes* (A) for one shape's outline, *Mirror* (M), *Fill* (K), *Pen* (P) and *Shape* (U), then *Undo* and
 *Redo*. The panel (on the right; below the canvas on a phone) shows the chosen tool's settings, then the
 colours. Selecting a shape from the canvas switches to Edit mode; going back
 to Trace mode deselects and puts the tool back to Select.
@@ -130,6 +130,27 @@ Fill works from the keyboard too. With the tool on, Tab to the image: a
 crosshair appears in the middle. The arrow keys move it (8 screen pixels a
 step, 40 with Shift) and Enter or Space fills under it. The eyedropper works
 the same way while it's armed.
+
+## Pen (P) and Shape (U): draw new shapes
+
+The *Pen* draws a path node by node. Click to put down a corner, or drag to
+pull out a curve: the handle follows the pointer and its partner mirrors it, so
+the node is smooth. Click the first node again to close the path into a filled
+shape, or press Enter or Esc to end it open, as a line. Backspace takes back the
+last node.
+
+The *Shape* tool draws a rectangle (with rounded corners if you give it a
+*Corner radius*), an ellipse, a regular polygon (3 to 24 *Sides*, a corner at
+the top) or a straight line. Drag from corner to corner. Hold ⇧ for a square, a
+circle or a line at a multiple of 45°, and ⌥ to draw from the centre out.
+
+New shapes are drawn in the tool's colour, which is shared with *Fill*: type
+one, click a swatch from the drawing, or *Pick* one from the original image.
+Lines take the *Line width* set in the panel. A new shape goes just above the
+selected one (or on top of everything with nothing selected) and becomes the
+selection, so the next one lands above it. Each is one undo step, and is made
+of the same nodes and curves as a traced shape, so *Nodes* reshapes it and every
+export draws it.
 
 ## Shapes: find, hide and lock
 
