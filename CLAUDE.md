@@ -39,7 +39,7 @@ Marking it ready also triggers the Claude review workflow.
   merges it only on Matt's go; merging publishes, tags and makes the GitHub release (release.yml, trusted publishing). Root devDeps pin `@emnapi/core`/`@emnapi/runtime` (optional peers of tsdown's
   compiler): without them npm versions disagree about the lockfile and `npm ci` fails on some (10, 11.4, 11.7).
 - **VTracer is a benchmark only** (devDependency `@visioncortex/vtracer`, loaded in Node by `scripts/vtracer.mjs`):
-  `score`, `score:photos`, `site:assets` and two tests compare against it. The app ships no WebAssembly.
+  `score`, `score:photos`, `site:assets` and two tests compare against it. The main app runs no WebAssembly; only the AI worker does (ONNX Runtime, Tesseract).
 - **Logo/Illustration palettes come from histogram peaks** (`packages/inlay/src/palette.ts`)
   (VTracer's quantizer drifted flat colours). Poster quantizes (`quantizePalette`, k-means in OKLab) and stacks
   shapes (`stacked`). Re-score any preset change (`score`, and `score:photos` for Poster) before shipping.
