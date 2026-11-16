@@ -35,6 +35,7 @@ import {
   type FillSettings,
   type Img,
   type Paint,
+  type PaintTool,
 } from '../lib/cleanup'
 import { backgroundOf, composite, dabAt, maskOver, regionOf, stampSegment, strokeColour, type Dab, type Mask } from '../lib/cleanupPixels'
 import { cleanedPixels, originalPixels, pngOf } from '../lib/cleanupRun'
@@ -43,8 +44,10 @@ import type { Source } from '../lib/image'
 import { STEP as ZOOM_STEP, wheelFactor } from '../lib/zoom'
 import { Section, Slider } from './Controls'
 
-export type CleanTool = 'crop' | 'straighten' | 'brush' | 'eraser' | 'fill' | 'wand'
-export const isPaintTool = (t: CleanTool): t is 'brush' | 'eraser' => t === 'brush' || t === 'eraser'
+export type CleanTool = 'crop' | 'straighten' | PaintTool | 'fill' | 'wand'
+export const isPaintTool = (t: CleanTool): t is PaintTool => t === 'brush' || t === 'eraser' || t === 'despeckle' || t === 'heal'
+/** While Despeckle or Heal is drawn, the stroke shows as a tint; the fix is worked out from it when you let go. */
+const MARK: [number, number, number, number] = [194, 65, 12, 110]
 /** The tools that lay down the brush colour, and so pick it with Alt-click. */
 const usesColour = (t: CleanTool) => t === 'brush' || t === 'fill' || t === 'wand'
 
@@ -317,7 +320,7 @@ export function CleanCanvas(p: {
     canvasRef.current?.getContext('2d')!.putImageData(s.data, 0, 0, r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0)
   }
   const startStroke = (pt: Pt, pressure: number) => {
-    const t = p.tool as 'brush' | 'eraser'
+    const t = p.tool as PaintTool
     const op: Paint = {
       kind: 'paint',
       tool: t,
@@ -327,7 +330,7 @@ export function CleanCanvas(p: {
       points: [],
     }
     const out = img.rgba.slice()
-    const s: Stroke = { op, base: img, mask: maskOver({ x0: 0, y0: 0, x1: img.width, y1: img.height }), touched: false, pressure, out, data: new ImageData(out as Uint8ClampedArray<ArrayBuffer>, img.width, img.height), colour: strokeColour(img, op), last: null }
+    const s: Stroke = { op, base: img, mask: maskOver({ x0: 0, y0: 0, x1: img.width, y1: img.height }), touched: false, pressure, out, data: new ImageData(out as Uint8ClampedArray<ArrayBuffer>, img.width, img.height), colour: t === 'despeckle' || t === 'heal' ? MARK : strokeColour(img, op), last: null }
     stroke.current = s
     addPoint(s, pt, pressure)
   }
@@ -650,7 +653,7 @@ export function CleanPanel(p: {
 
   return (
     <>
-      <Section title={{ crop: 'Crop', straighten: 'Straighten', brush: 'Brush', eraser: 'Eraser', fill: 'Fill', wand: 'Magic wand' }[p.tool]}>
+      <Section title={{ crop: 'Crop', straighten: 'Straighten', brush: 'Brush', eraser: 'Eraser', despeckle: 'Despeckle', heal: 'Heal', fill: 'Fill', wand: 'Magic wand' }[p.tool]}>
         {isPaintTool(p.tool) ? (
           <BrushFields {...p} tool={p.tool} background={backgroundOf(size)} />
         ) : p.tool === 'fill' || p.tool === 'wand' ? (
@@ -847,7 +850,7 @@ export function CleanPanel(p: {
 }
 
 function BrushFields(p: {
-  tool: 'brush' | 'eraser'
+  tool: PaintTool
   brush: BrushSettings
   onBrush: (b: BrushSettings) => void
   inks: Ink[]
@@ -862,7 +865,11 @@ function BrushFields(p: {
       <p className="field-hint">
         {p.tool === 'brush'
           ? 'Paint over gaps in an outline, holes in a fill or a broken letter. Alt-click the image to pick its colour. A pen’s pressure sets the width.'
-          : bg
+          : p.tool === 'despeckle'
+            ? 'Paint over JPEG noise and specks: they even out and merge into the colour round them, only where you paint. Shapes more than a quarter of the brush’s size stay.'
+            : p.tool === 'heal'
+              ? 'Paint over a mark (a stain, a watermark, a stray line) to fill it in from the pixels round it, keeping edges that run through it sharp.'
+              : bg
             ? `Paints the background colour, ${bg}, so stray marks, dust and signatures trace as nothing.`
             : 'Paints the background, which is transparent here, so stray marks trace as nothing.'}
       </p>

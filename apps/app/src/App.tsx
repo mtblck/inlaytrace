@@ -47,6 +47,8 @@ import { BucketFields, ShapesList, StyleFields, type ShapeFlag, type StylePatch 
 import { bucketFill } from './lib/bucket'
 import { addOp, BRUSH_DEFAULT, BRUSH_MAX, BRUSH_MIN, FILL_DEFAULT, MAX_OPS, type BrushSettings, type CleanupOp, type FillSettings } from './lib/cleanup'
 import type { CleanTool, CropDraft } from './components/CleanUp'
+/** Clean up's tool keys. */
+const CLEAN_KEYS = { c: 'crop', l: 'straighten', b: 'brush', e: 'eraser', d: 'despeckle', j: 'heal', g: 'fill', w: 'wand' } as const satisfies Record<string, CleanTool>
 import { loadPaper } from './lib/paper'
 import { deleteNodes, moveHandle, moveNode, moveNodes, parsePath, serializePath, nodeCount, type NodePart, type NodeRef, type Pt } from './lib/pathdata'
 import { addNode, nearestOnPath, roundNode, sharpenNode, simplifySubpaths, smoothNode } from './lib/nodeops'
@@ -1127,9 +1129,8 @@ export default function App() {
       } else if (workMode === 'clean') {
         // Clean up's own keys; Edit's tool keys don't reach past it, so leaving always goes through the mode switch.
         if (e.key === '?' || (e.key === '/' && e.shiftKey)) setShortcutsOpen(true)
-        else if (key === 'c' || key === 'l' || key === 'b' || key === 'e' || key === 'g' || key === 'w')
-          chooseCleanTool(({ c: 'crop', l: 'straighten', b: 'brush', e: 'eraser', g: 'fill', w: 'wand' } as const)[key])
-        else if ((e.code === 'BracketLeft' || e.code === 'BracketRight') && (cleanTool === 'brush' || cleanTool === 'eraser')) {
+        else if (Object.hasOwn(CLEAN_KEYS, key)) chooseCleanTool(CLEAN_KEYS[key as keyof typeof CLEAN_KEYS])
+        else if ((e.code === 'BracketLeft' || e.code === 'BracketRight') && (cleanTool === 'brush' || cleanTool === 'eraser' || cleanTool === 'despeckle' || cleanTool === 'heal')) {
           // [ ] size, Shift + [ ] hardness, as in most paint programs.
           e.preventDefault()
           const up = e.code === 'BracketRight'

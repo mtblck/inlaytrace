@@ -3,6 +3,7 @@
  * list itself so it loads only once Clean up is used: the session check and
  * the mode's glue need the list, not the pixel loops.
  */
+import { smoothShading } from 'inlaytrace'
 import { clamp, isQuarter, normDegrees, type CleanupOp, type Crop, type Fill, type Flip, type Img, type Levels, type Paint } from './cleanup'
 
 // ---- Replay -----------------------------------------------------------------
@@ -334,7 +335,190 @@ function paint(img: Img, op: Paint, inPlace: boolean): Img {
     last = d
   }
   const out = inPlace ? img : { rgba: img.rgba.slice(), width: w, height: h }
-  if (rect) composite(out.rgba, img.rgba, w, mask, strokeColour(img, op), rect)
+  if (!rect) return out
+  if (op.tool === 'despeckle' || op.tool === 'heal') {
+    // Worked out from a copy, so the result doesn't depend on whether it paints in place.
+    const fixed = op.tool === 'heal' ? heal(img, mask, rect) : despeckle(img, rect, (Math.PI * dabs.reduce((r, d) => Math.max(r, d.r), 0) ** 2) / 4)
+    blend(out.rgba, img.rgba, w, mask, fixed, rect)
+  } else composite(out.rgba, img.rgba, w, mask, strokeColour(img, op), rect)
+  return out
+}
+
+/**
+ * Lay `fixed` (the pixels of `rect`, row by row) over `base` through the mask,
+ * into `out`. Half cover or more counts as full: a mark the brush's edge only
+ * mostly covers would otherwise be left as a faint ghost, and the fixed pixels
+ * match those round them anyway.
+ */
+function blend(out: Uint8ClampedArray, base: Uint8ClampedArray, w: number, mask: Mask, fixed: Uint8ClampedArray, rect: Rect) {
+  const rw = rect.x1 - rect.x0
+  for (let y = rect.y0; y < rect.y1; y++)
+    for (let x = rect.x0; x < rect.x1; x++) {
+      const m = mask.data[(y - mask.y) * mask.w + x - mask.x]
+      if (!m) continue
+      const o = (y * w + x) * 4
+      const f = ((y - rect.y0) * rw + x - rect.x0) * 4
+      const c = Math.min(1, m / 128)
+      for (let k = 0; k < 4; k++) out[o + k] = base[o + k] + (fixed[f + k] - base[o + k]) * c
+    }
+}
+
+// ---- Despeckle and heal (#206) -------------------------------------------------------
+
+/** Two pixels are one colour for despeckling when no channel differs by more than this (JPEG noise left after smoothing). */
+const SPECK_TOLERANCE = 24
+/** Room round the stroke the smoothing and the specks' neighbours are read from. */
+const MARGIN = 6
+
+/**
+ * Despeckle: the stroke's box, smoothed (the tracer's own edge-preserving
+ * smoothShading, so JPEG noise evens out and edges stay put), then every patch
+ * of one colour smaller than `minArea` that lies inside the box taken over by
+ * the colour it shares the most edge with. Specks are judged on the pixels
+ * round the stroke too, so a dot the brush only half covers is still a dot.
+ * Returns the pixels of `rect`.
+ */
+export function despeckle(img: Img, rect: Rect, minArea: number): Uint8ClampedArray {
+  const { width: w, height: h } = img
+  const bx0 = Math.max(0, rect.x0 - MARGIN)
+  const by0 = Math.max(0, rect.y0 - MARGIN)
+  const bw = Math.min(w, rect.x1 + MARGIN) - bx0
+  const bh = Math.min(h, rect.y1 + MARGIN) - by0
+  const box = new Uint8ClampedArray(bw * bh * 4)
+  for (let y = 0; y < bh; y++) box.set(img.rgba.subarray(((by0 + y) * w + bx0) * 4, ((by0 + y) * w + bx0 + bw) * 4), y * bw * 4)
+  const px = smoothShading(box, bw, bh)
+  // A few rounds: a speck that joins a slightly larger one can leave that one still small.
+  for (let round = 0; round < 4; round++) if (!mergeSmall(px, bw, bh, Math.max(2, minArea))) break
+  const out = new Uint8ClampedArray((rect.x1 - rect.x0) * (rect.y1 - rect.y0) * 4)
+  const rw = rect.x1 - rect.x0
+  for (let y = rect.y0; y < rect.y1; y++) out.set(px.subarray(((y - by0) * bw + rect.x0 - bx0) * 4, ((y - by0) * bw + rect.x1 - bx0) * 4), (y - rect.y0) * rw * 4)
+  return out
+}
+
+/** One round of despeckling `px` in place; false when no speck was left. */
+function mergeSmall(px: Uint8ClampedArray, w: number, h: number, minArea: number): boolean {
+  // Patches of one colour: each grown from its first pixel, within the tolerance of that pixel's colour.
+  const label = new Int32Array(w * h).fill(-1)
+  const areas: number[] = []
+  const edge: boolean[] = []
+  const sums: number[][] = []
+  const stack = new Int32Array(w * h)
+  for (let start = 0; start < w * h; start++) {
+    if (label[start] >= 0) continue
+    const id = areas.length
+    const o = start * 4
+    const [r, g, b, a] = [px[o], px[o + 1], px[o + 2], px[o + 3]]
+    let n = 0
+    let area = 0
+    let touches = false
+    const sum = [0, 0, 0, 0]
+    stack[n++] = start
+    label[start] = id
+    while (n) {
+      const i = stack[--n]
+      area++
+      for (let k = 0; k < 4; k++) sum[k] += px[i * 4 + k]
+      const x = i % w
+      const y = (i - x) / w
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1) touches = true
+      for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1])
+        if (j >= 0 && label[j] < 0 && near(px, j * 4, r, g, b, a, SPECK_TOLERANCE)) {
+          label[j] = id
+          stack[n++] = j
+        }
+    }
+    areas.push(area)
+    edge.push(touches)
+    sums.push(sum)
+  }
+  // Each small patch inside the box takes the colour of the neighbour it shares most edge with, smallest first.
+  const small = areas.map((a, id) => ({ a, id })).filter((c) => c.a < minArea && !edge[c.id] && areas.length > 1)
+  if (!small.length) return false
+  const members: number[][] = areas.map(() => [])
+  for (let i = 0; i < w * h; i++) if (areas[label[i]] < minArea) members[label[i]].push(i)
+  const colour = (id: number) => sums[id].map((v) => Math.round(v / areas[id]))
+  const owner = Int32Array.from(label)
+  let changed = false
+  small.sort((p, q) => p.a - q.a)
+  for (const { id } of small) {
+    const votes = new Map<number, number>()
+    for (const i of members[id]) {
+      const x = i % w
+      for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w])
+        if (j >= 0 && j < w * h && owner[j] !== id) votes.set(owner[j], (votes.get(owner[j]) ?? 0) + 1)
+    }
+    let best = -1
+    let most = 0
+    for (const [l, v] of votes) if (v > most || (v === most && areas[l] > areas[best])) (most = v), (best = l)
+    if (best < 0) continue
+    const [r, g, b, a] = colour(best)
+    for (const i of members[id]) {
+      owner[i] = best
+      px[i * 4] = r
+      px[i * 4 + 1] = g
+      px[i * 4 + 2] = b
+      px[i * 4 + 3] = a
+    }
+    areas[best] += areas[id]
+    changed = true
+  }
+  return changed
+}
+
+/**
+ * Heal: the pixels under the stroke filled in from the pixels round it, a ring
+ * at a time from the outside in. Each takes the colour of the neighbour most
+ * like the rest of its filled-in neighbours (not their average), so a flat
+ * colour stays flat and where two colours meet the edge stays sharp rather
+ * than blurring to a third that would trace as a band. Returns the pixels of
+ * `rect`.
+ */
+export function heal(img: Img, mask: Mask, rect: Rect): Uint8ClampedArray {
+  const { width: w, height: h } = img
+  const rw = rect.x1 - rect.x0
+  const rh = rect.y1 - rect.y0
+  const out = new Uint8ClampedArray(rw * rh * 4)
+  // The pixels to fill: every one the stroke touches. Pixels round the rect are read from the image.
+  const known = (x: number, y: number) => x < 0 || y < 0 || x >= w || y >= h ? false : x < rect.x0 || y < rect.y0 || x >= rect.x1 || y >= rect.y1 ? true : done[(y - rect.y0) * rw + x - rect.x0] === 1
+  const done = new Uint8Array(rw * rh)
+  for (let y = 0; y < rh; y++)
+    for (let x = 0; x < rw; x++) {
+      const i = y * rw + x
+      const o = ((rect.y0 + y) * w + rect.x0 + x) * 4
+      for (let k = 0; k < 4; k++) out[i * 4 + k] = img.rgba[o + k]
+      if (!mask.data[(rect.y0 + y - mask.y) * mask.w + rect.x0 + x - mask.x]) done[i] = 1
+    }
+  const colourAt = (x: number, y: number, k: number) => (x >= rect.x0 && y >= rect.y0 && x < rect.x1 && y < rect.y1 ? out[((y - rect.y0) * rw + x - rect.x0) * 4 + k] : img.rgba[(y * w + x) * 4 + k])
+  let left = done.reduce((n, v) => n + (v ? 0 : 1), 0)
+  const ring: number[] = []
+  const cand: number[] = []
+  while (left) {
+    ring.length = 0
+    for (let y = 0; y < rh; y++)
+      for (let x = 0; x < rw; x++) {
+        if (done[y * rw + x]) continue
+        const gx = rect.x0 + x
+        const gy = rect.y0 + y
+        cand.length = 0
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && known(gx + dx, gy + dy)) cand.push(gx + dx, gy + dy)
+        if (!cand.length) continue
+        // The medoid: the known neighbour nearest, in total, to the others.
+        let best = 0
+        let bestCost = Infinity
+        for (let a = 0; a < cand.length; a += 2) {
+          let cost = 0
+          for (let b = 0; b < cand.length; b += 2) for (let k = 0; k < 4; k++) cost += Math.abs(colourAt(cand[a], cand[a + 1], k) - colourAt(cand[b], cand[b + 1], k))
+          if (cost < bestCost) (bestCost = cost), (best = a)
+        }
+        ring.push(y * rw + x, cand[best], cand[best + 1])
+      }
+    // Nothing known anywhere near (a stroke over the whole image): leave the rest as it is.
+    if (!ring.length) break
+    // The whole ring is worked out before any of it counts as known, so the fill doesn't lean one way.
+    for (let r = 0; r < ring.length; r += 3) for (let k = 0; k < 4; k++) out[ring[r] * 4 + k] = colourAt(ring[r + 1], ring[r + 2], k)
+    for (let r = 0; r < ring.length; r += 3) done[ring[r]] = 1
+    left -= ring.length / 3
+  }
   return out
 }
 

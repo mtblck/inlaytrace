@@ -20,7 +20,9 @@
  *  - paint (#202): a brush or eraser stroke, as the points drawn (fractions of
  *    the image at that step, with pen pressure) plus the brush's size and
  *    hardness. The eraser paints the image's background colour, worked out at
- *    that step, so what it erases traces as nothing.
+ *    that step, so what it erases traces as nothing. Despeckle and Heal
+ *    (#206) are strokes too: the stroke marks where, and the replay works out
+ *    what from the pixels round it.
  *  - fill (#205): the Fill tool's click, or a magic-wand selection filled or
  *    cleared, as the points clicked (fractions of the image at that step) plus
  *    the tolerance and whether only touching pixels count. The region is found
@@ -44,7 +46,8 @@ export type Threshold = { kind: 'threshold'; level: number }
  * finger). `size` is the brush's diameter at full pressure, as a fraction of
  * the image's long edge; `hardness` 1 is a crisp edge, 0 a soft one.
  */
-export type Paint = { kind: 'paint'; tool: 'brush' | 'eraser'; color?: string; size: number; hardness: number; points: number[] }
+export type PaintTool = 'brush' | 'eraser' | 'despeckle' | 'heal'
+export type Paint = { kind: 'paint'; tool: PaintTool; color?: string; size: number; hardness: number; points: number[] }
 /**
  * A fill. `seeds` is flat, two numbers a point clicked: x and y as fractions
  * of the image's width and height. Each seed takes the pixels within
@@ -136,7 +139,7 @@ const HEX = /^#[0-9a-f]{6}$/i
 
 function checkPaint(o: Record<string, unknown>): Paint | null {
   const { tool, color, size, hardness, points } = o
-  if (tool !== 'brush' && tool !== 'eraser') return null
+  if (tool !== 'brush' && tool !== 'eraser' && tool !== 'despeckle' && tool !== 'heal') return null
   if (tool === 'brush' ? typeof color !== 'string' || !HEX.test(color) : color !== undefined) return null
   if (!num(size, 1e-6, 1) || !num(hardness, 0, 1)) return null
   if (!Array.isArray(points) || !points.length || points.length % 3 || points.length > MAX_STROKE_POINTS * 3) return null

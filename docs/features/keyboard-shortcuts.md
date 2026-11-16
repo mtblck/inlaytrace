@@ -20,10 +20,12 @@ mode switches to Edit mode.
 | L | Straighten: drag along a line that should be level or upright |
 | B | Brush: paint over gaps, holes and blotches |
 | E | Eraser: paint the background colour over stray marks |
+| D | Despeckle: even out noise and specks where you paint |
+| J | Heal: fill a mark in from the pixels round it |
 | G | Fill: fill the area you click in the brush colour |
 | W | Magic wand: select an area of one colour (⇧ click adds) |
 | Delete | Clear the wand's selection to the background |
-| [ / ] | Brush smaller, bigger |
+| [ / ] | Brush smaller, bigger (Brush, Eraser, Despeckle, Heal) |
 | Shift [ / Shift ] | Brush softer, harder |
 | ⌥ click | Pick the brush colour from the image (Brush, Fill, Magic wand) |
 | Space drag | Pan when zoomed in (or drag with the middle button) |

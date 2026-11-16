@@ -1,3 +1,4 @@
+import jpeg from 'jpeg-js'
 import { describe, expect, it } from 'vitest'
 import { addOp, adjustmentOf, checkCleanup, sameGeometry, setAdjustment, straightenAngle, type CleanupOp, type Img } from './cleanup'
 import { backgroundOf, composite, dabAt, maskOver, regionOf, replay, sizeAfter, stampSegment, strokeColour, type Dab } from './cleanupPixels'
@@ -178,6 +179,64 @@ describe('brush and eraser', () => {
   })
 })
 
+describe('despeckle and heal (#206)', () => {
+  const stroke = (tool: 'despeckle' | 'heal', points: number[], size = 0.2): CleanupOp => ({ kind: 'paint', tool, size, hardness: 1, points })
+  const rgbAt = (img: Img, x: number, y: number) => Array.from(img.rgba.slice((y * img.width + x) * 4, (y * img.width + x) * 4 + 3))
+
+  it('heals a mark from the colour round it', () => {
+    const page = image(60, 60, (x, y) => (Math.hypot(x - 30, y - 30) < 5 ? 0 : 240))
+    const out = replay(page, [stroke('heal', [0.5, 0.5, 1])])
+    expect(grid(out).flat().every((v) => v === 240)).toBe(true)
+  })
+
+  it('keeps an edge sharp where it heals across two colours', () => {
+    // Black left, white right, a red blot on the line between.
+    const img = image(60, 60, (x) => (x < 30 ? 0 : 255))
+    for (let y = 26; y < 34; y++) for (let x = 26; x < 34; x++) img.rgba.set([255, 0, 0, 255], (y * 60 + x) * 4)
+    const out = replay(img, [stroke('heal', [0.5, 0.5, 1])])
+    for (let y = 20; y < 40; y++)
+      for (let x = 20; x < 40; x++) {
+        const [r, g, b] = rgbAt(out, x, y)
+        expect(r === g && g === b && (r === 0 || r === 255)).toBe(true)
+      }
+    // The line carries straight through: black on the left of it, white on the right.
+    expect(at(out, 28, 30)).toBe(0)
+    expect(at(out, 31, 30)).toBe(255)
+  })
+
+  it('despeckles a noisy JPEG under the brush, and only there, keeping real shapes', () => {
+    // A blue disc on white, dusted with dark specks, saved as a rough JPEG.
+    const w = 120
+    const h = 80
+    const raw = Buffer.alloc(w * h * 4)
+    let seed = 7
+    const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) raw.set(Math.hypot(x - 30, y - 40) < 18 ? [30, 60, 200, 255] : [255, 255, 255, 255], (y * w + x) * 4)
+    for (let k = 0; k < 60; k++) {
+      const x = 55 + Math.floor(rand() * 60)
+      const y = 5 + Math.floor(rand() * 70)
+      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]].slice(0, 1 + Math.floor(rand() * 4))) raw.set([40, 40, 40, 255], ((y + dy) * w + x + dx) * 4)
+    }
+    const decoded = jpeg.decode(jpeg.encode({ data: raw, width: w, height: h }, 40).data, { useTArray: true })
+    const noisy: Img = { rgba: new Uint8ClampedArray(decoded.data), width: w, height: h }
+    const dark = (img: Img, x0: number, x1: number) => {
+      let n = 0
+      for (let y = 0; y < h; y++) for (let x = x0; x < x1; x++) if (at(img, x, y) < 160) n++
+      return n
+    }
+    // A stroke down the specked right half, and one across the disc's edge.
+    const out = replay(noisy, [stroke('despeckle', [0.72, 0.2, 1, 0.72, 0.8, 1, 0.88, 0.8, 1, 0.88, 0.2, 1], 0.25), stroke('despeckle', [0.25, 0.5, 1], 0.2)])
+    expect(dark(noisy, 75, 100)).toBeGreaterThan(10)
+    expect(dark(out, 75, 100)).toBe(0)
+    // Outside the strokes nothing changed.
+    expect(Array.from(out.rgba.slice(0, 4 * 40))).toEqual(Array.from(noisy.rgba.slice(0, 4 * 40)))
+    // The disc is a shape, not a speck: it's still blue.
+    const [r, , b] = rgbAt(out, 30, 40)
+    expect(b - r).toBeGreaterThan(120)
+  })
+})
+
 describe('fill and the magic wand (#205)', () => {
   // 40 × 20: two black rings on white, the left one 30 grey inside, the right one 60 grey inside.
   const rings = () =>
@@ -267,6 +326,8 @@ describe('clean-up list', () => {
     expect(checkCleanup([{ ...stroke, points: [0.1, 0.2, 2] }])).toBeNull()
     expect(checkCleanup([{ ...stroke, tool: 'eraser' }])).toBeNull() // an eraser has no colour of its own
     expect(checkCleanup([{ ...stroke, tool: 'smudge' }])).toBeNull()
+    expect(checkCleanup([{ kind: 'paint', tool: 'heal', size: 0.05, hardness: 1, points: [0.5, 0.5, 1] }])).toHaveLength(1)
+    expect(checkCleanup([{ ...stroke, tool: 'despeckle' }])).toBeNull() // only the brush has a colour
     expect(checkCleanup('nope')).toBeNull()
     const fill = { kind: 'fill', seeds: [0.1, 0.2, 0.3, 0.4], tolerance: 32, contiguous: true, color: '#FF0000' }
     expect(checkCleanup([fill])).toEqual([{ ...fill, color: '#ff0000' }])

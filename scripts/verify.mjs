@@ -1443,7 +1443,7 @@ const siteOrigin = process.env.SITE ?? (new URL(url).hostname.endsWith('mattblac
   await cp.getByRole('tab', { name: 'Clean up' }).click()
   await cp.locator('[data-clean-canvas]').waitFor()
   const rail = cp.locator('[data-rail]')
-  check((await rail.getByRole('radio').allInnerTexts()).join() === 'Crop,Straighten,Brush,Eraser,Fill,Magic wand', 'Clean up has Crop, Straighten, Brush, Eraser, Fill and Magic wand in its rail')
+  check((await rail.getByRole('radio').allInnerTexts()).join() === 'Crop,Straighten,Brush,Eraser,Despeckle,Heal,Fill,Magic wand', 'Clean up has Crop, Straighten, Brush, Eraser, Despeckle, Heal, Fill and Magic wand in its rail')
   check((await size()) === '640x640', `Clean up shows the image at its own size (${await size()})`)
   // Crop: draw a box, then apply it.
   const ov = await cp.locator('[data-clean-overlay]').boundingBox()
@@ -1499,6 +1499,17 @@ const siteOrigin = process.env.SITE ?? (new URL(url).hostname.endsWith('mattblac
   for (let i = 0; i < 3; i++) await cp.keyboard.press(']')
   await stroke(0.5)
   check((await pixel(0.5, 0.5)) === corner, `the eraser paints the background colour back (${await pixel(0.5, 0.5)} vs ${corner})`)
+  // Heal (#206): a red mark painted, then healed away from the pixels round it.
+  await cp.keyboard.press('b')
+  await stroke(0.3)
+  check((await pixel(0.5, 0.3)) === '255,0,0,255', 'a red mark to heal')
+  await cp.keyboard.press('j')
+  check((await cp.locator('[data-brush-fields="heal"]').count()) === 1, 'J picks Heal')
+  await stroke(0.3)
+  // The image is black and white here (the threshold), so what heals in is black or white too.
+  check(['0,0,0,255', '255,255,255,255'].includes(await pixel(0.5, 0.3)), `Heal fills the mark in from round it (${await pixel(0.5, 0.3)})`)
+  await cp.keyboard.press('d')
+  check((await cp.locator('[data-brush-fields="despeckle"]').count()) === 1, 'D picks Despeckle')
   // Fill and the magic wand (#205): a click fills the area it's in; the wand selects, then fills.
   const click = async (fx, fy, opts) => {
     const box = await cp.locator('[data-clean-overlay]').boundingBox()

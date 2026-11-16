@@ -49,6 +49,25 @@ faster.
   Apple Pencil's pressure sets the width as you draw.
 - Each stroke is one undo step.
 
+## Despeckle (D) and heal (J)
+
+Two more brushes, with the same size, hardness and pressure as the brush:
+
+- **Despeckle:** paint over JPEG noise and specks. Where you paint, the image
+  is smoothed with the tracer's own edge-preserving filter (the one behind
+  *Smooth shading*), then every patch of one colour smaller than a quarter of
+  the brush merges into the colour it shares the most edge with. It's
+  *Ignore specks* for one area: raising that for the whole image would wipe
+  out small detail elsewhere. Shapes bigger than that stay.
+- **Heal:** paint over a mark (a stain, a watermark, a stray pen line) to
+  fill it in from the pixels round it, a ring at a time from the outside in.
+  Each pixel takes the colour of a neighbour, not an average of them, so a
+  flat colour stays flat and an edge that runs through the mark carries on
+  sharp rather than blurring into a band the trace would pick up.
+
+While you paint, the stroke shows as a tint; the fix is worked out when you
+let go.
+
 ## Fill (G) and the magic wand (W)
 
 - **Fill:** click the image to fill the area you click in the brush colour: a
@@ -92,7 +111,7 @@ original, as one undoable step.
 ## How it works
 
 Clean-up is a list of operations (crop, rotate, flip, levels, threshold,
-brush and eraser strokes, and fills)
+brush, eraser, despeckle and heal strokes, and fills)
 stored with your edits, so Undo and Redo step through it like any other edit,
 and it is saved with the session, so a reload brings it back
 (`apps/app/src/lib/cleanup.ts`). Replaying the list onto the original makes
