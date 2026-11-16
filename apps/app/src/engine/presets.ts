@@ -62,6 +62,8 @@ export type Settings = {
   smoothShading: boolean
   /** Flat-art presets: darken faint painted outlines before tracing, so the shapes they part don't merge. */
   keepOutlines: boolean
+  /** Poster and Illustration: trace in greys only, `colors` of them (#196). */
+  grayscale: boolean
   /** Draw text found in the image as type, in the nearest of our fonts, instead of tracing it. */
   recogniseText: boolean
   /**
@@ -78,7 +80,7 @@ export type Preset = {
   id: PresetId
   label: string
   hint: string
-  defaults: Omit<Settings, 'preset' | 'merge' | 'removeBackground' | 'aiUpscale' | 'fineDetail' | 'smoothShading' | 'keepOutlines' | 'recogniseText' | 'ownColors' | 'useOwnColors'>
+  defaults: Omit<Settings, 'preset' | 'merge' | 'removeBackground' | 'aiUpscale' | 'fineDetail' | 'smoothShading' | 'keepOutlines' | 'grayscale' | 'recogniseText' | 'ownColors' | 'useOwnColors'>
 }
 
 /** The app's preset ids; Poster is the package's `poster`. */
@@ -113,7 +115,7 @@ export const PRESETS: Preset[] = [
 
 export const presetById = (id: PresetId) => PRESETS.find((p) => p.id === id)!
 
-export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {}, removeBackground: false, aiUpscale: false, fineDetail: false, smoothShading: false, keepOutlines: false, recogniseText: false, ownColors: [], useOwnColors: false })
+export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {}, removeBackground: false, aiUpscale: false, fineDetail: false, smoothShading: false, keepOutlines: false, grayscale: false, recogniseText: false, ownColors: [], useOwnColors: false })
 
 /** Presets that can close small gaps in their lines (gaps.ts). */
 export const closesGaps = (id: PresetId) => id === 'lineart' || id === 'centerline' || id === 'outline'
@@ -133,6 +135,9 @@ export const hasExactShapes = (id: PresetId) => id === 'logo' || id === 'illustr
 
 /** Evening out painted shading: the presets whose palettes are histogram peaks. */
 export const canSmooth = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline'
+
+/** Tracing in greys (#196): Poster and Illustration, like Illustrator's Grayscale mode. */
+export const canGrayscale = (id: PresetId) => id === 'photo' || id === 'illustration'
 
 /** Merging colours: the flat-art presets, whose palettes are real colours (Poster's are cluster averages). */
 export const canMerge = (id: PresetId) => id === 'logo' || id === 'illustration' || id === 'outline' || id === 'pixel'
@@ -183,9 +188,10 @@ export function toTraceOptions(s: Settings, scale = 1): TraceOptions {
   const own = ownPaletteOf(s)
   const colour = { ...fit, colors: s.colors, ...merge, ...(own ? { palette: [...own] } : {}) }
   if (s.preset === 'pixel') return colour
-  if (s.preset === 'photo') return { ...colour, layers: s.shapes === 'stacked' }
+  const grey = s.grayscale && canGrayscale(s.preset) && !own ? { grayscale: true } : {}
+  if (s.preset === 'photo') return { ...colour, layers: s.shapes === 'stacked', ...grey }
   // Logo, Illustration and Outline art. Gradients come with layers in Illustration and Outline art; cut out is for cutters, which can't draw them.
-  return { ...colour, layers: s.shapes === 'stacked', ...gaps, ...(s.preset === 'outline' ? { strokes: true } : {}), ...(s.smoothShading ? { smoothShading: true } : {}), ...(s.keepOutlines ? { keepOutlines: true } : {}) }
+  return { ...colour, layers: s.shapes === 'stacked', ...gaps, ...(s.preset === 'outline' ? { strokes: true } : {}), ...(s.smoothShading ? { smoothShading: true } : {}), ...(s.keepOutlines ? { keepOutlines: true } : {}), ...grey }
 }
 
 /** Pixel art keeps every source pixel; everything else is traced at this size at most. */

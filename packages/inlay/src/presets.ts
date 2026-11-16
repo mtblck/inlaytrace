@@ -8,7 +8,7 @@
  */
 import { centerline } from './centerline'
 import { toSvg, traceRaw, type InlayOptions, type InlayResult } from './inlay'
-import { exactPalette, peakPalette, quantizePalette } from './palette'
+import { exactPalette, oklab, peakPalette, quantizePalette } from './palette'
 import { boostLines, smoothShading } from './smooth'
 
 export type PresetName = 'logo' | 'illustration' | 'outline' | 'lineart' | 'centerline' | 'poster' | 'pixel'
@@ -55,6 +55,8 @@ export type TraceOptions = {
   smoothShading?: boolean
   /** Colour presets: darken faint painted outlines first, so the shapes they part don't merge. */
   keepOutlines?: boolean
+  /** Colour presets but pixel art: trace in greys only, `colors` of them (each pixel's OKLab lightness, as a grey). */
+  grayscale?: boolean
 }
 
 /** A preset's defaults: what `trace` uses for every option not given. */
@@ -135,6 +137,8 @@ export function tracePreset(image: ImageLike, options: TraceOptions = {}): Inlay
     if (p.kind === 'centerline') return centerline(px, width, height, { ...fit, threshold, closeGaps: !!o.closeGaps, scale, ...(o.strokeWidth ? { strokeWidth: o.strokeWidth } : {}) })
     return traceRaw(px, width, height, { ...fit, shapes: !!o.shapes, mode: 'binary', threshold, closeGaps: !!o.closeGaps, scale })
   }
+  // Greys only: each pixel becomes the grey of its own lightness, so every palette picked from it is grey.
+  if (o.grayscale && name !== 'pixel' && !o.palette?.length) px = toGray(px)
   // Painted outlines made plain first, and marked, so neither smoothing nor the clean-up after labelling takes them away.
   const lines = o.keepOutlines ? new Uint8Array(width * height) : undefined
   if (lines) px = boostLines(px, width, height, outlineRadius(scale), lines)
@@ -171,6 +175,26 @@ export function tracePreset(image: ImageLike, options: TraceOptions = {}): Inlay
     ...(lines ? { lines } : {}),
   }
   return traceRaw(px, width, height, raw)
+}
+
+/** sRGB (0–255) of the grey whose OKLab lightness is `l`: for a grey, L is the cube root of its linear light. */
+const greyOf = (l: number) => {
+  const y = Math.min(1, Math.max(0, l)) ** 3
+  return Math.round(255 * (y <= 0.0031308 ? 12.92 * y : 1.055 * y ** (1 / 2.4) - 0.055))
+}
+
+/** A copy of the image in greys of each pixel's own OKLab lightness; alpha kept. */
+function toGray(px: ArrayLike<number>): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(px.length)
+  const seen = new Map<number, number>()
+  for (let i = 0; i < px.length; i += 4) {
+    const key = (px[i]! << 16) | (px[i + 1]! << 8) | px[i + 2]!
+    let v = seen.get(key)
+    if (v === undefined) seen.set(key, (v = greyOf(oklab([px[i]!, px[i + 1]!, px[i + 2]!])[0])))
+    out[i] = out[i + 1] = out[i + 2] = v
+    out[i + 3] = px[i + 3]!
+  }
+  return out
 }
 
 /** The options given, without the ones explicitly undefined (which would hide a preset's default). */

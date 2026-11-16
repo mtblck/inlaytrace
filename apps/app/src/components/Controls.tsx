@@ -1,6 +1,6 @@
 import { useId, useState, type ReactNode } from 'react'
 import type { PrepStage } from '../engine/prep'
-import { MAX_OWN_COLORS, PRESETS, canOwnColors, closesGaps, ownPaletteOf, hasExactShapes, isInk, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
+import { MAX_OWN_COLORS, PRESETS, canGrayscale, canOwnColors, closesGaps, ownPaletteOf, hasExactShapes, isInk, presetById, toleranceFor, type PresetId, type Settings } from '../engine/presets'
 import { addColors, parseColorList } from '../lib/colors'
 import { PipetteIcon } from './IconButton'
 import type { Candidate, SizeSearch } from '../engine/targetSize'
@@ -51,6 +51,7 @@ type Props = {
 export function Controls({ settings, onChange, onPreset, suggestPoster, measuredStroke, prep, pickingOwn, onPickOwn, ...size }: Props) {
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) => onChange({ ...settings, [key]: value })
   const p = settings.preset
+  const greys = settings.grayscale && canGrayscale(p) && !ownPaletteOf(settings)
   const defaults = presetById(p).defaults
   const changed = (Object.keys(defaults) as (keyof typeof defaults)[]).some((k) => defaults[k] !== settings[k])
   const hintId = useId()
@@ -112,7 +113,26 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
           {canOwnColors(p) && <OwnColors settings={settings} onChange={onChange} picking={!!pickingOwn} onPick={onPickOwn} />}
 
           {!isInk(p) && !ownPaletteOf(settings) && (
-            <Slider label="Colours" value={settings.colors} min={2} max={64} step={1} onChange={(v) => set('colors', v)} format={(v) => `${v}`} hint="Fewer means a smaller file. If two colours merge into one, raise this." />
+            <Slider
+              label={greys ? 'Greys' : 'Colours'}
+              value={settings.colors}
+              min={2}
+              max={64}
+              step={1}
+              onChange={(v) => set('colors', v)}
+              format={(v) => `${v}`}
+              hint={greys ? 'How many shades of grey, white and black included.' : 'Fewer means a smaller file. If two colours merge into one, raise this.'}
+            />
+          )}
+
+          {canGrayscale(p) && !ownPaletteOf(settings) && (
+            <label className="flex items-start gap-2 text-[13px]">
+              <input type="checkbox" className="mt-0.5 accent-[var(--c-accent)]" checked={settings.grayscale} onChange={(e) => set('grayscale', e.target.checked)} />
+              <span>
+                Greys only
+                <span className="field-hint block">For laser engraving, one-colour print or a black-and-white photo: each colour becomes the grey of its lightness.</span>
+              </span>
+            </label>
           )}
 
           {isInk(p) && (

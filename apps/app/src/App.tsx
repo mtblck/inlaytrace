@@ -1371,6 +1371,7 @@ export default function App() {
     next.fineDetail = settings.fineDetail
     next.smoothShading = settings.smoothShading
     next.keepOutlines = settings.keepOutlines
+    next.grayscale = settings.grayscale
     next.recogniseText = settings.recogniseText
     // Your own colours are about what you can print, not this preset.
     next.ownColors = settings.ownColors

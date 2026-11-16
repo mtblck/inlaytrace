@@ -93,6 +93,15 @@ painted film poster, skin had no colour of its own and split between the white
 shirt and a dark tan, in ragged patches. Illustration's 24 gave it skin and its
 shadow (about 6% more file).
 
+**Greys only** (Poster, Illustration): trace in shades of grey instead of
+colours, like Illustrator's Grayscale mode, for laser engraving, one-colour
+print or a black-and-white photo. Each pixel becomes the grey of its own
+lightness (OKLab L) before the palette is picked, so *Colours* becomes
+*Greys*: how many shades, white and black included. Two colours of the same
+lightness, such as a mid red and a mid green, become one grey. Off with *Use my
+colours*, whose colours are traced as they are. Kept when you change preset.
+In the package it's the `grayscale` option.
+
 **Use my colours** (Logo, Illustration, Outline art, Poster): trace with only
 colours you choose, such as vinyl stock, embroidery threads, screen-print inks
 or brand colours. Paste hex codes into the box (commas, spaces, semicolons or

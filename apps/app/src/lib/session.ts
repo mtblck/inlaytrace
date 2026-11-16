@@ -112,6 +112,7 @@ export function checkSettings(x: unknown): Settings {
   if (typeof x.fineDetail === 'boolean') out.fineDetail = x.fineDetail
   if (typeof x.smoothShading === 'boolean') out.smoothShading = x.smoothShading
   if (typeof x.keepOutlines === 'boolean') out.keepOutlines = x.keepOutlines
+  if (typeof x.grayscale === 'boolean') out.grayscale = x.grayscale
   if (typeof x.recogniseText === 'boolean') out.recogniseText = x.recogniseText
   if (typeof x.strokeWidth === 'number' && Number.isFinite(x.strokeWidth) && x.strokeWidth >= 0) out.strokeWidth = x.strokeWidth
   if (x.shapes === 'stacked' || x.shapes === 'cutout') out.shapes = x.shapes

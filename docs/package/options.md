@@ -21,6 +21,7 @@ override it. Left out, each comes from the preset (`presets` lists them).
 | `strokeWidth` | number, px | `centerline`: the stroke width; measured from the ink when left out. |
 | `smoothShading` | boolean | Colour presets: [`smoothShading`](api.md) first, so painted shading doesn't break into flecks. |
 | `keepOutlines` | boolean | Colour presets: [`boostLines`](api.md) first, so faint painted outlines stay apart from the shapes they part. Looks for wider lines on an enlarged image (`scale`). |
+| `grayscale` | boolean | Colour presets but `pixel`: trace in greys only, `colors` of them. Each pixel becomes the grey of its own OKLab lightness before the palette is picked. Ignored with your own `palette`. |
 
 ## Fitting
 

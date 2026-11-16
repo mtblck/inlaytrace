@@ -228,3 +228,23 @@ describe('close small gaps (#145)', () => {
     expect(checkSettings({ ...settingsFor('lineart'), closeGaps: false })).toMatchObject({ closeGaps: false })
   })
 })
+
+describe('greys only (#196)', () => {
+  it('reaches the tracer only on Poster and Illustration, and not with your own colours', () => {
+    for (const p of PRESETS) expect(!!toTraceOptions({ ...settingsFor(p.id), grayscale: true }).grayscale).toBe(p.id === 'photo' || p.id === 'illustration')
+    expect(toTraceOptions(settingsFor('photo')).grayscale).toBeUndefined()
+    expect(toTraceOptions({ ...settingsFor('photo'), grayscale: true, ownColors: ['#ff0000', '#ffffff'], useOwnColors: true }).grayscale).toBeUndefined()
+  })
+
+  it('traces Poster in greys, as many as the slider says', () => {
+    const { px, w, h } = testCard()
+    const t = trace(px, w, h, toTraceOptions({ ...settingsFor('photo'), grayscale: true, colors: 4 }))
+    const inks = inksOf(t).map((i) => i.hex)
+    expect(inks.length).toBeLessThanOrEqual(4)
+    for (const hex of inks) expect(hex.slice(1, 3) === hex.slice(3, 5) && hex.slice(3, 5) === hex.slice(5, 7)).toBe(true)
+  })
+
+  it('is kept in a saved session', () => {
+    expect(checkSettings({ ...settingsFor('photo'), grayscale: true }).grayscale).toBe(true)
+  })
+})

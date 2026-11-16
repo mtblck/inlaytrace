@@ -86,6 +86,7 @@ type TraceOptions = {
   strokeWidth?: number // centerline
   smoothShading?: boolean
   keepOutlines?: boolean
+  grayscale?: boolean // greys only, `colors` of them
 }
 
 // The deprecated 0.3 form's options
