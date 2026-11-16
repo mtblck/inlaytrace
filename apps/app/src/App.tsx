@@ -47,6 +47,8 @@ import { booleanOp, type BooleanOp } from './lib/boolean'
 import { BucketFields, ShapesList, StyleFields, type ShapeFlag, type StylePatch } from './components/Shapes'
 import { bucketFill } from './lib/bucket'
 import { addShape, SHAPE_DEFAULT, type ShapeSettings } from './lib/draw'
+import { eraseDoc, knifeDoc } from './lib/cut'
+import type { PenCommand } from './components/DrawLayer'
 import { addOp, BRUSH_DEFAULT, BRUSH_MAX, BRUSH_MIN, FILL_DEFAULT, MAX_OPS, pixelOps, type BrushSettings, type CleanupOp, type FillSettings } from './lib/cleanup'
 import type { CleanFocus, CleanTool, CropDraft } from './components/CleanUp'
 /** The eyedropper's target for the Pen and Shape tools' colour (#210). */
@@ -667,7 +669,7 @@ export default function App() {
   const lineTrace = useMemo(() => !!traced && hasStrokes(traced), [traced])
   // Strokes can't be mirrored or bound a fill: leave those tools if a trace turns into them.
   useEffect(() => {
-    if ((strokes && tool === 'mirror') || (lineTrace && tool === 'fill')) setTool('select')
+    if ((strokes && tool === 'mirror') || (lineTrace && (tool === 'fill' || tool === 'erase' || tool === 'knife'))) setTool('select')
   }, [strokes, lineTrace, tool])
 
   // Shapes that no longer exist (re-trace, undo past their creation), or are
@@ -984,6 +986,39 @@ export default function App() {
     setSelectedNodes([])
     startEditing()
   }
+  const [penCommand, setPenCommand] = useState<PenCommand | null>(null)
+  const [penNodes, setPenNodes] = useState(0)
+
+  // ---- Eraser and Knife (#211): on the selection, or every visible unlocked shape ----------
+  const [eraserWidth, setEraserWidth] = useState(12)
+  const [cutError, setCutError] = useState<string | null>(null)
+  const cuttingRef = useRef(false)
+  const cutInputs = useRef({ selectedIds, selectableIds })
+  cutInputs.current = { selectedIds, selectableIds }
+  const cutWith = async (run: (paper: Awaited<ReturnType<typeof loadPaper>>, doc: DocT, targets: string[]) => ReturnType<typeof eraseDoc>, keep: 'add' | 'trim') => {
+    if (cuttingRef.current) return
+    cuttingRef.current = true
+    setCutError(null)
+    try {
+      const paper = await loadPaper()
+      const current = docRef.current
+      if (!current) return
+      const { selectedIds, selectableIds } = cutInputs.current
+      const sel = selectedIds.filter((id) => selectableIds.has(id))
+      const r = run(paper, current, sel.length ? sel : [...selectableIds])
+      if ('error' in r) return setCutError(r.error)
+      editDoc(() => r.doc)
+      // A selection follows its shapes: the Knife's new pieces join it, what the Eraser took leaves it.
+      if (sel.length) setSelectedIds(keep === 'add' ? [...new Set([...sel, ...r.selected])] : sel.filter((id) => r.doc.paths.some((p) => p.id === id)))
+    } catch (error) {
+      setCutError(`That didn’t work: ${error instanceof Error ? error.message : String(error)}. Your drawing is unchanged.`)
+    } finally {
+      cuttingRef.current = false
+    }
+  }
+  const onErase = (points: Pt[]) => void cutWith((paper, doc, targets) => eraseDoc(paper, doc, targets, points, eraserWidth), 'trim')
+  const onKnife = (a: Pt, b: Pt) => void cutWith((paper, doc, targets) => knifeDoc(paper, doc, targets, a, b), 'add')
+
   const [fillError, setFillError] = useState<string | null>(null)
   const [filling, setFilling] = useState(false)
   const fillingRef = useRef(false)
@@ -1109,8 +1144,9 @@ export default function App() {
     // multi-selection that Delete could act on unseen.
     if (t === 'nodes') setSelectedIds((ids) => ids.slice(0, 1))
     else if (t === 'mirror' || t === 'fill') setSelectedIds([])
-    if (t === 'mirror' || t === 'fill') void loadPaper().catch(() => {}) // warm it up while the user picks a side or a colour
+    if (t === 'mirror' || t === 'fill' || t === 'erase' || t === 'knife') void loadPaper().catch(() => {}) // warm it up while the user picks a side, a colour or a place
     setFillError(null)
+    setCutError(null)
   }, [])
 
   /** Edit mode's tool rail: beside the canvas on a wide screen, in the mode bar on a phone (one or the other, never both). */
@@ -1229,8 +1265,9 @@ export default function App() {
       } else if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
         e.preventDefault()
         setShortcutsOpen(true)
-      } else if (hasDoc && !e.shiftKey && (key === 'v' || key === 'a' || key === 'm' || key === 'k' || key === 'p' || key === 'u')) {
-        if (!(key === 'm' && strokes) && !(key === 'k' && lineTrace)) chooseTool(({ v: 'select', a: 'nodes', m: 'mirror', k: 'fill', p: 'pen', u: 'shape' } as const)[key])
+      } else if (hasDoc && !e.shiftKey && (key === 'v' || key === 'a' || key === 'm' || key === 'k' || key === 'p' || key === 'u' || key === 'e' || key === 'c')) {
+        if (!(key === 'm' && strokes) && !(lineTrace && (key === 'k' || key === 'e' || key === 'c')))
+          chooseTool(({ v: 'select', a: 'nodes', m: 'mirror', k: 'fill', p: 'pen', u: 'shape', e: 'erase', c: 'knife' } as const)[key])
         setWorkMode('edit')
         startEditing()
       }
@@ -1610,8 +1647,7 @@ export default function App() {
                     onPick={onPick}
                     onFill={(at) => void fillAt(at)}
                     onAxis={moveAxis}
-                    draw={{ shape, colour: fillColour, strokeWidth: drawStroke }}
-                    onDrawn={onDrawn}
+                    draw={{ shape, colour: fillColour, strokeWidth: drawStroke, onDrawn, eraserWidth, onErase, onKnife, penCommand, onPenNodes: setPenNodes }}
                   />
                   {busy && (
                     <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
@@ -1785,7 +1821,10 @@ export default function App() {
                   inks: shownInks,
                   onPick: () => setPicking((p) => (p?.target === DRAW_COLOUR ? null : { target: DRAW_COLOUR })),
                   picking: picking?.target === DRAW_COLOUR,
+                  penNodes,
+                  onPenCommand: (kind) => setPenCommand((c) => ({ kind, seq: (c?.seq ?? 0) + 1 })),
                 }}
+                cut={{ eraserWidth, onEraserWidth: setEraserWidth, error: cutError, selected: selectedIds.length }}
                 detached={detached}
                 selection={
                   selectedPaths.length

@@ -48,6 +48,8 @@ mode switches to Edit mode.
 | Backspace | Pen: take back the last node |
 | U | Shape: drag a rectangle, ellipse, polygon or line |
 | ⇧ drag, ⌥ drag | Shape: a square, circle or 45° line; from the centre |
+| E | Eraser: rub out part of the shapes (the selected ones, if any) |
+| C | Knife: drag a line through shapes to cut them in pieces (⇧ for 45°) |
 | Double-click a shape | Edit its nodes (from Select) |
 | Double-click the outline | Add a node there (Nodes) |
 

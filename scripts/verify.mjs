@@ -644,7 +644,7 @@ check((await page.locator('[data-rail]').count()) === 0, 'Trace mode has no tool
 await page.getByRole('tab', { name: /Edit/ }).click()
 check(await viewIs('Vector'), 'starting to edit switches to Vector, hiding the original')
 const rail = page.locator('[data-rail]')
-check((await rail.getByRole('radio').count()) === 6 && (await rail.getByRole('button', { name: 'Undo' }).count()) === 1, 'Edit mode shows the tool rail: Select, Nodes, Mirror, Fill, Pen, Shape, Undo and Redo')
+check((await rail.getByRole('radio').count()) === 8 && (await rail.getByRole('button', { name: 'Undo' }).count()) === 1, 'Edit mode shows the tool rail: Select, Nodes, Mirror, Fill, Pen, Shape, Eraser, Knife, Undo and Redo')
 await rail.getByRole('radio', { name: 'Nodes' }).click()
 check((await page.locator('#panel-edit h2').first().innerText()) === 'Nodes', 'the panel follows the rail’s tool')
 // Leaving Edit puts its tools away: back on Select, nothing selected, so Delete can't act unseen.
@@ -1145,6 +1145,36 @@ if (process.env.FIXTURE) {
   check(/fill="#d25"/.test(svg) && /stroke="#d25"[^>]*stroke-width="6"/.test(svg), 'drawn shapes export, the line as a stroke')
   await dp.keyboard.press(`${MOD}+z`)
   check((await dp.locator(VECTOR).count()) === 5, 'Undo takes the line away')
+  // Without a keyboard: the panel's Finish line ends an open path.
+  await dp.mouse.click(...at(0.1, 0.4))
+  await dp.mouse.click(...at(0.3, 0.45))
+  await dp.locator('[data-draw-fields]').getByRole('button', { name: 'Finish line' }).click()
+  await dp.waitForFunction(() => document.querySelectorAll('[data-pen-node]').length === 0, null, { timeout: 5000 }).catch(() => {})
+  check((await dp.locator(VECTOR).count()) === 6 && (await dp.locator(VECTOR).last().getAttribute('fill')) === 'none', `Finish line in the panel ends the path as a line (${await dp.locator(VECTOR).count()}, ${await dp.locator(VECTOR).last().getAttribute('fill')})`)
+  await dp.keyboard.press(`${MOD}+z`)
+
+  // ---- Knife and Eraser (#211) ----
+  await dp.keyboard.press('Escape')
+  await dp.keyboard.press('c')
+  check((await dp.locator('[data-cut-fields="knife"]').count()) === 1, 'C picks the Knife')
+  // Right through the blue square (20–60 of 200), not through the background.
+  await drag([0.05, 0.2], [0.4, 0.2])
+  await dp.waitForFunction(() => document.querySelectorAll('svg[aria-label="Traced SVG"] path[fill="#113388"]').length === 2, null, { timeout: 15000 }).catch(() => {})
+  const blues = dp.locator('svg[aria-label="Traced SVG"] path[fill="#113388"]')
+  const halves = await Promise.all([0, 1].map((i) => blues.nth(i).boundingBox()))
+  check((await blues.count()) === 2 && halves.every((b) => Math.abs(b.height - sheet.height * 0.1) < 2), `the Knife cuts the square into two halves of its colour (${halves.map((b) => b && Math.round(b.height)).join(', ')} px tall)`)
+  check((await dp.locator(VECTOR).count()) === 6, 'and leaves the background, which it didn’t cross, whole')
+  await dp.keyboard.press('e')
+  check((await dp.locator('[data-cut-fields="erase"]').count()) === 1, 'E picks the Eraser')
+  await dp.locator('[data-cut-fields]').getByLabel('Eraser width').fill('10')
+  // Across the pink rectangle (100–180 × 100–140), through its middle.
+  await drag([0.45, 0.6], [0.95, 0.6])
+  await dp.waitForFunction(() => (document.querySelectorAll('svg[aria-label="Traced SVG"] path[fill="#dd2255"]')[0]?.getAttribute('d').match(/M/g) ?? []).length === 2, null, { timeout: 15000 }).catch(() => {})
+  const rubbed = await dp.locator('svg[aria-label="Traced SVG"] path[fill="#dd2255"]').first().getAttribute('d')
+  check((rubbed.match(/M/g) ?? []).length === 2, `the Eraser rubs a band out of the rectangle, leaving two pieces (${rubbed.slice(0, 80)}…)`)
+  await dp.keyboard.press(`${MOD}+z`)
+  const back = await dp.locator('svg[aria-label="Traced SVG"] path[fill="#dd2255"]').first().getAttribute('d')
+  check((back.match(/M/g) ?? []).length === 1, 'one Undo puts it back')
   await dp.close()
 }
 

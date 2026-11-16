@@ -1,14 +1,19 @@
 /**
- * The Pen and the Shape tool on the canvas (#210): a transparent sheet over
- * the drawing that turns pointer drags into a path, previewed as you go, and
- * hands the finished path data to `onDrawn`. The geometry is lib/draw.ts.
+ * The Pen and the Shape tool (#210), and the vector Eraser and Knife (#211), on
+ * the canvas: a transparent sheet over the drawing that turns pointer drags
+ * into a path, a brush stroke or a cut, previewed as you go. The geometry is
+ * lib/draw.ts and lib/cut.ts; this only gathers points.
  */
 import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
-import { penDrag, penPath, shapePath, type PenNode, type ShapeSettings } from '../lib/draw'
+import { lineEnd, penDrag, penPath, shapePath, type PenNode, type ShapeSettings } from '../lib/draw'
 import type { Pt } from '../lib/pathdata'
 
-type Props = {
-  tool: 'pen' | 'shape'
+export type DrawTool = 'pen' | 'shape' | 'erase' | 'knife'
+/** A request from the panel to the Pen, numbered so the same one can be sent twice. */
+export type PenCommand = { kind: 'finish' | 'cancel'; seq: number }
+
+export type DrawLayerProps = {
+  tool: DrawTool
   width: number
   height: number
   /** SVG units per screen pixel. */
@@ -20,6 +25,14 @@ type Props = {
   strokeWidth: number
   /** A finished path: `open` ones are lines (a stroke), closed ones are filled. */
   onDrawn: (d: string, open: boolean) => void
+  /** The Eraser's width (SVG units), and its finished stroke. */
+  eraserWidth: number
+  onErase: (points: Pt[]) => void
+  /** The Knife's finished cut. */
+  onKnife: (a: Pt, b: Pt) => void
+  /** The panel's Finish and Cancel for the Pen, and how many nodes it has down. */
+  penCommand?: PenCommand | null
+  onPenNodes?: (n: number) => void
 }
 
 /** On-screen pixels: how near the first node a click closes the path, and how far a press must move to be a drag. */
@@ -27,9 +40,10 @@ const CLOSE_PX = 8
 const DRAG_PX = 3
 const NODE_PX = 7
 
-type Press = { at: Pt; client: Pt; to: Pt | null }
+/** A press under way: where it began, where the pointer is once it moved, the Eraser's track, and whether it closes the Pen's path. */
+type Press = { at: Pt; client: Pt; to: Pt | null; track: Pt[]; closing: boolean }
 
-export function DrawLayer(p: Props) {
+export function DrawLayer(p: DrawLayerProps) {
   const [nodes, setNodes] = useState<PenNode[]>([])
   const [press, setPress] = useState<Press | null>(null)
   const [hover, setHover] = useState<Pt | null>(null)
@@ -64,8 +78,21 @@ export function DrawLayer(p: Props) {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [penActive])
 
-  // ⇧ and ⌥ change a shape mid-drag without the pointer moving.
-  const shaping = p.tool === 'shape' && !!press
+  // The panel's Finish and Cancel, for a Pen without a keyboard (a phone, a tablet).
+  const lastCommand = useRef(p.penCommand?.seq ?? 0)
+  useEffect(() => {
+    const c = p.penCommand
+    if (!c || c.seq === lastCommand.current) return
+    lastCommand.current = c.seq
+    const { nodes, p: now } = live.current
+    if (c.kind === 'finish' && nodes.length >= 2) now.onDrawn(penPath(nodes, false), true)
+    setNodes([])
+  }, [p.penCommand])
+  const onPenNodes = p.onPenNodes
+  useEffect(() => onPenNodes?.(nodes.length), [nodes.length, onPenNodes])
+
+  // ⇧ and ⌥ change a shape or a cut mid-drag without the pointer moving.
+  const shaping = (p.tool === 'shape' || p.tool === 'knife') && !!press
   useEffect(() => {
     if (!shaping) return
     const onKey = (e: KeyboardEvent) => setMods({ shift: e.shiftKey, alt: e.altKey })
@@ -89,27 +116,32 @@ export function DrawLayer(p: Props) {
     e.preventDefault()
     // preventDefault keeps focus where it was: take it off a panel field, so Enter and Esc reach the Pen.
     if (document.activeElement instanceof HTMLElement && document.activeElement.closest('input, select, textarea')) document.activeElement.blur()
-    if (p.tool === 'pen' && nearFirst(at) && canClose) {
-      p.onDrawn(penPath(nodes, true), false)
-      setNodes([])
-      return
-    }
+    // On the first node, the Pen closes the path when the press ends; a drag there shapes the closing curve.
+    const closing = p.tool === 'pen' && nearFirst(at) && canClose
     e.currentTarget.setPointerCapture(e.pointerId)
     setMods({ shift: e.shiftKey, alt: e.altKey })
-    setPress({ at, client: { x: e.clientX, y: e.clientY }, to: null })
+    setPress({ at: closing ? { x: nodes[0].x, y: nodes[0].y } : at, client: { x: e.clientX, y: e.clientY }, to: null, track: [at], closing })
   }
   const onMove = (e: RPointerEvent<SVGRectElement>) => {
     const q = p.toSvg(e)
     setHover(q)
     if (!press || !q) return
     setMods({ shift: e.shiftKey, alt: e.altKey })
-    if (press.to || Math.hypot(e.clientX - press.client.x, e.clientY - press.client.y) >= DRAG_PX) setPress({ ...press, to: q })
+    if (p.tool === 'erase') setPress({ ...press, to: q, track: [...press.track, q] })
+    else if (press.to || Math.hypot(e.clientX - press.client.x, e.clientY - press.client.y) >= DRAG_PX) setPress({ ...press, to: q })
   }
   const onUp = (e: RPointerEvent<SVGRectElement>) => {
     if (!press) return
     setPress(null)
     if (e.type === 'pointercancel') return
-    if (p.tool === 'pen') setNodes([...nodes, press.to ? penDrag(press.at, press.to) : { x: press.at.x, y: press.at.y, out: null }])
+    if (p.tool === 'erase') p.onErase(press.track)
+    else if (p.tool === 'knife') {
+      if (press.to) p.onKnife(press.at, lineEnd(press.at, press.to, e.shiftKey))
+    } else if (press.closing) {
+      const all = press.to ? [penDrag(press.at, press.to), ...nodes.slice(1)] : nodes
+      p.onDrawn(penPath(all, true), false)
+      setNodes([])
+    } else if (p.tool === 'pen') setNodes([...nodes, press.to ? penDrag(press.at, press.to) : { x: press.at.x, y: press.at.y, out: null }])
     else if (press.to) {
       const d = shapePath(p.shape, press.at, press.to, { shift: e.shiftKey, alt: e.altKey, min: 2 * p.unit })
       if (d) p.onDrawn(d, p.shape.kind === 'line')
@@ -121,6 +153,9 @@ export function DrawLayer(p: Props) {
   if (p.tool === 'shape' && press?.to) {
     const d = shapePath(p.shape, press.at, press.to, { ...mods, min: 0 })
     if (d) preview = { d, open: p.shape.kind === 'line' }
+  } else if (p.tool === 'pen' && press?.closing) {
+    const all = press.to ? [penDrag(press.at, press.to), ...nodes.slice(1)] : nodes
+    preview = { d: penPath(all, true), open: false }
   } else if (p.tool === 'pen' && nodes.length + (press ? 1 : 0) > 0) {
     // The nodes so far, the one being placed, and a rubber band to the pointer.
     const placing = press ? [press.to ? penDrag(press.at, press.to) : { x: press.at.x, y: press.at.y, out: null }] : []
@@ -128,11 +163,33 @@ export function DrawLayer(p: Props) {
     const all = [...nodes, ...placing, ...next]
     if (all.length >= 2) preview = { d: penPath(all, false), open: true }
   }
+  const track = p.tool === 'erase' && press ? press.track.map((q) => `${q.x},${q.y}`).join(' ') : null
+  const knife = p.tool === 'knife' && press?.to ? { a: press.at, b: lineEnd(press.at, press.to, mods.shift) } : null
   const handle = p.tool === 'pen' && press?.to ? { a: { x: 2 * press.at.x - press.to.x, y: 2 * press.at.y - press.to.y }, b: press.to } : null
   const s = NODE_PX * p.unit
 
   return (
     <g data-draw={p.tool}>
+      {track !== null && (
+        // The Eraser's track: a single point draws as a dot (a zero-length line with round caps).
+        <polyline
+          points={press!.track.length > 1 ? track : `${track} ${track}`}
+          fill="none"
+          stroke="var(--c-accent)"
+          strokeOpacity={0.35}
+          strokeWidth={p.eraserWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          pointerEvents="none"
+          data-erase-track=""
+        />
+      )}
+      {p.tool === 'erase' && hover && !press && (
+        <circle cx={hover.x} cy={hover.y} r={p.eraserWidth / 2} fill="none" stroke="var(--c-accent)" strokeWidth={1} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+      )}
+      {knife && (
+        <line x1={knife.a.x} y1={knife.a.y} x2={knife.b.x} y2={knife.b.y} stroke="var(--c-accent)" strokeWidth={1.5} strokeDasharray="6 3" vectorEffect="non-scaling-stroke" pointerEvents="none" data-knife-line="" />
+      )}
       {preview && (
         <path
           d={preview.d}
@@ -172,7 +229,7 @@ export function DrawLayer(p: Props) {
         width={p.width}
         height={p.height}
         fill="transparent"
-        style={{ cursor: p.tool === 'pen' && nearFirst(hover) && canClose ? 'pointer' : 'crosshair', touchAction: 'none' }}
+        style={{ cursor: p.tool === 'pen' && nearFirst(hover) && canClose ? 'pointer' : p.tool === 'erase' ? 'none' : 'crosshair', touchAction: 'none' }}
         data-draw-target=""
         onPointerDown={onDown}
         onPointerMove={onMove}
