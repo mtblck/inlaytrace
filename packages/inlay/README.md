@@ -72,7 +72,7 @@ PNGs need nothing else. For JPEG, WebP, GIF or TIFF, install
 Any option overrides the preset: `colors`, `palette` (your own colours, as
 `#rrggbb`), `merge` (`{ '#from': '#into' }`), `speckle`, `tolerance`,
 `cornerAngle`, `layers`, `shapes`, `strokes`, `gradients`, `closeGaps`,
-`threshold`, `invert`, `strokeWidth`, `smoothShading`, `keepOutlines` and
+`threshold`, `invert`, `strokeWidth`, `smoothShading`, `keepOutlines`, `grayscale` and
 `scale`. [Options](https://github.com/mtblck/inlaytrace/blob/main/docs/package/options.md)
 says what each does.
 

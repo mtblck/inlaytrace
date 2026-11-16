@@ -96,3 +96,20 @@ describe('trace(image, { preset }) (#162, #163)', () => {
     expect(presets.logo.layers).toBe(false)
   })
 })
+
+describe('grayscale (#196)', () => {
+  it('traces in greys only, as many as asked, and keeps light and dark apart', () => {
+    for (const preset of ['poster', 'illustration', 'logo'] as const) {
+      const r = trace(card(), { preset, grayscale: true, colors: 3 })
+      const fills = new Set(r.paths.map((p) => p.fill))
+      expect(fills.size).toBeLessThanOrEqual(3)
+      for (const f of fills) expect(f.slice(1, 3) === f.slice(3, 5) && f.slice(3, 5) === f.slice(5, 7)).toBe(true)
+      // White stays white; the red disc is a darker grey than white and lighter than black.
+      expect(fills.has('#ffffff')).toBe(true)
+    }
+  })
+
+  it('changes nothing when off', () => {
+    expect(toSvg(trace(card(), { preset: 'poster', grayscale: false }))).toBe(toSvg(trace(card(), { preset: 'poster' })))
+  })
+})

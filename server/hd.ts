@@ -88,6 +88,7 @@ export function cleanSettings(raw: unknown): Settings | null {
     colors: Math.round(num(s.colors, 2, 64, 8)),
     threshold: s.threshold === null || s.threshold === 'auto' ? s.threshold : Math.round(num(s.threshold, 0, 255, 128)),
     lightInk: s.lightInk === true,
+    grayscale: s.grayscale === true,
     // Missing (an older client): the preset's own default.
     closeGaps: typeof s.closeGaps === 'boolean' ? s.closeGaps : !!PRESETS.find((p) => p.id === s.preset)?.defaults.closeGaps,
     speckle: num(s.speckle, 0, 256, 4),
