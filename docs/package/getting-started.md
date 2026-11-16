@@ -57,6 +57,23 @@ console.log(`${result.paths.length} shapes`)
 Run it as an ES module (`"type": "module"` in `package.json`, or a `.mjs`
 file) so the top-level `await` works.
 
+## From the command line
+
+```sh
+npx inlaytrace logo.png -o logo.svg
+npx inlaytrace scan.png -o scan.svg --preset lineart
+npx inlaytrace photo.jpg -o photo.svg --preset poster --colors 16
+```
+
+PNGs are read with Node's own zlib, so they need nothing else. JPEG, WebP,
+GIF and TIFF go through [sharp](https://sharp.pixelplumbing.com/) when it's
+installed beside inlaytrace (`npm install sharp`); without it the command says
+so. Without `-o`, the SVG goes to stdout. The flags follow the options below:
+`--preset`, `--colors`, `--palette '#111111,#e63946'`, `--speckle`,
+`--tolerance`, `--corner`, `--layers` / `--no-layers`, `--exact-shapes` /
+`--no-exact-shapes`, `--threshold`, `--invert` and `--stroke-width`.
+`npx inlaytrace --help` lists them.
+
 ## Pick a preset
 
 The preset says what the image is, and brings the palette, the clean-up and

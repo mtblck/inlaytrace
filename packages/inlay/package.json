@@ -31,8 +31,12 @@
     "./package.json": "./package.json"
   },
   "types": "./dist/index.d.ts",
+  "bin": {
+    "inlaytrace": "./bin/inlaytrace.mjs"
+  },
   "files": [
     "dist",
+    "bin",
     "CHANGELOG.md"
   ],
   "sideEffects": false,
