@@ -2196,7 +2196,7 @@ const COMPARE_HINT = {
 function Empty(props: { editFirst: boolean; loading: boolean; error: string | null; onChoose: () => void; onSample: () => void }) {
   return (
     <div className="mat grid flex-1 place-items-center p-4 sm:p-6">
-      <div className="w-full max-w-lg rounded-2xl border-2 border-dashed border-on-mat/45 bg-black/15 px-6 py-10 text-center sm:px-10 sm:py-14">
+      <div className="w-full max-w-lg rounded-2xl border-2 border-dashed border-on-mat/45 bg-mat-panel px-6 py-10 text-center sm:px-10 sm:py-14">
         {props.loading ? (
           <p className="text-[15px] text-on-mat" aria-live="polite">
             Tracing…
