@@ -347,8 +347,8 @@
 }
 
 /* ---- The phone's dock (components/Dock.tsx) --------------------------------
-   Flush with the foot of the screen, full width, with a round notch cut out of
-   its top edge for the Mode button that sits in it. */
+   Flush with the foot of the screen, full width, with the Mode button sitting
+   on it, its top rising just above the dock's edge. */
 .dock {
   height: var(--dock-h);
   padding: 0 6px env(safe-area-inset-bottom);
@@ -361,8 +361,6 @@
   box-shadow:
     0 -6px 20px -8px rgb(22 32 28 / 0.25),
     0 -1px 2px rgb(22 32 28 / 0.06);
-  -webkit-mask: radial-gradient(circle 41px at 50% 14px, transparent 40px, #000 41px);
-  mask: radial-gradient(circle 41px at 50% 14px, transparent 40px, #000 41px);
 }
 /* The picked slot's icon: bolder, with its solid parts (.f) filled. */
 .dock-on svg {

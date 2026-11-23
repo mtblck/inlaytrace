@@ -1,6 +1,6 @@
 /**
  * The phone's dock (below lg): a bar along the foot of the screen with the
- * yellow Mode button in a notch at its centre and two tools either side,
+ * yellow Mode button at its centre and two tools either side,
  * which follow the mode (Trace: Image, Type, Tune, Export; Edit: Select,
  * Nodes, Combine, Draw; Clean up: Crop, Brush, Erase, Levels). On a wide
  * screen the mode tabs, the tool rail and the sidebar do this instead.
