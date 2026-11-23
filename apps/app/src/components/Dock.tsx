@@ -8,8 +8,20 @@
  * A slot may hold a few tools: tapping it picks its tool, and tapping it again
  * while it is picked lists the others just above it.
  */
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { MODE_LABEL, type WorkMode } from './Workspace'
+
+/** Arrow keys, Home and End move focus between a menu's enabled items (the menu pattern's roving focus). */
+function menuKeys(e: ReactKeyboardEvent<HTMLElement>) {
+  const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key]
+  if (step === undefined && e.key !== 'Home' && e.key !== 'End') return
+  const items = [...e.currentTarget.querySelectorAll<HTMLElement>('[role^="menuitem"]:not(:disabled)')]
+  if (!items.length) return
+  e.preventDefault()
+  const at = items.indexOf(document.activeElement as HTMLElement)
+  const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (at + step! + items.length) % items.length
+  items[next].focus({ preventScroll: true })
+}
 
 /** One tool or view in a slot's list. */
 export type DockItem = { id: string; label: string; icon: ReactNode; disabled?: string }
@@ -151,7 +163,8 @@ export function Dock(p: { modes: WorkMode[]; mode: WorkMode; onMode: (m: WorkMod
   // Opening a menu moves focus into it, onto the item in use, so a keyboard or screen reader lands there.
   const menu = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (picking || list) menu.current?.querySelector<HTMLElement>('[aria-checked="true"]:not(:disabled), [role^="menuitem"]:not(:disabled)')?.focus({ preventScroll: true })
+    const m = menu.current
+    if (picking || list) (m?.querySelector<HTMLElement>('[aria-checked="true"]:not(:disabled)') ?? m?.querySelector<HTMLElement>('[role^="menuitem"]:not(:disabled)'))?.focus({ preventScroll: true })
   }, [picking, list])
 
   const open = p.slots.find((s) => s.id === list)
@@ -201,7 +214,7 @@ export function Dock(p: { modes: WorkMode[]; mode: WorkMode; onMode: (m: WorkMod
       )}
 
       {open?.items && (
-        <div ref={menu} role="menu" aria-label={open.label} className="fixed inset-x-3 bottom-[calc(var(--dock-h)+10px)] z-50 grid grid-cols-2 gap-1 rounded-xl border border-rule bg-paper p-1.5 shadow-lg lg:hidden" data-dock-list={open.id}>
+        <div ref={menu} role="menu" aria-label={open.label} onKeyDown={menuKeys} className="fixed inset-x-3 bottom-[calc(var(--dock-h)+10px)] z-50 grid grid-cols-2 gap-1 rounded-xl border border-rule bg-paper p-1.5 shadow-lg lg:hidden" data-dock-list={open.id}>
           {open.items.map((it) => (
             <button
               key={it.id}
@@ -225,7 +238,7 @@ export function Dock(p: { modes: WorkMode[]; mode: WorkMode; onMode: (m: WorkMod
       )}
 
       {picking && (
-        <div ref={menu} role="menu" aria-label="Mode" className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--dock-h)+18px)] z-50 flex items-end justify-center gap-6 lg:hidden" data-mode-picker="">
+        <div ref={menu} role="menu" aria-label="Mode" onKeyDown={menuKeys} className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--dock-h)+18px)] z-50 flex items-end justify-center gap-6 lg:hidden" data-mode-picker="">
           {p.modes.map((m) => (
             <button
               key={m}
@@ -321,7 +334,7 @@ export function MoreMenu(p: { theme: 'light' | 'dark'; onTheme: () => void; supp
       {open && (
         <>
           <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setOpen(false)} />
-          <div ref={list} role="menu" aria-label="More" className="absolute top-11 right-0 z-50 w-56 overflow-hidden rounded-lg border border-rule bg-paper py-1 shadow-lg">
+          <div ref={list} role="menu" aria-label="More" onKeyDown={menuKeys} className="absolute top-11 right-0 z-50 w-56 overflow-hidden rounded-lg border border-rule bg-paper py-1 shadow-lg">
             <button
               type="button"
               role="menuitem"
