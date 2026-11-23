@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { zipSync, strToU8 } from 'fflate'
 import { TraceClient } from './engine/client'
 import { BatchDialog } from './components/Batch'
@@ -71,14 +71,18 @@ import { Canvas, type Overlays, type SelectMode, type Tool, type ViewMode } from
 import { ShortcutsDialog } from './components/Shortcuts'
 import { ExportOptions } from './components/ExportOptions'
 import { CLEAN_TOOLS, EDIT_TOOLS, ModeSwitch, ToolRail, useWide, type WorkMode } from './components/Workspace'
+import { Dock, DOCK_ICON, MoreMenu, type DockSlot } from './components/Dock'
 import { clearSession, loadSession, newSessionId, saveImage, saveState } from './lib/session'
 import { buildDxf, buildEps, buildPdf, pngPixels, withSize, type ExportSize } from './lib/vectorExport'
-import { IconButton, KeyboardIcon, MoonIcon, SunIcon } from './components/IconButton'
+import { IconButton, KeyboardIcon, MoonIcon, RedoIcon, SunIcon, UndoIcon } from './components/IconButton'
 import { EditPanel } from './components/EditPanel'
-import { Support } from './components/Support'
+import { Support, SUPPORT_URL } from './components/Support'
 import { Controls, STAGE } from './components/Controls'
 import { Inks } from './components/Inks'
 import { useTheme } from './lib/theme'
+
+/** The parts of Trace's panel a phone shows one at a time (the dock's buttons). */
+type PhoneView = 'image' | 'type' | 'tune' | 'export'
 
 type Status = { kind: 'idle' } | { kind: 'tracing' } | { kind: 'done'; ms: number } | { kind: 'opened' } | { kind: 'error'; message: string }
 
@@ -169,7 +173,19 @@ export default function App() {
   }
   /** The workspace's mode (components/Workspace.tsx): Trace sets up the trace, Edit fixes its shapes. */
   const [workMode, setWorkMode] = useState<WorkMode>('trace')
+  /** Which part of Trace's panel a phone shows, picked in the dock. */
+  const [phoneView, setPhoneView] = useState<PhoneView>('type')
+  /** A line under the canvas on a phone, after a dock button that needs something first. */
+  const [dockNote, setDockNote] = useState<string | null>(null)
+  const aside = useRef<HTMLElement>(null)
+  // The note goes after a while, or once there is a selection or another mode (below).
+  useEffect(() => {
+    if (!dockNote) return
+    const t = setTimeout(() => setDockNote(null), 5000)
+    return () => clearTimeout(t)
+  }, [dockNote])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  useEffect(() => setDockNote(null), [selectedIds, workMode])
   /** Nodes selected in the shape the Nodes tool is editing (the first selected shape). */
   const [selectedNodes, setSelectedNodes] = useState<NodeRef[]>([])
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
@@ -1568,9 +1584,62 @@ export default function App() {
 
   const { theme, toggle } = useTheme()
 
+  /** A phone with a trace open: the layout fits the screen, with the canvas above, the panel scrolling below it and the dock at the foot. */
+  const docked = !!(source && trace)
+  const showPhone = (v: PhoneView) => {
+    setPhoneView(v)
+    aside.current?.scrollTo({ top: 0 })
+  }
+  /** Scroll the panel on a phone to a part of it, for the dock's Combine and Levels. */
+  const reveal = (selector: string) => requestAnimationFrame(() => aside.current?.querySelector(selector)?.scrollIntoView({ block: 'start', behavior: 'smooth' }))
+  const editTools = EDIT_TOOLS(strokes, lineTrace)
+  const cleanTools = CLEAN_TOOLS(settings.removeBackground)
+  /** A slot that holds a few of the rail's tools. */
+  const toolSlot = <T extends string>(id: string, label: string, icon: ReactNode, rail: { id: T; label: string; icon: ReactNode; disabled?: string }[], ids: T[], current: T, pick: (t: T) => void): DockSlot => {
+    const items = ids.map((i) => rail.find((t) => t.id === i)!).filter(Boolean)
+    const mine = (ids as string[]).includes(current)
+    return {
+      id,
+      label: mine && ids.length > 1 ? (items.find((t) => t.id === current)?.label ?? label) : label,
+      icon,
+      active: mine,
+      onSelect: () => pick(items.find((t) => !t.disabled)?.id ?? ids[0]),
+      items: ids.length > 1 ? items.map((t) => ({ id: t.id, label: t.label, icon: t.icon, disabled: t.disabled })) : undefined,
+      current,
+      onItem: (t) => pick(t as T),
+    }
+  }
+  const view = (v: PhoneView, label: string): DockSlot => ({ id: v, label, icon: DOCK_ICON[v], active: phoneView === v, onSelect: () => showPhone(v) })
+  const dockSlots: [DockSlot, DockSlot, DockSlot, DockSlot] =
+    workMode === 'edit'
+      ? [
+          toolSlot('select', 'Select', DOCK_ICON.select, editTools, ['select', 'mirror'], tool, chooseTool),
+          toolSlot('nodes', 'Nodes', DOCK_ICON.nodes, editTools, ['nodes'], tool, chooseTool),
+          {
+            id: 'combine',
+            label: 'Combine',
+            icon: DOCK_ICON.combine,
+            active: false,
+            onSelect: () => {
+              if (tool !== 'select') chooseTool('select')
+              setDockNote(selectedIds.length ? null : 'Tap a shape to select it, then combine it with others below.')
+              reveal('[data-combine]')
+            },
+          },
+          toolSlot('draw', 'Draw', DOCK_ICON.draw, editTools, ['pen', 'shape', 'fill', 'erase', 'knife'], tool, chooseTool),
+        ]
+      : workMode === 'clean'
+        ? [
+            toolSlot('crop', 'Crop', DOCK_ICON.crop, cleanTools, ['crop', 'straighten'], cleanTool, chooseCleanTool),
+            toolSlot('brush', 'Brush', DOCK_ICON.brush, cleanTools, ['brush', 'fill', 'heal', 'despeckle'], cleanTool, chooseCleanTool),
+            toolSlot('erase', 'Erase', DOCK_ICON.erase, cleanTools, ['eraser', 'wand', 'keep', 'remove'], cleanTool, chooseCleanTool),
+            { id: 'levels', label: 'Levels', icon: DOCK_ICON.levels, active: false, onSelect: () => reveal('[data-section="levels"]') },
+          ]
+        : [view('image', 'Image'), view('type', 'Type'), view('tune', 'Tune'), view('export', 'Export')]
+
   return (
     <div
-      className="flex h-full flex-col"
+      className={`flex flex-col ${docked ? 'h-full' : 'min-h-full lg:h-full'}`}
       onDragOver={(e) => {
         if ([...e.dataTransfer.types].includes('Files')) {
           e.preventDefault()
@@ -1588,7 +1657,8 @@ export default function App() {
         else if (files[0]) open(files[0])
       }}
     >
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-rule px-5">
+      {/* On a phone the page scrolls under it until a trace opens; then the layout fits the screen. */}
+      <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-rule bg-paper px-4 lg:static lg:px-5">
         <div className="flex items-baseline gap-3">
           <h1 className="leading-none">
             {/* The landing page and docs live beside the app, at the site root. */}
@@ -1604,13 +1674,27 @@ export default function App() {
           <p className="hidden text-[13px] text-ink-muted sm:block">Image to SVG, in your browser.</p>
         </div>
         <div className="flex items-center gap-1 text-[13px]">
-          <IconButton label="Keyboard shortcuts" hint="Keyboard shortcuts (?)" aria-keyshortcuts="?" onClick={() => setShortcutsOpen(true)}>
-            <KeyboardIcon />
-          </IconButton>
-          <IconButton label={theme === 'dark' ? 'Use light theme' : 'Use dark theme'} onClick={toggle}>
-            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
-          </IconButton>
+          {/* A phone's undo and redo: on a wide screen they are at the foot of the tool rail. */}
+          {docked && workMode !== 'trace' && (
+            <div role="group" aria-label="History" className="flex gap-0.5 lg:hidden">
+              <IconButton label="Undo" disabled={history.past.length === 0} onClick={() => historyStep('undo')}>
+                <UndoIcon />
+              </IconButton>
+              <IconButton label="Redo" disabled={history.future.length === 0} onClick={() => historyStep('redo')}>
+                <RedoIcon />
+              </IconButton>
+            </div>
+          )}
+          <span className="hidden lg:contents">
+            <IconButton label="Keyboard shortcuts" hint="Keyboard shortcuts (?)" aria-keyshortcuts="?" onClick={() => setShortcutsOpen(true)}>
+              <KeyboardIcon />
+            </IconButton>
+            <IconButton label={theme === 'dark' ? 'Use light theme' : 'Use dark theme'} onClick={toggle}>
+              {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+            </IconButton>
+          </span>
           <Support />
+          <MoreMenu theme={theme} onTheme={toggle} supportUrl={SUPPORT_URL} />
         </div>
       </header>
 
@@ -1634,14 +1718,13 @@ export default function App() {
 
       <main className="flex min-h-0 flex-1 flex-col lg:flex-row" data-traces={traceCount}>
         {/* ---- Work surface ---- */}
-        {/* On a phone, 52vh plus the mode bar when it shows: the bar replaced the sidebar's tabs and mustn't cost the canvas its height. */}
-        <div className={`relative flex min-w-0 flex-1 flex-col lg:min-h-0 ${source && trace ? 'min-h-[calc(52vh+44px)]' : 'min-h-[52vh]'}`}>
+        {/* On a phone with a trace, a fixed share of the screen, the panel scrolling under it; before one, the drop zone. */}
+        <div className={`relative flex min-w-0 flex-col lg:min-h-0 lg:flex-1 ${docked ? 'h-[46svh] shrink-0 lg:h-auto' : 'min-h-[52vh] flex-1'}`}>
           {source && trace ? (
             <>
-              {/* The mode switcher, above the canvas; on a phone the tool rail shares its row, to leave the canvas room. */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-rule px-4 py-1.5 lg:py-2" data-workspace={workMode}>
+              {/* The mode switcher, above the canvas; a phone switches modes and tools in the dock instead. */}
+              <div className="hidden flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-rule px-4 py-2 lg:flex" data-workspace={workMode}>
                 <ModeSwitch modes={cleanable ? ['clean', 'trace', 'edit'] : ['trace', 'edit']} mode={workMode} onMode={chooseMode} edited={detached} />
-                {modeRail && !wide && <div className="min-w-fit flex-1">{modeRail}</div>}
               </div>
               <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
                 {modeRail && wide && modeRail}
@@ -1731,7 +1814,7 @@ export default function App() {
               </div>
               {/* One row, the same height as the sidebar's footer beside it (lg). The hint shows where there's room for it
                   (each view's button carries it as a tooltip too) and shortens rather than wrapping. */}
-              <div className={`${workMode === 'clean' ? 'hidden' : 'flex'} flex-wrap items-center justify-between gap-3 border-t border-rule px-4 py-2.5 lg:h-13 lg:flex-nowrap lg:py-0`}>
+              <div className={`${workMode === 'clean' ? 'hidden' : 'flex'} flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-rule px-4 py-2 lg:h-13 lg:flex-nowrap lg:py-0`}>
                 <div role="radiogroup" aria-label="Compare" className="flex shrink-0 gap-px overflow-hidden rounded-md border border-rule bg-rule">
                   {(
                     [
@@ -1749,13 +1832,22 @@ export default function App() {
                         viewChosen.current = true
                         setMode(v)
                       }}
-                      className={`px-3 py-1 text-[13px] ${mode === v ? 'bg-paper font-medium text-accent' : 'bg-paper-sunk hover:bg-paper'}`}
+                      aria-label={label}
+                      className={`px-2.5 py-1 text-[13px] sm:px-3 ${mode === v ? 'bg-paper font-medium text-accent' : 'bg-paper-sunk hover:bg-paper'}`}
                     >
-                      {label}
+                      {/* "Diff" on a phone, so the row fits one line. */}
+                      {v === 'difference' ? (
+                        <>
+                          <span className="sm:hidden">Diff</span>
+                          <span className="hidden sm:inline">{label}</span>
+                        </>
+                      ) : (
+                        label
+                      )}
                     </button>
                   ))}
                 </div>
-                <p className="order-last w-full text-[12.5px] text-ink-muted md:order-none md:w-auto lg:min-w-0 lg:flex-1 lg:truncate lg:max-[1399px]:hidden" title={COMPARE_HINT[mode]}>
+                <p className="hidden text-[12.5px] text-ink-muted lg:block lg:min-w-0 lg:flex-1 lg:truncate lg:max-[1399px]:hidden" title={COMPARE_HINT[mode]}>
                   {COMPARE_HINT[mode]}
                 </p>
                 <div className="flex shrink-0 items-center gap-3" role="group" aria-label="Overlays">
@@ -1774,7 +1866,9 @@ export default function App() {
                     onColor={(nodeColor) => setOverlays({ ...overlays, nodeColor })}
                   />
                 </div>
-                <ZoomControl zoom={zoom} fit={fitScale} onZoom={setZoom} />
+                <span className="hidden sm:contents">
+                  <ZoomControl zoom={zoom} fit={fitScale} onZoom={setZoom} />
+                </span>
               </div>
             </>
           ) : (
@@ -1794,10 +1888,26 @@ export default function App() {
         </div>
 
         {/* ---- Controls ---- */}
-        <aside className={`flex w-full shrink-0 flex-col border-rule lg:w-[340px] lg:border-l lg:pb-0 ${source ? 'pb-[72px]' : ''}`}>
-          <div className="min-h-0 flex-1 lg:overflow-y-auto">
+        <aside
+          ref={aside}
+          className={`flex w-full shrink-0 flex-col border-rule lg:w-[340px] lg:border-l lg:pb-0 ${docked ? 'min-h-0 flex-1 overflow-y-auto pb-[calc(var(--dock-h)+24px)] lg:flex-none lg:overflow-visible' : ''}`}
+          data-phone-show={docked && workMode === 'trace' && !source?.svg ? phoneView : undefined}
+        >
+          {/* A phone's Download, always in reach at the top of the panel; on a wide screen it is in the column's foot. */}
+          {docked && (
+            <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-rule bg-paper px-4 py-2 lg:hidden" data-export-bar="">
+              <span className="num min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap" aria-live="polite">
+                {dockNote ?? (stats ? `${stats.paths.toLocaleString()} paths · ${formatBytes(stats.bytes)}` : 'Tracing…')}
+              </span>
+              <button className="btn btn-primary h-10 shrink-0 px-4" disabled={!trace} onClick={download}>
+                Download SVG
+              </button>
+            </div>
+          )}
+          {/* On a phone the whole aside scrolls (docked), so this must not shrink inside it. */}
+          <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             {source && (
-              <div className="flex items-center justify-between gap-3 border-b border-rule px-5 py-3">
+              <div className="flex items-center justify-between gap-3 border-b border-rule px-5 py-3" data-phone="image">
                 <div className="min-w-0">
                   <div className="truncate text-[13.5px] font-medium">{source.name}</div>
                   <div className="truncate text-[13px] text-ink-muted tabular-nums" data-image-info="">
@@ -1818,7 +1928,7 @@ export default function App() {
             )}
             {source && (
               sessionNote && (
-                <p className="border-b border-rule px-5 py-2 text-[12px] text-ink-faint" data-session={sessionNote}>
+                <p className="border-b border-rule px-5 py-2 text-[12px] text-ink-faint" data-session={sessionNote} data-phone="image">
                   {sessionNote === 'restored' ? 'Restored from your last visit. ' : ''}Your image and edits are kept in this browser only, so a reload doesn’t lose them.
                 </p>
               )
@@ -1993,10 +2103,10 @@ export default function App() {
             </div>
           </div>
 
-          {/* On desktop this pins to the foot of the column; on a phone it follows the controls, and a bar
-              pinned to the foot of the screen keeps Download in reach. Nothing to export before an image is open. */}
+          {/* On desktop this pins to the foot of the column; on a phone it is the dock's Export view, and the bar at
+              the top of the panel keeps Download in reach. Nothing to export before an image is open. */}
           {source && (
-            <div id="export" className="scroll-mt-4 border-t border-rule bg-paper px-5 py-4">
+            <div id="export" className="scroll-mt-4 border-t border-rule bg-paper px-5 py-4" data-phone="export">
               <dl className="mb-3 grid grid-cols-3 gap-2">
                 <Stat label="Paths" value={stats ? stats.paths.toLocaleString() : '—'} />
                 <Stat label="Nodes" value={stats ? stats.nodes.toLocaleString() : '—'} />
@@ -2053,29 +2163,8 @@ export default function App() {
             </div>
           )}
 
-          {source && (
-            <div className="fixed inset-x-0 bottom-0 z-20 flex items-center gap-3 border-t border-rule bg-paper px-5 py-3 lg:hidden" data-export-bar="">
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="num truncate">{stats ? `${stats.paths.toLocaleString()} paths, ${formatBytes(stats.bytes)}` : 'Tracing…'}</span>
-                <a href="#export" className="self-start text-[13px] text-accent underline underline-offset-2">
-                  More formats
-                </a>
-              </div>
-              {workMode !== 'edit' && (
-                <button className="btn h-12 shrink-0 px-3 sm:px-4" disabled={!trace} onClick={() => chooseMode('edit')} aria-label="Edit SVG">
-                  {/* Just "Edit" on the narrowest phones, so the stats beside it keep some room. */}
-                  <span className="min-[400px]:hidden">Edit</span>
-                  <span className="hidden min-[400px]:inline">Edit SVG</span>
-                </button>
-              )}
-              <button className="btn btn-primary h-12 px-5" disabled={!trace} onClick={download}>
-                Download SVG
-              </button>
-            </div>
-          )}
-
-          {/* No room for a page footer, so one quiet line ends the sidebar. */}
-          <nav aria-label="About Inlay" className="flex items-center gap-4 border-t border-rule px-5 py-2.5 text-[12px] text-ink-muted lg:h-13 lg:py-0">
+          {/* No room for a page footer, so one quiet line ends the sidebar. A phone has these in the header's menu. */}
+          <nav aria-label="About Inlay" className="hidden items-center gap-4 border-t border-rule px-5 py-2.5 text-[12px] text-ink-muted lg:flex lg:h-13 lg:py-0">
             <a href="/docs/overview/" className="hover:text-ink">
               Docs
             </a>
@@ -2091,6 +2180,8 @@ export default function App() {
           </nav>
         </aside>
       </main>
+
+      {docked && <Dock modes={cleanable ? ['clean', 'trace', 'edit'] : ['trace', 'edit']} mode={workMode} onMode={chooseMode} edited={detached} slots={dockSlots} />}
     </div>
   )
 }
@@ -2187,7 +2278,8 @@ function OverlayToggle(props: { label: string; on: boolean; color: string; onTog
         <input type="checkbox" className="accent-[var(--c-accent)]" checked={props.on} onChange={(e) => props.onToggle(e.target.checked)} />
         {props.label}
       </label>
-      <label className="relative h-4 w-4 overflow-hidden rounded-sm border border-rule" style={{ background: props.color }} title={`${props.label} colour`}>
+      {/* The colour swatch waits for a wider screen, so a phone's compare row stays one line. */}
+      <label className="relative hidden h-4 w-4 overflow-hidden rounded-sm border border-rule sm:block" style={{ background: props.color }} title={`${props.label} colour`}>
         <input
           type="color"
           value={props.color}

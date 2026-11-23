@@ -59,10 +59,10 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
 
   return (
     <>
-      <Section title="What is it?">
-        {/* Desktop: a two-column grid, so Adjust stays in view (#123). Phone: one row of chips to swipe,
-            right under the canvas (#124). The chosen preset's description sits under either. */}
-        <div role="radiogroup" aria-label="Image type" className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 lg:mx-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:px-0 lg:pb-0">
+      <Section title="What is it?" phone="type">
+        {/* A two-column grid: on a desktop so Adjust stays in view (#123), on a phone as the dock's Type view.
+            The chosen preset's description sits under it. */}
+        <div role="radiogroup" aria-label="Image type" className="grid grid-cols-2 gap-2">
           {PRESETS.map((preset) => {
             const active = preset.id === p
             return (
@@ -72,11 +72,11 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
                 aria-checked={active}
                 aria-describedby={active ? `${hintId}` : undefined}
                 onClick={() => onPreset(preset.id)}
-                className={`flex h-11 shrink-0 items-center gap-2 rounded-full px-4 text-left text-[14px] whitespace-nowrap transition-colors lg:h-12 lg:rounded-md lg:px-3 ${
+                className={`flex h-12 min-w-0 items-center gap-2 rounded-md px-3 text-left text-[14px] whitespace-nowrap transition-colors ${
                   active ? 'border-2 border-ink bg-paper-sunk font-semibold text-ink' : 'border border-rule bg-paper font-medium text-ink hover:border-ink-faint'
                 }`}
               >
-                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" className={`hidden shrink-0 lg:block ${active ? 'text-ink' : 'text-ink-faint'}`}>
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" className={`shrink-0 ${active ? 'text-ink' : 'text-ink-faint'}`}>
                   <path d={PRESET_ICONS[preset.id]} />
                 </svg>
                 {preset.label}
@@ -101,6 +101,7 @@ export function Controls({ settings, onChange, onPreset, suggestPoster, measured
 
       <Section
         title="Adjust"
+        phone="tune"
         action={
           changed && (
             <button className="text-[12.5px] text-ink-muted underline-offset-2 hover:text-ink hover:underline" onClick={() => onPreset(p)}>
@@ -398,7 +399,7 @@ function TargetSize(p: Omit<Props, 'settings' | 'onChange' | 'onPreset' | 'measu
   const valid = Number.isFinite(n) && n > 0
   const r = run?.result
   return (
-    <Section title="Target size">
+    <Section title="Target size" phone="tune">
       <div className="space-y-3">
         <form
           className="flex items-end gap-2"
@@ -473,9 +474,10 @@ function TargetSize(p: Omit<Props, 'settings' | 'onChange' | 'onPreset' | 'measu
   )
 }
 
-export function Section({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
+/** `phone` names the dock views (Trace on a phone) that show this section: see index.css's [data-phone-show]. */
+export function Section({ title, action, phone, children }: { title: string; action?: ReactNode; phone?: string; children: ReactNode }) {
   return (
-    <section className="border-b border-rule px-5 py-5">
+    <section className="border-b border-rule px-5 py-5" data-phone={phone} data-section={title.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '')}>
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="text-[13px] font-semibold text-ink">{title}</h2>
         {action}
@@ -550,7 +552,7 @@ function Prepare({ settings, set, prep }: { settings: Settings; set: <K extends 
   const s = prep.status
   const busy = s && (s.total ? `${STAGE[s.stage]}… ${s.stage === 'upscale' && s.done < s.total && s.total < 1000 ? `${Math.round((s.done / s.total) * 100)}%` : `${(s.done / 1048576).toFixed(1)} of ${(s.total / 1048576).toFixed(1)} MB`}` : `${STAGE[s.stage]}…`)
   return (
-    <Section title="Prepare">
+    <Section title="Prepare" phone="image">
       <div className="space-y-3">
         <label className="flex items-start gap-2 text-[13px]">
           <input type="checkbox" className="mt-0.5 accent-[var(--c-accent)]" checked={settings.removeBackground} onChange={(e) => set('removeBackground', e.target.checked)} />

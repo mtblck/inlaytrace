@@ -628,7 +628,7 @@ function CombineFields(p: { shapes: number; onCombine: (op: BooleanOp) => Promis
     setBusy(false)
   }
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5" data-combine="">
       <span className="field-label">Combine</span>
       <div className="grid grid-cols-4 gap-1" role="group" aria-label="Combine">
         {(

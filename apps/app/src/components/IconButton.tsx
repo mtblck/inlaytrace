@@ -14,6 +14,16 @@ export const SunIcon = () => (
     <path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1" strokeLinecap="round" />
   </svg>
 )
+export const UndoIcon = () => (
+  <svg {...base} width={18} height={18} viewBox="0 0 18 18" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 4L3 7l3 3M3 7h7.5a4 4 0 010 8H8" />
+  </svg>
+)
+export const RedoIcon = () => (
+  <svg {...base} width={18} height={18} viewBox="0 0 18 18" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 4l3 3-3 3M15 7H7.5a4 4 0 000 8H10" />
+  </svg>
+)
 export const KeyboardIcon = () => (
   <svg {...base}>
     <rect x="1.5" y="4" width="13" height="8.5" rx="1.5" />
@@ -26,9 +36,9 @@ export const KeyboardIcon = () => (
  * keyboard focus (a native `title` only shows on hover, after a delay). The
  * accessible name comes from `label`; the tooltip is the same text for sight.
  */
-export function IconButton({ label, hint, onClick, children, ...rest }: { label: string; hint?: string; onClick: () => void; children: ReactNode; 'aria-keyshortcuts'?: string }) {
+export function IconButton({ label, hint, onClick, children, ...rest }: { label: string; hint?: string; onClick: () => void; children: ReactNode; disabled?: boolean; 'aria-keyshortcuts'?: string }) {
   return (
-    <button type="button" onClick={onClick} aria-label={label} className="group relative grid size-9 place-items-center rounded-md text-ink-muted hover:bg-paper-sunk hover:text-ink" {...rest}>
+    <button type="button" onClick={onClick} aria-label={label} className="group relative grid size-9 place-items-center rounded-md text-ink-muted hover:bg-paper-sunk hover:text-ink disabled:cursor-not-allowed disabled:text-ink-faint disabled:hover:bg-transparent" {...rest}>
       {children}
       <span
         aria-hidden="true"

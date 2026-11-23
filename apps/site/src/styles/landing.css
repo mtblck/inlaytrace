@@ -95,6 +95,24 @@ main,
   justify-content: space-between;
   padding-block: 20px;
 }
+/* The header stays at the top as the page scrolls: full width for its background, its content still
+   in the 1072 px column. */
+header.top {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  max-width: none;
+  padding-inline: max(24px, (100% - 1072px) / 2);
+  padding-block: 14px;
+  background: color-mix(in srgb, var(--page) 88%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+/* The header's tip button is for phones; wider screens have the floating one. */
+.top .top-tip {
+  display: none;
+}
 .wordmark {
   color: var(--text);
   font-weight: 800;
@@ -122,11 +140,11 @@ main,
   align-items: center;
   gap: 24px;
 }
-.top nav a:not(.button) {
+.top nav a:not(.button, .tipjar) {
   color: var(--text-soft);
   text-decoration: none;
 }
-.top nav a:not(.button):hover {
+.top nav a:not(.button, .tipjar):hover {
   color: var(--text);
 }
 /* The one action in the header: the app, in the hero button's colours. */
@@ -326,10 +344,43 @@ h2 {
   max-width: 40em;
 }
 .trio {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 20px;
   margin-top: 36px;
+}
+/* Buttons that pick a close-up, for phones (see Small screens). */
+.trio-tabs {
+  display: none;
+  gap: 2px;
+  margin-top: 24px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--sunk);
+}
+.trio-tabs button {
+  flex: 1;
+  min-height: 36px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 550;
+  cursor: pointer;
+}
+.trio-tabs button[aria-pressed='true'] {
+  background: var(--page);
+  color: var(--text);
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgb(22 32 28 / 0.12);
+}
+/* The landing page's app button on phones, once the hero's has scrolled away (Page.astro). */
+.float-app {
+  display: none;
 }
 .trio figure {
   margin: 0;
@@ -492,6 +543,81 @@ pre {
   }
   .print figcaption {
     padding: 4px 0 16px;
+  }
+  /* The three close-ups: one at a time, swiped or picked with the buttons, the next one peeking. */
+  .trio-tabs {
+    display: flex;
+  }
+  .trio {
+    display: flex;
+    gap: 12px;
+    margin: 14px -16px 0;
+    padding-inline: 16px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 16px;
+    scrollbar-width: none;
+  }
+  .trio::-webkit-scrollbar {
+    display: none;
+  }
+  .trio figure {
+    flex: 0 0 86%;
+    scroll-snap-align: center;
+  }
+}
+@media (max-width: 600px) {
+  header.top {
+    padding-block: 10px;
+    padding-inline: 16px;
+  }
+  .top nav {
+    gap: 16px;
+  }
+  /* Tip and app buttons move off the page's content: the tip into the header, the app button to the
+     bottom edge (on the landing page; other pages keep it in the header). */
+  .top .top-tip {
+    display: inline-flex;
+    --tipjar-size: 38px;
+    --tipjar-shadow: none;
+  }
+  .tipjar:not(.top-tip) {
+    display: none;
+  }
+  .top .top-app {
+    display: none;
+  }
+  .float-app {
+    display: block;
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    z-index: 30;
+    padding: 14px 20px;
+    border-radius: 10px;
+    text-align: center;
+    font-size: 1.05rem;
+    box-shadow: 0 10px 24px -8px rgb(22 32 28 / 0.45);
+    transform: translateY(calc(100% + 32px));
+    /* Off screen it is out of the tab order too; visibility follows once the slide has finished. */
+    visibility: hidden;
+    transition:
+      transform 0.25s ease,
+      visibility 0s 0.25s;
+  }
+  .float-app[data-show] {
+    transform: none;
+    visibility: visible;
+    transition: transform 0.25s ease;
+  }
+  .float-app[hidden] {
+    display: none;
+  }
+}
+@media (max-width: 600px) and (prefers-reduced-motion: reduce) {
+  .float-app {
+    transition: none;
   }
 }
 

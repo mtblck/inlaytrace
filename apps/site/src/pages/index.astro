@@ -46,7 +46,7 @@ const artView = `${ax + crop.x * s} ${ay + crop.y * s} ${crop.w * s} ${crop.h * 
 const dot = crop.w / 90
 ---
 
-<Page title="Inlay: trace images into vector shapes that fit together" description={description}>
+<Page title="Inlay: trace images into vector shapes that fit together" description={description} floatingApp>
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-text">
           <h1 id="hero-title"><span>Vector shapes,</span> <span>cut to fit.</span></h1>
@@ -88,19 +88,24 @@ const dot = crop.w / 90
           A 48 px square of the badge: the left peak and its snowcap. Inlay keeps the straight edges straight and the summit sharp; a
           tracer that smooths each colour's outline on its own lets them wander. The dots are each tracer's nodes.
         </p>
-        <div class="trio">
-          <figure>
+        <div class="trio-tabs" role="group" aria-label="Show one picture">
+          <button type="button" aria-pressed="true" aria-controls="trio-source">Source</button>
+          <button type="button" aria-pressed="false" aria-controls="trio-inlay">Inlay</button>
+          <button type="button" aria-pressed="false" aria-controls="trio-vtracer">VTracer</button>
+        </div>
+        <div class="trio" id="trio">
+          <figure id="trio-source">
             <svg viewBox={artView} role="img" aria-label="The clean source art"><Fragment set:html={art} /></svg>
             <figcaption><strong>The source art</strong><span>The clean art. Both tracers got it as a 640 px JPEG</span></figcaption>
           </figure>
-          <figure>
+          <figure id="trio-inlay">
             <svg viewBox={view} role="img" aria-label="Inlay's trace of the same square">
               {(sample.inlay as Shape[]).map((p) => <path d={p.d} fill={p.fill} />)}
               {inlayNodes.map((n) => <circle class="node" cx={n.x} cy={n.y} r={dot} />)}
             </svg>
             <figcaption><strong>Inlay</strong><span>{sample.wrongInWindow.inlay} px differ from the source, {inlayNodes.length} nodes</span></figcaption>
           </figure>
-          <figure>
+          <figure id="trio-vtracer">
             <svg viewBox={view} role="img" aria-label="VTracer's trace of the same square">
               {(sample.percolour as Shape[]).map((p) => <path d={p.d} fill={p.fill} transform={p.transform} />)}
               {vtNodes.map((n) => <circle class="node" cx={n.x} cy={n.y} r={dot} />)}

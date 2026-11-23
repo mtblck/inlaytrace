@@ -8,8 +8,8 @@ Inlay's Edit mode is a small SVG editor for fixing and finishing drawings,
 traced or opened as SVG. Three ways in:
 
 - **Edit SVG**, beside *Download SVG*, switches a trace to Edit mode, so you
-  can fix it before downloading. On a phone it's in the bar at the foot of the
-  screen.
+  can fix it before downloading. On a phone, the yellow mode button in the dock
+  switches to Edit ([On a phone](on-a-phone.md)).
 - **The *Edit* switch** above the canvas, or a tool's key (V, A, M).
 - **[inlaytrace.com/svg-editor](https://inlaytrace.com/svg-editor/)** opens
   the app ready for an SVG (`/app/?mode=edit`): the first file you drop opens

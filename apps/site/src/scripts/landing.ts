@@ -52,3 +52,33 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy]')
     setTimeout(() => (button.textContent = 'Copy'), 1500)
   })
 }
+
+/**
+ * Phones: the three close-ups become a row you swipe through (CSS scroll snap). The buttons above
+ * scroll to one, and follow the swipe to show which is in view. Wider screens show all three and hide the buttons.
+ * Offsets are the figures' own: .trio is positioned, so it is their offsetParent.
+ */
+const trio = document.getElementById('trio')
+const tabs = [...document.querySelectorAll<HTMLButtonElement>('.trio-tabs button')]
+if (trio && tabs.length) {
+  const figures = tabs.map((t) => document.getElementById(t.getAttribute('aria-controls')!)!)
+  const mark = (i: number) => tabs.forEach((t, j) => t.setAttribute('aria-pressed', String(i === j)))
+  tabs.forEach((t, i) =>
+    t.addEventListener('click', () => {
+      mark(i)
+      trio.scrollTo({ left: figures[i].offsetLeft - (trio.clientWidth - figures[i].offsetWidth) / 2, behavior: still.matches ? 'auto' : 'smooth' })
+    }),
+  )
+  let frame = 0
+  trio.addEventListener('scroll', () => {
+    cancelAnimationFrame(frame)
+    frame = requestAnimationFrame(() => {
+      const mid = trio.scrollLeft + trio.clientWidth / 2
+      let best = 0
+      figures.forEach((f, i) => {
+        if (Math.abs(f.offsetLeft + f.offsetWidth / 2 - mid) < Math.abs(figures[best].offsetLeft + figures[best].offsetWidth / 2 - mid)) best = i
+      })
+      mark(best)
+    })
+  })
+}
