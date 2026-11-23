@@ -13,10 +13,14 @@ import { CONTACT, SUPPORT } from '../data/legal'
 interface Props {
   title: string
   description: string
+  /** On phones, swap the header's app button for a floating one (the landing page, whose hero has its own). */
+  floatingApp?: boolean
 }
-const { title, description } = Astro.props
+const { title, description, floatingApp = false } = Astro.props
 /** Inlay is free; this floating button asks for a tip. It tucks away when the footer, with its own support link, is on screen. */
 const tip = tipjar({ href: SUPPORT, label: 'Support Inlay', description: 'on Ko-fi', icon: 'heart', newTab: true })
+/** On a phone the floating button would cover the page, so the tip sits in the sticky header instead. */
+const headerTip = tipjar({ href: SUPPORT, label: 'Support Inlay', description: 'on Ko-fi', icon: 'heart', newTab: true, position: 'inline', compact: 'always', className: 'top-tip' })
 /** The app (apps/app), served beside this site. */
 const APP = '/app/'
 /** The footer's columns. */
@@ -84,7 +88,8 @@ const FOOTER = [
       </a>
       <nav aria-label="Site">
         <a href="/docs/package/getting-started/">Docs</a>
-        <a class="button small" href={APP}>Open the app</a>
+        <a class:list={['button small', { 'top-app': floatingApp }]} href={APP}>Open the app</a>
+        <Fragment set:html={headerTip} />
       </nav>
     </header>
 
@@ -117,11 +122,37 @@ const FOOTER = [
     </footer>
 
     <Fragment set:html={tip} />
+    {
+      floatingApp && (
+        <a class="button float-app" href={APP} hidden>
+          Trace an image, free
+        </a>
+      )
+    }
     <script>
       import { tuck } from 'tipjar'
 
-      const button = document.querySelector<HTMLElement>('.tipjar')
+      const button = document.querySelector<HTMLElement>('.tipjar:not(.top-tip)')
       if (button) tuck(button, 'footer.foot')
+
+      // Phones: the floating app button shows once the hero's own button has scrolled away, until the footer.
+      const float = document.querySelector<HTMLElement>('.float-app')
+      const hero = document.querySelector('.hero .actions')
+      const foot = document.querySelector('footer.foot')
+      if (float && hero && foot) {
+        let pastHero = false
+        let atFoot = false
+        const show = () => float.toggleAttribute('data-show', pastHero && !atFoot)
+        float.hidden = false
+        new IntersectionObserver(([e]) => {
+          pastHero = !e.isIntersecting && e.boundingClientRect.top < 0
+          show()
+        }).observe(hero)
+        new IntersectionObserver(([e]) => {
+          atFoot = e.isIntersecting
+          show()
+        }).observe(foot)
+      }
     </script>
 
   </body>

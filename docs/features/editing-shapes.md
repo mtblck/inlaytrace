@@ -4,8 +4,9 @@ order: 4
 
 # Editing shapes
 
-Edit mode, from the *Trace · Edit* switch above the canvas. Its tools are in
-the rail beside the canvas (above it, on a phone): *Select* (V) for whole
+Edit mode, from the *Trace · Edit* switch above the canvas (on a phone, the
+yellow mode button in the dock). Its tools are in the rail beside the canvas
+(in the dock, on a phone: see [On a phone](on-a-phone.md)): *Select* (V) for whole
 shapes, *Nodes* (A) for one shape's outline, *Mirror* (M), *Fill* (K), *Pen* (P), *Shape* (U), *Eraser* (E) and *Knife* (C), then *Undo* and
 *Redo*. The panel (on the right; below the canvas on a phone) shows the chosen tool's settings, then the
 colours. Selecting a shape from the canvas switches to Edit mode; going back

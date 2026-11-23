@@ -47,7 +47,8 @@ async function newPage(viewport, colorScheme = 'light') {
 const shot = async (page, name) => shots && (await page.screenshot({ path: join(shots, `${name}.png`) }))
 
 async function traced(page) {
-  await page.getByText(/Traced in [\d,]+ ms$/).waitFor({ timeout: 30_000 })
+  // Attached, not visible: a phone's dock shows the export panel, where this line is, only in its Export view.
+  await page.getByText(/Traced in [\d,]+ ms$/).waitFor({ state: 'attached', timeout: 30_000 })
 }
 
 /** Run an action that should cause a new trace, and wait for that trace. */
@@ -1659,7 +1660,27 @@ await traced(mobile)
 const overflow = await mobile.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
 check(overflow <= 0, `no horizontal scroll on a phone (${overflow}px)`)
 await shot(mobile, '09-mobile')
-await mobile.getByRole('tab', { name: /Edit/ }).click()
+// The phone's dock: Trace's panel one part at a time, and the Mode button for the others.
+const dock = mobile.locator('[data-dock]')
+check(await dock.isVisible(), 'a phone has the dock at the foot of the screen')
+check((await mobile.locator('[data-workspace]').isHidden()) && (await mobile.locator('[data-rail]').count()) === 0, 'and no mode tabs or tool rail above the canvas')
+check(await mobile.getByRole('radiogroup', { name: 'Image type' }).isVisible(), 'Trace opens on Type')
+check(await mobile.locator('[data-section="adjust"]').isHidden(), 'with Adjust put away')
+await dock.locator('[data-dock-slot=tune]').click()
+check((await mobile.locator('[data-section="adjust"]').isVisible()) && (await mobile.getByRole('radiogroup', { name: 'Image type' }).isHidden()), 'Tune shows Adjust instead')
+const canvasTop = (await mobile.locator('main > div').first().boundingBox()).y
+await mobile.locator('aside').evaluate((a) => a.scrollTo({ top: 400 }))
+check((await mobile.locator('main > div').first().boundingBox()).y === canvasTop, 'the canvas stays put while the panel scrolls')
+check(await mobile.getByRole('button', { name: 'Download SVG' }).isVisible(), 'Download stays in reach')
+await mobile.locator('[data-mode-button]').click()
+await mobile.getByRole('menuitemradio', { name: /Edit/ }).click()
+check((await dock.getAttribute('data-dock')) === 'edit', 'the Mode button switches to Edit')
+check((await dock.locator('[data-dock-slot]').allInnerTexts()).map((t) => t.trim()).join() === 'Select,Nodes,Combine,Draw', `Edit's dock has Select, Nodes, Combine and Draw (${(await dock.locator('[data-dock-slot]').allInnerTexts()).join()})`)
+await dock.locator('[data-dock-slot=draw]').click()
+await dock.locator('[data-dock-slot=draw]').click()
+check((await mobile.locator('[data-dock-list=draw]').getByRole('menuitemradio').allInnerTexts()).join() === 'Pen,Shape,Fill,Eraser,Knife', 'tapping Draw again lists its tools')
+await mobile.locator('[data-dock-list=draw]').getByRole('menuitemradio', { name: 'Shape' }).click()
+check((await dock.locator('[data-dock-slot=draw]').innerText()).trim() === 'Shape', 'and the slot takes the tool picked')
 await shot(mobile, '10-mobile-edit')
 
 // ---- The site: landing page and docs ----------------------------------------
@@ -1834,9 +1855,10 @@ const siteOrigin = process.env.SITE ?? (new URL(url).hostname.endsWith('mattblac
   await pp.goto(url)
   await pp.getByRole('button', { name: 'Try a sample' }).click()
   await traced(pp)
-  await pp.getByRole('tab', { name: 'Clean up' }).click()
+  await pp.locator('[data-mode-button]').click()
+  await pp.getByRole('menuitemradio', { name: /Clean up/ }).click()
   await pp.locator('[data-clean-canvas]').waitFor()
-  await pp.locator('[data-rail]').getByRole('radio', { name: 'Brush' }).click()
+  await pp.locator('[data-dock-slot=brush]').click()
   check(await pp.locator('[data-brush-bar]').isVisible(), 'on a phone the brush’s size, hardness and colour sit under the image')
   const pinched = await pp.evaluate(() => {
     const box = document.querySelector('[data-clean-canvas]')
@@ -1854,7 +1876,7 @@ const siteOrigin = process.env.SITE ?? (new URL(url).hostname.endsWith('mattblac
     return new Promise((done) => setTimeout(() => done(Number(box.getAttribute('data-clean-zoom'))), 150))
   })
   check(pinched > 2, `a two-finger pinch zooms the image (${pinched}×), and paints nothing`)
-  check(await pp.locator('[data-rail]').getByRole('button', { name: /^Undo/ }).isDisabled(), 'the pinch’s first finger left no stroke behind')
+  check(await pp.getByRole('group', { name: 'History' }).getByRole('button', { name: 'Undo' }).isDisabled(), 'the pinch’s first finger left no stroke behind')
   await pp.close()
 }
 
@@ -1968,7 +1990,25 @@ if (siteOrigin) {
     await phone.goto(new URL(path, siteOrigin).href)
     const over = await phone.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
     check(over <= 0, `no horizontal scroll on a phone at /${path} (${over}px)`)
-    if (!path) await shot(phone, '13-landing-mobile')
+    if (!path) {
+      await shot(phone, '13-landing-mobile')
+      // The landing page on a phone: a sticky header with the tip button, and the app button floating once the hero's has gone.
+      const tip = phone.locator('header.top .tipjar')
+      check((await tip.isVisible()) && (await phone.locator('.tipjar:not(.top-tip)').isHidden()), 'on a phone the tip button sits in the header, not over the page')
+      const float = phone.locator('.float-app')
+      check(!(await float.evaluate((el) => el.hasAttribute('data-show'))), 'the floating app button waits while the hero’s is on screen')
+      await phone.locator('#evidence-title').scrollIntoViewIfNeeded()
+      await phone.waitForTimeout(400)
+      check(await float.evaluate((el) => el.hasAttribute('data-show')), 'and floats in once it has scrolled away')
+      check((await phone.locator('header.top').boundingBox()).y === 0, 'the header stays at the top')
+      await phone.locator('.trio-tabs').getByRole('button', { name: 'VTracer' }).click()
+      await phone.waitForTimeout(800)
+      const vt = await phone.locator('#trio-vtracer').boundingBox()
+      check(vt.x >= 0 && vt.x + vt.width <= 390, 'the VTracer button swipes its close-up into view')
+      await phone.locator('footer.foot').scrollIntoViewIfNeeded()
+      await phone.waitForTimeout(400)
+      check(!(await float.evaluate((el) => el.hasAttribute('data-show'))), 'and it steps aside for the footer')
+    }
   }
 }
 

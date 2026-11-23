@@ -30,10 +30,15 @@
   --c-mat-fine: rgb(179 192 184 / 0.13);
   --c-on-mat: #b3c0b8;
   --c-on-mat-strong: #eef2ee;
+  /* The phone's dock: white on the paper, so it reads as a bar of its own. */
+  --c-dock: #ffffff;
+  /* Its height above the phone's own inset (the iPhone home bar). */
+  --dock-h: calc(70px + env(safe-area-inset-bottom));
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
+  --c-dock: #1b2a24;
   --c-paper: #131e1a;
   --c-paper-sunk: #1b2a24;
   --c-ink: #eef2ee;
@@ -338,5 +343,46 @@
   *::after {
     transition-duration: 0ms !important;
     animation-duration: 0ms !important;
+  }
+}
+
+/* ---- The phone's dock (components/Dock.tsx) --------------------------------
+   Flush with the foot of the screen, full width, with a round notch cut out of
+   its top edge for the Mode button that sits in it. */
+.dock {
+  height: var(--dock-h);
+  padding: 0 6px env(safe-area-inset-bottom);
+}
+.dock::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--c-dock);
+  box-shadow:
+    0 -6px 20px -8px rgb(22 32 28 / 0.25),
+    0 -1px 2px rgb(22 32 28 / 0.06);
+  -webkit-mask: radial-gradient(circle 41px at 50% 14px, transparent 40px, #000 41px);
+  mask: radial-gradient(circle 41px at 50% 14px, transparent 40px, #000 41px);
+}
+/* The picked slot's icon: bolder, with its solid parts (.f) filled. */
+.dock-on svg {
+  stroke-width: 2.1;
+}
+.dock-on svg .f {
+  fill: currentColor;
+}
+.dock-fab {
+  box-shadow: 0 8px 18px -6px rgb(140 100 0 / 0.55);
+}
+@media (max-width: 1023.98px) {
+  /* Trace's panel on a phone shows one part at a time, the one picked in the dock. */
+  [data-phone-show] [data-phone] {
+    display: none;
+  }
+  [data-phone-show='image'] [data-phone~='image'],
+  [data-phone-show='type'] [data-phone~='type'],
+  [data-phone-show='tune'] [data-phone~='tune'],
+  [data-phone-show='export'] [data-phone~='export'] {
+    display: block;
   }
 }
