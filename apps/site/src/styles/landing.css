@@ -600,10 +600,16 @@ pre {
     font-size: 1.05rem;
     box-shadow: 0 10px 24px -8px rgb(22 32 28 / 0.45);
     transform: translateY(calc(100% + 32px));
-    transition: transform 0.25s ease;
+    /* Off screen it is out of the tab order too; visibility follows once the slide has finished. */
+    visibility: hidden;
+    transition:
+      transform 0.25s ease,
+      visibility 0s 0.25s;
   }
   .float-app[data-show] {
     transform: none;
+    visibility: visible;
+    transition: transform 0.25s ease;
   }
   .float-app[hidden] {
     display: none;

@@ -145,6 +145,11 @@ export function Dock(p: { modes: WorkMode[]; mode: WorkMode; onMode: (m: WorkMod
     return () => window.removeEventListener('keydown', onKey, true)
   }, [picking, list])
   useEffect(() => setList(null), [p.mode])
+  // Opening a menu moves focus into it, onto the item in use, so a keyboard or screen reader lands there.
+  const menu = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (picking || list) menu.current?.querySelector<HTMLElement>('[aria-checked="true"]:not(:disabled), [role^="menuitem"]:not(:disabled)')?.focus({ preventScroll: true })
+  }, [picking, list])
 
   const open = p.slots.find((s) => s.id === list)
   const others = p.modes.filter((m) => m !== p.mode)
@@ -183,7 +188,7 @@ export function Dock(p: { modes: WorkMode[]; mode: WorkMode; onMode: (m: WorkMod
     <>
       {(picking || open) && (
         <div
-          className={`fixed inset-0 z-40 lg:hidden ${picking ? 'bg-[#0d1613]/85' : ''}`}
+          className={`fixed inset-0 z-40 lg:hidden ${picking ? 'bg-[#0d1613]/90' : ''}`}
           aria-hidden="true"
           onClick={() => {
             setPicking(false)
@@ -193,7 +198,7 @@ export function Dock(p: { modes: WorkMode[]; mode: WorkMode; onMode: (m: WorkMod
       )}
 
       {open?.items && (
-        <div role="menu" aria-label={open.label} className="fixed inset-x-3 bottom-[calc(var(--dock-h)+10px)] z-50 grid grid-cols-2 gap-1 rounded-xl border border-rule bg-paper p-1.5 shadow-lg lg:hidden" data-dock-list={open.id}>
+        <div ref={menu} role="menu" aria-label={open.label} className="fixed inset-x-3 bottom-[calc(var(--dock-h)+10px)] z-50 grid grid-cols-2 gap-1 rounded-xl border border-rule bg-paper p-1.5 shadow-lg lg:hidden" data-dock-list={open.id}>
           {open.items.map((it) => (
             <button
               key={it.id}
@@ -216,7 +221,7 @@ export function Dock(p: { modes: WorkMode[]; mode: WorkMode; onMode: (m: WorkMod
       )}
 
       {picking && (
-        <div role="menu" aria-label="Mode" className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--dock-h)+18px)] z-50 flex items-end justify-center gap-6 lg:hidden" data-mode-picker="">
+        <div ref={menu} role="menu" aria-label="Mode" className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--dock-h)+18px)] z-50 flex items-end justify-center gap-6 lg:hidden" data-mode-picker="">
           {p.modes.map((m) => (
             <button
               key={m}
@@ -277,8 +282,10 @@ export function Dock(p: { modes: WorkMode[]; mode: WorkMode; onMode: (m: WorkMod
 export function MoreMenu(p: { theme: 'light' | 'dark'; onTheme: () => void; supportUrl: string }) {
   const [open, setOpen] = useState(false)
   const button = useRef<HTMLButtonElement>(null)
+  const list = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open) return
+    list.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus({ preventScroll: true })
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       e.stopPropagation()
@@ -309,7 +316,7 @@ export function MoreMenu(p: { theme: 'light' | 'dark'; onTheme: () => void; supp
       {open && (
         <>
           <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setOpen(false)} />
-          <div role="menu" aria-label="More" className="absolute top-11 right-0 z-50 w-56 overflow-hidden rounded-lg border border-rule bg-paper py-1 shadow-lg">
+          <div ref={list} role="menu" aria-label="More" className="absolute top-11 right-0 z-50 w-56 overflow-hidden rounded-lg border border-rule bg-paper py-1 shadow-lg">
             <button
               type="button"
               role="menuitem"

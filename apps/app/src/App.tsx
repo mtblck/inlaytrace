@@ -178,13 +178,14 @@ export default function App() {
   /** A line under the canvas on a phone, after a dock button that needs something first. */
   const [dockNote, setDockNote] = useState<string | null>(null)
   const aside = useRef<HTMLElement>(null)
-  // The note goes once there is a selection, another mode, or after a while.
+  // The note goes after a while, or once there is a selection or another mode (below).
   useEffect(() => {
     if (!dockNote) return
     const t = setTimeout(() => setDockNote(null), 5000)
     return () => clearTimeout(t)
   }, [dockNote])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  useEffect(() => setDockNote(null), [selectedIds, workMode])
   /** Nodes selected in the shape the Nodes tool is editing (the first selected shape). */
   const [selectedNodes, setSelectedNodes] = useState<NodeRef[]>([])
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
@@ -1721,8 +1722,7 @@ export default function App() {
         <div className={`relative flex min-w-0 flex-col lg:min-h-0 lg:flex-1 ${docked ? 'h-[46svh] shrink-0 lg:h-auto' : 'min-h-[52vh] flex-1'}`}>
           {source && trace ? (
             <>
-              {/* The mode switcher, above the canvas; on a phone the tool rail shares its row, to leave the canvas room. */}
-              {/* A phone switches modes and tools in the dock instead. */}
+              {/* The mode switcher, above the canvas; a phone switches modes and tools in the dock instead. */}
               <div className="hidden flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-rule px-4 py-2 lg:flex" data-workspace={workMode}>
                 <ModeSwitch modes={cleanable ? ['clean', 'trace', 'edit'] : ['trace', 'edit']} mode={workMode} onMode={chooseMode} edited={detached} />
               </div>
@@ -2103,8 +2103,8 @@ export default function App() {
             </div>
           </div>
 
-          {/* On desktop this pins to the foot of the column; on a phone it follows the controls, and a bar
-              pinned to the foot of the screen keeps Download in reach. Nothing to export before an image is open. */}
+          {/* On desktop this pins to the foot of the column; on a phone it is the dock's Export view, and the bar at
+              the top of the panel keeps Download in reach. Nothing to export before an image is open. */}
           {source && (
             <div id="export" className="scroll-mt-4 border-t border-rule bg-paper px-5 py-4" data-phone="export">
               <dl className="mb-3 grid grid-cols-3 gap-2">
