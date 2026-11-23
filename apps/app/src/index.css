@@ -50,9 +50,10 @@
   --c-accent-ink: #16201c;
   --c-accent-dim: rgb(242 194 48 / 0.16);
   --c-selection: rgb(242 194 48 / 0.28);
-  --c-mat: #0d1613;
-  --c-mat-line: rgb(179 192 184 / 0.16);
-  --c-mat-fine: rgb(179 192 184 / 0.08);
+  /* A lighter green than the paper, so the mat reads as its own surface in the dark. */
+  --c-mat: #2a4a3f;
+  --c-mat-line: rgb(214 226 219 / 0.2);
+  --c-mat-fine: rgb(214 226 219 / 0.09);
 }
 
 @theme inline {
