@@ -28,6 +28,8 @@
   --c-mat: #1b352d;
   --c-mat-line: rgb(179 192 184 / 0.26);
   --c-mat-fine: rgb(179 192 184 / 0.13);
+  /* Behind text set on the mat (the empty drop zone). */
+  --c-mat-panel: rgb(0 0 0 / 0.15);
   --c-on-mat: #b3c0b8;
   --c-on-mat-strong: #eef2ee;
   /* The phone's dock: white on the paper, so it reads as a bar of its own. */
@@ -54,6 +56,8 @@
   --c-mat: #2a4a3f;
   --c-mat-line: rgb(214 226 219 / 0.2);
   --c-mat-fine: rgb(214 226 219 / 0.09);
+  /* The lighter mat needs a darker panel to keep small text above 7:1. */
+  --c-mat-panel: rgb(13 22 19 / 0.82);
 }
 
 @theme inline {
@@ -70,6 +74,7 @@
   --color-mark: var(--c-mark);
   --color-mark-ink: var(--c-mark-ink);
   --color-mat: var(--c-mat);
+  --color-mat-panel: var(--c-mat-panel);
   --color-on-mat: var(--c-on-mat);
   --color-on-mat-strong: var(--c-on-mat-strong);
 
