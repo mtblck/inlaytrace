@@ -130,6 +130,9 @@ export function Dock(p: { modes: WorkMode[]; mode: WorkMode; onMode: (m: WorkMod
   /** The slot whose list is open, by id. */
   const [list, setList] = useState<string | null>(null)
   const fab = useRef<HTMLButtonElement>(null)
+  const nav = useRef<HTMLElement>(null)
+  // Closing a menu by choosing from it hands focus back to the button that opened it (WCAG 2.4.3).
+  const focusSlot = (id: string) => nav.current?.querySelector<HTMLElement>(`[data-dock-slot="${id}"]`)?.focus({ preventScroll: true })
 
   // Escape closes whichever is open; a new mode closes a list that belonged to the old one.
   useEffect(() => {
@@ -208,6 +211,7 @@ export function Dock(p: { modes: WorkMode[]; mode: WorkMode; onMode: (m: WorkMod
               disabled={!!it.disabled}
               title={it.disabled}
               onClick={() => {
+                focusSlot(open.id)
                 setList(null)
                 open.onItem?.(it.id)
               }}
@@ -229,6 +233,7 @@ export function Dock(p: { modes: WorkMode[]; mode: WorkMode; onMode: (m: WorkMod
               role="menuitemradio"
               aria-checked={m === p.mode}
               onClick={() => {
+                fab.current?.focus({ preventScroll: true })
                 setPicking(false)
                 if (m !== p.mode) p.onMode(m)
               }}
@@ -245,7 +250,7 @@ export function Dock(p: { modes: WorkMode[]; mode: WorkMode; onMode: (m: WorkMod
         </div>
       )}
 
-      <nav aria-label="Tools" className="dock fixed inset-x-0 bottom-0 z-40 flex lg:hidden" data-dock={p.mode}>
+      <nav ref={nav} aria-label="Tools" className="dock fixed inset-x-0 bottom-0 z-40 flex lg:hidden" data-dock={p.mode}>
         {slot(p.slots[0])}
         {slot(p.slots[1])}
         <div className="relative w-[84px] shrink-0">
