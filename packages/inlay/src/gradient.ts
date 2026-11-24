@@ -127,11 +127,8 @@ export function shadings(rgba: ArrayLike<number>, w: number, h: number, comp: In
     const rms = (f: (j: number) => Rgb) => Math.sqrt(cs.reduce((s, c, j) => s + d3(c, f(j)) ** 2, 0) / n)
     const flat = rms(() => mean)
     const banded = rms((j) => bands[j])
-    if (flat < FLAT_MIN || g.rms > MAX_RMS || g.rms > GAIN * flat) continue
-    // A faint shade (its bands all close) drawn within noise can't be drawn visibly better by its bands:
-    // a background's slight vignette isn't one straight ramp, so each band, fitted to its own patch, beat it.
-    if (!(g.rms < FLAT_MIN && spread(groups.get(r)!.map((id) => colors[id])) <= FAINT_SPREAD))
-      if (g.rms > BANDS_SLACK * banded || worseOnABand(g.gradient, xs, ys, cs, bands, ids)) continue
+    if (flat < FLAT_MIN || g.rms > MAX_RMS || g.rms > GAIN * flat || g.rms > BANDS_SLACK * banded) continue
+    if (worseOnABand(g.gradient, xs, ys, cs, bands, ids)) continue
     out.push({ comps: [...groups.get(r)!], gradient: g.gradient, mean: '' })
   }
 
@@ -288,7 +285,7 @@ export function faintShades(rgba: ArrayLike<number>, w: number, h: number, comp:
 
 /** The widest OKLab distance between any two of these colours. */
 function spread(rgbs: Rgb[]) {
-  const labs = [...new Set(rgbs)].map(oklab)
+  const labs = [...new Map(rgbs.map((c) => [toHex(c), c])).values()].map(oklab)
   let most = 0
   for (const a of labs) for (const b of labs) most = Math.max(most, Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]))
   return most

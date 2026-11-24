@@ -436,14 +436,15 @@ least half of their boundary it steps by under 0.4 of their colours'
 difference, both over three pixels and between the two pixels themselves (so a
 line one pixel wide still counts as an edge), with no allowance for noise. A
 pale fill on white steps by its whole difference, so it stays. The joined run,
-if its shades span no more than 0.1, takes its commonest colour. With
-`gradients` (Illustration), such a run is first offered as one gradient; a
-faint shade's bands all close, and the gradient within 6 levels of the image,
-it no longer has to draw every band as well as the band's own colour did,
-since a vignette isn't one straight ramp and each band, fitted to its own
-patch, always beat it by a level or two. On the truck, Logo went from 107 to
-63 KB with the background one shape and the truck unchanged pixel for pixel;
-Illustration draws the background as one gradient.
+if its shades span no more than 0.1, takes its commonest colour, and its edges
+are fitted without sub-pixel placement, which would read the blend against that
+colour rather than the band's. It stays flat in Illustration too: a gradient
+over the truck's vignette, which isn't one straight ramp, drew some band over
+10 levels off, and letting faint shades skip the per-band check would also
+smear a close pastel shape into a soft background. With your own palette it is
+off, as every colour there was chosen. On the truck, Logo went from 107 to 63
+KB and Illustration from 126 to 71 KB, the background one shape and the truck
+unchanged pixel for pixel.
 
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at

@@ -94,6 +94,14 @@ export type InlayOptions = FitOptions & {
    */
   gradients?: boolean
   /**
+   * Faint shading as one shape: neighbouring regions in close colours that
+   * the image passes between without an edge (a barely-there gradient in a
+   * background, banded by close tints) join, in their commonest colour.
+   * Palette mode, not photos or pixel art. On by default; the presets turn it
+   * off with your own palette, whose every colour you chose.
+   */
+  faint?: boolean
+  /**
    * Painted lines (one entry per pixel, non-zero on a line), as `boostLines`
    * marks them. A region mostly on them is a drawn line, not one ink's two
    * shades, so it folds only into another piece of line: a dark outline
@@ -252,18 +260,28 @@ export function* traceSteps(rgba: ArrayLike<number>, w: number, h: number, o: In
     }
   }
   // Faint shading (a barely-there gradient in a background, banded by close tints) as one flat colour.
-  if (o.mode === 'palette' && !o.pixels && !o.photo) {
+  // Its regions' pixels, so sub-pixel edges (which read a blend of two flat colours) skip them too.
+  let faintPx: Uint8Array | null = null
+  if (o.mode === 'palette' && !o.pixels && !o.photo && o.faint !== false) {
     const rgbs = colors.map((c, l) => (c && drawn[l] && !gradientOf.has(l) ? hexToRgb(c) : null))
     const into = faintShades(rgba, w, h, comp, compLabel.length, (id) => compLabel[id], rgbs, (id) => compArea[id], (id) => gradientOf.has(compLabel[id]))
     if (into.some((l) => l >= 0)) {
-      for (let i = 0; i < labels.length; i++) if (comp[i] !== VOID && into[comp[i]] >= 0) labels[i] = into[comp[i]]
+      faintPx = new Uint8Array(labels.length)
+      for (let i = 0; i < labels.length; i++)
+        if (comp[i] !== VOID && into[comp[i]] >= 0) {
+          labels[i] = into[comp[i]]
+          faintPx[i] = 1
+        }
       ;({ comp, compLabel, compArea } = components(labels, w, h, (l) => drawn[l]))
     }
   }
+  const faintRegion = new Uint8Array(compLabel.length)
+  if (faintPx) for (let i = 0; i < faintPx.length; i++) if (faintPx[i] && comp[i] !== VOID) faintRegion[comp[i]] = 1
   const chains = findChains(comp, w, h)
   // Sub-pixel edges read a blend of two flat colours, so not beside a gradient.
   const rgbOf = clean ? (id: number) => hexToRgb(colors[compLabel[id]]) : null
-  const flatSides = (c: Chain) => !gradientOf.has(compLabel[c.left]) && !gradientOf.has(compLabel[c.right])
+  const flatSides = (c: Chain) =>
+    !gradientOf.has(compLabel[c.left]) && !gradientOf.has(compLabel[c.right]) && !(c.left !== VOID && faintRegion[c.left]) && !(c.right !== VOID && faintRegion[c.right])
   // Each chain is fitted once, then shared by every shape it bounds.
   const fitted: { chain: Chain; cubics: Cubic[]; back: Cubic[] }[] = []
   const chainsOf = new Map<number, number[]>()

@@ -173,10 +173,9 @@ describe('faint shading', () => {
     expect(r.paths.map((p) => p.fill).sort()).toEqual(['#162133', '#fdfdfe'])
   })
 
-  it('or as one gradient, where gradients are on', () => {
+  it('or as one shape still, where gradients are on', () => {
     const r = trace(image(W, H, vignette), W, H, { ...opts, gradients: true })
     expect(r.paths).toHaveLength(2)
-    expect(r.paths.filter((p) => p.gradient)).toHaveLength(1)
   })
 
   it('keeps a pale fill on white, though as close', () => {
@@ -185,5 +184,17 @@ describe('faint shading', () => {
     const px = image(W, H, (x, y) => (navy(x, y) ? [22, 33, 51] : pale(x, y) ? [235, 235, 237] : pale(x - 3, y) ? [243, 243, 245] : WHITE))
     const r = trace(px, W, H, opts)
     expect(r.paths.map((p) => p.fill)).toContain('#ebebed')
+  })
+
+  it('keeps a pale fill on the vignette itself, in one of its own tints', () => {
+    // In the lighter half, so its sharp edge parts it from the background's own bands.
+    const disc = (x: number, y: number) => Math.hypot(x - 200, y - 40) < 25
+    const r = trace(image(W, H, (x, y) => (disc(x, y) ? [235, 235, 237] : vignette(x, y))), W, H, opts)
+    expect(r.paths.map((p) => p.fill).sort()).toEqual(['#162133', '#ebebed', '#fdfdfe'])
+  })
+
+  it('keeps every colour when told to (your own palette)', () => {
+    const r = trace(image(W, H, vignette), W, H, { ...opts, faint: false })
+    expect(new Set(r.paths.map((p) => p.fill)).size).toBeGreaterThan(2)
   })
 })
