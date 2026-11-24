@@ -164,6 +164,20 @@ describe('the edges of those fixes', () => {
     expect(peakPalette(img, 16, { width: 200 })).toEqual(peakPalette(img, 16))
   })
 
+  it('keeps a flat grey close to a picked blue-grey, given the width', () => {
+    // A truck logo: navy body, a blue-grey cab panel, neutral-grey grille bars 0.057 from the cab, on white.
+    const NAVY: Rgb = [22, 33, 51]
+    const CAB: Rgb = [69, 76, 93]
+    const BAR: Rgb = [90, 90, 95]
+    const img = flat(200, 200, (x, y) => {
+      if (x < 10 || x >= 190 || y < 10 || y >= 190) return WHITE
+      if (x >= 120 && y >= 30 && y < 170) return CAB
+      return x >= 30 && x < 100 && y % 12 >= 6 ? BAR : NAVY
+    })
+    expect(peakPalette(img, 8).some((c) => near(c, BAR, 0.01))).toBe(false)
+    expect(peakPalette(img, 8, { width: 200 }).some((c) => near(c, BAR, 0.01))).toBe(true)
+  })
+
   it('takes a zero minTint as no minimum, without hanging', () => {
     expect(peakPalette(px, 8, { width: W, minTint: 0 }).length).toBeGreaterThan(0)
   })
