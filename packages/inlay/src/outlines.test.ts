@@ -164,6 +164,39 @@ describe('the edges of those fixes', () => {
     expect(peakPalette(img, 16, { width: 200 })).toEqual(peakPalette(img, 16))
   })
 
+  it('keeps a flat grey close to a picked blue-grey, given the width', () => {
+    // A truck logo: navy body, a blue-grey cab panel, neutral-grey grille bars 0.057 from the cab, on white.
+    const NAVY: Rgb = [22, 33, 51]
+    const CAB: Rgb = [69, 76, 93]
+    const BAR: Rgb = [90, 90, 95]
+    const img = flat(200, 200, (x, y) => {
+      if (x < 10 || x >= 190 || y < 10 || y >= 190) return WHITE
+      if (x >= 120 && y >= 30 && y < 170) return CAB
+      return x >= 30 && x < 100 && y % 12 >= 6 ? BAR : NAVY
+    })
+    expect(peakPalette(img, 8).some((c) => near(c, BAR, 0.01))).toBe(false)
+    expect(peakPalette(img, 8, { width: 200 }).some((c) => near(c, BAR, 0.01))).toBe(true)
+  })
+
+  it('gives a shade between two close colours one of them for its whole region, not blotches of both', () => {
+    const NAVY: Rgb = [22, 33, 51]
+    const CAB: Rgb = [69, 76, 93]
+    const BAR: Rgb = [90, 90, 95]
+    const palette = ['#162133', '#454c5d', '#5a5a5f', '#ffffff']
+    const fills = (img: Uint8Array) => new Set(pathsOf(traceInlay(img, 120, 80, { ...LOGO, mode: 'palette', palette })).map((p) => p.fill))
+    // A bumper of the shade between them, its noise in 6 px blotches either way, on navy.
+    const blotched = flat(120, 80, (x, y) => {
+      if (x < 10 || x >= 110 || y < 10 || y >= 70) return NAVY
+      const k = ((((x / 6) | 0) * 7 + ((y / 6) | 0) * 13) % 5) - 2
+      return [79 + 3 * k, 83 + 2 * k, 90 - k]
+    })
+    const f = fills(blotched)
+    expect(f.has('#454c5d') && f.has('#5a5a5f')).toBe(false)
+    // Two fills side by side, meeting along a clean edge, stay two.
+    const sideBySide = flat(120, 80, (x, y) => (x < 10 || x >= 110 || y < 10 || y >= 70 ? NAVY : x < 60 ? CAB : BAR))
+    expect(fills(sideBySide)).toEqual(new Set(['#162133', '#454c5d', '#5a5a5f']))
+  })
+
   it('takes a zero minTint as no minimum, without hanging', () => {
     expect(peakPalette(px, 8, { width: W, minTint: 0 }).length).toBeGreaterThan(0)
   })

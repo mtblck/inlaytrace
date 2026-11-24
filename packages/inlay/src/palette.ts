@@ -17,7 +17,9 @@
  *     share (a decal, lettering) is still a colour if it isn't a blend of two
  *     colours already accepted (an anti-aliased edge between them).
  *  4. Stop at the requested count.
- *  5. Given the image's `width`, fill what's left of the count with pale tints:
+ *  5. Given the image's `width`, add close fills: flat colours step 3 found
+ *     too near a picked one (neutral-grey bars beside a blue-grey cab).
+ *  6. Then fill what's left of the count with pale tints:
  *     light flat colours (pixels that match their four neighbours) too close to a
  *     picked colour for step 3. A light-blue fill on white is 0.03 from it in
  *     OKLab and lies on the line from white to the blue ink, so step 3 calls
@@ -74,6 +76,10 @@ export function peakPalette(
     if (edge && isBlend(it.rgb, it.lab, picked, minDistance)) continue
     picked.push({ lab: it.lab, rgb: it.rgb })
   }
+  // The flat pass skips the outer ring of pixels, so a small icon's share is measured inside it.
+  const inner = width ? Math.min(opaque, Math.max(0, width - 2) * Math.max(0, rgba.length / 4 / width - 2)) : 0
+  if (flat && flat.total >= FLAT_ART * inner && picked.length < maxColors)
+    picked.push(...closeFills(flat, opaque, picked, maxColors - picked.length, minDistance / 2, Math.max(minShare, CLOSE_MIN_SHARE)))
   if (flat && picked.length < maxColors) picked.push(...flatTints(flat, opaque, picked, maxColors - picked.length, minTint, minFlat))
   return picked.map((p) => toHex(p.rgb))
 }
@@ -196,6 +202,95 @@ function flatTints(flat: Histogram, opaque: number, picked: { lab: Rgb }[], room
     if ([...picked, ...out].every((p) => distance(p.lab, it.lab) >= minTint)) out.push({ lab: it.lab, rgb: it.rgb })
   }
   return out
+}
+
+/**
+ * Close fills are for flat art: at least this share of its pixels flat. The
+ * truck logo is 0.92 flat, the score's shaded fixture 0.96; photos are 0.52 to
+ * 0.73, and there they only added shades, which grew Illustration's SVG of
+ * them by up to half.
+ */
+const FLAT_ART = 0.8
+
+/**
+ * Close fills: flat colours left out because they sit within `minDistance` of
+ * a picked one. A truck logo's neutral-grey grille bars and tyre treads were
+ * 0.057 from its blue-grey cab, so they traced as the cab, flecked with navy
+ * where their shading fell nearer that. Only flat pixels count, so
+ * anti-aliased edges and JPEG ringing can't raise a colour here, and only
+ * while there's room under the cap: clean art, whose fills are all picked
+ * already, leaves nothing over.
+ *
+ * Each round weighs the flat pixels still more than `radius` from every
+ * colour picked, and takes the mean of the heaviest spot (the pixels within
+ * `radius` of one bin) if it covers `minShare` of the image. A smooth ramp (a
+ * photo's dark shading) is flat too, and its in-between shades would only
+ * band it into near-copies, so a spot on the line through two picked colours
+ * near it is passed over (see inRamp): the truck's grey lies off to the side
+ * of the cab's blue-grey, not on from it.
+ */
+const RAMP_SPAN = 6
+/** A floor on a close fill's share, whatever minShare is: at 0, JPEG noise inside fills would fill the cap. */
+const CLOSE_MIN_SHARE = 0.001
+const RAMP_TOLERANCE = 0.012
+
+function closeFills(flat: Histogram, opaque: number, picked: { lab: Rgb; rgb: Rgb }[], room: number, radius: number, minShare: number) {
+  const bins = flat.keys.map((key) => {
+    const rgb = flat.mean(key)
+    return { key, n: flat.n[key], flat: 0, rgb, lab: oklab(rgb), weight: 0, flatWeight: 0, peak: true }
+  })
+  const out: { lab: Rgb; rgb: Rgb }[] = []
+  const passed = new Set<number>()
+  // Each round adds a colour or passes a spot over, so `left` shrinks every round.
+  while (out.length < room) {
+    const all = [...picked, ...out]
+    // Pale ones are left to flatTints, which picks them closer still.
+    const left = bins.filter((b) => !passed.has(b.key) && b.lab[0] < TINT_LIGHTNESS && all.every((p) => distance(p.lab, b.lab) > radius))
+    for (const b of left) b.weight = 0
+    weigh(left, radius)
+    let best: (typeof bins)[number] | undefined
+    for (const b of left) if (!best || b.weight > best.weight) best = b
+    if (!best || best.weight < minShare * opaque) break
+    const spot = left.filter((o) => distance(o.lab, best.lab) <= radius)
+    const sum: Rgb = [0, 0, 0]
+    let n = 0
+    for (const o of spot) {
+      for (let k = 0; k < 3; k++) sum[k] += o.rgb[k] * o.n
+      n += o.n
+    }
+    const rgb: Rgb = [sum[0] / n, sum[1] / n, sum[2] / n]
+    const lab = oklab(rgb)
+    // The spot's mean can fall back inside a picked colour's reach (spots needn't be round), or be a ramp's shade.
+    if (inRamp(rgb, lab, all, RAMP_TOLERANCE, RAMP_SPAN * radius) || !all.every((p) => distance(p.lab, lab) > radius)) for (const o of spot) passed.add(o.key)
+    else out.push({ rgb, lab })
+  }
+  return out
+}
+
+/**
+ * Whether a colour lies on the line through two picked colours that are within
+ * `span` of it and of each other, between them or up to their spacing beyond
+ * either (a ramp runs on past its last peak), within `tolerance`. A gradient's
+ * shades sit on that line almost exactly (0.002 on the score's shaded fixture);
+ * the truck's grey was 0.021 off it.
+ */
+function inRamp(rgb: Rgb, lab: Rgb, picked: { rgb: Rgb; lab: Rgb }[], tolerance: number, span: number) {
+  const near = picked.filter((p) => distance(p.lab, lab) <= span)
+  for (let i = 0; i < near.length; i++)
+    for (let j = i + 1; j < near.length; j++) {
+      const a = near[i].rgb
+      const b = near[j].rgb
+      // Only near pairs: lines between far colours pass near everything. The
+      // truck's grey is 0.010 from the line between its cab and its orange trim.
+      if (distance(near[i].lab, near[j].lab) > span) continue
+      const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
+      const len = d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
+      if (!len) continue
+      const t = Math.min(2, Math.max(-1, ((rgb[0] - a[0]) * d[0] + (rgb[1] - a[1]) * d[1] + (rgb[2] - a[2]) * d[2]) / len))
+      const mix: Rgb = [0, 1, 2].map((k) => Math.min(255, Math.max(0, a[k] + t * d[k]))) as Rgb
+      if (distance(oklab(mix), lab) < tolerance) return true
+    }
+  return false
 }
 
 /**

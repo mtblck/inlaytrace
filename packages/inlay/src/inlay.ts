@@ -218,6 +218,7 @@ export function* traceSteps(rgba: ArrayLike<number>, w: number, h: number, o: In
   // (judged before merged inks and lines relabel pixels), and not for photos.
   const clean = o.mode === 'palette' && !o.pixels && !o.photo && lossless(rgba, labels, w, h, colors)
   if (o.mode === 'palette' && o.merge) mergeLabels(labels, colors, o.merge)
+  if (o.mode === 'palette' && !o.photo && !o.pixels) settleClosePairs(labels, rgba, w, h, colors, o.lines)
   yield { stage: 'clean', done: 0 }
   // A lone pixel in pixel art is deliberate, not a stray.
   if (!o.pixels) despur(labels, w, h)
@@ -1056,6 +1057,59 @@ const NEIGHBOURS = [
 ] as const
 
 // ---- 2b. Specks ------------------------------------------------------------------------
+
+/** Two palette colours closer than this (OKLab) can split one shade between them, pixel by pixel. */
+const CLOSE_PAIR = 0.07
+/** Pale pairs are a fill and its paper, which meet along a clean edge: left alone. */
+const CLOSE_PALE = 0.85
+/** Edges between the two colours, per pixel of the rarer one, past which a region is speckled with both, not two fills side by side. */
+const INTERLEAVED = 0.1
+
+/**
+ * A shade between two close palette colours goes one way, for the whole
+ * region it fills, not pixel by pixel. A truck's bumper (#4e5057) lay between
+ * its blue-grey cab and its neutral-grey bars, 0.03 from each, and noise
+ * flipped it from one to the other in blotches. Each region of the two
+ * colours together, when it is blotched with both (more than INTERLEAVED
+ * edges between them per pixel of the rarer), takes whichever is nearer its
+ * mean colour. Two fills that meet along a clean edge are left as they are,
+ * and so are painted lines marked by keepOutlines.
+ */
+function settleClosePairs(labels: Int32Array, rgba: ArrayLike<number>, w: number, h: number, colors: string[], lines?: ArrayLike<number>) {
+  const labs = colors.map((c) => (c ? oklab(hexToRgb(c)) : null))
+  const dist = (a: Rgb, b: Rgb) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+  for (let a = 0; a < colors.length; a++)
+    for (let b = a + 1; b < colors.length; b++) {
+      const la = labs[a]
+      const lb = labs[b]
+      if (!la || !lb || dist(la, lb) >= CLOSE_PAIR || la[0] >= CLOSE_PALE || lb[0] >= CLOSE_PALE) continue
+      // The two as one label, so a region is everything either one fills; marked painted lines keep their own.
+      const joined = Int32Array.from(labels, (l, i) => (lines?.[i] ? -1 : l === b ? a : l))
+      const { comp, compLabel } = components(joined, w, h, (l) => l === a)
+      const n = compLabel.length
+      const na = new Float64Array(n)
+      const nb = new Float64Array(n)
+      const edges = new Float64Array(n)
+      const sum = new Float64Array(n * 3)
+      for (let i = 0, x = 0; i < labels.length; i++, x = x === w - 1 ? 0 : x + 1) {
+        const id = comp[i]
+        if (id === VOID) continue
+        if (labels[i] === a) na[id]++
+        else nb[id]++
+        for (let k = 0; k < 3; k++) sum[id * 3 + k] += rgba[i * 4 + k]
+        if (x < w - 1 && comp[i + 1] === id && labels[i + 1] !== labels[i]) edges[id]++
+        if (i + w < labels.length && comp[i + w] === id && labels[i + w] !== labels[i]) edges[id]++
+      }
+      const to = new Int32Array(n).fill(-1)
+      for (let id = 0; id < n; id++) {
+        if (!na[id] || !nb[id] || edges[id] <= INTERLEAVED * Math.min(na[id], nb[id])) continue
+        const t = na[id] + nb[id]
+        const mean = oklab([sum[id * 3] / t, sum[id * 3 + 1] / t, sum[id * 3 + 2] / t])
+        to[id] = dist(mean, la) <= dist(mean, lb) ? a : b
+      }
+      for (let i = 0; i < labels.length; i++) if (comp[i] !== VOID && to[comp[i]] >= 0) labels[i] = to[comp[i]]
+    }
+}
 
 /**
  * 4-connected components of equal labels (two-pass union-find, linear time).
