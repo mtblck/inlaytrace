@@ -251,16 +251,16 @@ describe('deblur, on edges off the pixel grid', () => {
 
 describe('deblur, on a large image', () => {
   it('keeps a thin line that the work scale leaves a pixel wide', () => {
-    // 1.8 megapixels are solved at a third of their size, where this 3 px line is one pixel of the grey it fades to: as thin as the slivers that are given away, but with one colour all round it is no gap between shapes.
-    const BW = 1700
-    const BH = 1040
+    // Over 420,000 pixels, so solved at half size, where this 2 px line is one pixel of the grey it fades to: as thin as the slivers that are given away, but with one colour all round it is no gap between shapes.
+    const BW = 900
+    const BH = 480
     const px = new Uint8ClampedArray(BW * BH * 4)
     let seed = 5
     for (let y = 0; y < BH; y++) {
-      const tall = cover(y, 200.5, 1.8) - cover(y, BH - 200.5, 1.8)
+      const tall = cover(y, 100.5, 1.8) - cover(y, BH - 100.5, 1.8)
       for (let x = 0; x < BW; x++) {
-        const pale = Math.min(1, cover(x, 200.5, 1.8) - cover(x, 600.5, 1.8) + (cover(x, 778.5, 1.8) - cover(x, 781.5, 1.8)) * tall)
-        const grey = cover(x, 1040.5, 1.8)
+        const pale = Math.min(1, cover(x, 100.5, 1.8) - cover(x, 300.5, 1.8) + (cover(x, 400.5, 1.8) - cover(x, 402.5, 1.8)) * tall)
+        const grey = cover(x, 600.5, 1.8)
         seed = (Math.imul(seed, 1103515245) + 12345) >>> 0
         const grain = ((seed >>> 16) % 7) - 3
         for (let c = 0; c < 3; c++) {
@@ -271,11 +271,11 @@ describe('deblur, on a large image', () => {
       }
     }
     const out = deblur(px, BW, BH)
-    const at = (x: number) => out[(500 * BW + x) * 4]!
+    const at = (x: number) => out[(240 * BW + x) * 4]!
     // The line is there, if in the grey, with paper either side.
-    expect(Math.max(at(779), at(780), at(781))).toBeGreaterThan(110)
-    expect(at(770)).toBeLessThan(60)
-    expect(at(790)).toBeLessThan(60)
+    expect(Math.max(at(400), at(401), at(402))).toBeGreaterThan(110)
+    expect(at(392)).toBeLessThan(60)
+    expect(at(410)).toBeLessThan(60)
   })
 })
 
