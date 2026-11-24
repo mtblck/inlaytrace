@@ -425,6 +425,26 @@ unchanged (10.41 to 10.43), with 3% fewer shapes and 70% more time, so
 Poster leaves it off; so do Logo and anything cut out, since a cutter can
 only cut flat colour. In the package it is an option, off by default.
 
+**A faint background is one shape.** AI-made logos often sit on a near-white
+background with a vignette too slight to see, about 25 levels from corner to
+corner. Pale tints (a light fill on white is that close too) split it into
+three or four ragged bands, which on a dump-truck logo made a third of the
+SVG. Logo, Illustration and Outline art now join neighbouring regions whose
+colours are within 0.07 of each other in OKLab (closer than the peak walk
+tells apart) when the image passes between them without an edge: across at
+least half of their boundary it steps by under 0.4 of their colours'
+difference, both over three pixels and between the two pixels themselves (so a
+line one pixel wide still counts as an edge), with no allowance for noise. A
+pale fill on white steps by its whole difference, so it stays. The joined run,
+if its shades span no more than 0.1, takes its commonest colour. With
+`gradients` (Illustration), such a run is first offered as one gradient; a
+faint shade's bands all close, and the gradient within 6 levels of the image,
+it no longer has to draw every band as well as the band's own colour did,
+since a vignette isn't one straight ramp and each band, fitted to its own
+patch, always beat it by a level or two. On the truck, Logo went from 107 to
+63 KB with the background one shape and the truck unchanged pixel for pixel;
+Illustration draws the background as one gradient.
+
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
 most one waiting request per channel (trace, optimise), replacing it when a

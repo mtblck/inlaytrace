@@ -33,7 +33,7 @@ import { hexToRgb, oklab, type Rgb } from './palette'
 import { serializePath, type PathNode, type Pt, type Subpath } from './path'
 import { complete, endDir, sample, SHARP, SMOOTH, startDir, straightEnd, turn } from './layers'
 import { regionWidths, skeletonStrokes } from './skeleton'
-import { shadings, type Gradient } from './gradient'
+import { faintShades, shadings, type Gradient } from './gradient'
 import { closeGaps } from './gaps'
 
 export type InlayOptions = FitOptions & {
@@ -248,6 +248,15 @@ export function* traceSteps(rgba: ArrayLike<number>, w: number, h: number, o: In
         for (const id of s.comps) relabel[id] = l
       }
       for (let i = 0; i < labels.length; i++) if (comp[i] !== VOID && relabel[comp[i]] >= 0) labels[i] = relabel[comp[i]]
+      ;({ comp, compLabel, compArea } = components(labels, w, h, (l) => drawn[l]))
+    }
+  }
+  // Faint shading (a barely-there gradient in a background, banded by close tints) as one flat colour.
+  if (o.mode === 'palette' && !o.pixels && !o.photo) {
+    const rgbs = colors.map((c, l) => (c && drawn[l] && !gradientOf.has(l) ? hexToRgb(c) : null))
+    const into = faintShades(rgba, w, h, comp, compLabel.length, (id) => compLabel[id], rgbs, (id) => compArea[id], (id) => gradientOf.has(compLabel[id]))
+    if (into.some((l) => l >= 0)) {
+      for (let i = 0; i < labels.length; i++) if (comp[i] !== VOID && into[comp[i]] >= 0) labels[i] = into[comp[i]]
       ;({ comp, compLabel, compArea } = components(labels, w, h, (l) => drawn[l]))
     }
   }
