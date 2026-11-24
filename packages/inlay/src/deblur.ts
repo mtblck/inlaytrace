@@ -21,8 +21,9 @@
  * The map found is of square pixels, and the photo's own texture (print has
  * one) ripples its edges by a pixel or so. Under a blur the photo cannot say
  * where an edge runs to better than that, so each boundary is smoothed along
- * its length before the result is drawn (`boundaries`): straight edges come
- * out straight, arcs smooth, and corners stay where they are. The result is
+ * its length before the result is drawn (`boundaries`): arcs come out
+ * smooth, corners stay where they are, and an edge a line fits is drawn as
+ * that line, exactly straight. The result is
  * drawn at full size with clean anti-aliased edges, for the tracer to label
  * as it would crisp art.
  *
@@ -628,7 +629,7 @@ const BOUNDARY_SIGMA = 1.2
 const BOUNDARY_PER_BLUR = 0.5
 const BOUNDARY_SIGMA_MAX = 3
 /** Sweeps at most, and the share of pixels a sweep must still change to earn another. */
-const SWEEPS = 16
+const SWEEPS = 24
 const SETTLED = 2e-4
 /** Sweeps between fresh looks at the slow lighting. */
 const RESHADE = 3
@@ -641,6 +642,12 @@ const BLEND_ENDS = 0.2
 const BLEND_DEPTH = 1.5
 /** Away from the two colours themselves, only a line is re-read, at least this many times longer than wide: a blob re-read is a speck. */
 const BLEND_LONG = 8
+/**
+ * And only a line with this share of its rim on the one colour: a line through
+ * a field of it. A strip between two colours can as well be the wider, duller
+ * strip it was first read as, and the blur leaves nothing to tell the two by.
+ */
+const BLEND_WITHIN = 0.75
 /** Rounds of re-reading, and the sweeps that tidy up after each. */
 const BLEND_ROUNDS = 2
 const BLEND_SWEEPS = 4
@@ -996,7 +1003,10 @@ function solve(obs: Float32Array[], w: number, h: number, sigma: Float32Array, p
         if (deepest > BLEND_DEPTH * (blurSum / area.length) + 1) continue
         // A band's rim is twice its length and its area length times width: so this is length over width.
         const line = rim * rim >= 4 * BLEND_LONG * area.length
-        for (const { c, b, t } of blends[a]!.filter((x) => (beside[x.c]! && beside[x.b]!) || (line && (beside[x.c]! || beside[x.b]!))).slice(0, 2)) {
+        let around = 0
+        for (let l = 0; l < C.length; l++) around += beside[l]!
+        const field = BLEND_WITHIN * around
+        for (const { c, b, t } of blends[a]!.filter((x) => (beside[x.c]! && beside[x.b]!) || (line && Math.max(beside[x.c]!, beside[x.b]!) > field)).slice(0, 2)) {
           // Each pixel's place along the way from c to b, in the photo.
           const ab = [C[b]![0]! - C[c]![0]!, C[b]![1]! - C[c]![1]!, C[b]![2]! - C[c]![2]!]
           for (const p of area) along[p] = target[0]![p]! * ab[0]! + target[1]![p]! * ab[1]! + target[2]![p]! * ab[2]!
@@ -1221,6 +1231,10 @@ type Boundary = {
   b: number
   /** Cut from a longer boundary at a corner: its ends stay put even where they meet. */
   cut?: boolean
+  /** The part the same boundary goes on in, round the corner at this one's end. */
+  next?: Boundary
+  /** Its straight runs. */
+  runs?: Run[]
 }
 
 /**
@@ -1237,6 +1251,10 @@ type Boundary = {
  * own, and a corner is put where its two sides, run on, would meet: the
  * search rounds corners off. So a returned boundary's smoothed ends need not
  * be its stepped ones, and one closed boundary may come back in parts.
+ *
+ * Last, a stretch that a line fits as closely as its points may move is
+ * drawn as that line (`straightRuns`), and two such lines meet where they
+ * cross: smoothing leaves a slow wobble in, and a line has none.
  */
 function boundaries(lab: Uint8Array, w: number, h: number, sigma: Float32Array): Boundary[] {
   const at = (x: number, y: number) => lab[y * w + x]!
@@ -1415,6 +1433,7 @@ function boundaries(lab: Uint8Array, w: number, h: number, sigma: Float32Array):
     const cuts = closed ? [...corners.map((c) => c - corners[0]!), n] : [0, ...corners, n]
     // Where each cut's end goes: a corner's to where its sides meet, the boundary's own ends nowhere.
     const ends: ([number, number] | null)[] = closed ? [...tips, tips[0]!] : [null, ...tips, null]
+    const made: Boundary[] = []
     for (let i = 0; i + 1 < cuts.length; i++) {
       const x = xs.slice(cuts[i]!, cuts[i + 1]! + 1)
       const y = ys.slice(cuts[i]!, cuts[i + 1]! + 1)
@@ -1424,10 +1443,13 @@ function boundaries(lab: Uint8Array, w: number, h: number, sigma: Float32Array):
       const last = ends[i + 1]
       if (first) (nx[0] = first[0]), (ny[0] = first[1])
       if (last) (nx[x.length - 1] = last[0]), (ny[x.length - 1] = last[1])
-      parts.push({ xs: x, ys: y, nx, ny, a: e.a, b: e.b, cut: true })
+      made.push({ xs: x, ys: y, nx, ny, a: e.a, b: e.b, cut: true })
     }
+    for (let i = 0; i < made.length; i++) if (ends[i + 1]) made[i]!.next = made[(i + 1) % made.length]
+    parts.push(...made)
   }
-  for (const { xs, ys, nx, ny, cut } of parts) {
+  for (const part of parts) {
+    const { xs, ys, nx, ny, cut } = part
     const n = xs.length - 1
     const closed = !cut && xs[0] === xs[n] && ys[0] === ys[n]
     // The boundary's points, read past its ends: round again if it closes, else mirrored through the end (as often as it takes), which stays put.
@@ -1516,8 +1538,192 @@ function boundaries(lab: Uint8Array, w: number, h: number, sigma: Float32Array):
       nx[k] = x0 + f * (x1 - x0)
       ny[k] = y0 + f * (y1 - y0)
     }
+    part.runs = straightRuns(sx[0]!, sy[0]!, eps)
   }
+  // A corner with a straight run either side goes where the two lines cross: they are better placed than it was.
+  for (const part of parts) {
+    const p = part.runs?.at(-1)
+    const q = part.next?.runs?.[0]
+    if (!p || !q || p.to !== part.xs.length - 1 || q.from !== 0) continue
+    const v = crossing(p, q)
+    if (!v || Math.hypot(v[0] - part.nx[p.to]!, v[1] - part.ny[p.to]!) > LINE_MEET) continue
+    p.last = q.first = v
+  }
+  for (const part of parts) if (part.runs) drawRuns(part.runs, part.nx, part.ny)
   return parts
+}
+
+/** A straight run of a boundary is at least this many points long… */
+const LINE_MIN = 16
+/** …and bows off its line by no more than this (work px) from end to end: a wobble about a line is a line, a gentle arc is not. */
+const LINE_BOW = 0.25
+/** Two runs that meet at less than this angle (radians) are a bend drawn as chords: the shorter is no line, nor the longer unless twice its length. At more, they meet in a corner. */
+const LINE_KINK = 0.3
+/** …or at any angle, if either bows this far (work px) the way they turn. */
+const LINE_ARC = 0.12
+/** Two runs are neighbours when no more than this many points lie between them: a bend the search rounded off. */
+const LINE_GAP = 12
+/** Either side of a corner, the runs' lines may put it this far (work px) from where it was first put. */
+const LINE_MEET = 1.5
+/** Points over which a run's loose end eases back into the smoothed path. */
+const LINE_EASE = 6
+
+/** A straight run, from point `from` to point `to`: a point on its line, the line's direction (the way the boundary runs), how far its points bow off the line (to the left, at its ends), and where its ends meet another run's line. */
+type Run = { from: number; to: number; mx: number; my: number; ux: number; uy: number; bow: number; first?: [number, number]; last?: [number, number] }
+
+/**
+ * The straight runs of one boundary. Smoothing takes out a wobble shorter
+ * than it reaches; a slow one, a pixel or two over a hundred, it leaves, and
+ * under a heavy blur the search draws a straight side lumpy. But where a line
+ * lies as near the boundary's points (`dx`, `dy`: the path with only its
+ * pixel steps off) as each may move (`eps`), a line is the simplest thing the
+ * photo allows. The longest such run is taken first, then the longest either
+ * side of it. Each run's line is the best through its own points, which
+ * places it better than either of its ends is placed.
+ */
+function straightRuns(dx: Float32Array, dy: Float32Array, eps: Float32Array): Run[] {
+  const n = dx.length - 1
+  if (n < LINE_MIN) return []
+  // A line as a run of the points from..to, if every one is near enough to it and (`bow`) they do not bow off it as an arc would.
+  const within = (r: Run, bow: boolean): Run | null => {
+    let s2 = 0
+    let s4 = 0
+    let d0 = 0
+    let d2 = 0
+    let lo = Infinity
+    let hi = -Infinity
+    for (let k = r.from; k <= r.to; k++) {
+      const px = dx[k]! - r.mx
+      const py = dy[k]! - r.my
+      const d = py * r.ux - px * r.uy
+      if (Math.abs(d) > eps[k]!) return null
+      const t = px * r.ux + py * r.uy
+      s2 += t * t
+      s4 += t * t * t * t
+      d0 += d
+      d2 += d * t * t
+      if (t < lo) lo = t
+      if (t > hi) hi = t
+    }
+    if (!bow) return r
+    // The bow: the best parabola through the offsets, at the run's ends.
+    const c = r.to - r.from + 1
+    const spread = s4 - (s2 * s2) / c
+    if (!(spread > 0) || hi - lo < 0.6 * LINE_MIN) return null
+    r.bow = ((d2 - (d0 * s2) / c) / spread) * ((hi - lo) / 2) ** 2
+    return Math.abs(r.bow) <= LINE_BOW ? r : null
+  }
+  const fit = (from: number, to: number): Run | null => {
+    const c = to - from + 1
+    let mx = 0
+    let my = 0
+    for (let k = from; k <= to; k++) (mx += dx[k]!), (my += dy[k]!)
+    mx /= c
+    my /= c
+    let xx = 0
+    let xy = 0
+    let yy = 0
+    for (let k = from; k <= to; k++) {
+      const px = dx[k]! - mx
+      const py = dy[k]! - my
+      xx += px * px
+      xy += px * py
+      yy += py * py
+    }
+    const angle = 0.5 * Math.atan2(2 * xy, xx - yy)
+    // Pointing the way the boundary runs.
+    const way = Math.cos(angle) * (dx[to]! - dx[from]!) + Math.sin(angle) * (dy[to]! - dy[from]!) < 0 ? -1 : 1
+    return within({ from, to, mx, my, ux: way * Math.cos(angle), uy: way * Math.sin(angle), bow: 0 }, true)
+  }
+  // The longest run starting at `from` and ending by `end`.
+  const reach = (from: number, end: number): Run | null => {
+    let to = from + LINE_MIN
+    if (to > end) return null
+    let best = fit(from, to)
+    if (!best) return null
+    for (let step = 32; step >= 1; step >>= 1)
+      while (to + step <= end) {
+        const r = fit(from, to + step)
+        if (!r) break
+        best = r
+        to += step
+      }
+    return best
+  }
+  const runs: Run[] = []
+  const search = (lo: number, hi: number) => {
+    let best: Run | null = null
+    for (let from = lo; from + LINE_MIN <= hi; ) {
+      const r = reach(from, hi)
+      if (r && (!best || r.to - r.from > best.to - best.from)) best = r
+      if (r && r.to === hi) break
+      from += r ? Math.max(2, (r.to - r.from) >> 3) : 2
+    }
+    if (!best) return
+    search(lo, best.from)
+    runs.push(best)
+    search(best.to, hi)
+  }
+  search(0, n)
+  // A bend drawn as chords is not lines.
+  const out = new Set<Run>()
+  for (let i = 0; i + 1 < runs.length; i++) {
+    const p = runs[i]!
+    const q = runs[i + 1]!
+    if (q.from - p.to > LINE_GAP) continue
+    // The turn from one to the next, and how far each bows the same way: the chords of an arc bow with its turn, a polygon's sides do not.
+    const turn = p.ux * q.uy - p.uy * q.ux
+    const bows = Math.max(p.bow, q.bow) * Math.sign(turn)
+    if (Math.abs(turn) >= Math.sin(LINE_KINK) && bows < LINE_ARC) continue
+    const lp = p.to - p.from
+    const lq = q.to - q.from
+    if (lp < 2 * lq) out.add(p)
+    if (lq < 2 * lp) out.add(q)
+  }
+  const kept = runs.filter((r) => !out.has(r))
+  // Two runs at an angle, a rounded bend apart at most: both are run on to the point of the bend nearest where their lines meet, and meet there.
+  for (let i = 0; i + 1 < kept.length; i++) {
+    const p = kept[i]!
+    const q = kept[i + 1]!
+    if (q.from - p.to > LINE_GAP) continue
+    const v = crossing(p, q)
+    if (!v) continue
+    let m = -1
+    let near = Infinity
+    for (let k = p.to; k <= q.from; k++) {
+      const d = Math.hypot(v[0] - dx[k]!, v[1] - dy[k]!)
+      if (d < near) (near = d), (m = k)
+    }
+    if (near > eps[m]!) continue
+    p.to = q.from = m
+    p.last = q.first = v
+  }
+  return kept
+}
+
+/** Where two runs' lines cross, if they are at an angle. */
+function crossing(p: Run, q: Run): [number, number] | null {
+  const cross = p.ux * q.uy - p.uy * q.ux
+  if (Math.abs(cross) < Math.sin(LINE_KINK)) return null
+  const along = ((q.mx - p.mx) * q.uy - (q.my - p.my) * q.ux) / cross
+  return [p.mx + along * p.ux, p.my + along * p.uy]
+}
+
+/** A boundary's smoothed points (`nx`, `ny`) moved onto its straight runs. An end that meets nothing eases back into the smoothed path. */
+function drawRuns(runs: Run[], nx: Float32Array, ny: Float32Array) {
+  for (const r of runs) {
+    for (let k = r.from; k <= r.to; k++) {
+      const t = (nx[k]! - r.mx) * r.ux + (ny[k]! - r.my) * r.uy
+      let wgt = 1
+      if (!r.first && k - r.from < LINE_EASE) wgt = Math.min(wgt, (k - r.from) / LINE_EASE)
+      if (!r.last && r.to - k < LINE_EASE) wgt = Math.min(wgt, (r.to - k) / LINE_EASE)
+      wgt = wgt * wgt * (3 - 2 * wgt)
+      nx[k] = nx[k]! + wgt * (r.mx + t * r.ux - nx[k]!)
+      ny[k] = ny[k]! + wgt * (r.my + t * r.uy - ny[k]!)
+    }
+    if (r.first) (nx[r.from] = r.first[0]), (ny[r.from] = r.first[1])
+    if (r.last) (nx[r.to] = r.last[0]), (ny[r.to] = r.last[1])
+  }
 }
 
 /**

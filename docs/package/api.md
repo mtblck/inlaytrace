@@ -227,15 +227,15 @@ screenshot or enlargement of flat art. It measures the blur place by place,
 finds the flat colours the image is made of, and searches for the map of those
 colours that, blurred the same way, best matches the image with the least
 boundary. That map's boundaries are then smoothed along their length, as far
-as the blur leaves their place open, so straight edges come out straight and
-corners stay corners, and it is drawn with clean anti-aliased edges. It works out
+as the blur leaves their place open, a stretch that a line fits is drawn as
+that line, and corners stay corners; then it is drawn with clean anti-aliased edges. It works out
 whether the blur was a lens's (of light) or a resize's (of the stored values),
 which decides where each edge sits, and undoes a colour fringe first. `blur`
 is `edgeBlur`'s reading, measured when left out; under 1.5 px the image is
 only copied. For an image enlarged `scale` times first, that threshold grows
 with it. Alpha is kept, and the colour under transparent pixels isn't blurred
 in. An image with fewer than two flat colours (a line drawing, a photo) is
-only copied. Shading comes out flat. About 3 s for a megapixel image.
+only copied. Shading comes out flat. About 4 s for a megapixel image.
 
 ### `boostLines(rgba, width, height, radius?, lines?)`
 

@@ -181,6 +181,24 @@ function tilted(sigma: number) {
   return px
 }
 
+/** Radius of the disc `disc` draws. */
+const RADIUS = 40
+
+/** Navy paper with a pale disc about the middle, blurred by `sigma` (near enough: the edge's own blur, which is all a disc this size shows), with random grain. */
+function disc(sigma: number) {
+  const px = new Uint8ClampedArray(S * S * 4)
+  let seed = 11
+  for (let y = 0; y < S; y++)
+    for (let x = 0; x < S; x++) {
+      const k = 1 - cover(Math.hypot(x - 63.5, y - 63.5), RADIUS, sigma)
+      seed = (Math.imul(seed, 1103515245) + 12345) >>> 0
+      const grain = ((seed >>> 16) % 7) - 3
+      for (let ch = 0; ch < 3; ch++) px[(y * S + x) * 4 + ch] = NAVY[ch]! + (PALE[ch]! - NAVY[ch]!) * k + grain
+      px[(y * S + x) * 4 + 3] = 255
+    }
+  return px
+}
+
 /** How far from the middle of `tilted`'s picture, going out from (ox, oy) off it along (dx, dy), red falls halfway from pale to navy. */
 function reach(px: Uint8ClampedArray, ox: number, oy: number, dx: number, dy: number, from: number) {
   const red = (x: number, y: number) => {
@@ -204,6 +222,21 @@ describe('deblur, on edges off the pixel grid', () => {
     // Along each side, short of its corners: nowhere further than half a pixel or so from the true edge. The grain alone ripples a labelled edge by more.
     for (const [nx, ny] of [[c, s], [-s, c], [-c, -s], [s, -c]] as const)
       for (let t = -24; t <= 24; t += 2) expect(Math.abs(reach(out, -ny * t, nx * t, nx, ny, HALF - 8) - HALF)).toBeLessThan(0.6)
+  })
+
+  it('runs a straight side straight to its corners', () => {
+    // To within 4 px of each corner: smoothing alone bends the last few pixels of a side in towards the corner it rounds, by half a pixel.
+    for (const [nx, ny] of [[c, s], [-s, c], [-c, -s], [s, -c]] as const)
+      for (let t = -30; t <= 30; t += 2) expect(Math.abs(reach(out, -ny * t, nx * t, nx, ny, HALF - 8) - HALF)).toBeLessThan(0.3)
+  })
+
+  it('leaves a round edge round', () => {
+    // No stretch of a circle this size is a line: drawn as chords, it would sit half a pixel and more off its arc.
+    const round = deblur(disc(2.5), S, S)
+    for (let i = 0; i < 48; i++) {
+      const a = (i * Math.PI) / 24
+      expect(Math.abs(reach(round, 0, 0, Math.cos(a), Math.sin(a), RADIUS - 8) - RADIUS)).toBeLessThan(0.35)
+    }
   })
 
   it('keeps a corner a corner', () => {

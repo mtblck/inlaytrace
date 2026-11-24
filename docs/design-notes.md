@@ -465,7 +465,12 @@ explains (a pinstripe's). The search starts from each pixel's nearest colour
 and flips pixels one at a time, down the picture and back up, wherever misfit
 plus boundary drops, then re-reads thin areas of a colour two others blend to
 as those two: a line thinner than the blur fades to the blend's colour and is
-first read as a wider line of it, which no single flip gets out of. The map
+first read as a wider line of it, which no single flip gets out of. Only a
+line running through one colour is re-read so. A strip between two different
+colours can as well be the wider, duller strip it was first read as, and under
+a blur nothing tells the two apart: the truck's cab-grey strip between the
+orange trim and the navy rim came back as a pale hairline until this was the
+rule. The map
 that comes out is right about where the shapes are and wrong about their
 edges in the small: its pixels step along every slant, and a photo of print
 has a texture of its own that the search fits faithfully, rippling each edge
@@ -482,7 +487,19 @@ and an amount of smoothing is used only where that pull is under half a
 pixel; without this every round shape shrank by up to the tolerance (the
 fixtures' wrong pixels went up three- to five-fold). And a corner is where
 its two sides, run on as straight lines, meet: the search rounds it off, and
-ending each side at the rounded point bends the whole side towards it. The
+ending each side at the rounded point bends the whole side towards it.
+Smoothing still leaves a slow wobble in, a pixel or two over a hundred, and
+under a heavy blur the lumps the search drew. So a stretch that one line fits
+to within what each of its points may move, and that bows off the line by
+under a quarter of a pixel, is drawn as that line, and two such lines meet
+where they cross: over half the truck's boundary length. The lines are better
+placed than the corner found before them (drawing them through that corner
+instead doubled the icons fixture's wrong pixels), and two runs that meet at
+under 0.3 rad, or bow the way they turn, are a curve drawn as chords and stay
+smoothed (a wheel arch came out a polygon without that). Placing each edge
+from the photo's own ramp afterwards was tried and dropped: on a blurred
+circle the smoothed edge was already within 0.12 px of true (rms), and the
+refit made that 0.10 with a pull inwards on curves. The
 picture is then drawn along those boundaries at twice its size and halved,
 for anti-aliased edges. Slivers no more than two pixels wide, left where
 three colours' ramps cross and read as gaps between shapes, are given to
@@ -497,16 +514,16 @@ sharp artwork was registered onto the photo and edges compared: of the
 output's edges, the share within 2 px of a true one, and of the true edges,
 the share found. Tracing the photo as it is: 53% and 64%. The light model:
 61% and 50%. Now: 79% and 68%, and the Logo trace went from 411 KB with halos
-to 72 KB without, the orange trim back. On the score fixtures blurred by 2
-and 3.5 px, wrong pixels fell from 1.5–8% to 0.04–1% on flat art (emblem,
+to 71 KB without, the orange trim back. On the score fixtures blurred by 2
+and 3.5 px, wrong pixels fell from 1.5–8% to 0.03–1% on flat art (emblem,
 icons, pinwheel, overlap, badge; the badge blurred as light by 3.5 px, 9.5 →
-3.7%). It is opt in, suggested when an image
+3.5%). It is opt in, suggested when an image
 measures soft (over 1.6 px), because it only suits flat colour: shading comes
-out flat (the shaded fixture got worse, 0.8 → 2.2%), art with no flat areas
+out flat (the shaded fixture got worse, 0.8 → 2.1%), art with no flat areas
 is returned as it was (strokes), hairlines that never reach their own colour
-are not recovered (outline at 3.5 px: 2.6 → 3.9%), and where the blur is wider
+are not recovered (outline at 3.5 px: 2.6 → 3.8%), and where the blur is wider
 than the details (the truck's left tyre, at 7–8 px) they come back rounded or
-merged. About 3 s for a megapixel image.
+merged. About 4 s for a megapixel image.
 
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
