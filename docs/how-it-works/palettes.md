@@ -71,7 +71,17 @@ Given the image's width, `peakPalette` counts flat pixels per bin, then:
 - a blend of two picked colours that is almost never flat (under 5% of its
   pixels) is an edge and is left out, at any share under 2% (above that,
   1 px rules and dithered fills, never flat either, are colours of their own);
-- spare slots go to flat tints: peaks of flat pixels alone, at least 0.02 from
+- spare slots go first to close fills: flat colours left out for being under
+  0.07 from a picked one. A truck logo's neutral-grey grille bars and tyre
+  treads were 0.057 from its blue-grey cab, so they traced as the cab, smeared
+  with navy. Each round takes the heaviest spot of flat pixels still more than
+  0.035 from every colour picked, if it covers 0.2% of the image (never under
+  0.1%). Only flat art gets them (80% of its pixels flat or more; photos are
+  0.52 to 0.73, and there they grew Illustration's SVG by up to half). Pale
+  spots are left to the tints below, and a spot on the line through two nearby
+  picked colours is a gradient's shade, which would only band it, so it is
+  passed over;
+- then to flat tints: peaks of flat pixels alone, at least 0.02 from
   every colour picked, flat over at least 0.1% of the image, and pale (OKLab
   lightness 0.85 or more). A photo's smooth sky or shadow is flat too, and
   without the lightness bar its dark shades filled Illustration's colours
