@@ -36,7 +36,7 @@ type Props = {
   /** Centerline: the stroke width the last trace measured from the ink, for the Auto label. */
   measuredStroke?: number | null
   /** The AI steps: whether the image is small enough to upscale, and what's running. */
-  prep?: { smallImage: boolean; finer: boolean; textPreset: boolean; smoothable: boolean; text: { family: string; weight: number; size: number }[] | null; status: { stage: PrepStage; done: number; total: number } | null; error: string | null }
+  prep?: { smallImage: boolean; finer: boolean; textPreset: boolean; smoothable: boolean; blurry: boolean; text: { family: string; weight: number; size: number }[] | null; status: { stage: PrepStage; done: number; total: number } | null; error: string | null }
   /** The optimised SVG's size now, and the target-size search. */
   currentBytes?: number | null
   sizeRun?: SizeRun | null
@@ -576,6 +576,16 @@ function Prepare({ settings, set, prep }: { settings: Settings; set: <K extends 
             Trace at 2× for fine detail
             <span className="field-hint block">
               {prep.finer ? 'Keeps thin lines and small features, like faces on a poster. Slower, and the file is bigger.' : prep.smallImage ? 'Small images are already traced enlarged.' : 'This image is already traced at the largest size.'}
+            </span>
+          </span>
+        </label>
+        <label className={`flex items-start gap-2 text-[13px] ${prep.smoothable ? '' : 'opacity-60'}`}>
+          <input type="checkbox" className="mt-0.5 accent-[var(--c-accent)]" checked={settings.sharpen} disabled={!prep.smoothable} onChange={(e) => set('sharpen', e.target.checked)} />
+          <span>
+            Sharpen blurry edges
+            {prep.smoothable && prep.blurry && !settings.sharpen && <span className="field-hint"> (this image looks soft)</span>}
+            <span className="field-hint block">
+              {prep.smoothable ? 'For soft photos and screenshots of logos: snaps blurred edges back to hard ones, so the blur doesn’t trace as a halo round every shape. Slower; does nothing to sharp images.' : 'For Logo, Illustration and Outline art.'}
             </span>
           </span>
         </label>

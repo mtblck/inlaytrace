@@ -118,6 +118,7 @@ type TraceOptions = {
   threshold?: number | 'auto' | null // lineart, centerline
   invert?: boolean // lineart, centerline
   strokeWidth?: number // centerline
+  sharpen?: boolean
   smoothShading?: boolean
   keepOutlines?: boolean
   grayscale?: boolean // greys only, `colors` of them
@@ -208,6 +209,26 @@ labels as one colour instead of flecks of two; edges between colours stay put.
 Transparent pixels, and any non-zero in `keep` (one entry per pixel), are left
 alone and never averaged in. Run it before picking the palette and pass the
 result to `trace`.
+
+### `sharpenEdges(rgba, width, height, blur?)` and `edgeBlur(rgba, width, height)`
+
+```ts
+function sharpenEdges(rgba: ArrayLike<number>, width: number, height: number, blur?: number): Uint8ClampedArray
+function edgeBlur(rgba: ArrayLike<number>, width: number, height: number): number
+```
+
+`edgeBlur` measures how soft the image's edges are, in px: the Gaussian blur a
+hard edge would need to look like the image's strong edges (the median over
+them; 0 with none). Crisp art reads under 1 px, JPEG or not; the same art
+blurred by 2 px reads about 2.
+
+`sharpenEdges` returns a copy with soft edges made hard, for tracing a blurry
+photo or screenshot of flat art: grain is evened out (`smoothShading`), then a
+colour shock filter moves each pixel partway along an edge's ramp to the colour
+of the nearer end, a pixel a pass, until the edge is a step at its middle. A
+thin line's middle keeps its colour, so the line stays. `blur` is `edgeBlur`'s
+reading, measured when left out; under 1.5 px the image is only copied.
+Transparent pixels are left alone. About 5 s for a megapixel image.
 
 ### `boostLines(rgba, width, height, radius?, lines?)`
 

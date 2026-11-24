@@ -11,7 +11,7 @@ import type { SizeRun } from './components/Controls'
 import { canMerge, canSetText, canSmooth, isInk, maxTraceEdge, ownPaletteOf, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
 import { addColors, nearestColor, OWN_COLORS } from './lib/colors'
 import { swatchColors, swatchFile, type SwatchFormat } from './lib/swatches'
-import { ACCEPTED, canTraceFiner, colourAt, hasDarkBackground, loadSource, looksLikePhoto, pixelsOf, UPSCALE_BELOW, type Pixels, type Source } from './lib/image'
+import { ACCEPTED, canTraceFiner, colourAt, hasDarkBackground, loadSource, looksBlurry, looksLikePhoto, pixelsOf, UPSCALE_BELOW, type Pixels, type Source } from './lib/image'
 import { formatBytes, normalizeHex, parseTrace, statsOf, withText, type Trace } from './lib/svg'
 import {
   buildSvg,
@@ -1560,6 +1560,8 @@ export default function App() {
   }
 
   const photo = useMemo(() => !!source && looksLikePhoto(source), [source])
+  // Measured on the image as given (or as cleaned up), never enlarged: enlarging alone softens edges.
+  const blurry = useMemo(() => !!base && looksBlurry(base), [base])
   const suggestPoster = photo && !presetPicked && settings.preset !== 'photo'
 
   const choosePreset = (id: PresetId) => {
@@ -1571,6 +1573,7 @@ export default function App() {
     next.removeBackground = settings.removeBackground
     next.aiUpscale = settings.aiUpscale
     next.fineDetail = settings.fineDetail
+    next.sharpen = settings.sharpen
     next.smoothShading = settings.smoothShading
     next.keepOutlines = settings.keepOutlines
     next.grayscale = settings.grayscale
@@ -2090,7 +2093,7 @@ export default function App() {
                 onPreset={choosePreset}
                 suggestPoster={suggestPoster}
                 measuredStroke={settings.preset === 'centerline' && settings.strokeWidth === 0 ? (trace?.paths[0]?.stroke ?? null) : null}
-                prep={{ smallImage: !!base && Math.max(base.bitmap.width, base.bitmap.height) < UPSCALE_BELOW, finer: !!base && settings.preset !== 'pixel' && canTraceFiner(base, maxTraceEdge(settings.preset)), textPreset: canSetText(settings.preset), smoothable: canSmooth(settings.preset), text: wantText && preparedNow ? preparedNow.text : null, status: prepStatus, error: prepError }}
+                prep={{ smallImage: !!base && Math.max(base.bitmap.width, base.bitmap.height) < UPSCALE_BELOW, finer: !!base && settings.preset !== 'pixel' && canTraceFiner(base, maxTraceEdge(settings.preset)), textPreset: canSetText(settings.preset), smoothable: canSmooth(settings.preset), blurry, text: wantText && preparedNow ? preparedNow.text : null, status: prepStatus, error: prepError }}
                 currentBytes={stats?.bytes ?? null}
                 sizeRun={sizeRun}
                 onFindSize={findSize}

@@ -101,6 +101,7 @@ export function cleanSettings(raw: unknown): Settings | null {
     removeBackground: false,
     aiUpscale: false,
     fineDetail: false,
+    sharpen: s.sharpen === true,
     smoothShading: s.smoothShading === true,
     keepOutlines: s.keepOutlines === true,
     recogniseText: false,

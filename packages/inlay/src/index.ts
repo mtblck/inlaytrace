@@ -10,6 +10,7 @@ export { toSvg, type InlayOptions, type InlayPath, type InlayResult, type TraceS
 export type { Gradient, GradientStop } from './gradient'
 export { peakPalette, exactPalette, quantizePalette, oklab, type Rgb } from './palette'
 export { boostLines, smoothShading } from './smooth'
+export { edgeBlur, sharpenEdges } from './sharpen'
 export { centerline, traceCenterline, centerlineToSvg, type CenterlineOptions, type CenterlineResult } from './centerline'
 export { detectSymmetry, type Symmetry, type MirrorSymmetry, type RotationalSymmetry, type SymmetryOptions } from './symmetry'
 export { fitChain, isFlat, pointAt, type Cubic, type FitOptions } from './fit'

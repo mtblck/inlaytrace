@@ -41,6 +41,15 @@ Optional steps run before tracing, in your browser:
   lines and small features survive, like the eyes and mouths on a painted
   poster. Not AI. Slower (about 2.5× on an 820 × 1162 poster), and the file is
   bigger (about 3×).
+- **Sharpen blurry edges** (Logo, Illustration, Outline art): for a soft photo
+  or screenshot of a logo. Blurred, each edge is a ramp, and the ramp's middle
+  traces as a band of an in-between colour round every shape (a pale halo
+  between a navy outline and white paper); thin lines fade into their ramps
+  and drop out. This evens out the grain, then snaps every ramp back to a step
+  at its middle (a shock filter), so the shapes meet edge to edge again and
+  thin lines keep their colour. The app suggests it when an image's edges
+  measure soft. Not AI. Slower: about 5 s for a megapixel image. Images whose
+  edges are already crisp are left as they are.
 - **Smooth painted shading** (Logo, Illustration, Outline art): before the
   colours are picked, each pixel is averaged with nearby pixels of a similar
   colour only (a bilateral filter), so brush and JPEG noise inside a shadow

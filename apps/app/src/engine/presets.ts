@@ -58,6 +58,8 @@ export type Settings = {
   fineDetail: boolean
   /** Line art, Centerline and Outline art: join a line's ends across small breaks before tracing (gaps.ts). */
   closeGaps: boolean
+  /** Flat-art presets: make soft, blurry edges hard before tracing, so the blur doesn't trace as a band round every shape. */
+  sharpen: boolean
   /** Flat-art presets: even out painted shading before tracing, so it doesn't break into flecks. */
   smoothShading: boolean
   /** Flat-art presets: darken faint painted outlines before tracing, so the shapes they part don't merge. */
@@ -80,7 +82,7 @@ export type Preset = {
   id: PresetId
   label: string
   hint: string
-  defaults: Omit<Settings, 'preset' | 'merge' | 'removeBackground' | 'aiUpscale' | 'fineDetail' | 'smoothShading' | 'keepOutlines' | 'grayscale' | 'recogniseText' | 'ownColors' | 'useOwnColors'>
+  defaults: Omit<Settings, 'preset' | 'merge' | 'removeBackground' | 'aiUpscale' | 'fineDetail' | 'sharpen' | 'smoothShading' | 'keepOutlines' | 'grayscale' | 'recogniseText' | 'ownColors' | 'useOwnColors'>
 }
 
 /** The app's preset ids; Poster is the package's `poster`. */
@@ -115,7 +117,7 @@ export const PRESETS: Preset[] = [
 
 export const presetById = (id: PresetId) => PRESETS.find((p) => p.id === id)!
 
-export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {}, removeBackground: false, aiUpscale: false, fineDetail: false, smoothShading: false, keepOutlines: false, grayscale: false, recogniseText: false, ownColors: [], useOwnColors: false })
+export const settingsFor = (id: PresetId): Settings => ({ preset: id, ...presetById(id).defaults, merge: {}, removeBackground: false, aiUpscale: false, fineDetail: false, sharpen: false, smoothShading: false, keepOutlines: false, grayscale: false, recogniseText: false, ownColors: [], useOwnColors: false })
 
 /** Presets that can close small gaps in their lines (gaps.ts). */
 export const closesGaps = (id: PresetId) => id === 'lineart' || id === 'centerline' || id === 'outline'
@@ -191,7 +193,7 @@ export function toTraceOptions(s: Settings, scale = 1): TraceOptions {
   const grey = s.grayscale && canGrayscale(s.preset) && !own ? { grayscale: true } : {}
   if (s.preset === 'photo') return { ...colour, layers: s.shapes === 'stacked', ...grey }
   // Logo, Illustration and Outline art. Gradients come with layers in Illustration and Outline art; cut out is for cutters, which can't draw them.
-  return { ...colour, layers: s.shapes === 'stacked', ...gaps, ...(s.preset === 'outline' ? { strokes: true } : {}), ...(s.smoothShading ? { smoothShading: true } : {}), ...(s.keepOutlines ? { keepOutlines: true } : {}), ...grey }
+  return { ...colour, layers: s.shapes === 'stacked', ...gaps, ...(s.preset === 'outline' ? { strokes: true } : {}), ...(s.sharpen ? { sharpen: true } : {}), ...(s.smoothShading ? { smoothShading: true } : {}), ...(s.keepOutlines ? { keepOutlines: true } : {}), ...grey }
 }
 
 /** Pixel art keeps every source pixel; everything else is traced at this size at most. */

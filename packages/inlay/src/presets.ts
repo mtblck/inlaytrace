@@ -9,6 +9,7 @@
 import { centerline } from './centerline'
 import { run, toSvg, traceRaw, traceSteps, type InlayOptions, type InlayResult, type TraceStep } from './inlay'
 import { exactPalette, oklab, peakPalette, quantizePalette } from './palette'
+import { sharpenEdges } from './sharpen'
 import { boostLines, smoothShading } from './smooth'
 
 export type PresetName = 'logo' | 'illustration' | 'outline' | 'lineart' | 'centerline' | 'poster' | 'pixel'
@@ -51,6 +52,8 @@ export type TraceOptions = {
   invert?: boolean
   /** Centerline: the stroke width in px; measured from the ink when left out. */
   strokeWidth?: number
+  /** Colour presets: make soft, blurry edges hard before picking colours, so the blur doesn't trace as a band round every shape. Does nothing to crisp images. */
+  sharpen?: boolean
   /** Colour presets: even out painted shading (brush and JPEG noise) before picking colours. */
   smoothShading?: boolean
   /** Colour presets: darken faint painted outlines first, so the shapes they part don't merge. */
@@ -147,6 +150,8 @@ function* presetSteps(image: ImageLike, options: TraceOptions = {}): Generator<T
   }
   // Greys only: each pixel becomes the grey of its own lightness, so every palette picked from it is grey.
   if (o.grayscale && name !== 'pixel' && !o.palette?.length) px = toGray(px)
+  // Blurry edges made hard first, so their ramps don't pick up a colour of their own (a halo).
+  if (o.sharpen) px = sharpenEdges(px, width, height)
   // Painted outlines made plain first, and marked, so neither smoothing nor the clean-up after labelling takes them away.
   const lines = o.keepOutlines ? new Uint8Array(width * height) : undefined
   if (lines) px = boostLines(px, width, height, outlineRadius(scale), lines)

@@ -70,7 +70,7 @@ GIF and TIFF go through [sharp](https://sharp.pixelplumbing.com/) when it's
 installed beside inlaytrace (`npm install sharp`); without it the command says
 so. Without `-o`, the SVG goes to stdout. The flags follow the options below:
 `--preset`, `--colors`, `--palette '#111111,#e63946'`, `--speckle`,
-`--tolerance`, `--corner`, `--grayscale`, `--layers` / `--no-layers`, `--exact-shapes` /
+`--tolerance`, `--corner`, `--grayscale`, `--sharpen`, `--layers` / `--no-layers`, `--exact-shapes` /
 `--no-exact-shapes`, `--threshold`, `--invert` and `--stroke-width`.
 `npx inlaytrace --help` lists them.
 

@@ -19,6 +19,7 @@ override it. Left out, each comes from the preset (`presets` lists them).
 | `threshold` | number, `'auto'` or `null` | `lineart` and `centerline`: see [binary mode](#mode-binary-line-art). Default `'auto'`. |
 | `invert` | boolean | `lineart` and `centerline`: light ink on a dark background. A copy of the pixels is flipped; yours are left alone. |
 | `strokeWidth` | number, px | `centerline`: the stroke width; measured from the ink when left out. |
+| `sharpen` | boolean | Colour presets: [`sharpenEdges`](api.md) first, so a blurry image's soft edges don't trace as a band of an in-between colour round every shape. Does nothing to an image whose edges measure crisp. |
 | `smoothShading` | boolean | Colour presets: [`smoothShading`](api.md) first, so painted shading doesn't break into flecks. |
 | `keepOutlines` | boolean | Colour presets: [`boostLines`](api.md) first, so faint painted outlines stay apart from the shapes they part. Looks for wider lines on an enlarged image (`scale`). |
 | `grayscale` | boolean | Colour presets but `pixel`: trace in greys only, `colors` of them. Each pixel becomes the grey of its own OKLab lightness before the palette is picked. Ignored with your own `palette`. |
