@@ -6,6 +6,7 @@
  * scaled down before tracing. The SVG is then emitted at the traced size; it is
  * a vector, so its display size is free to change afterwards.
  */
+import { edgeBlur } from 'inlaytrace'
 import { importSvg, type SvgImport } from './svgImport'
 
 export type Source = {
@@ -171,6 +172,25 @@ export function coverColours(rgba: Uint8ClampedArray): number {
   return k
 }
 const PHOTO_COLOURS = 30
+
+/**
+ * Whether the image's edges look blurred: `edgeBlur` past BLURRY px, measured
+ * on the image at its own size (at most 1024 px), since enlarging softens it.
+ * Crisp art reads 0.3–0.9 px, even as a JPEG; the same art blurred by 2 px
+ * reads 1.9–2.3, and a soft photo of a printed logo 5. Photos read 0.9–1.5.
+ */
+export function looksBlurry(source: Source): boolean {
+  if (source.svg) return false
+  const long = Math.max(source.bitmap.width, source.bitmap.height)
+  const k = Math.min(1, 1024 / long)
+  const width = Math.max(1, Math.round(source.bitmap.width * k))
+  const height = Math.max(1, Math.round(source.bitmap.height * k))
+  const ctx = new OffscreenCanvas(width, height).getContext('2d', { willReadFrequently: true })!
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(source.bitmap, 0, 0, width, height)
+  return edgeBlur(ctx.getImageData(0, 0, width, height).data, width, height) > BLURRY
+}
+const BLURRY = 1.6
 
 /** Whether the image looks like a photo, which Poster suits better than the flat-colour presets. */
 export function looksLikePhoto(source: Source): boolean {

@@ -446,6 +446,46 @@ off, as every colour there was chosen. On the truck, Logo went from 107 to 63
 KB and Illustration from 126 to 71 KB, the background one shape and the truck
 unchanged pixel for pixel.
 
+**Blurry flat art is solved for, not sharpened.** A soft photo of a printed
+logo traced with a pale band round every shape: each edge is a ramp, and the
+ramp's middle is nearest some third palette colour. Everything that works on
+the ramp itself failed on the test image, a dump-truck logo (Nov 2026).
+Unsharp masking and Richardson–Lucy sharpened the grain and kept the band; a
+colour shock filter made hard edges but turned the band solid; growing regions
+from the flat areas lost the thin trim; giving each edge pixel the nearer of
+the colours either side lost the halo and left ragged shapes; Real-ESRGAN and
+Restormer (defocus deblurring; tested only, its licence is academic) barely
+sharpened it. `deblur` (*Remove blur*) fits a model instead: the map of a few
+flat colours that, blurred as the image was, best matches it, at the least
+boundary. The blur is measured per edge (contrast ÷ steepest slope ÷ √2π) and
+pooled into a map by block medians, since a photo taken at an angle is sharper
+on one side (the truck: 3.5 px across the middle, 7–8 at the left); the
+colours are the commonest of the flat areas, plus any no blend of two of those
+explains (a pinstripe's). The search starts from each pixel's nearest colour
+and flips pixels one at a time, down the picture and back up, wherever misfit
+plus boundary drops, then re-reads thin areas of a colour two others blend to
+as those two: a line thinner than the blur fades to the blend's colour and is
+first read as a wider line of it, which no single flip gets out of. What
+mattered most was what the blur acted on. A lens blurs light; a resize or a
+filter blurs the stored sRGB values, and the same step blurred each way
+differs by about half a blur in where its middle sits. Modelled as light, the
+truck (blurred as stored, it turned out) came back with every dark outline too
+fat. Now the starkest edges' ramps decide: blurred as light they are lopsided
+(by 1.5–5% of their width; as stored, under 1%). To measure any of this the
+sharp artwork was registered onto the photo and edges compared: of the
+output's edges, the share within 2 px of a true one, and of the true edges,
+the share found. Tracing the photo as it is: 53% and 64%. The light model:
+61% and 50%. Now: 80% and 66%, and the Logo trace went from 411 KB with halos
+to 93 KB without, the orange trim back. On the score fixtures blurred by 2
+and 3.5 px, wrong pixels fell from 1.5–8% to 0.1–1.4% on flat art (emblem,
+icons, pinwheel, overlap, badge). It is opt in, suggested when an image
+measures soft (over 1.6 px), because it only suits flat colour: shading comes
+out flat (the shaded fixture got worse, 0.8 → 2.2%), art with no flat areas
+is returned as it was (strokes), hairlines that never reach their own colour
+are not recovered (outline at 3.5 px: 2.6 → 3.9%), and where the blur is wider
+than the details (the truck's left tyre, at 7–8 px) they come back rounded or
+merged. About 3 s for a megapixel image.
+
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
 most one waiting request per channel (trace, optimise), replacing it when a

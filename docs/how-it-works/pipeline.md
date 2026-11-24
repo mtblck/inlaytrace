@@ -34,6 +34,9 @@ which the unit tests also call, so the tests and the app can't drift apart:
   tracer, with a palette from [histogram peaks](palettes.md) (or ink/paper for
   line art). Illustration and Outline art stack their shapes by default: each
   shape is drawn whole, with the parts hidden behind another completed.
+  With *Remove blur*, `deblur` (`packages/inlay/src/deblur.ts`) first works
+  out the flat shapes behind a soft image and redraws it crisp, so its edges'
+  ramps don't trace as halos.
   With *Smooth painted shading*, the pixels first go through an edge-preserving
   (bilateral) filter, `smoothShading` in `packages/inlay/src/smooth.ts`, so a
   painted shadow's noise doesn't break it into flecks of two colours. With

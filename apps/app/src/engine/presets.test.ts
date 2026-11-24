@@ -137,6 +137,14 @@ describe('Outline art', () => {
     for (const id of ['photo', 'pixel', 'lineart', 'centerline'] as const) expect(toTraceOptions({ ...settingsFor(id), smoothShading: true }).smoothShading).toBeUndefined()
   })
 
+  it('takes the blur out only when asked, and only for the peak-palette presets', () => {
+    for (const id of ['logo', 'illustration', 'outline'] as const) {
+      expect(toTraceOptions(settingsFor(id)).deblur).toBeUndefined()
+      expect(toTraceOptions({ ...settingsFor(id), deblur: true }).deblur).toBe(true)
+    }
+    for (const id of ['photo', 'pixel', 'lineart', 'centerline'] as const) expect(toTraceOptions({ ...settingsFor(id), deblur: true }).deblur).toBeUndefined()
+  })
+
   it('keeps painted outlines only when asked, telling the package how far the image was enlarged', () => {
     expect(toTraceOptions(settingsFor('illustration')).keepOutlines).toBeUndefined()
     expect(toTraceOptions({ ...settingsFor('illustration'), keepOutlines: true }).keepOutlines).toBe(true)
