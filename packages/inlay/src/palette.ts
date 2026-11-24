@@ -76,7 +76,10 @@ export function peakPalette(
     if (edge && isBlend(it.rgb, it.lab, picked, minDistance)) continue
     picked.push({ lab: it.lab, rgb: it.rgb })
   }
-  if (flat && flat.total >= FLAT_ART * opaque && picked.length < maxColors) picked.push(...closeFills(flat, opaque, picked, maxColors - picked.length, minDistance / 2, minShare))
+  // The flat pass skips the outer ring of pixels, so a small icon's share is measured inside it.
+  const inner = width ? Math.min(opaque, Math.max(0, width - 2) * Math.max(0, rgba.length / 4 / width - 2)) : 0
+  if (flat && flat.total >= FLAT_ART * inner && picked.length < maxColors)
+    picked.push(...closeFills(flat, opaque, picked, maxColors - picked.length, minDistance / 2, Math.max(minShare, CLOSE_MIN_SHARE)))
   if (flat && picked.length < maxColors) picked.push(...flatTints(flat, opaque, picked, maxColors - picked.length, minTint, minFlat))
   return picked.map((p) => toHex(p.rgb))
 }
@@ -227,6 +230,8 @@ const FLAT_ART = 0.8
  * of the cab's blue-grey, not on from it.
  */
 const RAMP_SPAN = 6
+/** A floor on a close fill's share, whatever minShare is: at 0, JPEG noise inside fills would fill the cap. */
+const CLOSE_MIN_SHARE = 0.001
 const RAMP_TOLERANCE = 0.012
 
 function closeFills(flat: Histogram, opaque: number, picked: { lab: Rgb; rgb: Rgb }[], room: number, radius: number, minShare: number) {
@@ -236,10 +241,11 @@ function closeFills(flat: Histogram, opaque: number, picked: { lab: Rgb; rgb: Rg
   })
   const out: { lab: Rgb; rgb: Rgb }[] = []
   const passed = new Set<number>()
-  // Each round adds a colour or passes a ramp's spot over; a photo has many ramps.
-  for (let round = 0; out.length < room && round < 4 * room; round++) {
+  // Each round adds a colour or passes a spot over, so `left` shrinks every round.
+  while (out.length < room) {
     const all = [...picked, ...out]
-    const left = bins.filter((b) => !passed.has(b.key) && all.every((p) => distance(p.lab, b.lab) > radius))
+    // Pale ones are left to flatTints, which picks them closer still.
+    const left = bins.filter((b) => !passed.has(b.key) && b.lab[0] < TINT_LIGHTNESS && all.every((p) => distance(p.lab, b.lab) > radius))
     for (const b of left) b.weight = 0
     weigh(left, radius)
     let best: (typeof bins)[number] | undefined
@@ -254,7 +260,8 @@ function closeFills(flat: Histogram, opaque: number, picked: { lab: Rgb; rgb: Rg
     }
     const rgb: Rgb = [sum[0] / n, sum[1] / n, sum[2] / n]
     const lab = oklab(rgb)
-    if (inRamp(rgb, lab, all, RAMP_TOLERANCE, RAMP_SPAN * radius)) for (const o of spot) passed.add(o.key)
+    // The spot's mean can fall back inside a picked colour's reach (spots needn't be round), or be a ramp's shade.
+    if (inRamp(rgb, lab, all, RAMP_TOLERANCE, RAMP_SPAN * radius) || !all.every((p) => distance(p.lab, lab) > radius)) for (const o of spot) passed.add(o.key)
     else out.push({ rgb, lab })
   }
   return out
@@ -273,6 +280,8 @@ function inRamp(rgb: Rgb, lab: Rgb, picked: { rgb: Rgb; lab: Rgb }[], tolerance:
     for (let j = i + 1; j < near.length; j++) {
       const a = near[i].rgb
       const b = near[j].rgb
+      // Only near pairs: lines between far colours pass near everything. The
+      // truck's grey is 0.010 from the line between its cab and its orange trim.
       if (distance(near[i].lab, near[j].lab) > span) continue
       const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
       const len = d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
