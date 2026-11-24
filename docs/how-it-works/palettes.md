@@ -80,7 +80,10 @@ Given the image's width, `peakPalette` counts flat pixels per bin, then:
   0.52 to 0.73, and there they grew Illustration's SVG by up to half). Pale
   spots are left to the tints below, and a spot on the line through two nearby
   picked colours is a gradient's shade, which would only band it, so it is
-  passed over;
+  passed over. A shade between the two close colours (the truck's bumper)
+  would then flip between them in blotches, so after labelling, a region of
+  the pair that is blotched with both takes whichever is nearer its mean
+  (`settleClosePairs` in inlay.ts);
 - then to flat tints: peaks of flat pixels alone, at least 0.02 from
   every colour picked, flat over at least 0.1% of the image, and pale (OKLab
   lightness 0.85 or more). A photo's smooth sky or shadow is flat too, and
