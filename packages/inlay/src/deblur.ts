@@ -638,8 +638,13 @@ const SHADE_SIGMA = 20
 /** A colour this near the line between two others (of 255), and not within this share of either end, is what they blend to. */
 const BLEND_OFF = 26
 const BLEND_ENDS = 0.2
-/** An area of a blend's colour is re-read as the two it blends only when no deeper than this many blurs, and a pixel. */
-const BLEND_DEPTH = 1.5
+/**
+ * An area of a blend's colour is re-read as the two it blends only when no
+ * deeper than this many blurs, and a pixel. A line fades to the blend's colour
+ * while it is under about 2.3 blurs wide, and is first read at about twice
+ * its width, so that deep.
+ */
+const BLEND_DEPTH = 2.3
 /** Away from the two colours themselves, only a line is re-read, at least this many times longer than wide: a blob re-read is a speck. */
 const BLEND_LONG = 8
 /**
@@ -673,9 +678,10 @@ const SLIVER_WORTH = 12
  * and the misfit is kept up to date as flips are made. When that settles,
  * thin areas of a colour two others blend to are re-read as those two
  * (`unblend`), and slivers between areas are given to them (`dropSlivers`):
- * neither is reached by any run of single flips.
+ * neither is reached by any run of single flips. A generator: it pauses
+ * after every sweep.
  */
-function solve(obs: Float32Array[], w: number, h: number, sigma: Float32Array, palette: Rgb3[], start: Uint8Array, space: Space): Uint8Array {
+function* solve(obs: Float32Array[], w: number, h: number, sigma: Float32Array, palette: Rgb3[], start: Uint8Array, space: Space): Generator<undefined, Uint8Array> {
   // Kernels for each blur level.
   let top = 0.5
   for (let p = 0; p < sigma.length; p++) top = Math.max(top, Math.min(MAX_WORK_BLUR, sigma[p]!))
@@ -693,7 +699,8 @@ function solve(obs: Float32Array[], w: number, h: number, sigma: Float32Array, p
     levels.push({ r, k, self })
     if (s >= top) break
   }
-  const P = levels[levels.length - 1]!.r
+  // Padding: the widest kernel and one more (the summed table below looks a pixel past it), and no less than the boundary's smallest neighbourhood.
+  const P = Math.max(levels[levels.length - 1]!.r + 1, Math.ceil(2.5 * BOUNDARY_SIGMA))
   const W = w + 2 * P
   const H = h + 2 * P
   const N = W * H
@@ -848,65 +855,108 @@ function solve(obs: Float32Array[], w: number, h: number, sigma: Float32Array, p
       }
     }
   }
+  // The padding repeats the picture's outermost pixels: their labels as they are now, the model kept up as `spread` does.
+  const repad = () => {
+    const R = levels[levels.length - 1]!.r
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        if (x >= P && y >= P && x < W - P && y < H - P) {
+          x = W - P - 1
+          continue
+        }
+        const p = y * W + x
+        const a = lab[p]!
+        const l = lab[Math.min(H - P - 1, Math.max(P, y)) * W + Math.min(W - P - 1, Math.max(P, x))]!
+        if (a === l) continue
+        lab[p] = l
+        const d0 = C[l]![0]! - C[a]![0]!
+        const d1 = C[l]![1]! - C[a]![1]!
+        const d2 = C[l]![2]! - C[a]![2]!
+        // Only the picture's own pixels are fitted: those whose kernels reach this one.
+        for (let qy = Math.max(P, y - R); qy <= Math.min(H - P - 1, y + R); qy++)
+          for (let qx = Math.max(P, x - R); qx <= Math.min(W - P - 1, x + R); qx++) {
+            const q = qy * W + qx
+            const lv = levels[level[q]!]!
+            const rr = lv.r
+            const dx = x - qx
+            const dy = y - qy
+            if (dx > rr || dx < -rr || dy > rr || dy < -rr) continue
+            const kv = lv.k[(dy + rr) * (2 * rr + 1) + dx + rr]!
+            model[0]![q]! += kv * d0
+            model[1]![q]! += kv * d1
+            model[2]![q]! += kv * d2
+            owed[3 * q]! += weight2[0]![q]! * kv * d0
+            owed[3 * q + 1]! += weight2[1]![q]! * kv * d1
+            owed[3 * q + 2]! += weight2[2]![q]! * kv * d2
+          }
+      }
+  }
   const steps = [1, -1, W, -W]
   const inside = w * h
   let sweep = 0
-  const search = (sweeps: number) => {
-    for (const end = sweep + sweeps; sweep < end; sweep++) {
-      if (sweep % RESHADE === 0) {
-        reshade()
-        settle()
-      }
-      let flips = 0
-      // Down the picture and back up by turns, so no direction is favoured.
-      for (let i = 0; i < inside; i++) {
-        const j = sweep & 1 ? inside - 1 - i : i
-        const p = (P + Math.floor(j / w)) * W + P + (j % w)
-        const a = lab[p]!
-        let best = 0
-        let bestL = -1
-        let tried = -1
-        let g0 = 0
-        let g1 = 0
-        let g2 = 0
-        for (let s = 0; s < 4; s++) {
-          const b = lab[p + steps[s]!]!
-          if (b === a || b === tried || b === bestL) continue
-          const lv = levels[level[p]!]!
-          if (tried < 0 && bestL < 0) {
-            // The misfit blurred back to here: what a flip would change, per unit of colour. Through this pixel's own
-            // kernel, where its neighbours' differ by a level or two at most.
-            const { r, k } = lv
-            let i = 0
-            for (let dy = -r; dy <= r; dy++) {
-              let q = 3 * (p + dy * W - r)
-              for (let dx = -r; dx <= r; dx++, q += 3, i++) {
-                const kv = k[i]!
-                g0 += kv * owed[q]!
-                g1 += kv * owed[q + 1]!
-                g2 += kv * owed[q + 2]!
-              }
+  // One sweep; returns how many pixels it flipped.
+  const pass = (): number => {
+    if (sweep % RESHADE === 0) {
+      repad()
+      reshade()
+      settle()
+    }
+    let flips = 0
+    // Down the picture and back up by turns, so no direction is favoured.
+    for (let i = 0; i < inside; i++) {
+      const j = sweep & 1 ? inside - 1 - i : i
+      const p = (P + Math.floor(j / w)) * W + P + (j % w)
+      const a = lab[p]!
+      let best = 0
+      let bestL = -1
+      let tried = -1
+      let g0 = 0
+      let g1 = 0
+      let g2 = 0
+      for (let s = 0; s < 4; s++) {
+        const b = lab[p + steps[s]!]!
+        if (b === a || b === tried || b === bestL) continue
+        const lv = levels[level[p]!]!
+        if (tried < 0 && bestL < 0) {
+          // The misfit blurred back to here: what a flip would change, per unit of colour. Through this pixel's own
+          // kernel, where its neighbours' differ by a level or two at most.
+          const { r, k } = lv
+          let i = 0
+          for (let dy = -r; dy <= r; dy++) {
+            let q = 3 * (p + dy * W - r)
+            for (let dx = -r; dx <= r; dx++, q += 3, i++) {
+              const kv = k[i]!
+              g0 += kv * owed[q]!
+              g1 += kv * owed[q + 1]!
+              g2 += kv * owed[q + 2]!
             }
           }
-          tried = b
-          const ca = C[a]!
-          const cb = C[b]!
-          const d0 = cb[0]! - ca[0]!
-          const d1 = cb[1]! - ca[1]!
-          const d2 = cb[2]! - ca[2]!
-          const dE = 2 * (d0 * g0 + d1 * g1 + d2 * g2) + lv.self * (d0 * d0 * weight2[0]![p]! + d1 * d1 * weight2[1]![p]! + d2 * d2 * weight2[2]![p]!) + BOUNDARY_COST * longer(p, a, b)
-          if (dE < best) (best = dE), (bestL = b)
         }
-        if (bestL < 0) continue
-        lab[p] = bestL
-        spread(p, C[bestL]![0]! - C[a]![0]!, C[bestL]![1]! - C[a]![1]!, C[bestL]![2]! - C[a]![2]!)
-        flips++
+        tried = b
+        const ca = C[a]!
+        const cb = C[b]!
+        const d0 = cb[0]! - ca[0]!
+        const d1 = cb[1]! - ca[1]!
+        const d2 = cb[2]! - ca[2]!
+        const dE = 2 * (d0 * g0 + d1 * g1 + d2 * g2) + lv.self * (d0 * d0 * weight2[0]![p]! + d1 * d1 * weight2[1]![p]! + d2 * d2 * weight2[2]![p]!) + BOUNDARY_COST * longer(p, a, b)
+        if (dE < best) (best = dE), (bestL = b)
       }
-      // Stop once a sweep changes next to nothing.
+      if (bestL < 0) continue
+      lab[p] = bestL
+      spread(p, C[bestL]![0]! - C[a]![0]!, C[bestL]![1]! - C[a]![1]!, C[bestL]![2]! - C[a]![2]!)
+      flips++
+    }
+    return flips
+  }
+  // Sweeps, with a pause after each, until one changes next to nothing.
+  function* search(sweeps: number): Generator<undefined, void> {
+    for (const end = sweep + sweeps; sweep < end; sweep++) {
+      const flips = pass()
+      yield
       if (flips < SETTLED * inside) break
     }
   }
-  search(SWEEPS)
+  yield* search(SWEEPS)
 
   // Which colours two others blend to: where along the way from the first to the second, by colour.
   const blends: { c: number; b: number; t: number; off: number }[][] = C.map((ca, a) => {
@@ -1029,7 +1079,7 @@ function solve(obs: Float32Array[], w: number, h: number, sigma: Float32Array, p
     }
     return changed
   }
-  for (let round = 0; round < BLEND_ROUNDS && unblend(); round++) search(BLEND_SWEEPS)
+  for (let round = 0; round < BLEND_ROUNDS && unblend(); round++) yield* search(BLEND_SWEEPS)
 
   // A set of flips, kept only if the misfit they cost is under `worth` times the boundary they save.
   const tryFlips = (ps: number[], to: (p: number) => number, worth: number): boolean => {
@@ -1093,11 +1143,15 @@ function solve(obs: Float32Array[], w: number, h: number, sigma: Float32Array, p
           }
           into.set(p, best)
         }
+        // With one colour all round, it is a thin line through that colour, not a gap between two shapes.
+        if (new Set(into.values()).size < 2) continue
         if (tryFlips(area, (p) => into.get(p)!, SLIVER_WORTH)) changed = true
       }
     return changed
   }
-  if (dropSlivers()) search(BLEND_SWEEPS)
+  // Slivers are given to labels beside them: not to one only the padding still has.
+  repad()
+  if (dropSlivers()) yield* search(BLEND_SWEEPS)
 
   const out = new Uint8Array(w * h)
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) out[y * w + x] = lab[(y + P) * W + x + P]!
@@ -1120,6 +1174,15 @@ const MAX_SHARP_BLUR = 2.2
  * threshold grows with it. Alpha is kept as it is.
  */
 export function deblur(rgba: ArrayLike<number>, width: number, height: number, blurPx?: number, scale = 1): Uint8ClampedArray {
+  const steps = deblurSteps(rgba, width, height, blurPx, scale)
+  for (;;) {
+    const r = steps.next()
+    if (r.done) return r.value
+  }
+}
+
+/** `deblur` as steps: it pauses between its stages and after each sweep of the search (a tenth of a second or so apart on a megapixel image), so an async caller can stop it or let other work in. */
+export function* deblurSteps(rgba: ArrayLike<number>, width: number, height: number, blurPx?: number, scale = 1): Generator<undefined, Uint8ClampedArray> {
   const out = Uint8ClampedArray.from(rgba)
   const n = width * height
   if (width < 16 || height < 16) return out
@@ -1139,6 +1202,7 @@ export function deblur(rgba: ArrayLike<number>, width: number, height: number, b
   let stored = lumOf(STORED)
   let map = measureBlur(stored, width, height)
   if (!(map.median > 0) || (blurPx ?? map.median) < SOFT_EDGES * Math.max(1, scale)) return out
+  yield
   const aligned = alignChannels(ch, width, height, map.median)
   if (aligned) {
     ch = aligned
@@ -1147,6 +1211,7 @@ export function deblur(rgba: ArrayLike<number>, width: number, height: number, b
   const space = blurredAsLight(stored, width, height) ? LIGHT : STORED
   if (aligned || space === LIGHT) map = measureBlur(space === LIGHT ? lumOf(LIGHT) : stored, width, height)
   if (!(map.median > 0)) return out
+  yield
   // The scale to work at, from the blur of the picture's sharper quarter.
   const blurs: number[] = []
   for (let y = 4; y < height; y += 8) for (let x = 4; x < width; x += 8) blurs.push(map.at(x, y))
@@ -1192,8 +1257,11 @@ export function deblur(rgba: ArrayLike<number>, width: number, height: number, b
   }
   const kept = dropShades(seen, w, h, sigma, palette, start)
   if (kept.length < 2) return out
-  const labels = solve(obs, w, h, sigma, kept, start, space)
-  redraw(labels, w, h, kept, F, boundaries(labels, w, h, sigma), out, width, height)
+  yield
+  const labels = yield* solve(obs, w, h, sigma, kept, start, space)
+  const edges = boundaries(labels, w, h, sigma)
+  yield
+  redraw(labels, w, h, kept, F, edges, out, width, height)
   return out
 }
 

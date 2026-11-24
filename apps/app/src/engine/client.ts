@@ -11,7 +11,7 @@ import type { Settings, TraceOptions } from './presets'
 import type { Candidate } from './targetSize'
 import type { WorkerRequest, WorkerResponse } from './worker'
 
-type Channel = 'trace' | 'optimize' | 'symmetry' | 'size'
+type Channel = 'trace' | 'optimize' | 'symmetry' | 'blur' | 'size'
 type Pending = { request: WorkerRequest; resolve: (r: WorkerResponse | null) => void; progress?: (r: WorkerResponse) => void }
 
 export class TraceClient {
@@ -57,6 +57,11 @@ export class TraceClient {
     return this.send('symmetry', { type: 'symmetry', id: this.nextId++, rgba: rgba.slice().buffer, width, height })
   }
 
+  /** How soft the image's edges are (`edgeBlur`), for the Remove blur hint. */
+  blur(rgba: Uint8ClampedArray, width: number, height: number) {
+    return this.send('blur', { type: 'blur', id: this.nextId++, rgba: rgba.slice().buffer, width, height })
+  }
+
   /**
    * Search trace settings for a file under `target` bytes. Long (many traces),
    * so the app runs it on a client of its own, leaving the main one free to trace.
@@ -88,9 +93,9 @@ export class TraceClient {
 
   private pump() {
     if (this.busy) return
-    // Traces first: an optimize of a stale trace is wasted work. Symmetry last:
-    // it's only needed once the Mirror tool opens.
-    const channel = (['trace', 'optimize', 'symmetry', 'size'] as const).find((c) => this.waiting.has(c))
+    // Traces first: an optimize of a stale trace is wasted work. Symmetry and
+    // blur last: one is only needed once the Mirror tool opens, the other is a hint.
+    const channel = (['trace', 'optimize', 'symmetry', 'blur', 'size'] as const).find((c) => this.waiting.has(c))
     if (!channel) return
     const next = this.waiting.get(channel)!
     this.waiting.delete(channel)

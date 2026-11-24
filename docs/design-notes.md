@@ -503,7 +503,10 @@ refit made that 0.10 with a pull inwards on curves. The
 picture is then drawn along those boundaries at twice its size and halved,
 for anti-aliased edges. Slivers no more than two pixels wide, left where
 three colours' ramps cross and read as gaps between shapes, are given to
-their neighbours first where the photo barely notices. What
+their neighbours first where the photo barely notices; only between two
+colours, since with one colour all round such an area is a thin line (a 3 px
+line on a 2048 px picture, solved at a quarter of its size, is one work pixel
+wide, and was erased until this was the rule). What
 mattered most was what the blur acted on. A lens blurs light; a resize or a
 filter blurs the stored sRGB values, and the same step blurred each way
 differs by about half a blur in where its middle sits. Modelled as light, the
@@ -519,11 +522,14 @@ and 3.5 px, wrong pixels fell from 1.5–8% to 0.03–1% on flat art (emblem,
 icons, pinwheel, overlap, badge; the badge blurred as light by 3.5 px, 9.5 →
 3.5%). It is opt in, suggested when an image
 measures soft (over 1.6 px), because it only suits flat colour: shading comes
-out flat (the shaded fixture got worse, 0.8 → 2.1%), art with no flat areas
+out flat (the shaded fixture got worse, 0.8 → 2.2%), art with no flat areas
 is returned as it was (strokes), hairlines that never reach their own colour
 are not recovered (outline at 3.5 px: 2.6 → 3.8%), and where the blur is wider
 than the details (the truck's left tyre, at 7–8 px) they come back rounded or
-merged. About 4 s for a megapixel image.
+merged. A picture over 420,000 pixels is solved at a half, a third or a
+quarter of its size, for time; a line under about two of those work pixels
+wide is kept, but in the colour it fades to and a little wide. About 4 s for
+a megapixel image, and `traceAsync` pauses after each sweep of the search.
 
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at

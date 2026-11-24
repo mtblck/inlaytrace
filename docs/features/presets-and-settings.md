@@ -51,7 +51,7 @@ Optional steps run before tracing, in your browser:
   what get traced, so shapes meet edge to edge again and thin trim keeps its
   colour. A colour fringe round the edges (common in phone photos) is taken
   out on the way. The app suggests it when an image's edges measure soft. Not
-  AI. Slower: about 3 s for a megapixel image. Images whose edges are already
+  AI. Slower: about 4 s for a megapixel image. Images whose edges are already
   crisp are left as they are. It is for flat colour: shading and gradients
   come out as flat areas, line drawings are left as they are, and where the
   blur is very heavy (wider than the details themselves) small details come

@@ -203,8 +203,8 @@ export function traceRaw(rgba: ArrayLike<number>, w: number, h: number, o: Inlay
   return run(traceSteps(rgba, w, h, o))
 }
 
-/** What a trace is doing: label the pixels, clean up the labels, find the regions and their edges, fit the edges, build the shapes. */
-export type TraceStage = 'palette' | 'label' | 'clean' | 'regions' | 'fit' | 'shapes'
+/** What a trace is doing: take the blur out (only with `deblur`), pick the palette, label the pixels, clean up the labels, find the regions and their edges, fit the edges, build the shapes. */
+export type TraceStage = 'deblur' | 'palette' | 'label' | 'clean' | 'regions' | 'fit' | 'shapes'
 /** A point a trace can pause at: the stage, and how far through it (0 to 1). */
 export type TraceStep = { stage: TraceStage; done: number }
 /** Fitting, the longest stage, pauses after this many edges. */

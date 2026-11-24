@@ -52,12 +52,14 @@ type TraceAsyncOptions = TraceOptions & {
 }
 type AbortSignalLike = { readonly aborted: boolean; readonly reason?: unknown }
 type TraceStep = { stage: TraceStage; done: number } // done: how far through the stage, 0 to 1
-type TraceStage = 'palette' | 'label' | 'clean' | 'regions' | 'fit' | 'shapes'
+type TraceStage = 'deblur' | 'palette' | 'label' | 'clean' | 'regions' | 'fit' | 'shapes'
 ```
 
 `trace` that can be stopped and reports progress: it gives the same result,
 but pauses between its stages (and every few hundred edges while fitting),
-calling `onProgress`. About every 12 ms it lets the thread get on with other
+calling `onProgress`. With `deblur` on there is a `'deblur'` stage first,
+which pauses after each sweep of its search: about a tenth of a second apart
+on a megapixel image, and `done` there is an estimate. About every 12 ms it lets the thread get on with other
 work, so a page that traces on its main thread can keep responding, and a
 Cancel button can abort it. When `signal` aborts, it rejects at the next pause
 with the signal's `reason` (an `Error` named `AbortError` when there is none),

@@ -11,7 +11,7 @@ import type { SizeRun } from './components/Controls'
 import { canMerge, canSetText, canSmooth, isInk, maxTraceEdge, ownPaletteOf, settingsFor, toTraceOptions, type PresetId, type Settings } from './engine/presets'
 import { addColors, nearestColor, OWN_COLORS } from './lib/colors'
 import { swatchColors, swatchFile, type SwatchFormat } from './lib/swatches'
-import { ACCEPTED, canTraceFiner, colourAt, hasDarkBackground, loadSource, looksBlurry, looksLikePhoto, pixelsOf, UPSCALE_BELOW, type Pixels, type Source } from './lib/image'
+import { ACCEPTED, BLURRY, blurPixels, canTraceFiner, colourAt, hasDarkBackground, loadSource, looksLikePhoto, pixelsOf, UPSCALE_BELOW, type Pixels, type Source } from './lib/image'
 import { formatBytes, normalizeHex, parseTrace, statsOf, withText, type Trace } from './lib/svg'
 import {
   buildSvg,
@@ -1562,7 +1562,23 @@ export default function App() {
   const photo = useMemo(() => !!source && looksLikePhoto(source), [source])
   // Measured on the image as given (or as cleaned up), never enlarged: enlarging alone softens edges.
   const smoothable = canSmooth(settings.preset)
-  const blurry = useMemo(() => smoothable && !!base && looksBlurry(base), [smoothable, base])
+  // Measured in the worker, once a trace is done: it is only a hint, takes long enough to stall the page, and must not hold up the first preview.
+  const [blurOf, setBlurOf] = useState<{ source: Source; px: number } | null>(null)
+  const blurEdge = maxTraceEdge(settings.preset)
+  const hasTraced = status.kind === 'done'
+  useEffect(() => {
+    if (!smoothable || !base || !hasTraced || blurOf?.source === base) return
+    const pixels = blurPixels(base, blurEdge)
+    if (!pixels) return
+    let live = true
+    void client.blur(pixels.rgba, pixels.width, pixels.height).then((res) => {
+      if (live && res?.type === 'blur') setBlurOf({ source: base, px: res.px })
+    })
+    return () => {
+      live = false
+    }
+  }, [smoothable, base, hasTraced, blurEdge, blurOf, client])
+  const blurry = smoothable && !!base && blurOf?.source === base && blurOf.px > BLURRY
   const suggestPoster = photo && !presetPicked && settings.preset !== 'photo'
 
   const choosePreset = (id: PresetId) => {

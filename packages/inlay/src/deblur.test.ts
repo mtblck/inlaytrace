@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { deblur, edgeBlur } from './deblur'
-import { trace } from './presets'
+import { trace, traceAsync } from './presets'
 
 /** Erf, near enough (Abramowitz–Stegun 7.1.26), for drawing Gaussian-blurred edges. */
 function erf(x: number) {
@@ -249,6 +249,36 @@ describe('deblur, on edges off the pixel grid', () => {
   })
 })
 
+describe('deblur, on a large image', () => {
+  it('keeps a thin line that the work scale leaves a pixel wide', () => {
+    // 1.8 megapixels are solved at a third of their size, where this 3 px line is one pixel of the grey it fades to: as thin as the slivers that are given away, but with one colour all round it is no gap between shapes.
+    const BW = 1700
+    const BH = 1040
+    const px = new Uint8ClampedArray(BW * BH * 4)
+    let seed = 5
+    for (let y = 0; y < BH; y++) {
+      const tall = cover(y, 200.5, 1.8) - cover(y, BH - 200.5, 1.8)
+      for (let x = 0; x < BW; x++) {
+        const pale = Math.min(1, cover(x, 200.5, 1.8) - cover(x, 600.5, 1.8) + (cover(x, 778.5, 1.8) - cover(x, 781.5, 1.8)) * tall)
+        const grey = cover(x, 1040.5, 1.8)
+        seed = (Math.imul(seed, 1103515245) + 12345) >>> 0
+        const grain = ((seed >>> 16) % 7) - 3
+        for (let c = 0; c < 3; c++) {
+          const v = NAVY[c]! + (PALE[c]! - NAVY[c]!) * pale
+          px[(y * BW + x) * 4 + c] = v + (GREY[c]! - v) * grey + grain
+        }
+        px[(y * BW + x) * 4 + 3] = 255
+      }
+    }
+    const out = deblur(px, BW, BH)
+    const at = (x: number) => out[(500 * BW + x) * 4]!
+    // The line is there, if in the grey, with paper either side.
+    expect(Math.max(at(779), at(780), at(781))).toBeGreaterThan(110)
+    expect(at(770)).toBeLessThan(60)
+    expect(at(790)).toBeLessThan(60)
+  })
+})
+
 describe('trace, with deblur', () => {
   it('draws blurred art as the shapes crisp art has, without the bands between', () => {
     const shapes = (sigma: number, deblur: boolean) => trace({ data: art(sigma), width: W, height: H }, { preset: 'logo', deblur }).paths.length
@@ -256,6 +286,30 @@ describe('trace, with deblur', () => {
     expect(shapes(0, false)).toBe(6)
     expect(shapes(2.5, false)).toBeGreaterThan(6)
     expect(shapes(2.5, true)).toBe(6)
+  })
+
+  it('pauses while it deblurs, so an async trace reports it and can be stopped there', async () => {
+    // Not the picture above: the last deblurred image is remembered, and answers without a deblur stage.
+    const image = { data: art(3), width: W, height: H }
+    const controller = new AbortController()
+    const seen: string[] = []
+    const stopped = traceAsync(image, {
+      preset: 'logo',
+      deblur: true,
+      signal: controller.signal,
+      onProgress: (s) => {
+        seen.push(s.stage)
+        if (s.stage === 'deblur' && s.done > 0) controller.abort(new Error('stop'))
+      },
+    })
+    await expect(stopped).rejects.toThrow('stop')
+    expect(seen).toEqual(['deblur', 'deblur'])
+    // Left to finish, it pauses many times on the way and gives what trace gives.
+    const stages: string[] = []
+    const r = await traceAsync(image, { preset: 'logo', deblur: true, onProgress: (s) => stages.push(s.stage) })
+    expect(stages.filter((s) => s === 'deblur').length).toBeGreaterThan(5)
+    expect(stages.indexOf('palette')).toBe(stages.lastIndexOf('deblur') + 1)
+    expect(r).toEqual(trace(image, { preset: 'logo', deblur: true }))
   })
 
   it('leaves pixel art alone', () => {
