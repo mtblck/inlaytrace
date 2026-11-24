@@ -156,6 +156,66 @@ describe('deblur', () => {
   })
 })
 
+/** Side of the picture `tilted` draws, the half-width of its square, and the square's turn (radians). */
+const S = 128
+const HALF = 34
+const TILT = 0.35
+
+/** Navy paper with a pale square turned by TILT about the middle, blurred by `sigma`, with random grain: no edge runs along the pixels. */
+function tilted(sigma: number) {
+  const px = new Uint8ClampedArray(S * S * 4)
+  const c = Math.cos(TILT)
+  const s = Math.sin(TILT)
+  let seed = 7
+  for (let y = 0; y < S; y++)
+    for (let x = 0; x < S; x++) {
+      // A blur is the same along any pair of axes, so along the square's own it is one blurred bar times another.
+      const u = (x - 63.5) * c + (y - 63.5) * s
+      const v = -(x - 63.5) * s + (y - 63.5) * c
+      const k = (cover(u, -HALF, sigma) - cover(u, HALF, sigma)) * (cover(v, -HALF, sigma) - cover(v, HALF, sigma))
+      seed = (Math.imul(seed, 1103515245) + 12345) >>> 0
+      const grain = ((seed >>> 16) % 7) - 3
+      for (let ch = 0; ch < 3; ch++) px[(y * S + x) * 4 + ch] = NAVY[ch]! + (PALE[ch]! - NAVY[ch]!) * k + grain
+      px[(y * S + x) * 4 + 3] = 255
+    }
+  return px
+}
+
+/** How far from the middle of `tilted`'s picture, going out from (ox, oy) off it along (dx, dy), red falls halfway from pale to navy. */
+function reach(px: Uint8ClampedArray, ox: number, oy: number, dx: number, dy: number, from: number) {
+  const red = (x: number, y: number) => {
+    const x0 = Math.floor(x - 0.5)
+    const y0 = Math.floor(y - 0.5)
+    const fx = x - 0.5 - x0
+    const fy = y - 0.5 - y0
+    const at = (xx: number, yy: number) => px[(yy * S + xx) * 4]!
+    return at(x0, y0) * (1 - fx) * (1 - fy) + at(x0 + 1, y0) * fx * (1 - fy) + at(x0, y0 + 1) * (1 - fx) * fy + at(x0 + 1, y0 + 1) * fx * fy
+  }
+  for (let r = from; r < from + 20; r += 0.05) if (red(64 + ox + r * dx, 64 + oy + r * dy) < (NAVY[0] + PALE[0]) / 2) return r
+  return NaN
+}
+
+describe('deblur, on edges off the pixel grid', () => {
+  const out = deblur(tilted(2.5), S, S)
+  const c = Math.cos(TILT)
+  const s = Math.sin(TILT)
+
+  it('draws a slanted edge as a straight line where it was', () => {
+    // Along each side, short of its corners: nowhere further than half a pixel or so from the true edge. The grain alone ripples a labelled edge by more.
+    for (const [nx, ny] of [[c, s], [-s, c], [-c, -s], [s, -c]] as const)
+      for (let t = -24; t <= 24; t += 2) expect(Math.abs(reach(out, -ny * t, nx * t, nx, ny, HALF - 8) - HALF)).toBeLessThan(0.6)
+  })
+
+  it('keeps a corner a corner', () => {
+    // Out along each diagonal: the search alone rounds a corner off by a pixel and a half of the 48 to its point.
+    for (const [dx, dy] of [[c - s, s + c], [-s - c, c - s], [s - c, -s - c], [s + c, s - c]] as const) {
+      const off = reach(out, 0, 0, dx / Math.SQRT2, dy / Math.SQRT2, HALF) - HALF * Math.SQRT2
+      expect(off).toBeGreaterThan(-1)
+      expect(off).toBeLessThan(0.5)
+    }
+  })
+})
+
 describe('trace, with deblur', () => {
   it('draws blurred art as the shapes crisp art has, without the bands between', () => {
     const shapes = (sigma: number, deblur: boolean) => trace({ data: art(sigma), width: W, height: H }, { preset: 'logo', deblur }).paths.length

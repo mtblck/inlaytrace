@@ -226,7 +226,9 @@ blurred by 2 px reads about 2.
 screenshot or enlargement of flat art. It measures the blur place by place,
 finds the flat colours the image is made of, and searches for the map of those
 colours that, blurred the same way, best matches the image with the least
-boundary; that map is redrawn with clean anti-aliased edges. It works out
+boundary. That map's boundaries are then smoothed along their length, as far
+as the blur leaves their place open, so straight edges come out straight and
+corners stay corners, and it is drawn with clean anti-aliased edges. It works out
 whether the blur was a lens's (of light) or a resize's (of the stored values),
 which decides where each edge sits, and undoes a colour fringe first. `blur`
 is `edgeBlur`'s reading, measured when left out; under 1.5 px the image is

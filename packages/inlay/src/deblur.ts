@@ -16,8 +16,15 @@
  * need to be. A halo's band never survives that search: a step between its
  * two neighbours, blurred, already matches the photo there, so the band buys
  * nothing and costs boundary. A thin line does survive, since no blurred step
- * between its neighbours makes a dip. The result is redrawn at full size with
- * clean anti-aliased edges, for the tracer to label as it would crisp art.
+ * between its neighbours makes a dip.
+ *
+ * The map found is of square pixels, and the photo's own texture (print has
+ * one) ripples its edges by a pixel or so. Under a blur the photo cannot say
+ * where an edge runs to better than that, so each boundary is smoothed along
+ * its length before the result is drawn (`boundaries`): straight edges come
+ * out straight, arcs smooth, and corners stay where they are. The result is
+ * drawn at full size with clean anti-aliased edges, for the tracer to label
+ * as it would crisp art.
  *
  * Two things about the photo are worked out first, since either one wrong
  * puts every edge in the wrong place:
@@ -637,6 +644,8 @@ const BLEND_LONG = 8
 /** Rounds of re-reading, and the sweeps that tidy up after each. */
 const BLEND_ROUNDS = 2
 const BLEND_SWEEPS = 4
+/** An area nowhere over two pixels wide goes where the misfit that costs is under this many times the boundary saved. */
+const SLIVER_WORTH = 12
 
 /**
  * The label map (one palette index per pixel of a w × h picture) that, with
@@ -656,7 +665,8 @@ const BLEND_SWEEPS = 4
  * misfit is known from the misfit blurred back through the pixel's kernel,
  * and the misfit is kept up to date as flips are made. When that settles,
  * thin areas of a colour two others blend to are re-read as those two
- * (`unblend`), which no run of single flips reaches.
+ * (`unblend`), and slivers between areas are given to them (`dropSlivers`):
+ * neither is reached by any run of single flips.
  */
 function solve(obs: Float32Array[], w: number, h: number, sigma: Float32Array, palette: Rgb3[], start: Uint8Array, space: Space): Uint8Array {
   // Kernels for each blur level.
@@ -906,12 +916,14 @@ function solve(obs: Float32Array[], w: number, h: number, sigma: Float32Array, p
     return found.sort((x, y) => x.off - y.off)
   })
   // One pixel relabelled, the model kept up; returns what that added to the total, exactly.
+  let flipBoundary = 0
   const flip = (p: number, to: number): number => {
     const a = lab[p]!
     const d0 = C[to]![0]! - C[a]![0]!
     const d1 = C[to]![1]! - C[a]![1]!
     const d2 = C[to]![2]! - C[a]![2]!
-    let dE = BOUNDARY_COST * longer(p, a, to)
+    flipBoundary = BOUNDARY_COST * longer(p, a, to)
+    let dE = flipBoundary
     const r = levels[Math.min(levels.length - 1, level[p]! + 2)]!.r
     for (let dy = -r; dy <= r; dy++) {
       let q = p + dy * W - r
@@ -1008,6 +1020,75 @@ function solve(obs: Float32Array[], w: number, h: number, sigma: Float32Array, p
     return changed
   }
   for (let round = 0; round < BLEND_ROUNDS && unblend(); round++) search(BLEND_SWEEPS)
+
+  // A set of flips, kept only if the misfit they cost is under `worth` times the boundary they save.
+  const tryFlips = (ps: number[], to: (p: number) => number, worth: number): boolean => {
+    const was = ps.map((p) => lab[p]!)
+    let misfit = 0
+    let boundary = 0
+    for (const p of ps) {
+      const dE = flip(p, to(p))
+      boundary += flipBoundary
+      misfit += dE - flipBoundary
+    }
+    if (misfit + worth * boundary < 0) return true
+    for (let i = ps.length - 1; i >= 0; i--) flip(ps[i]!, was[i]!)
+    return false
+  }
+  /**
+   * Slivers taken out: an area nowhere more than two pixels wide, given to
+   * the areas beside it, where the photo barely notices. They are left where
+   * three colours' ramps cross (a thin dark rim between orange trim and white
+   * paper leaves specks of paper colour between the two), and read as gaps.
+   */
+  const dropSlivers = (): boolean => {
+    const done = new Uint8Array(N)
+    let changed = false
+    const rim = (p: number) => {
+      const a = lab[p]
+      return lab[p - 1] !== a || lab[p + 1] !== a || lab[p - W] !== a || lab[p + W] !== a
+    }
+    for (let y0 = P; y0 < H - P; y0++)
+      for (let x0 = P; x0 < W - P; x0++) {
+        const first = y0 * W + x0
+        if (done[first]) continue
+        const a = lab[first]!
+        const area = [first]
+        done[first] = 1
+        let thin = true
+        for (let i = 0; i < area.length; i++) {
+          const p = area[i]!
+          if (thin && !rim(p)) thin = false
+          for (const s of steps) {
+            const q = p + s
+            const qx = q % W
+            const qy = (q - qx) / W
+            if (qx < P || qy < P || qx >= W - P || qy >= H - P || done[q] || lab[q] !== a) continue
+            done[q] = 1
+            area.push(q)
+          }
+        }
+        if (!thin) continue
+        // Each pixel to the label beside it that most of its neighbours have.
+        const into = new Map<number, number>()
+        for (const p of area) {
+          let best = -1
+          let most = 0
+          for (const s of steps) {
+            const l = lab[p + s]!
+            if (l === a) continue
+            let n = 0
+            for (const t of steps) if (lab[p + t] === l) n++
+            if (n > most) (most = n), (best = l)
+          }
+          into.set(p, best)
+        }
+        if (tryFlips(area, (p) => into.get(p)!, SLIVER_WORTH)) changed = true
+      }
+    return changed
+  }
+  if (dropSlivers()) search(BLEND_SWEEPS)
+
   const out = new Uint8Array(w * h)
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) out[y * w + x] = lab[(y + P) * W + x + P]!
   return out
@@ -1019,8 +1100,6 @@ function solve(obs: Float32Array[], w: number, h: number, sigma: Float32Array, p
 const MAX_WORK_PIXELS = 420_000
 /** The picture is shrunk until its sharper quarter is no more blurred than this, in work px: a wider blur costs its square in time and gains nothing. */
 const MAX_SHARP_BLUR = 2.2
-/** Smoothing (work px) of each label's mask when the result is redrawn at full size. */
-const REDRAW_SIGMA = 1.1
 
 /**
  * A copy of `rgba` (`width` × `height`, RGBA) with its blur taken out: flat
@@ -1104,72 +1183,405 @@ export function deblur(rgba: ArrayLike<number>, width: number, height: number, b
   const kept = dropShades(seen, w, h, sigma, palette, start)
   if (kept.length < 2) return out
   const labels = solve(obs, w, h, sigma, kept, start, space)
-  redraw(labels, w, h, kept, F, out, width, height)
+  redraw(labels, w, h, kept, F, boundaries(labels, w, h, sigma), out, width, height)
   return out
 }
 
+/** A boundary's points are smoothed by as much as moves each no further than this share of the blur there (work px)… */
+const SMOOTH_PER_BLUR = 0.6
+/** …nor than this share of the width of the thinner area beside it, which must not be pinched… */
+const SMOOTH_PER_WIDTH = 0.4
+/** …but any point may move this far (work px), or the steps of a slant would stay. */
+const SMOOTH_MIN = 0.75
+/** …and none by an amount that pulls the path there, wobble aside, by more than this (work px): a bend is pulled inwards, and what is put back for it swings wide beside a sharp turn. */
+const SMOOTH_PULL = 0.5
+/** Areas this deep (work px) or deeper are not thin. */
+const THIN_REACH = 5
+/** The amounts of smoothing tried (px along the boundary), and how fast the amount may change from point to point (steps of that list). */
+const SMOOTH_LEVELS = [1.5, 3, 6, 12, 24]
+const SMOOTH_EASE = 0.25
+
+/** A boundary has a corner where it turns by this much (radians) between the stretches of this many points before and after. */
+const CORNER_TURN = 0.6
+const CORNER_SPAN = 5
+/** The stretches either side of a corner are straight: their points lie this near a line (work px, root mean square). */
+const CORNER_STRAIGHT = 0.5
+/** Where those lines meet is the corner, if no further from the turn than the blur there and this (work px). */
+const CORNER_REACH = 0.75
+
+type Boundary = {
+  /** The boundary as the label map has it: corner points of its pixels, a step apart. */
+  xs: number[]
+  ys: number[]
+  /** The same points, smoothed. */
+  nx: Float32Array
+  ny: Float32Array
+  /** The two labels it parts. */
+  a: number
+  b: number
+  /** Cut from a longer boundary at a corner: its ends stay put even where they meet. */
+  cut?: boolean
+}
+
 /**
- * The label map drawn at full size into `out` (alpha untouched). Each label's
- * mask is smoothed a little and the strongest wins at every point, which
- * rounds the map's pixel steps into curves; each output pixel averages four
- * such points, so edges come out anti-aliased like crisp art's.
+ * Every boundary of the label map (w × h), smoothed. The search leaves each
+ * one wobbling by a pixel or two: a photo of print has a texture of its own,
+ * which ripples every edge, and a map of square pixels steps along every
+ * slant. Under a blur the photo says little about where exactly an edge runs,
+ * so each boundary between two areas, from one meeting of three to the next,
+ * is smoothed along its length: every point by as much as moves it no further
+ * than a share of the blur there, and less beside a thin area, which must not
+ * be pinched. A straight edge comes out straight and an arc smooth.
+ *
+ * A boundary is first cut at its corners, each side to be smoothed on its
+ * own, and a corner is put where its two sides, run on, would meet: the
+ * search rounds corners off. So a returned boundary's smoothed ends need not
+ * be its stepped ones, and one closed boundary may come back in parts.
  */
-function redraw(lab: Uint8Array, w: number, h: number, palette: Rgb3[], F: number, out: Uint8ClampedArray, width: number, height: number) {
-  const R = 3
-  const K = palette.length
-  const score = new Float32Array(K)
-  const wx = new Float32Array(2 * R + 1)
-  const wy = new Float32Array(2 * R + 1)
-  // Which work pixels have another label within reach: only those need the smoothing.
-  const mixed = new Uint8Array(w * h)
+function boundaries(lab: Uint8Array, w: number, h: number, sigma: Float32Array): Boundary[] {
+  const at = (x: number, y: number) => lab[y * w + x]!
+  // Cracks between pixels with different labels: across (under pixel row y - 1) and down (left of pixel column x).
+  const across = (x: number, y: number) => x >= 0 && x < w && y >= 1 && y < h && at(x, y - 1) !== at(x, y)
+  const down = (x: number, y: number) => x >= 1 && x < w && y >= 0 && y < h && at(x - 1, y) !== at(x, y)
+  const seenAcross = new Uint8Array(w * (h + 1))
+  const seenDown = new Uint8Array((w + 1) * h)
+  // From a corner point, the cracks leaving it: right, down, left, up.
+  const leaves = (x: number, y: number, d: number) => (d === 0 ? across(x, y) : d === 1 ? down(x, y) : d === 2 ? across(x - 1, y) : down(x, y - 1))
+  const degree = (x: number, y: number) => (leaves(x, y, 0) ? 1 : 0) + (leaves(x, y, 1) ? 1 : 0) + (leaves(x, y, 2) ? 1 : 0) + (leaves(x, y, 3) ? 1 : 0)
+  const DX = [1, 0, -1, 0]
+  const DY = [0, 1, 0, -1]
+  const mark = (x: number, y: number, d: number): boolean => {
+    const seen = d === 0 || d === 2 ? seenAcross : seenDown
+    const i = d === 0 ? y * w + x : d === 2 ? y * w + x - 1 : d === 1 ? y * (w + 1) + x : (y - 1) * (w + 1) + x
+    if (seen[i]) return false
+    seen[i] = 1
+    return true
+  }
+  // How deep each pixel is in its area: steps to the nearest other label (the picture's edge is none).
+  const depth = new Uint16Array(w * h).fill(65535)
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
-      const a = lab[y * w + x]!
-      if ((x + 1 < w && lab[y * w + x + 1] !== a) || (y + 1 < h && lab[(y + 1) * w + x] !== a)) {
-        for (let yy = Math.max(0, y - R - 1); yy <= Math.min(h - 1, y + R + 2); yy++) mixed.fill(1, yy * w + Math.max(0, x - R - 1), yy * w + Math.min(w - 1, x + R + 2) + 1)
-      }
+      const p = y * w + x
+      const l = lab[p]
+      if ((x > 0 && lab[p - 1] !== l) || (x + 1 < w && lab[p + 1] !== l) || (y > 0 && lab[p - w] !== l) || (y + 1 < h && lab[p + w] !== l)) depth[p] = 1
     }
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const p = y * w + x
+      if (x > 0) depth[p] = Math.min(depth[p]!, depth[p - 1]! + 1)
+      if (y > 0) depth[p] = Math.min(depth[p]!, depth[p - w]! + 1)
+    }
+  for (let y = h - 1; y >= 0; y--)
+    for (let x = w - 1; x >= 0; x--) {
+      const p = y * w + x
+      if (x + 1 < w) depth[p] = Math.min(depth[p]!, depth[p + 1]! + 1)
+      if (y + 1 < h) depth[p] = Math.min(depth[p]!, depth[p + w]! + 1)
+    }
+  // Half the width of the area a pixel is in, about: the deepest of its label nearby.
+  const half = (x: number, y: number) => {
+    const cx = Math.min(w - 1, Math.max(0, x))
+    const cy = Math.min(h - 1, Math.max(0, y))
+    const l = at(cx, cy)
+    let most = 1
+    for (let yy = Math.max(0, cy - THIN_REACH); yy <= Math.min(h - 1, cy + THIN_REACH); yy++)
+      for (let xx = Math.max(0, cx - THIN_REACH); xx <= Math.min(w - 1, cx + THIN_REACH); xx++) if (lab[yy * w + xx] === l && depth[yy * w + xx]! > most) most = depth[yy * w + xx]!
+    return Math.min(most, THIN_REACH)
+  }
+  const found: Boundary[] = []
+  // One boundary, walked from a corner point along a crack until three areas meet, the picture ends, or it closes.
+  const walk = (x: number, y: number, d: number) => {
+    if (!mark(x, y, d)) return
+    // The two labels it parts, from its first crack.
+    const [a, b] = d === 0 ? [at(x, y - 1), at(x, y)] : d === 2 ? [at(x - 1, y - 1), at(x - 1, y)] : d === 1 ? [at(x - 1, y), at(x, y)] : [at(x - 1, y - 1), at(x, y - 1)]
+    const xs = [x]
+    const ys = [y]
+    const x0 = x
+    const y0 = y
+    for (;;) {
+      x += DX[d]!
+      y += DY[d]!
+      xs.push(x)
+      ys.push(y)
+      if ((x === x0 && y === y0) || degree(x, y) !== 2) break
+      let next = -1
+      for (let e = 0; e < 4; e++) if (e !== (d + 2) % 4 && leaves(x, y, e)) next = e
+      if (next < 0 || !mark(x, y, next)) break
+      d = next
+    }
+    found.push({ xs, ys, nx: Float32Array.from(xs), ny: Float32Array.from(ys), a: a!, b: b! })
+  }
+  // Open boundaries first, from where they end; then the closed ones, from anywhere on them.
+  for (let pass = 0; pass < 2; pass++)
+    for (let y = 0; y <= h; y++)
+      for (let x = 0; x <= w; x++) {
+        const deg = degree(x, y)
+        if (!deg || (pass === 0 && deg === 2)) continue
+        for (let d = 0; d < 4; d++) if (leaves(x, y, d)) walk(x, y, d)
+      }
+  // Each boundary is cut at its corners, so that either side is smoothed on its own and the corner stays a corner.
+  const parts: Boundary[] = []
+  const step = gauss1(1.5)
+  const sr = (step.length - 1) >> 1
+  const D = CORNER_SPAN
+  for (const e of found) {
+    const n = e.xs.length - 1
+    const closed = e.xs[0] === e.xs[n] && e.ys[0] === e.ys[n]
+    if (n < 4 * D) {
+      parts.push(e)
+      continue
+    }
+    const pick = (v: ArrayLike<number>, k: number) => (closed ? v[((k % n) + n) % n]! : v[Math.min(n, Math.max(0, k))]!)
+    // The pixels' steps taken off, then how far the path turns at each point, between the stretches before and after it.
+    const px = new Float32Array(n + 1)
+    const py = new Float32Array(n + 1)
+    for (let k = 0; k <= n; k++)
+      for (let t = -sr; t <= sr; t++) {
+        px[k]! += step[t + sr]! * pick(e.xs, k + t)
+        py[k]! += step[t + sr]! * pick(e.ys, k + t)
+      }
+    const turn = new Float32Array(n + 1)
+    for (let k = closed ? 0 : D; k <= (closed ? n - 1 : n - D); k++) {
+      const ux = px[k]! - pick(px, k - D)
+      const uy = py[k]! - pick(py, k - D)
+      const vx = pick(px, k + D) - px[k]!
+      const vy = pick(py, k + D) - py[k]!
+      turn[k] = Math.abs(Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy))
+    }
+    if (closed) turn[n] = turn[0]!
+    // A corner: a sharp turn, sharper than any near it, with little turn a stretch away on either side (an arc turns as much all along).
+    // The line through the points from `from` to `to`: a point on it, its direction, and how far off it they lie.
+    const line = (from: number, to: number) => {
+      let mx = 0
+      let my = 0
+      const c = to - from + 1
+      for (let j = from; j <= to; j++) (mx += pick(e.xs, j)), (my += pick(e.ys, j))
+      mx /= c
+      my /= c
+      let xx = 0
+      let xy = 0
+      let yy = 0
+      for (let j = from; j <= to; j++) {
+        const dx = pick(e.xs, j) - mx
+        const dy = pick(e.ys, j) - my
+        xx += dx * dx
+        xy += dx * dy
+        yy += dy * dy
+      }
+      const angle = 0.5 * Math.atan2(2 * xy, xx - yy)
+      const dx = Math.cos(angle)
+      const dy = Math.sin(angle)
+      return { mx, my, dx, dy, off: Math.sqrt(Math.max(0, xx * dy * dy - 2 * xy * dx * dy + yy * dx * dx) / c) }
+    }
+    // The longest straight stretch on one side of point k, a little away from it: the search rounds a corner off.
+    const side = (k: number, dir: number) => {
+      for (let far = 3 * D; far >= 2 * D; far -= D) {
+        const from = dir < 0 ? k - far : k + D
+        const to = dir < 0 ? k - D : k + far
+        if (!closed && (from < 0 || to > n)) continue
+        const l = line(from, to)
+        if (l.off <= CORNER_STRAIGHT) return l
+      }
+      return null
+    }
+    const corners: number[] = []
+    const tips: [number, number][] = []
+    for (let k = closed ? 0 : D; k <= (closed ? n - 1 : n - D); k++) {
+      const t = turn[k]!
+      if (t < CORNER_TURN || 2 * Math.max(pick(turn, k - 2 * D), pick(turn, k + 2 * D)) > t) continue
+      let most = true
+      for (let j = 1; j <= D && most; j++) if (pick(turn, k - j) >= t || pick(turn, k + j) > t) most = false
+      if (!most) continue
+      // The corner itself is where its two sides, run on, would meet: counted only if that is near where the path turns.
+      const p = side(k, -1)
+      const q = side(k, 1)
+      if (!p || !q) continue
+      const cross = p.dx * q.dy - p.dy * q.dx
+      if (Math.abs(cross) < 0.2) continue
+      const along = ((q.mx - p.mx) * q.dy - (q.my - p.my) * q.dx) / cross
+      const tx = p.mx + along * p.dx
+      const ty = p.my + along * p.dy
+      const blurred = Math.min(MAX_WORK_BLUR, sigma[Math.min(h - 1, e.ys[k]!) * w + Math.min(w - 1, e.xs[k]!)]!)
+      if (Math.hypot(tx - e.xs[k]!, ty - e.ys[k]!) > CORNER_REACH + blurred) continue
+      corners.push(k)
+      tips.push([tx, ty])
+    }
+    if (!corners.length) {
+      parts.push(e)
+      continue
+    }
+    // A closed boundary is opened at its first corner.
+    const xs = closed ? [...e.xs.slice(corners[0]!, n), ...e.xs.slice(0, corners[0]! + 1)] : e.xs
+    const ys = closed ? [...e.ys.slice(corners[0]!, n), ...e.ys.slice(0, corners[0]! + 1)] : e.ys
+    const cuts = closed ? [...corners.map((c) => c - corners[0]!), n] : [0, ...corners, n]
+    // Where each cut's end goes: a corner's to where its sides meet, the boundary's own ends nowhere.
+    const ends: ([number, number] | null)[] = closed ? [...tips, tips[0]!] : [null, ...tips, null]
+    for (let i = 0; i + 1 < cuts.length; i++) {
+      const x = xs.slice(cuts[i]!, cuts[i + 1]! + 1)
+      const y = ys.slice(cuts[i]!, cuts[i + 1]! + 1)
+      const nx = Float32Array.from(x)
+      const ny = Float32Array.from(y)
+      const first = ends[i]
+      const last = ends[i + 1]
+      if (first) (nx[0] = first[0]), (ny[0] = first[1])
+      if (last) (nx[x.length - 1] = last[0]), (ny[x.length - 1] = last[1])
+      parts.push({ xs: x, ys: y, nx, ny, a: e.a, b: e.b, cut: true })
+    }
+  }
+  for (const { xs, ys, nx, ny, cut } of parts) {
+    const n = xs.length - 1
+    const closed = !cut && xs[0] === xs[n] && ys[0] === ys[n]
+    // The boundary's points, read past its ends: round again if it closes, else mirrored through the end (as often as it takes), which stays put.
+    const past = (v: ArrayLike<number>, k: number) => {
+      if (closed) return v[((k % n) + n) % n]!
+      let base = 0
+      let sign = 1
+      while (k < 0 || k > n) {
+        base += sign * 2 * (k < 0 ? v[0]! : v[n]!)
+        k = k < 0 ? -k : 2 * n - k
+        sign = -sign
+      }
+      return base + sign * v[k]!
+    }
+    // What is smoothed: the path as the label map has it, but for a corner moved to where its sides meet.
+    const ix = Float32Array.from(nx)
+    const iy = Float32Array.from(ny)
+    // How far each point may move: a share of the blur there, and less beside a thin area.
+    const eps = new Float32Array(n + 1)
+    for (let k = 0; k <= n; k++) {
+      const x = xs[k]!
+      const y = ys[k]!
+      const s = Math.min(MAX_WORK_BLUR, sigma[Math.min(h - 1, y) * w + Math.min(w - 1, x)]!)
+      // The four pixels round the point cover both sides of the boundary.
+      const thin = Math.min(half(x - 1, y - 1), half(x, y - 1), half(x - 1, y), half(x, y))
+      eps[k] = Math.max(SMOOTH_MIN, Math.min(SMOOTH_PER_BLUR * s, SMOOTH_PER_WIDTH * (2 * thin - 1)))
+    }
+    // Smoothed by more and more; each point keeps the most smoothing that moves it no further than that.
+    const level = new Float32Array(n + 1)
+    const sx: Float32Array[] = []
+    const sy: Float32Array[] = []
+    const open = new Uint8Array(n + 1).fill(1)
+    for (let li = 0; li < SMOOTH_LEVELS.length; li++) {
+      const along = SMOOTH_LEVELS[li]!
+      if (along > n / 2) break
+      const k1 = gauss1(along)
+      const r = (k1.length - 1) >> 1
+      const smooth = (v: ArrayLike<number>) => {
+        const o = new Float32Array(n + 1)
+        for (let k = 0; k <= n; k++) {
+          let a = 0
+          for (let t = -r; t <= r; t++) a += k1[t + r]! * past(v, k + t)
+          o[k] = a
+        }
+        return o
+      }
+      // Smoothing pulls a curve inwards, so what one pass took off is smoothed and put back: twice the pass, less the pass twice over.
+      const ox = smooth(ix)
+      const oy = smooth(iy)
+      const ox2 = smooth(ox)
+      const oy2 = smooth(oy)
+      for (let k = 0; k <= n; k++) {
+        // How far the pass pulled the path here, wobble aside: little on a gentle bend, a lot near a sharp turn.
+        const pull = Math.hypot(ox[k]! - ox2[k]!, oy[k]! - oy2[k]!)
+        const ax = (ox[k] = 2 * ox[k]! - ox2[k]!)
+        const ay = (oy[k] = 2 * oy[k]! - oy2[k]!)
+        if (!open[k]) continue
+        if (li > 0 && pull > SMOOTH_PULL) {
+          open[k] = 0
+          continue
+        }
+        // The first amount always: it only takes the pixels' steps off. The rest are measured from there.
+        if (li === 0 || Math.hypot(ax - sx[0]![k]!, ay - sy[0]![k]!) <= eps[k]!) level[k] = li + 1
+        else open[k] = 0
+      }
+      sx.push(ox)
+      sy.push(oy)
+    }
+    if (!sx.length) continue
+    // The amount changes gently along the boundary: a point by a corner holds its neighbours back.
+    for (let round = 0; round < (closed ? 2 : 1); round++) {
+      for (let k = 1; k <= n; k++) level[k] = Math.min(level[k]!, level[k - 1]! + SMOOTH_EASE)
+      for (let k = n - 1; k >= 0; k--) level[k] = Math.min(level[k]!, level[k + 1]! + SMOOTH_EASE)
+      // A closed boundary's first point is its last.
+      if (closed) level[0] = level[n] = Math.min(level[0]!, level[n]!)
+    }
+    for (let k = 0; k <= n; k++) {
+      const lv = level[k]!
+      if (lv <= 0) continue
+      const lo = Math.floor(lv)
+      const f = lv - lo
+      const x0 = lo ? sx[lo - 1]![k]! : ix[k]!
+      const y0 = lo ? sy[lo - 1]![k]! : iy[k]!
+      const x1 = lo < sx.length ? sx[lo]![k]! : x0
+      const y1 = lo < sy.length ? sy[lo]![k]! : y0
+      nx[k] = x0 + f * (x1 - x0)
+      ny[k] = y0 + f * (y1 - y0)
+    }
+  }
+  return parts
+}
+
+/**
+ * The label map drawn at full size into `out` (alpha untouched), along its
+ * smoothed boundaries. Drawn first as it is, each of its pixels a block, at
+ * twice the output's size; then, for each boundary, the points between its
+ * stepped path and its smoothed one change sides. Each output pixel averages
+ * its four points, so edges come out anti-aliased like crisp art's.
+ */
+function redraw(lab: Uint8Array, w: number, h: number, palette: Rgb3[], F: number, edges: Boundary[], out: Uint8ClampedArray, width: number, height: number) {
+  const S = 2 * F
+  const W = 2 * width
+  const H = 2 * height
+  const big = new Uint8Array(W * H)
+  for (let y = 0; y < H; y++) {
+    const row = Math.min(h - 1, Math.floor(y / S)) * w
+    for (let x = 0; x < W; x++) big[y * W + x] = lab[row + Math.min(w - 1, Math.floor(x / S))]!
+  }
+  // A point that has changed sides once is marked, and stays.
+  const MOVED = 128
+  const rows = new Map<number, number[]>()
+  const cut = (x1: number, y1: number, x2: number, y2: number) => {
+    if (y1 === y2) return
+    const lo = Math.max(0, Math.ceil(Math.min(y1, y2) - 0.5))
+    const hi = Math.min(H, Math.ceil(Math.max(y1, y2) - 0.5))
+    for (let y = lo; y < hi; y++) {
+      const x = x1 + ((y + 0.5 - y1) * (x2 - x1)) / (y2 - y1)
+      const r = rows.get(y)
+      if (r) r.push(x)
+      else rows.set(y, [x])
+    }
+  }
+  for (const { xs, ys, nx, ny, a, b } of edges) {
+    // Where the stepped path and the smoothed one cross each row of points: between them, in pairs, lies what changes sides.
+    rows.clear()
+    for (let k = 0; k + 1 < xs.length; k++) {
+      cut(xs[k]! * S, ys[k]! * S, xs[k + 1]! * S, ys[k + 1]! * S)
+      cut(nx[k]! * S, ny[k]! * S, nx[k + 1]! * S, ny[k + 1]! * S)
+    }
+    // An end moved to its corner: the two paths are joined there.
+    const n = xs.length - 1
+    cut(xs[0]! * S, ys[0]! * S, nx[0]! * S, ny[0]! * S)
+    cut(xs[n]! * S, ys[n]! * S, nx[n]! * S, ny[n]! * S)
+    for (const [y, cuts] of rows) {
+      cuts.sort((p, q) => p - q)
+      for (let c = 0; c + 1 < cuts.length; c += 2)
+        for (let x = Math.max(0, Math.ceil(cuts[c]! - 0.5)); x + 0.5 < cuts[c + 1]! && x < W; x++) {
+          const l = big[y * W + x]!
+          if (l === a) big[y * W + x] = b | MOVED
+          else if (l === b) big[y * W + x] = a | MOVED
+        }
+    }
+  }
   for (let y = 0; y < height; y++)
     for (let x = 0; x < width; x++) {
+      const p = 2 * y * W + 2 * x
+      const c0 = palette[big[p]! & 127]!
+      const c1 = palette[big[p + 1]! & 127]!
+      const c2 = palette[big[p + W]! & 127]!
+      const c3 = palette[big[p + W + 1]! & 127]!
       const o = (y * width + x) * 4
-      const hx = Math.min(w - 1, Math.floor(x / F))
-      const hy = Math.min(h - 1, Math.floor(y / F))
-      if (!mixed[hy * w + hx]) {
-        const c = palette[lab[hy * w + hx]!]!
-        out[o] = c[0]
-        out[o + 1] = c[1]
-        out[o + 2] = c[2]
-        continue
-      }
-      let r = 0
-      let g = 0
-      let b = 0
-      for (let sy = 0; sy < 2; sy++)
-        for (let sx = 0; sx < 2; sx++) {
-          // This point, in work pixels.
-          const px = (x + 0.25 + 0.5 * sx) / F - 0.5
-          const py = (y + 0.25 + 0.5 * sy) / F - 0.5
-          const cx = Math.round(px)
-          const cy = Math.round(py)
-          for (let i = -R; i <= R; i++) {
-            wx[i + R] = Math.exp(-((cx + i - px) ** 2) / (2 * REDRAW_SIGMA ** 2))
-            wy[i + R] = Math.exp(-((cy + i - py) ** 2) / (2 * REDRAW_SIGMA ** 2))
-          }
-          score.fill(0)
-          for (let j = -R; j <= R; j++) {
-            const yy = Math.min(h - 1, Math.max(0, cy + j))
-            for (let i = -R; i <= R; i++) score[lab[yy * w + Math.min(w - 1, Math.max(0, cx + i))]!]! += wx[i + R]! * wy[j + R]!
-          }
-          let best = 0
-          for (let k = 1; k < K; k++) if (score[k]! > score[best]!) best = k
-          const c = palette[best]!
-          r += c[0]
-          g += c[1]
-          b += c[2]
-        }
-      out[o] = r / 4
-      out[o + 1] = g / 4
-      out[o + 2] = b / 4
+      out[o] = (c0[0] + c1[0] + c2[0] + c3[0]) / 4
+      out[o + 1] = (c0[1] + c1[1] + c2[1] + c3[1]) / 4
+      out[o + 2] = (c0[2] + c1[2] + c2[2] + c3[2]) / 4
     }
 }
 
