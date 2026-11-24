@@ -1561,7 +1561,8 @@ export default function App() {
 
   const photo = useMemo(() => !!source && looksLikePhoto(source), [source])
   // Measured on the image as given (or as cleaned up), never enlarged: enlarging alone softens edges.
-  const blurry = useMemo(() => !!base && looksBlurry(base), [base])
+  const smoothable = canSmooth(settings.preset)
+  const blurry = useMemo(() => smoothable && !!base && looksBlurry(base), [smoothable, base])
   const suggestPoster = photo && !presetPicked && settings.preset !== 'photo'
 
   const choosePreset = (id: PresetId) => {

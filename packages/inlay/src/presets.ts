@@ -52,7 +52,7 @@ export type TraceOptions = {
   invert?: boolean
   /** Centerline: the stroke width in px; measured from the ink when left out. */
   strokeWidth?: number
-  /** Colour presets: make soft, blurry edges hard before picking colours, so the blur doesn't trace as a band round every shape. Does nothing to crisp images. */
+  /** Colour presets but pixel art: make soft, blurry edges hard before picking colours, so the blur doesn't trace as a band round every shape. Does nothing to crisp images. */
   sharpen?: boolean
   /** Colour presets: even out painted shading (brush and JPEG noise) before picking colours. */
   smoothShading?: boolean
@@ -151,7 +151,7 @@ function* presetSteps(image: ImageLike, options: TraceOptions = {}): Generator<T
   // Greys only: each pixel becomes the grey of its own lightness, so every palette picked from it is grey.
   if (o.grayscale && name !== 'pixel' && !o.palette?.length) px = toGray(px)
   // Blurry edges made hard first, so their ramps don't pick up a colour of their own (a halo).
-  if (o.sharpen) px = sharpenEdges(px, width, height)
+  if (o.sharpen && name !== 'pixel') px = sharpened(px, width, height, scale)
   // Painted outlines made plain first, and marked, so neither smoothing nor the clean-up after labelling takes them away.
   const lines = o.keepOutlines ? new Uint8Array(width * height) : undefined
   if (lines) px = boostLines(px, width, height, outlineRadius(scale), lines)
@@ -189,6 +189,21 @@ function* presetSteps(image: ImageLike, options: TraceOptions = {}): Generator<T
     ...(lines ? { lines } : {}),
   }
   return yield* traceSteps(px, width, height, raw)
+}
+
+/**
+ * `sharpenEdges`, remembering its last answer: the app traces the same pixels
+ * again on every slider change (and the target-size search many times), and
+ * sharpening costs seconds where the trace costs a fraction of that. Keyed by
+ * a hash of every byte, which takes milliseconds.
+ */
+let lastSharpened: { key: string; out: Uint8ClampedArray } | null = null
+function sharpened(px: ArrayLike<number>, width: number, height: number, scale: number): Uint8ClampedArray {
+  let h = 0x811c9dc5
+  for (let i = 0; i < px.length; i++) h = Math.imul(h ^ px[i]!, 0x01000193)
+  const key = `${width}x${height}@${scale}:${h >>> 0}`
+  if (lastSharpened?.key !== key) lastSharpened = { key, out: sharpenEdges(px, width, height, undefined, scale) }
+  return lastSharpened.out
 }
 
 /** sRGB (0–255) of the grey whose OKLab lightness is `l`: for a grey, L is the cube root of its linear light. */

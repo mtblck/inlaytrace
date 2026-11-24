@@ -210,10 +210,10 @@ Transparent pixels, and any non-zero in `keep` (one entry per pixel), are left
 alone and never averaged in. Run it before picking the palette and pass the
 result to `trace`.
 
-### `sharpenEdges(rgba, width, height, blur?)` and `edgeBlur(rgba, width, height)`
+### `sharpenEdges(rgba, width, height, blur?, scale?)` and `edgeBlur(rgba, width, height)`
 
 ```ts
-function sharpenEdges(rgba: ArrayLike<number>, width: number, height: number, blur?: number): Uint8ClampedArray
+function sharpenEdges(rgba: ArrayLike<number>, width: number, height: number, blur?: number, scale?: number): Uint8ClampedArray
 function edgeBlur(rgba: ArrayLike<number>, width: number, height: number): number
 ```
 
@@ -227,8 +227,9 @@ photo or screenshot of flat art: grain is evened out (`smoothShading`), then a
 colour shock filter moves each pixel partway along an edge's ramp to the colour
 of the nearer end, a pixel a pass, until the edge is a step at its middle. A
 thin line's middle keeps its colour, so the line stays. `blur` is `edgeBlur`'s
-reading, measured when left out; under 1.5 px the image is only copied.
-Transparent pixels are left alone. About 5 s for a megapixel image.
+reading, measured when left out; under 1.5 px the image is only copied. For
+an image enlarged `scale` times first, that threshold grows with it.
+Transparent pixels are left alone, and their colour isn't sharpened in. About 5 s for a megapixel image.
 
 ### `boostLines(rgba, width, height, radius?, lines?)`
 

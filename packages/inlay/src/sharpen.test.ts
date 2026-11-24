@@ -77,6 +77,22 @@ describe('sharpenEdges', () => {
     expect(after[67]).toBeLessThan(60)
   })
 
+  it('never darkens an edge with the black under transparency', () => {
+    // Cut out through the box's blurred left edge: canvases keep RGB 0 under alpha 0.
+    const px = art(2.5)
+    for (let y = 0; y < h; y++) for (let x = 0; x < 20; x++) px.set([0, 0, 0, 0], (y * w + x) * 4)
+    const out = sharpenEdges(px, w, h, 2.5)
+    // Every opaque pixel ends as the paper or the box (or between), never darker than the paper.
+    for (let y = 2; y < h - 2; y++) for (let x = 20; x < 30; x++) expect(out[(y * w + x) * 4]).toBeGreaterThan(36)
+  })
+
+  it('takes an enlarged image as softer by its scale', () => {
+    // Blur 2.5 is soft at its own size, but 2× enlarging alone would soften crisp art that much.
+    const px = art(2.5)
+    expect([...sharpenEdges(px, w, h, 2.5, 2)]).toEqual([...px])
+    expect([...sharpenEdges(px, w, h, 2.5, 1)]).not.toEqual([...px])
+  })
+
   it('leaves transparent pixels alone', () => {
     const px = art(2.5)
     for (let y = 0; y < h; y++) for (let x = 0; x < 8; x++) px[(y * w + x) * 4 + 3] = 0

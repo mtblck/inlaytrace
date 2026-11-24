@@ -14,7 +14,8 @@
  * colour and the edge ends as a step at its middle. A pixel at a peak or a dip
  * (a thin line's middle) keeps its colour, so thin lines stay.
  *
- * Measured in docs/design-notes.md ("Sharpening blurry images"). Unsharp
+ * Measured in docs/design-notes.md ("Blurry flat art is sharpened by a shock
+ * filter, not deconvolved"). Unsharp
  * masking and Richardson–Lucy deconvolution were tried first: both brought
  * the paper grain up with the edges and the file grew; neither removed the
  * halo, since a sharper ramp is still a ramp.
@@ -37,8 +38,8 @@ const EDGE_WINDOW = 6
  * with C the lightness range around it. The median over every strong edge;
  * 0 when there are none.
  *
- * Crisp art rendered at its size reads 0.7–1.3 (anti-aliasing); a 2 px blur on
- * the same art reads 2–3.8, and photos read 2–2.7.
+ * Crisp art reads 0.7–0.9 (anti-aliasing), JPEG or not; the same art blurred
+ * by 2 px reads 1.7–2.5, photos 0.9–1.5, a soft photo of a printed logo 2.1.
  */
 export function edgeBlur(rgba: ArrayLike<number>, width: number, height: number): number {
   const n = width * height
@@ -97,20 +98,65 @@ const DIRECTION_SIGMA = 1.5
 /**
  * A copy of `rgba` (`width` × `height`, RGBA) with soft edges made hard.
  * `blur` is how soft they are (`edgeBlur`, measured when left out); below
- * `SOFT_EDGES` the image is only copied. Transparent pixels are left as they are.
+ * `SOFT_EDGES` the image is only copied. `scale` is how many times the image
+ * was enlarged before this: enlarging softens edges by as much, so the
+ * threshold and the most passes grow with it. Transparent pixels are left as
+ * they are, and their colour never seeps in.
  */
-export function sharpenEdges(rgba: ArrayLike<number>, width: number, height: number, blur = edgeBlur(rgba, width, height)): Uint8ClampedArray {
-  if (blur < SOFT_EDGES || width < 3 || height < 3) return Uint8ClampedArray.from(rgba)
-  const passes = Math.min(MAX_PASSES, Math.round(PASSES_PER_PX * blur))
+export function sharpenEdges(rgba: ArrayLike<number>, width: number, height: number, blur = edgeBlur(rgba, width, height), scale = 1): Uint8ClampedArray {
+  const k = Math.max(1, scale)
+  if (blur < SOFT_EDGES * k || width < 3 || height < 3) return Uint8ClampedArray.from(rgba)
+  const passes = Math.min(MAX_PASSES * k, Math.round(PASSES_PER_PX * blur))
   const smooth = smoothShading(rgba, width, height)
   const n = width * height
   const opaque = new Uint8Array(n)
   for (let p = 0; p < n; p++) opaque[p] = rgba[p * 4 + 3]! >= 128 ? 1 : 0
   let ch: Float32Array[] = [0, 1, 2].map((c) => Float32Array.from({ length: n }, (_, p) => smooth[p * 4 + c]!))
+  extend(ch, opaque, width, height)
   for (let pass = 0; pass < passes; pass++) ch = shockPass(ch, width, height, opaque)
   const out = Uint8ClampedArray.from(rgba)
   for (let c = 0; c < 3; c++) for (let p = 0; p < n; p++) if (opaque[p]) out[p * 4 + c] = ch[c]![p]!
   return out
+}
+
+/** How far (px) opaque colours are carried into transparency: past every blur and look of a pass. */
+const EXTEND = Math.ceil(3 * DECIDE_SIGMA + 3 * DIRECTION_SIGMA + LOOK + 2)
+
+/**
+ * Transparent pixels given the colour of the opaque ones beside them, ring by
+ * ring, out to EXTEND px, so the blurs and looks across a cut-out edge see
+ * the shape's own colour, not the black that canvases keep under alpha 0
+ * (which put a dark rim round a background-removed logo).
+ */
+function extend(ch: Float32Array[], opaque: Uint8Array, w: number, h: number) {
+  const known = Uint8Array.from(opaque)
+  let ring: number[] = []
+  for (let r = 0; r < EXTEND; r++) {
+    ring = []
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const p = y * w + x
+        if (known[p]) continue
+        let sum0 = 0
+        let sum1 = 0
+        let sum2 = 0
+        let m = 0
+        for (const q of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, y > 0 ? p - w : -1, y < h - 1 ? p + w : -1])
+          if (q >= 0 && known[q]) {
+            sum0 += ch[0]![q]!
+            sum1 += ch[1]![q]!
+            sum2 += ch[2]![q]!
+            m++
+          }
+        if (!m) continue
+        ch[0]![p] = sum0 / m
+        ch[1]![p] = sum1 / m
+        ch[2]![p] = sum2 / m
+        ring.push(p)
+      }
+    if (!ring.length) break
+    for (const p of ring) known[p] = 1
+  }
 }
 
 /**

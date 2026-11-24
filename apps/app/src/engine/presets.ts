@@ -179,8 +179,8 @@ export type { TraceOptions }
  */
 export function toTraceOptions(s: Settings, scale = 1): TraceOptions {
   // `shapes` is always given: left out, the package's default (on for flat art) would win over the setting.
-  // `scale` only where it changes something: line widths (Outline art), gap sizes, and how wide an outline is looked for.
-  const scaled = scale > 1 && (s.preset === 'outline' || (isInk(s.preset) && s.closeGaps) || (canSmooth(s.preset) && s.keepOutlines))
+  // `scale` only where it changes something: line widths (Outline art), gap sizes, how wide an outline is looked for, and how soft an enlarged image may be before it's sharpened.
+  const scaled = scale > 1 && (s.preset === 'outline' || (isInk(s.preset) && s.closeGaps) || (canSmooth(s.preset) && (s.keepOutlines || s.sharpen)))
   const fit = { preset: PACKAGE_NAME[s.preset], speckle: s.speckle, tolerance: toleranceFor(s.smoothing), cornerAngle: s.corners, shapes: s.exact && hasExactShapes(s.preset), ...(scaled ? { scale } : {}) }
   // Like `shapes`, `closeGaps` is given whenever the preset closes gaps by default, so unticking it holds.
   const gaps = closesGaps(s.preset) ? { closeGaps: s.closeGaps } : {}
