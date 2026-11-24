@@ -425,6 +425,27 @@ unchanged (10.41 to 10.43), with 3% fewer shapes and 70% more time, so
 Poster leaves it off; so do Logo and anything cut out, since a cutter can
 only cut flat colour. In the package it is an option, off by default.
 
+**A faint background is one shape.** AI-made logos often sit on a near-white
+background with a vignette too slight to see, about 25 levels from corner to
+corner. Pale tints (a light fill on white is that close too) split it into
+three or four ragged bands, which on a dump-truck logo made a third of the
+SVG. Logo, Illustration and Outline art now join neighbouring regions whose
+colours are within 0.07 of each other in OKLab (closer than the peak walk
+tells apart) when the image passes between them without an edge: across at
+least half of their boundary it steps by under 0.4 of their colours'
+difference, both over three pixels and between the two pixels themselves (so a
+line one pixel wide still counts as an edge), with no allowance for noise. A
+pale fill on white steps by its whole difference, so it stays. The joined run,
+if its shades span no more than 0.1, takes its commonest colour, and its edges
+are fitted without sub-pixel placement, which would read the blend against that
+colour rather than the band's. It stays flat in Illustration too: a gradient
+over the truck's vignette, which isn't one straight ramp, drew some band over
+10 levels off, and letting faint shades skip the per-band check would also
+smear a close pastel shape into a soft background. With your own palette it is
+off, as every colour there was chosen. On the truck, Logo went from 107 to 63
+KB and Illustration from 126 to 71 KB, the background one shape and the truck
+unchanged pixel for pixel.
+
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
 most one waiting request per channel (trace, optimise), replacing it when a

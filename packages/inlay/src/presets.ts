@@ -179,6 +179,8 @@ function* presetSteps(image: ImageLike, options: TraceOptions = {}): Generator<T
     photo: picker === 'quantize',
     strokes: !!o.strokes && !pixels && picker !== 'quantize',
     gradients: gradients && !pixels,
+    // Your own colours are all kept: none is folded into another as a faint shade of it.
+    faint: !own,
     closeGaps: !!o.closeGaps,
     scale,
     ...(lines ? { lines } : {}),

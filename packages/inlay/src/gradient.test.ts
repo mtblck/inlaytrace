@@ -155,3 +155,46 @@ describe('painted art', () => {
     expect(r.paths.some((p) => p.gradient)).toBe(false)
   })
 })
+
+describe('faint shading', () => {
+  // A near-white background with a slight vignette (darker at the top left,
+  // not along one straight ramp), banded by close tints, and a navy shape on it.
+  const W = 240
+  const H = 160
+  const WHITE: Rgb = [253, 253, 254]
+  const GREY: Rgb = [232, 232, 235]
+  const navy = (x: number, y: number) => x >= 120 && x < 200 && y >= 80 && y < 130
+  const vignette = (x: number, y: number): Rgb => (navy(x, y) ? [22, 33, 51] : mix(GREY, WHITE, Math.hypot(x / W, y / H) ** 0.7))
+  const palette = ['#fdfdfe', '#f3f3f5', '#ebebed', '#162133']
+  const opts = { mode: 'palette' as const, palette, speckle: 2, tolerance: 0.75, cornerAngle: 60 }
+
+  it('traces a faint background gradient as one flat shape', () => {
+    const r = trace(image(W, H, vignette), W, H, opts)
+    expect(r.paths.map((p) => p.fill).sort()).toEqual(['#162133', '#fdfdfe'])
+  })
+
+  it('or as one shape still, where gradients are on', () => {
+    const r = trace(image(W, H, vignette), W, H, { ...opts, gradients: true })
+    expect(r.paths).toHaveLength(2)
+  })
+
+  it('keeps a pale fill on white, though as close', () => {
+    // Its edge steps by the whole difference: a shape, not shading.
+    const pale = (x: number, y: number) => Math.hypot(x - 60, y - 60) < 40
+    const px = image(W, H, (x, y) => (navy(x, y) ? [22, 33, 51] : pale(x, y) ? [235, 235, 237] : pale(x - 3, y) ? [243, 243, 245] : WHITE))
+    const r = trace(px, W, H, opts)
+    expect(r.paths.map((p) => p.fill)).toContain('#ebebed')
+  })
+
+  it('keeps a pale fill on the vignette itself, in one of its own tints', () => {
+    // In the lighter half, so its sharp edge parts it from the background's own bands.
+    const disc = (x: number, y: number) => Math.hypot(x - 200, y - 40) < 25
+    const r = trace(image(W, H, (x, y) => (disc(x, y) ? [235, 235, 237] : vignette(x, y))), W, H, opts)
+    expect(r.paths.map((p) => p.fill).sort()).toEqual(['#162133', '#ebebed', '#fdfdfe'])
+  })
+
+  it('keeps every colour when told to (your own palette)', () => {
+    const r = trace(image(W, H, vignette), W, H, { ...opts, faint: false })
+    expect(new Set(r.paths.map((p) => p.fill)).size).toBeGreaterThan(2)
+  })
+})

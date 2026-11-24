@@ -18,7 +18,7 @@
  * Along the axis (or the radius), each channel is then piecewise linear
  * between a few evenly spaced stops, as few as fit.
  */
-import { hexToRgb, toHex, type Rgb } from './palette'
+import { hexToRgb, oklab, toHex, type Rgb } from './palette'
 
 export type GradientStop = { offset: number; color: string }
 /** Coordinates in the trace's pixels (gradientUnits="userSpaceOnUse"). */
@@ -68,28 +68,10 @@ export type Shading = { comps: number[]; gradient: Gradient; mean: string }
  * region's flat colour.
  */
 export function shadings(rgba: ArrayLike<number>, w: number, h: number, comp: Int32Array, regions: number, colorOf: (id: number) => Rgb): Shading[] {
-  // Soft boundaries: per pair of regions, the image's step across their cracks against their colours' difference.
-  const step = new Map<number, number>()
-  const count = new Map<number, number>()
+  const { step, count } = steps(rgba, w, h, comp, regions)
   const rgb = (i: number): Rgb => [rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2]]
   const d3 = (a: Rgb, b: Rgb) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
   const colors = Array.from({ length: regions }, (_, id) => colorOf(id))
-  const crack = (a: number, b: number, before: number, after: number) => {
-    const ca = comp[a]
-    const cb = comp[b]
-    if (ca < 0 || cb < 0 || ca === cb) return
-    const key = Math.min(ca, cb) * regions + Math.max(ca, cb)
-    const p = before * 4
-    const q = after * 4
-    step.set(key, (step.get(key) ?? 0) + Math.hypot(rgba[p] - rgba[q], rgba[p + 1] - rgba[q + 1], rgba[p + 2] - rgba[q + 2]))
-    count.set(key, (count.get(key) ?? 0) + 1)
-  }
-  for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++) {
-      const i = y * w + x
-      if (x + 1 < w) crack(i, i + 1, y * w + Math.max(0, x - SPAN), y * w + Math.min(w - 1, x + 1 + SPAN))
-      if (y + 1 < h) crack(i, i + w, Math.max(0, y - SPAN) * w + x, Math.min(h - 1, y + 1 + SPAN) * w + x)
-    }
   const parent = Array.from({ length: regions }, (_, i) => i)
   const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])))
   for (const [key, n] of count) {
@@ -209,6 +191,104 @@ export function shadings(rgba: ArrayLike<number>, w: number, h: number, comp: In
   }
   out.forEach((s, k) => (s.mean = toHex([sums[k][0] / sums[k][3], sums[k][1] / sums[k][3], sums[k][2] / sums[k][3]])))
   return out
+}
+
+/**
+ * Per pair of touching regions (key `min * regions + max`): how many cracks
+ * they share, and the image's summed step across them, measured between the
+ * pixels SPAN either side of each crack.
+ */
+function steps(rgba: ArrayLike<number>, w: number, h: number, comp: Int32Array, regions: number, limit?: (a: number, b: number) => number) {
+  const step = new Map<number, number>()
+  const count = new Map<number, number>()
+  const soft = new Map<number, number>()
+  const crack = (a: number, b: number, before: number, after: number) => {
+    const ca = comp[a]
+    const cb = comp[b]
+    if (ca < 0 || cb < 0 || ca === cb) return
+    const key = Math.min(ca, cb) * regions + Math.max(ca, cb)
+    const p = before * 4
+    const q = after * 4
+    const s = Math.hypot(rgba[p] - rgba[q], rgba[p + 1] - rgba[q + 1], rgba[p + 2] - rgba[q + 2])
+    step.set(key, (step.get(key) ?? 0) + s)
+    count.set(key, (count.get(key) ?? 0) + 1)
+    // Faint cracks also step little between the two pixels themselves: a line thinner than SPAN steps there, not across.
+    if (limit && Math.max(s, Math.hypot(rgba[a * 4] - rgba[b * 4], rgba[a * 4 + 1] - rgba[b * 4 + 1], rgba[a * 4 + 2] - rgba[b * 4 + 2])) < limit(ca, cb))
+      soft.set(key, (soft.get(key) ?? 0) + 1)
+  }
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x
+      if (x + 1 < w) crack(i, i + 1, y * w + Math.max(0, x - SPAN), y * w + Math.min(w - 1, x + 1 + SPAN))
+      if (y + 1 < h) crack(i, i + w, Math.max(0, y - SPAN) * w + x, Math.min(h - 1, y + 1 + SPAN) * w + x)
+    }
+  return { step, count, soft }
+}
+
+/** Colours this close (OKLab) are one colour's faint shading when the image passes softly from one to the other. */
+const FAINT = 0.07
+/** …and the shades a faint run joins stay within this of each other. */
+const FAINT_SPREAD = 0.1
+/** A faint boundary is softer than a soft one: the image steps by less than this share of the two colours' difference, with no floor for noise. */
+const FAINT_SOFT = 0.4
+/** …across at least this share of their boundary: the rest can run beside an edge (a halo along a shape's outline). */
+const FAINT_SHARE = 0.5
+
+/**
+ * Faint shading: neighbouring regions in close colours (within FAINT in
+ * OKLab) that the image passes between without an edge, as a palette bands a
+ * barely-there gradient in a background. Each run of them becomes one region
+ * in its commonest colour. Returned as each region's new colour index, or -1.
+ *
+ * Unlike `shadings`, a boundary is faint only when its step is a small share
+ * of the colours' difference itself: a pale fill on white is as close in
+ * colour, and its edge steps by about the whole difference.
+ */
+export function faintShades(rgba: ArrayLike<number>, w: number, h: number, comp: Int32Array, regions: number, labelOf: (id: number) => number, rgbs: (Rgb | null)[], areaOf: (id: number) => number, skip: (id: number) => boolean): Int32Array {
+  const into = new Int32Array(regions).fill(-1)
+  const labs = rgbs.map((c) => (c ? oklab(c) : null))
+  const parent = Array.from({ length: regions }, (_, i) => i)
+  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])))
+  const d = (a: Rgb, b: Rgb) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+  const close = (a: number, b: number) => {
+    const la = labelOf(a)
+    const lb = labelOf(b)
+    return la !== lb && !!labs[la] && !!labs[lb] && !skip(a) && !skip(b) && d(labs[la]!, labs[lb]!) <= FAINT
+  }
+  const { count, soft } = steps(rgba, w, h, comp, regions, (a, b) => (close(a, b) ? FAINT_SOFT * d(rgbs[labelOf(a)]!, rgbs[labelOf(b)]!) : -1))
+  for (const [key, n] of count) {
+    const a = Math.floor(key / regions)
+    const b = key % regions
+    const k = soft.get(key) ?? 0
+    if (k < SOFT_MIN || k < FAINT_SHARE * n) continue
+    parent[find(a)] = find(b)
+  }
+  const groups = new Map<number, number[]>()
+  for (let id = 0; id < regions; id++) {
+    const r = find(id)
+    const g = groups.get(r)
+    if (g) g.push(id)
+    else groups.set(r, [id])
+  }
+  for (const ids of groups.values()) {
+    if (ids.length < 2) continue
+    const shades = [...new Set(ids.map(labelOf))]
+    if (shades.length < 2) continue
+    if (spread(shades.map((l) => rgbs[l]!)) > FAINT_SPREAD) continue
+    const area = new Map<number, number>()
+    for (const id of ids) area.set(labelOf(id), (area.get(labelOf(id)) ?? 0) + areaOf(id))
+    const main = [...area].reduce((a, b) => (b[1] > a[1] ? b : a))[0]
+    for (const id of ids) into[id] = main
+  }
+  return into
+}
+
+/** The widest OKLab distance between any two of these colours. */
+function spread(rgbs: Rgb[]) {
+  const labs = [...new Map(rgbs.map((c) => [toHex(c), c])).values()].map(oklab)
+  let most = 0
+  for (const a of labs) for (const b of labs) most = Math.max(most, Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]))
+  return most
 }
 
 /** A gradient's colour at a point. */
