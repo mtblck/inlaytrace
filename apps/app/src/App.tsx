@@ -212,6 +212,10 @@ export default function App() {
   /** Whether the user has moved the axis since this image opened; until then a detected one replaces it. */
   const axisTouched = useRef(false)
   const symmetryOf = useRef<Pixels | null>(null)
+  /** How soft the image's edges measured (`edgeBlur`), the image it was asked for, and the asking (set further down, where what it needs is known). */
+  const [blurOf, setBlurOf] = useState<{ source: Source; px: number } | null>(null)
+  const blurAsked = useRef<Source | null>(null)
+  const askBlur = useRef(() => {})
   const [mirroring, setMirroring] = useState(false)
   const [mirrorError, setMirrorError] = useState<string | null>(null)
   /** An action that would throw away shape edits, waiting for the user to confirm. */
@@ -633,6 +637,7 @@ export default function App() {
       if (traceText.length) paintOut((traced = rgba.slice()), width, height, traceText, width / source.bitmap.width)
       const res = await client.trace(traced, width, height, toTraceOptions(settings, cached.pixels.upscale))
       if (!res) return // superseded by a newer request
+      askBlur.current()
       if (symmetryOf.current !== cached.pixels) {
         // Once per set of pixels, not per trace: settings don't change the answer.
         // Asked after the trace, so detection never delays the first preview.
@@ -1562,22 +1567,19 @@ export default function App() {
   const photo = useMemo(() => !!source && looksLikePhoto(source), [source])
   // Measured on the image as given (or as cleaned up), never enlarged: enlarging alone softens edges.
   const smoothable = canSmooth(settings.preset)
-  // Measured in the worker, once a trace is done: it is only a hint, takes long enough to stall the page, and must not hold up the first preview.
-  const [blurOf, setBlurOf] = useState<{ source: Source; px: number } | null>(null)
-  const blurEdge = maxTraceEdge(settings.preset)
-  const hasTraced = status.kind === 'done'
-  useEffect(() => {
-    if (!smoothable || !base || !hasTraced || blurOf?.source === base) return
-    const pixels = blurPixels(base, blurEdge)
+  // Measured in the worker, asked for when a trace comes back and once per image: it is only a hint,
+  // takes long enough to stall the page, and must not hold up a preview.
+  askBlur.current = () => {
+    if (!smoothable || !base || blurAsked.current === base) return
+    const pixels = blurPixels(base, maxTraceEdge(settings.preset))
     if (!pixels) return
-    let live = true
+    const asked = (blurAsked.current = base)
     void client.blur(pixels.rgba, pixels.width, pixels.height).then((res) => {
-      if (live && res?.type === 'blur') setBlurOf({ source: base, px: res.px })
+      if (res?.type === 'blur') setBlurOf({ source: asked, px: res.px })
+      // Dropped (a newer image's took its place, or the worker restarted): the next trace asks again.
+      else if (blurAsked.current === asked) blurAsked.current = null
     })
-    return () => {
-      live = false
-    }
-  }, [smoothable, base, hasTraced, blurEdge, blurOf, client])
+  }
   const blurry = smoothable && !!base && blurOf?.source === base && blurOf.px > BLURRY
   const suggestPoster = photo && !presetPicked && settings.preset !== 'photo'
 

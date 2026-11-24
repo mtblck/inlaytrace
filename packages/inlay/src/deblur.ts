@@ -1079,7 +1079,12 @@ function* solve(obs: Float32Array[], w: number, h: number, sigma: Float32Array, 
     }
     return changed
   }
-  for (let round = 0; round < BLEND_ROUNDS && unblend(); round++) yield* search(BLEND_SWEEPS)
+  for (let round = 0; round < BLEND_ROUNDS; round++) {
+    // Areas at the picture's edge are judged by the labels beside them: the padding's, as they are now.
+    repad()
+    if (!unblend()) break
+    yield* search(BLEND_SWEEPS)
+  }
 
   // A set of flips, kept only if the misfit they cost is under `worth` times the boundary they save.
   const tryFlips = (ps: number[], to: (p: number) => number, worth: number): boolean => {
@@ -1131,12 +1136,14 @@ function* solve(obs: Float32Array[], w: number, h: number, sigma: Float32Array, 
         if (!thin) continue
         // Each pixel to the label beside it that most of its neighbours have.
         const into = new Map<number, number>()
+        const beside = new Set<number>()
         for (const p of area) {
           let best = -1
           let most = 0
           for (const s of steps) {
             const l = lab[p + s]!
             if (l === a) continue
+            beside.add(l)
             let n = 0
             for (const t of steps) if (lab[p + t] === l) n++
             if (n > most) (most = n), (best = l)
@@ -1144,7 +1151,7 @@ function* solve(obs: Float32Array[], w: number, h: number, sigma: Float32Array, 
           into.set(p, best)
         }
         // With one colour all round, it is a thin line through that colour, not a gap between two shapes.
-        if (new Set(into.values()).size < 2) continue
+        if (beside.size < 2) continue
         if (tryFlips(area, (p) => into.get(p)!, SLIVER_WORTH)) changed = true
       }
     return changed

@@ -152,6 +152,11 @@ plan forbids taking payments.
 
 - **Paddle's live approval:** a pricing page, terms, a refund policy and a
   privacy policy, live on inlaytrace.com before the review.
+- **Remove blur is off in HD runs** (`cleanSettings` in `server/hd.ts`, Nov
+  2026): it holds many full-size planes at once, too much at HD's sizes. The
+  free preview can have it on, so before HD is revived an HD run of such a
+  trace must either be refused with a reason or deblur a reduced copy, or the
+  result will not match the preview.
 
 ## Tickets
 

@@ -199,7 +199,8 @@ function* presetSteps(image: ImageLike, options: TraceOptions = {}): Generator<T
  * deblurring costs seconds where the trace costs a fraction of that. Keyed by
  * two hashes of every byte, which take milliseconds; so the last deblurred
  * image stays in memory until another replaces it. As steps: a first one
- * before it starts, then one at each of `deblurSteps`' pauses.
+ * before it starts, then one at each of `deblurSteps`' pauses; a single one
+ * when the answer was remembered.
  */
 let lastDeblurred: { key: string; out: Uint8ClampedArray } | null = null
 function* deblurred(px: ArrayLike<number>, width: number, height: number, scale: number): Generator<TraceStep, Uint8ClampedArray> {
@@ -210,7 +211,10 @@ function* deblurred(px: ArrayLike<number>, width: number, height: number, scale:
     h2 = (Math.imul(h2, 0x5bd1e995) + px[i]! + (h2 >>> 15)) | 0
   }
   const key = `${width}x${height}@${scale}:${h1 >>> 0}:${h2 >>> 0}`
-  if (lastDeblurred?.key === key) return lastDeblurred.out
+  if (lastDeblurred?.key === key) {
+    yield { stage: 'deblur', done: 1 }
+    return lastDeblurred.out
+  }
   yield { stage: 'deblur', done: 0 }
   const steps = deblurSteps(px, width, height, undefined, scale)
   for (let pauses = 1; ; pauses++) {

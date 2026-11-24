@@ -59,7 +59,9 @@ type TraceStage = 'deblur' | 'palette' | 'label' | 'clean' | 'regions' | 'fit' |
 but pauses between its stages (and every few hundred edges while fitting),
 calling `onProgress`. With `deblur` on there is a `'deblur'` stage first,
 which pauses after each sweep of its search: about a tenth of a second apart
-on a megapixel image, and `done` there is an estimate. About every 12 ms it lets the thread get on with other
+on a megapixel image, and `done` there is an estimate. The last deblurred
+image is remembered, so the same pixels traced again report the stage once,
+already done. About every 12 ms it lets the thread get on with other
 work, so a page that traces on its main thread can keep responding, and a
 Cancel button can abort it. When `signal` aborts, it rejects at the next pause
 with the signal's `reason` (an `Error` named `AbortError` when there is none),
