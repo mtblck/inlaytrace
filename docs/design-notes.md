@@ -425,6 +425,29 @@ unchanged (10.41 to 10.43), with 3% fewer shapes and 70% more time, so
 Poster leaves it off; so do Logo and anything cut out, since a cutter can
 only cut flat colour. In the package it is an option, off by default.
 
+**Blurry flat art is sharpened by a shock filter, not deconvolved.** A soft
+photo of a printed logo traced with a pale band round every shape: each edge
+is a ramp, and the ramp's middle is nearest some third palette colour.
+Unsharp masking sharpened the paper grain too (file +66%) and Richardson–Lucy
+(Gaussian PSF, 20 iterations) rang and took 15 s; neither removed the band,
+since a steeper ramp is still a ramp. `sharpenEdges` evens the grain out with
+`smoothShading`, then runs a colour shock filter: a pixel whose neighbours
+3 px either way across the edge lie on opposite sides of it in colour takes
+the colour one pixel towards the nearer end, so the ramp collapses to a step
+at its middle; a peak or dip (a thin line's middle) is left, so lines stay.
+Decisions and edge directions both use a σ 1.5 copy: from σ 0.7 or Sobel the
+grille of the test truck stayed half soft. The number of passes is 4.5× the
+blur `edgeBlur` measures (contrast ÷ steepest slope ÷ √2π, median over strong
+edges, only each edge's steepest point: without that, JPEG ringing read crisp
+art as 7–8 px). Crisp art reads 0.7–0.9 px, blurred 2 px 1.7–2.5, the truck
+2.1. On the truck, Logo went from 509 to 94 KB and Illustration from 587 to
+223 KB, with the halo gone and the orange trim back. On the score fixtures
+blurred 2–3 px it cut size and paths everywhere, and wrong pixels on flat
+shapes (overlap 1.36 → 0.47%, the badge 5.1 → 4.1%), but thin-line art got
+slightly worse (outline 2.1 → 2.8%): a blurred hairline comes back as a band
+at its half-height, wider than it was. Hence opt in, with a nudge when an
+image measures soft (over 1.6 px), rather than on by default.
+
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
 most one waiting request per channel (trace, optimise), replacing it when a
