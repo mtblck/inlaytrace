@@ -281,3 +281,165 @@ function gauss(src: Float32Array, w: number, h: number, sigma: number): Float32A
     }
   return out
 }
+
+/** Prototype: seeded region growing from flat areas. */
+export function snapEdges(rgba: ArrayLike<number>, w: number, h: number, opts: { flat?: number; erode?: number; minArea?: number; sigma?: number; ridge?: number; prominence?: number } = {}): Uint8ClampedArray {
+  const n = w * h
+  const smooth = smoothShading(rgba, w, h)
+  const ch = [0, 1, 2].map((c) => Float32Array.from({ length: n }, (_, p) => smooth[p * 4 + c]!))
+  const g = ch.map((c) => gauss(c, w, h, opts.sigma ?? 1))
+  const slope = new Float32Array(n).fill(1e9)
+  for (let y = 1; y < h - 1; y++)
+    for (let x = 1; x < w - 1; x++) {
+      const p = y * w + x
+      let s = 0
+      for (const f of g) s += ((f[p + 1]! - f[p - 1]!) / 2) ** 2 + ((f[p + w]! - f[p - w]!) / 2) ** 2
+      slope[p] = Math.sqrt(s)
+    }
+  const T = opts.flat ?? 3
+  let flat = new Uint8Array(n)
+  for (let p = 0; p < n; p++) flat[p] = slope[p]! < T && rgba[p * 4 + 3]! >= 128 ? 1 : 0
+  for (let r = 0; r < (opts.erode ?? 1); r++) {
+    const e = new Uint8Array(n)
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const p = y * w + x; e[p] = flat[p] && flat[p - 1] && flat[p + 1] && flat[p - w] && flat[p + w] ? 1 : 0 }
+    flat = e
+  }
+  // Ridges: a thin line's middle, where both sides across it lie the same way in colour (a fringe between two colours lies between them).
+  if (opts.ridge !== 0) {
+    const [ex, ey] = directions(g, w, h)
+    const L = opts.ridge ?? 3
+    const prom = opts.prominence ?? 20
+    for (let y = 1; y < h - 1; y++)
+      for (let x = 1; x < w - 1; x++) {
+        const p = y * w + x
+        if (flat[p] || rgba[p * 4 + 3]! < 128) continue
+        let dot = 0
+        let da = 0
+        let db = 0
+        for (const f of g) {
+          const v = f[p]!
+          const a = bilinear(f, w, h, x + L * ex[p]!, y + L * ey[p]!) - v
+          const b = bilinear(f, w, h, x - L * ex[p]!, y - L * ey[p]!) - v
+          dot += a * b
+          da += a * a
+          db += b * b
+        }
+        if (dot > 0 && Math.min(da, db) > prom * prom) flat[p] = 1
+      }
+  }
+  // Components; small ones aren't seeds.
+  const comp = new Int32Array(n).fill(-1)
+  const minArea = opts.minArea ?? 12
+  const stack: number[] = []
+  for (let s = 0; s < n; s++) {
+    if (!flat[s] || comp[s] >= 0) continue
+    const members: number[] = []
+    comp[s] = s
+    stack.push(s)
+    while (stack.length) {
+      const p = stack.pop()!
+      members.push(p)
+      const x = p % w
+      for (const q of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, p - w, p + w]) if (q >= 0 && q < n && flat[q] && comp[q] < 0) { comp[q] = s; stack.push(q) }
+    }
+    if (members.length < minArea) for (const p of members) comp[p] = -2
+  }
+  // Colour each pixel carries: its own for seeds.
+  const col = ch.map((c) => Float32Array.from(c))
+  const done = new Uint8Array(n)
+  // Bucket queue by colour distance.
+  const buckets: number[][] = Array.from({ length: 450 }, () => [])
+  const from = new Int32Array(n).fill(-1)
+  const push = (p: number, src: number) => {
+    let d = 0
+    for (let k = 0; k < 3; k++) d += (ch[k]![p]! - col[k]![src]!) ** 2
+    buckets[Math.min(449, Math.round(Math.sqrt(d)))]!.push(p, src)
+  }
+  for (let p = 0; p < n; p++) if (comp[p] >= 0) done[p] = 1
+  for (let p = 0; p < n; p++) {
+    if (!done[p]) continue
+    const x = p % w
+    for (const q of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, p - w, p + w]) if (q >= 0 && q < n && !done[q]) push(q, p)
+  }
+  let b = 0
+  while (b < 450) {
+    const bucket = buckets[b]!
+    if (!bucket.length) {
+      b++
+      continue
+    }
+    const src = bucket.pop()!
+    const p = bucket.pop()!
+    if (done[p]) continue
+    done[p] = 1
+    from[p] = src
+    for (let k = 0; k < 3; k++) col[k]![p] = col[k]![src]!
+    const x = p % w
+    for (const q of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, p - w, p + w])
+      if (q >= 0 && q < n && !done[q]) {
+        let d = 0
+        for (let k = 0; k < 3; k++) d += (ch[k]![q]! - col[k]![p]!) ** 2
+        const nb = Math.min(449, Math.round(Math.sqrt(d)))
+        buckets[nb]!.push(q, p)
+        if (nb < b) b = nb
+      }
+  }
+  const out = Uint8ClampedArray.from(rgba)
+  for (let p = 0; p < n; p++) if (rgba[p * 4 + 3]! >= 128) for (let k = 0; k < 3; k++) out[p * 4 + k] = col[k]![p]!
+  return out
+}
+
+/** Prototype: unmix. Each pixel that is a mix of the colours either side of its edge takes the nearer one. */
+export function unmixEdges(rgba: ArrayLike<number>, w: number, h: number, opts: { look?: number; passes?: number; off?: number; smoothDecide?: boolean; fringe?: boolean; fringeOnly?: boolean; chroma?: number } = {}): Uint8ClampedArray {
+  const n = w * h
+  const smooth = smoothShading(rgba, w, h)
+  let ch: Float32Array[] = [0, 1, 2].map((c) => Float32Array.from({ length: n }, (_, p) => smooth[p * 4 + c]!))
+  const blur = edgeBlur(rgba, w, h)
+  const L = opts.look ?? Math.max(2, Math.round(2.5 * blur))
+  for (let pass = 0; pass < (opts.passes ?? 2); pass++) {
+    const g = ch.map((c) => gauss(c, w, h, 1.5))
+    const [ex, ey] = directions(g, w, h)
+    const next = ch.map((c) => Float32Array.from(c))
+    for (let y = 1; y < h - 1; y++)
+      for (let x = 1; x < w - 1; x++) {
+        const p = y * w + x
+        if (rgba[p * 4 + 3]! < 128 || (ex[p] === 0 && ey[p] === 0)) continue
+        const src = opts.smoothDecide ? g : ch
+        const a = src.map((f) => bilinear(f, w, h, x + L * ex[p]!, y + L * ey[p]!))
+        const b = src.map((f) => bilinear(f, w, h, x - L * ex[p]!, y - L * ey[p]!))
+        const v = src.map((f) => f[p]!)
+        let ab2 = 0
+        let t = 0
+        let dot = 0
+        for (let k = 0; k < 3; k++) {
+          ab2 += (b[k]! - a[k]!) ** 2
+          t += (v[k]! - a[k]!) * (b[k]! - a[k]!)
+          dot += (a[k]! - v[k]!) * (b[k]! - v[k]!)
+        }
+        if (ab2 < 30 * 30) continue
+        t /= ab2
+        let off = 0
+        for (let k = 0; k < 3; k++) off += (v[k]! - (a[k]! + t * (b[k]! - a[k]!))) ** 2
+        const tol = Math.max(opts.off ?? 30, 0.3 * Math.sqrt(ab2))
+        const chroma = (c: number[]) => Math.max(c[0]!, c[1]!, c[2]!) - Math.min(c[0]!, c[1]!, c[2]!)
+        if (opts.fringeOnly || off > tol * tol || t < -0.15 || t > 1.15) {
+          // Not a blend of the two. A colour fringe (a lens's orange or blue edge) still lies between them in lightness;
+          // a thin line of its own is lighter or darker than both sides, or sticks out of them (both sides the same way from it).
+          if (!opts.fringe || dot >= 0) continue
+          const la = luma(a, 0)
+          const lb = luma(b, 0)
+          const lv = luma(v, 0)
+          if (Math.abs(lb - la) < 40) continue
+          t = (lv - la) / (lb - la)
+          if (t < 0.05 || t > 0.95) continue
+          if (chroma(v) < Math.max(chroma(a), chroma(b)) + (opts.chroma ?? 15)) continue
+        }
+        const take = t < 0.5 ? a : b
+        for (let k = 0; k < 3; k++) next[k]![p] = take[k]!
+      }
+    ch = next
+  }
+  const out = Uint8ClampedArray.from(rgba)
+  for (let p = 0; p < n; p++) if (rgba[p * 4 + 3]! >= 128) for (let k = 0; k < 3; k++) out[p * 4 + k] = ch[k]![p]!
+  return out
+}
