@@ -52,12 +52,16 @@ type TraceAsyncOptions = TraceOptions & {
 }
 type AbortSignalLike = { readonly aborted: boolean; readonly reason?: unknown }
 type TraceStep = { stage: TraceStage; done: number } // done: how far through the stage, 0 to 1
-type TraceStage = 'palette' | 'label' | 'clean' | 'regions' | 'fit' | 'shapes'
+type TraceStage = 'deblur' | 'palette' | 'label' | 'clean' | 'regions' | 'fit' | 'shapes'
 ```
 
 `trace` that can be stopped and reports progress: it gives the same result,
 but pauses between its stages (and every few hundred edges while fitting),
-calling `onProgress`. About every 12 ms it lets the thread get on with other
+calling `onProgress`. With `deblur` on there is a `'deblur'` stage first,
+which pauses after each sweep of its search: about a tenth of a second apart
+on a megapixel image, and `done` there is an estimate. The last deblurred
+image is remembered, so the same pixels traced again report the stage once,
+already done. About every 12 ms it lets the thread get on with other
 work, so a page that traces on its main thread can keep responding, and a
 Cancel button can abort it. When `signal` aborts, it rejects at the next pause
 with the signal's `reason` (an `Error` named `AbortError` when there is none),
@@ -118,6 +122,7 @@ type TraceOptions = {
   threshold?: number | 'auto' | null // lineart, centerline
   invert?: boolean // lineart, centerline
   strokeWidth?: number // centerline
+  deblur?: boolean
   smoothShading?: boolean
   keepOutlines?: boolean
   grayscale?: boolean // greys only, `colors` of them
@@ -208,6 +213,33 @@ labels as one colour instead of flecks of two; edges between colours stay put.
 Transparent pixels, and any non-zero in `keep` (one entry per pixel), are left
 alone and never averaged in. Run it before picking the palette and pass the
 result to `trace`.
+
+### `deblur(rgba, width, height, blur?, scale?)` and `edgeBlur(rgba, width, height)`
+
+```ts
+function deblur(rgba: ArrayLike<number>, width: number, height: number, blur?: number, scale?: number): Uint8ClampedArray
+function edgeBlur(rgba: ArrayLike<number>, width: number, height: number): number
+```
+
+`edgeBlur` measures how soft the image's edges are, in px: the Gaussian blur a
+hard edge would need to look like the image's bold edges (the median over
+them; 0 with none). Crisp art reads under 1 px, JPEG or not; the same art
+blurred by 2 px reads about 2.
+
+`deblur` returns a copy with the blur taken out, for tracing a soft photo,
+screenshot or enlargement of flat art. It measures the blur place by place,
+finds the flat colours the image is made of, and searches for the map of those
+colours that, blurred the same way, best matches the image with the least
+boundary. That map's boundaries are then smoothed along their length, as far
+as the blur leaves their place open, a stretch that a line fits is drawn as
+that line, and corners stay corners; then it is drawn with clean anti-aliased edges. It works out
+whether the blur was a lens's (of light) or a resize's (of the stored values),
+which decides where each edge sits, and undoes a colour fringe first. `blur`
+is `edgeBlur`'s reading, measured when left out; under 1.5 px the image is
+only copied. For an image enlarged `scale` times first, that threshold grows
+with it. Alpha is kept, and the colour under transparent pixels isn't blurred
+in. An image with fewer than two flat colours (a line drawing, a photo) is
+only copied. Shading comes out flat. About 4 s for a megapixel image.
 
 ### `boostLines(rgba, width, height, radius?, lines?)`
 

@@ -101,6 +101,8 @@ export function cleanSettings(raw: unknown): Settings | null {
     removeBackground: false,
     aiUpscale: false,
     fineDetail: false,
+    // Remove blur holds many full-size planes at once: too much at HD's sizes.
+    deblur: false,
     smoothShading: s.smoothShading === true,
     keepOutlines: s.keepOutlines === true,
     recogniseText: false,

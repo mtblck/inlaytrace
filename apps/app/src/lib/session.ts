@@ -110,6 +110,7 @@ export function checkSettings(x: unknown): Settings {
   if (typeof x.removeBackground === 'boolean') out.removeBackground = x.removeBackground
   if (typeof x.aiUpscale === 'boolean') out.aiUpscale = x.aiUpscale
   if (typeof x.fineDetail === 'boolean') out.fineDetail = x.fineDetail
+  if (typeof x.deblur === 'boolean') out.deblur = x.deblur
   if (typeof x.smoothShading === 'boolean') out.smoothShading = x.smoothShading
   if (typeof x.keepOutlines === 'boolean') out.keepOutlines = x.keepOutlines
   if (typeof x.grayscale === 'boolean') out.grayscale = x.grayscale

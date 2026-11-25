@@ -9,6 +9,7 @@
 import { centerline } from './centerline'
 import { run, toSvg, traceRaw, traceSteps, type InlayOptions, type InlayResult, type TraceStep } from './inlay'
 import { exactPalette, oklab, peakPalette, quantizePalette } from './palette'
+import { deblurSteps } from './deblur'
 import { boostLines, smoothShading } from './smooth'
 
 export type PresetName = 'logo' | 'illustration' | 'outline' | 'lineart' | 'centerline' | 'poster' | 'pixel'
@@ -51,6 +52,8 @@ export type TraceOptions = {
   invert?: boolean
   /** Centerline: the stroke width in px; measured from the ink when left out. */
   strokeWidth?: number
+  /** Colour presets but pixel art: take the blur out of a soft image before picking colours, so it doesn't trace as a band round every shape. Does nothing to crisp images. */
+  deblur?: boolean
   /** Colour presets: even out painted shading (brush and JPEG noise) before picking colours. */
   smoothShading?: boolean
   /** Colour presets: darken faint painted outlines first, so the shapes they part don't merge. */
@@ -147,6 +150,8 @@ function* presetSteps(image: ImageLike, options: TraceOptions = {}): Generator<T
   }
   // Greys only: each pixel becomes the grey of its own lightness, so every palette picked from it is grey.
   if (o.grayscale && name !== 'pixel' && !o.palette?.length) px = toGray(px)
+  // The blur taken out first, so soft edges' ramps don't pick up a colour of their own (a halo).
+  if (o.deblur && name !== 'pixel') px = yield* deblurred(px, width, height, scale)
   // Painted outlines made plain first, and marked, so neither smoothing nor the clean-up after labelling takes them away.
   const lines = o.keepOutlines ? new Uint8Array(width * height) : undefined
   if (lines) px = boostLines(px, width, height, outlineRadius(scale), lines)
@@ -187,6 +192,42 @@ function* presetSteps(image: ImageLike, options: TraceOptions = {}): Generator<T
   }
   return yield* traceSteps(px, width, height, raw)
 }
+
+/**
+ * `deblur`, remembering its last answer: the app traces the same pixels
+ * again on every slider change (and the target-size search many times), and
+ * deblurring costs seconds where the trace costs a fraction of that. Keyed by
+ * two hashes of every byte, which take milliseconds; so the last deblurred
+ * image stays in memory until another replaces it. As steps: a first one
+ * before it starts, then one at each of `deblurSteps`' pauses; a single one
+ * when the answer was remembered.
+ */
+let lastDeblurred: { key: string; out: Uint8ClampedArray } | null = null
+function* deblurred(px: ArrayLike<number>, width: number, height: number, scale: number): Generator<TraceStep, Uint8ClampedArray> {
+  let h1 = 0x811c9dc5
+  let h2 = 0x9747b28c
+  for (let i = 0; i < px.length; i++) {
+    h1 = Math.imul(h1 ^ px[i]!, 0x01000193)
+    h2 = (Math.imul(h2, 0x5bd1e995) + px[i]! + (h2 >>> 15)) | 0
+  }
+  const key = `${width}x${height}@${scale}:${h1 >>> 0}:${h2 >>> 0}`
+  if (lastDeblurred?.key === key) {
+    yield { stage: 'deblur', done: 1 }
+    return lastDeblurred.out
+  }
+  yield { stage: 'deblur', done: 0 }
+  const steps = deblurSteps(px, width, height, undefined, scale)
+  for (let pauses = 1; ; pauses++) {
+    const r = steps.next()
+    if (r.done) {
+      lastDeblurred = { key, out: r.value }
+      return r.value
+    }
+    // How many pauses there will be isn't known ahead: the search stops when it settles. About this many, usually.
+    yield { stage: 'deblur', done: Math.min(1, pauses / DEBLUR_PAUSES) }
+  }
+}
+const DEBLUR_PAUSES = 36
 
 /** sRGB (0–255) of the grey whose OKLab lightness is `l`: for a grey, L is the cube root of its linear light. */
 const greyOf = (l: number) => {

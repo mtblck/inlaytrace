@@ -446,6 +446,91 @@ off, as every colour there was chosen. On the truck, Logo went from 107 to 63
 KB and Illustration from 126 to 71 KB, the background one shape and the truck
 unchanged pixel for pixel.
 
+**Blurry flat art is solved for, not sharpened.** A soft photo of a printed
+logo traced with a pale band round every shape: each edge is a ramp, and the
+ramp's middle is nearest some third palette colour. Everything that works on
+the ramp itself failed on the test image, a dump-truck logo (Nov 2026).
+Unsharp masking and Richardson–Lucy sharpened the grain and kept the band; a
+colour shock filter made hard edges but turned the band solid; growing regions
+from the flat areas lost the thin trim; giving each edge pixel the nearer of
+the colours either side lost the halo and left ragged shapes; Real-ESRGAN and
+Restormer (defocus deblurring; tested only, its licence is academic) barely
+sharpened it. `deblur` (*Remove blur*) fits a model instead: the map of a few
+flat colours that, blurred as the image was, best matches it, at the least
+boundary. The blur is measured per edge (contrast ÷ steepest slope ÷ √2π) and
+pooled into a map by block medians, since a photo taken at an angle is sharper
+on one side (the truck: 3.5 px across the middle, 7–8 at the left); the
+colours are the commonest of the flat areas, plus any no blend of two of those
+explains (a pinstripe's). The search starts from each pixel's nearest colour
+and flips pixels one at a time, down the picture and back up, wherever misfit
+plus boundary drops, then re-reads thin areas of a colour two others blend to
+as those two: a line thinner than the blur fades to the blend's colour and is
+first read as a wider line of it, which no single flip gets out of. Only a
+line running through one colour is re-read so. A strip between two different
+colours can as well be the wider, duller strip it was first read as, and under
+a blur nothing tells the two apart: the truck's cab-grey strip between the
+orange trim and the navy rim came back as a pale hairline until this was the
+rule. The map
+that comes out is right about where the shapes are and wrong about their
+edges in the small: its pixels step along every slant, and a photo of print
+has a texture of its own that the search fits faithfully, rippling each edge
+by a pixel or so every few pixels. Charging more for boundary did not help
+(the ripple is in the photo, so straightening it costs misfit, and a cost
+high enough to pay for that takes the thin detail first). Under a blur the
+photo cannot place an edge to better than a share of the blur anyway, so
+the edges are cleaned up as geometry: every boundary between two areas is
+walked, cut at its corners, and smoothed along its length by as much as moves
+no point further than 0.6 of the blur there (less beside a thin area). A
+straight edge comes out straight. Two things had to be right. Smoothing a
+curve pulls it inwards, so what a pass takes off is smoothed and put back,
+and an amount of smoothing is used only where that pull is under half a
+pixel; without this every round shape shrank by up to the tolerance (the
+fixtures' wrong pixels went up three- to five-fold). And a corner is where
+its two sides, run on as straight lines, meet: the search rounds it off, and
+ending each side at the rounded point bends the whole side towards it.
+Smoothing still leaves a slow wobble in, a pixel or two over a hundred, and
+under a heavy blur the lumps the search drew. So a stretch that one line fits
+to within what each of its points may move, and that bows off the line by
+under a quarter of a pixel, is drawn as that line, and two such lines meet
+where they cross: over half the truck's boundary length. The lines are better
+placed than the corner found before them (drawing them through that corner
+instead doubled the icons fixture's wrong pixels), and two runs that meet at
+under 0.3 rad, or bow the way they turn, are a curve drawn as chords and stay
+smoothed (a wheel arch came out a polygon without that). Placing each edge
+from the photo's own ramp afterwards was tried and dropped: on a blurred
+circle the smoothed edge was already within 0.12 px of true (rms), and the
+refit made that 0.10 with a pull inwards on curves. The
+picture is then drawn along those boundaries at twice its size and halved,
+for anti-aliased edges. Slivers no more than two pixels wide, left where
+three colours' ramps cross and read as gaps between shapes, are given to
+their neighbours first where the photo barely notices; only between two
+colours, since with one colour all round such an area is a thin line (a 3 px
+line on a 2048 px picture, solved at a quarter of its size, is one work pixel
+wide, and was erased until this was the rule). What
+mattered most was what the blur acted on. A lens blurs light; a resize or a
+filter blurs the stored sRGB values, and the same step blurred each way
+differs by about half a blur in where its middle sits. Modelled as light, the
+truck (blurred as stored, it turned out) came back with every dark outline too
+fat. Now the starkest edges' ramps decide: blurred as light they are lopsided
+(by 1.5–5% of their width; as stored, under 1%). To measure any of this the
+sharp artwork was registered onto the photo and edges compared: of the
+output's edges, the share within 2 px of a true one, and of the true edges,
+the share found. Tracing the photo as it is: 53% and 64%. The light model:
+61% and 50%. Now: 79% and 68%, and the Logo trace went from 411 KB with halos
+to 71 KB without, the orange trim back. On the score fixtures blurred by 2
+and 3.5 px, wrong pixels fell from 1.5–8% to 0.03–1% on flat art (emblem,
+icons, pinwheel, overlap, badge; the badge blurred as light by 3.5 px, 9.5 →
+3.5%). It is opt in, suggested when an image
+measures soft (over 1.6 px), because it only suits flat colour: shading comes
+out flat (the shaded fixture got worse, 0.8 → 2.2%), art with no flat areas
+is returned as it was (strokes), hairlines that never reach their own colour
+are not recovered (outline at 3.5 px: 2.6 → 3.8%), and where the blur is wider
+than the details (the truck's left tyre, at 7–8 px) they come back rounded or
+merged. A picture over 420,000 pixels is solved at a half, a third or a
+quarter of its size, for time; a line under about two of those work pixels
+wide is kept, but in the colour it fades to and a little wide. About 4 s for
+a megapixel image, and `traceAsync` pauses after each sweep of the search.
+
 **Only the latest request ever waits.** Dragging a slider fires many trace
 requests a second and a trace can take a second or more. `TraceClient` holds at
 most one waiting request per channel (trace, optimise), replacing it when a

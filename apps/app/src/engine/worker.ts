@@ -4,7 +4,7 @@
  * page. Both are synchronous inside the worker; the client is responsible for
  * making sure only the latest request is ever waiting (see client.ts).
  */
-import { detectSymmetry, type Symmetry } from 'inlaytrace'
+import { detectSymmetry, edgeBlur, type Symmetry } from 'inlaytrace'
 import { runTrace } from './run'
 import { SVGO } from './svgo'
 import type { Settings, TraceOptions } from './presets'
@@ -14,12 +14,15 @@ export type WorkerRequest =
   | { type: 'trace'; id: number; rgba: ArrayBuffer; width: number; height: number; options: TraceOptions }
   | { type: 'optimize'; id: number; svg: string }
   | { type: 'symmetry'; id: number; rgba: ArrayBuffer; width: number; height: number }
+  | { type: 'blur'; id: number; rgba: ArrayBuffer; width: number; height: number }
   | { type: 'size'; id: number; rgba: ArrayBuffer; width: number; height: number; settings: Settings; target: number; scale: number }
 
 export type WorkerResponse =
   | { type: 'traced'; id: number; svg: string; ms: number }
   | { type: 'optimized'; id: number; svg: string }
   | { type: 'symmetry'; id: number; found: Symmetry[] }
+  /** How soft the image's edges are, in px (`edgeBlur`). */
+  | { type: 'blur'; id: number; px: number }
   | { type: 'sized'; id: number; result: SizeSearch }
   /** Sent while a size search runs; the request isn't finished. */
   | { type: 'progress'; id: number; tried: number; best: Candidate }
@@ -46,6 +49,8 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
       post({ type: 'sized', id: req.id, result })
     } else if (req.type === 'symmetry') {
       post({ type: 'symmetry', id: req.id, found: detectSymmetry(new Uint8Array(req.rgba), req.width, req.height) })
+    } else if (req.type === 'blur') {
+      post({ type: 'blur', id: req.id, px: edgeBlur(new Uint8Array(req.rgba), req.width, req.height) })
     } else {
       svgo ??= import('svgo/browser')
       const { optimize } = await svgo

@@ -172,6 +172,30 @@ export function coverColours(rgba: Uint8ClampedArray): number {
 }
 const PHOTO_COLOURS = 30
 
+/**
+ * The pixels an image's blur is judged on (`edgeBlur`, in the worker: it
+ * takes a tenth of a second and more): the image at the size it is traced
+ * at (`maxEdge` at most), never enlarged, since enlarging softens it. Null
+ * for an SVG.
+ */
+export function blurPixels(source: Source, maxEdge: number): { rgba: Uint8ClampedArray; width: number; height: number } | null {
+  if (source.svg) return null
+  const long = Math.max(source.bitmap.width, source.bitmap.height)
+  const k = Math.min(1, maxEdge / long)
+  const width = Math.max(1, Math.round(source.bitmap.width * k))
+  const height = Math.max(1, Math.round(source.bitmap.height * k))
+  const ctx = new OffscreenCanvas(width, height).getContext('2d', { willReadFrequently: true })!
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(source.bitmap, 0, 0, width, height)
+  return { rgba: ctx.getImageData(0, 0, width, height).data, width, height }
+}
+/**
+ * An image whose `edgeBlur` is past this many px looks blurred. Crisp art
+ * reads 0.3–0.9 px, even as a JPEG; the same art blurred by 2 px reads
+ * 1.9–2.3, and a soft photo of a printed logo 5. Photos read 0.9–1.5.
+ */
+export const BLURRY = 1.6
+
 /** Whether the image looks like a photo, which Poster suits better than the flat-colour presets. */
 export function looksLikePhoto(source: Source): boolean {
   if (source.svg) return false

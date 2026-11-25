@@ -18,7 +18,7 @@ function card() {
 describe('the public API', () => {
   it('exports only what docs/package/api.md documents (#161): anything added here is frozen at 1.0', () => {
     expect(Object.keys(inlay).sort()).toEqual(
-      ['boostLines', 'centerline', 'centerlineToSvg', 'detectSymmetry', 'exactPalette', 'fitChain', 'isFlat', 'mapPoints', 'oklab', 'parsePath', 'peakPalette', 'pointAt', 'presets', 'quantizePalette', 'serializePath', 'smoothShading', 'toSvg', 'trace', 'traceAsync', 'traceCenterline', 'traceInlay'].sort(),
+      ['boostLines', 'centerline', 'centerlineToSvg', 'deblur', 'detectSymmetry', 'edgeBlur', 'exactPalette', 'fitChain', 'isFlat', 'mapPoints', 'oklab', 'parsePath', 'peakPalette', 'pointAt', 'presets', 'quantizePalette', 'serializePath', 'smoothShading', 'toSvg', 'trace', 'traceAsync', 'traceCenterline', 'traceInlay'].sort(),
     )
   })
   it('traces to shapes as data, largest first, sharing their edge exactly', () => {

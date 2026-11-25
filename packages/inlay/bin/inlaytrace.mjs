@@ -27,6 +27,7 @@ Writes to stdout without -o.
       --exact-shapes      draw circles and rectangles exactly (--no-exact-shapes)
       --threshold <0-255> lineart and centerline: ink is darker than this
       --invert            lineart and centerline: light ink on a dark background
+      --deblur            colour presets: take the blur out of a soft image first
       --grayscale         colour presets: greys only, --colors of them
       --stroke-width <px> centerline: the stroke width
   -h, --help
@@ -47,6 +48,7 @@ const { values, positionals } = parseArgs({
     'exact-shapes': { type: 'boolean' },
     threshold: { type: 'string' },
     invert: { type: 'boolean' },
+    deblur: { type: 'boolean' },
     grayscale: { type: 'boolean' },
     'stroke-width': { type: 'string' },
     help: { type: 'boolean', short: 'h' },
@@ -86,6 +88,7 @@ const options = {
   shapes: values['exact-shapes'],
   threshold: values.threshold === undefined ? undefined : values.threshold === 'auto' ? 'auto' : num('threshold', values.threshold),
   invert: values.invert,
+  deblur: values.deblur,
   grayscale: values.grayscale,
   strokeWidth: num('stroke-width', values['stroke-width']),
 }
