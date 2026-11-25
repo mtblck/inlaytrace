@@ -12,6 +12,19 @@ the next release are in [`.changeset/`](../.changeset/); the
 
 <!-- Written by scripts/changelog.mjs from packages/inlay/CHANGELOG.md: edit that (or the changesets), not this. -->
 
+## 0.5.0
+
+### Minor Changes
+
+- New `deblur` option (and `--deblur` on the command line) for soft photos, screenshots and enlarged copies of flat-colour art. A blurred edge is a ramp, and its middle traced as a band of an in-between colour round every shape. `deblur` measures the blur place by place, finds the flat colours the image is made of, and works out the flat shapes that, blurred the same way, look like the image; those are traced instead, their straight edges drawn as true lines and their corners kept. It tells a lens's blur from a resize's, which decides where each edge sits, and takes out a colour fringe on the way. Images whose edges measure crisp are left as they are. `traceAsync` reports it as a `'deblur'` stage, pausing after each sweep of its search, so it can be cancelled. On a soft photo of a dump-truck logo the Logo SVG went from 411 KB with a halo round every shape to 71 KB without. Also exported: `deblur(rgba, width, height)` and `edgeBlur(rgba, width, height)`, which measures how soft an image's edges are, in px.
+- Exact shapes are chosen by drawing them: a shape near the fit limits is kept only if it covers the region as well as the free fit, and a small regular polygon (a hexagon a few pixels across) is no longer drawn as a circle.
+- New `traceAsync(image, { signal, onProgress, …options })`: the same trace as `trace`, but it pauses between stages to report progress, gives the thread time to do other work, and stops when its `AbortSignal` aborts.
+
+### Patch Changes
+
+- Logo and Illustration keep a flat colour that sits close to another one, when there's room under the colour cap: a truck logo's neutral-grey grille bars and tyre treads, 0.057 from its blue-grey cab in OKLab, used to trace as the cab, smeared with navy. Only flat art gets this (four in five pixels flat), and gradients' in-between shades are left out, so photos and soft shading trace as before. A shade between two close colours (the truck's bumper) now takes one of them for its whole region, instead of blotches of both.
+- A barely-there gradient in a background (a near-white vignette) no longer traces as ragged bands of close tints: Logo, Illustration and Outline art join them into one flat shape in their commonest colour. Only close colours the image passes between without an edge are joined, so a pale fill on white stays a shape, and your own palette keeps every colour. On a dump-truck logo the Logo SVG went from 107 to 63 KB.
+
 ## 0.4.0
 
 ### Minor Changes
