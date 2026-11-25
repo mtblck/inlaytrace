@@ -34,6 +34,8 @@
   --c-on-mat-strong: #eef2ee;
   /* The phone's dock: white on the paper, so it reads as a bar of its own. */
   --c-dock: #ffffff;
+  /* The header: a light grey band, to break up the paper below it. */
+  --c-header: #e8ece9;
   /* Its height above the phone's own inset (the iPhone home bar). */
   --dock-h: calc(70px + env(safe-area-inset-bottom));
 }
@@ -41,6 +43,7 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
   --c-dock: #1b2a24;
+  --c-header: #131e1a;
   --c-paper: #131e1a;
   --c-paper-sunk: #1b2a24;
   --c-ink: #eef2ee;
@@ -63,6 +66,7 @@
 @theme inline {
   --color-paper: var(--c-paper);
   --color-paper-sunk: var(--c-paper-sunk);
+  --color-header: var(--c-header);
   --color-ink: var(--c-ink);
   --color-ink-muted: var(--c-ink-muted);
   --color-ink-faint: var(--c-ink-faint);
@@ -400,4 +404,9 @@
     position-area: bottom span-left;
     box-shadow: 0 8px 18px -8px rgb(0 0 0 / 0.5);
   }
+}
+
+/* On the light header's grey, hovers take a deeper grey so they still show. */
+:root:not([data-theme='dark']) header.app-header {
+  --c-paper-sunk: #dae0dc;
 }

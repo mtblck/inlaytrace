@@ -1708,7 +1708,7 @@ export default function App() {
       }}
     >
       {/* On a phone the page scrolls under it until a trace opens; then the layout fits the screen. */}
-      <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-rule bg-paper px-4 lg:static lg:px-5">
+      <header className="app-header sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-rule bg-header px-4 lg:static lg:px-5">
         <div className="flex items-baseline gap-3">
           <h1 className="leading-none">
             {/* The landing page and docs live beside the app, at the site root. */}
@@ -1724,7 +1724,7 @@ export default function App() {
           <p className="hidden text-[13px] text-ink-muted sm:block">Image to SVG, in your browser.</p>
         </div>
         <div className="flex items-center gap-1 text-[13px]">
-          {/* A phone's undo and redo: on a wide screen they are at the foot of the tool rail. */}
+          {/* A phone's undo and redo: on a wide screen they are in the mode bar above the canvas. */}
           {docked && workMode !== 'trace' && (
             <div role="group" aria-label="History" className="flex gap-0.5 lg:hidden">
               <IconButton label="Undo" disabled={history.past.length === 0} onClick={() => historyStep('undo')}>
