@@ -54,6 +54,9 @@
     "onnxruntime-node": "1.31.1"
   },
   "overrides": {
-    "postcss-nested": "^7.0.2"
+    "postcss-nested": "^7.0.2",
+    "@vercel/cli-config": {
+      "zod": "^4.6.7"
+    }
   }
 }
