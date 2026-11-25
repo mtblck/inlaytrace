@@ -14,7 +14,7 @@ export type WorkMode = 'clean' | 'trace' | 'edit'
 
 export const MODE_LABEL: Record<WorkMode, string> = { clean: 'Clean up', trace: 'Trace', edit: 'Edit' }
 
-/** The mode tabs, above the canvas. `edited` marks Edit when the drawing has shape edits. */
+/** The mode tabs, above the canvas, the active one in the primary buttons' mustard. `edited` marks Edit when the drawing has shape edits. */
 export function ModeSwitch({ modes, mode, onMode, edited }: { modes: WorkMode[]; mode: WorkMode; onMode: (m: WorkMode) => void; edited: boolean }) {
   return (
     <div role="tablist" aria-label="Mode" className="flex shrink-0 items-center gap-px overflow-hidden rounded-md border border-rule bg-rule" data-modes={modes.join(' ')}>
@@ -26,11 +26,11 @@ export function ModeSwitch({ modes, mode, onMode, edited }: { modes: WorkMode[];
           aria-selected={mode === m}
           aria-controls={`panel-${m}`}
           onClick={() => onMode(m)}
-          className={`flex items-center px-2.5 py-1 text-[13px] sm:px-3.5 ${mode === m ? 'bg-paper font-medium text-accent' : 'bg-paper-sunk text-ink hover:bg-paper'}`}
+          className={`flex items-center px-2.5 py-1 text-[13px] sm:px-3.5 ${mode === m ? 'bg-mark font-medium text-mark-ink' : 'bg-paper-sunk text-ink hover:bg-paper'}`}
         >
           {MODE_LABEL[m]}
           {m === 'edit' && edited && (
-            <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent" data-edited="">
+            <span className={`ml-1.5 inline-block h-1.5 w-1.5 rounded-full ${mode === m ? 'bg-mark-ink' : 'bg-accent'}`} data-edited="">
               <span className="sr-only">(edited)</span>
             </span>
           )}
