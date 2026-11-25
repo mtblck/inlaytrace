@@ -68,7 +68,7 @@ import { bounds, effective, fromSlider, snap, step, toSlider, type Zoom } from '
 import { sampleImage } from './lib/sample'
 import { track } from './lib/track'
 import { Canvas, type Overlays, type SelectMode, type Tool, type ViewMode } from './components/Canvas'
-import { ShortcutsDialog } from './components/Shortcuts'
+import { REDO_KEYS, ShortcutsDialog, UNDO_KEYS } from './components/Shortcuts'
 import { ExportOptions } from './components/ExportOptions'
 import { CLEAN_TOOLS, EDIT_TOOLS, ModeSwitch, ToolRail, useWide, type WorkMode } from './components/Workspace'
 import { Dock, DOCK_ICON, MoreMenu, type DockSlot } from './components/Dock'
@@ -1229,10 +1229,6 @@ export default function App() {
       tools={EDIT_TOOLS(strokes, lineTrace)}
       tool={tool}
       onTool={chooseTool}
-      canUndo={history.past.length > 0}
-      canRedo={history.future.length > 0}
-      onUndo={() => historyStep('undo')}
-      onRedo={() => historyStep('redo')}
     />
   )
   const cleanRail = (
@@ -1240,10 +1236,6 @@ export default function App() {
       tools={CLEAN_TOOLS(settings.removeBackground)}
       tool={cleanTool}
       onTool={chooseCleanTool}
-      canUndo={history.past.length > 0}
-      canRedo={history.future.length > 0}
-      onUndo={() => historyStep('undo')}
-      onRedo={() => historyStep('redo')}
     />
   )
   const modeRail = workMode === 'edit' ? rail : workMode === 'clean' ? cleanRail : null
@@ -1659,6 +1651,42 @@ export default function App() {
           ]
         : [view('image', 'Image'), view('type', 'Type'), view('tune', 'Tune'), view('export', 'Export')]
 
+  /** Split, Difference and Vector: beside the mode tabs on a wide screen, in the canvas's foot on a phone. Active in the primary buttons' mustard. */
+  const compare = (
+    <div role="radiogroup" aria-label="Compare" className="flex shrink-0 gap-px overflow-hidden rounded-md border border-rule bg-rule">
+      {(
+        [
+          ['split', 'Split'],
+          ['difference', 'Difference'],
+          ['vector', 'Vector'],
+        ] as const
+      ).map(([v, label]) => (
+        <button
+          key={v}
+          role="radio"
+          aria-checked={mode === v}
+          title={COMPARE_HINT[v]}
+          onClick={() => {
+            viewChosen.current = true
+            setMode(v)
+          }}
+          aria-label={label}
+          className={`px-2.5 py-1 text-[13px] sm:px-3 ${mode === v ? 'bg-mark font-medium text-mark-ink' : 'bg-paper-sunk hover:bg-paper'}`}
+        >
+          {/* "Diff" on a phone, so the row fits one line. */}
+          {v === 'difference' ? (
+            <>
+              <span className="sm:hidden">Diff</span>
+              <span className="hidden sm:inline">{label}</span>
+            </>
+          ) : (
+            label
+          )}
+        </button>
+      ))}
+    </div>
+  )
+
   return (
     <div
       className={`flex flex-col ${docked ? 'h-full' : 'min-h-full lg:h-full'}`}
@@ -1680,7 +1708,7 @@ export default function App() {
       }}
     >
       {/* On a phone the page scrolls under it until a trace opens; then the layout fits the screen. */}
-      <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-rule bg-paper px-4 lg:static lg:px-5">
+      <header className="app-header sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-rule bg-header px-4 lg:static lg:px-5">
         <div className="flex items-baseline gap-3">
           <h1 className="leading-none">
             {/* The landing page and docs live beside the app, at the site root. */}
@@ -1696,7 +1724,7 @@ export default function App() {
           <p className="hidden text-[13px] text-ink-muted sm:block">Image to SVG, in your browser.</p>
         </div>
         <div className="flex items-center gap-1 text-[13px]">
-          {/* A phone's undo and redo: on a wide screen they are at the foot of the tool rail. */}
+          {/* A phone's undo and redo: on a wide screen they are in the mode bar above the canvas. */}
           {docked && workMode !== 'trace' && (
             <div role="group" aria-label="History" className="flex gap-0.5 lg:hidden">
               <IconButton label="Undo" disabled={history.past.length === 0} onClick={() => historyStep('undo')}>
@@ -1747,6 +1775,25 @@ export default function App() {
               {/* The mode switcher, above the canvas; a phone switches modes and tools in the dock instead. */}
               <div className="hidden flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-rule px-4 py-2 lg:flex" data-workspace={workMode}>
                 <ModeSwitch modes={cleanable ? ['clean', 'trace', 'edit'] : ['trace', 'edit']} mode={workMode} onMode={chooseMode} edited={detached} />
+                {workMode !== 'clean' && (
+                  <>
+                    <span aria-hidden="true" className="h-5 w-px bg-rule" />
+                    {compare}
+                  </>
+                )}
+                {workMode !== 'trace' && (
+                  <>
+                    <span aria-hidden="true" className="h-5 w-px bg-rule" />
+                    <div role="group" aria-label="History" className="flex gap-0.5">
+                      <IconButton label="Undo" hint={`Undo (${UNDO_KEYS})`} disabled={history.past.length === 0} onClick={() => historyStep('undo')}>
+                        <UndoIcon />
+                      </IconButton>
+                      <IconButton label="Redo" hint={`Redo (${REDO_KEYS})`} disabled={history.future.length === 0} onClick={() => historyStep('redo')}>
+                        <RedoIcon />
+                      </IconButton>
+                    </div>
+                  </>
+                )}
               </div>
               <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
                 {modeRail && wide && modeRail}
@@ -1834,44 +1881,11 @@ export default function App() {
                   )}
                 </div>
               </div>
-              {/* One row, the same height as the sidebar's footer beside it (lg). The hint shows where there's room for it
-                  (each view's button carries it as a tooltip too) and shortens rather than wrapping. */}
-              <div className={`${workMode === 'clean' ? 'hidden' : 'flex'} flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-rule px-4 py-2 lg:h-13 lg:flex-nowrap lg:py-0`}>
-                <div role="radiogroup" aria-label="Compare" className="flex shrink-0 gap-px overflow-hidden rounded-md border border-rule bg-rule">
-                  {(
-                    [
-                      ['split', 'Split'],
-                      ['difference', 'Difference'],
-                      ['vector', 'Vector'],
-                    ] as const
-                  ).map(([v, label]) => (
-                    <button
-                      key={v}
-                      role="radio"
-                      aria-checked={mode === v}
-                      title={COMPARE_HINT[v]}
-                      onClick={() => {
-                        viewChosen.current = true
-                        setMode(v)
-                      }}
-                      aria-label={label}
-                      className={`px-2.5 py-1 text-[13px] sm:px-3 ${mode === v ? 'bg-paper font-medium text-accent' : 'bg-paper-sunk hover:bg-paper'}`}
-                    >
-                      {/* "Diff" on a phone, so the row fits one line. */}
-                      {v === 'difference' ? (
-                        <>
-                          <span className="sm:hidden">Diff</span>
-                          <span className="hidden sm:inline">{label}</span>
-                        </>
-                      ) : (
-                        label
-                      )}
-                    </button>
-                  ))}
-                </div>
-                <p className="hidden text-[12.5px] text-ink-muted lg:block lg:min-w-0 lg:flex-1 lg:truncate lg:max-[1399px]:hidden" title={COMPARE_HINT[mode]}>
-                  {COMPARE_HINT[mode]}
-                </p>
+              {/* One row, the same height as the sidebar's footer beside it (lg): the overlays and zoom on the left (a wide screen has
+                  Split, Difference and Vector above, beside the modes). The hint shows where there's room for it, at the right
+                  (each view's button carries it as a tooltip too), and shortens rather than wrapping. */}
+              <div className={`${workMode === 'clean' ? 'hidden' : 'flex'} flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-rule px-4 py-2 lg:h-13 lg:flex-nowrap lg:justify-start lg:gap-x-5 lg:py-0`}>
+                {!wide && compare}
                 <div className="flex shrink-0 items-center gap-3" role="group" aria-label="Overlays">
                   <OverlayToggle
                     label="Paths"
@@ -1891,6 +1905,9 @@ export default function App() {
                 <span className="hidden sm:contents">
                   <ZoomControl zoom={zoom} fit={fitScale} onZoom={setZoom} />
                 </span>
+                <p className="hidden text-[12.5px] text-ink-muted lg:block lg:min-w-0 lg:flex-1 lg:truncate lg:text-right lg:max-[1399px]:hidden" title={COMPARE_HINT[mode]}>
+                  {COMPARE_HINT[mode]}
+                </p>
               </div>
             </>
           ) : (
@@ -2185,19 +2202,17 @@ export default function App() {
             </div>
           )}
 
-          {/* No room for a page footer, so one quiet line ends the sidebar. A phone has these in the header's menu. */}
-          <nav aria-label="About Inlay" className="hidden items-center gap-4 border-t border-rule px-5 py-2.5 text-[12px] text-ink-muted lg:flex lg:h-13 lg:py-0">
-            <a href="/docs/overview/" className="hover:text-ink">
+          {/* No room for a page footer, so one quiet line ends the sidebar. A phone has these in the header's menu; Support is the header's tip button. */}
+          <nav aria-label="About Inlay" className="hidden items-center justify-end gap-4 border-t border-rule px-5 py-2.5 text-[12px] text-ink-muted lg:flex lg:h-13 lg:py-0">
+            {/* New tabs, so a trace in progress stays open. */}
+            <a href="/docs/overview/" target="_blank" rel="noopener" className="hover:text-ink">
               Docs
             </a>
-            <a href="/privacy/" className="hover:text-ink">
+            <a href="/privacy/" target="_blank" rel="noopener" className="hover:text-ink">
               Privacy
             </a>
-            <a href="https://github.com/mtblck/inlaytrace" className="hover:text-ink">
+            <a href="https://github.com/mtblck/inlaytrace" target="_blank" rel="noopener" className="hover:text-ink">
               Source
-            </a>
-            <a href="https://ko-fi.com/mtblck" className="hover:text-ink">
-              Support Inlay
             </a>
           </nav>
         </aside>
