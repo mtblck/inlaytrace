@@ -624,7 +624,9 @@ const csp = response?.headers()['content-security-policy'] ?? ''
 check(!csp.includes("'wasm-unsafe-eval'"), "the app page's CSP allows no WebAssembly (only the AI worker may)")
 check(/worker-src[^;]*'self'/.test(csp) && !csp.includes("'sha256-"), "the app gets its own CSP (workers allowed), not the site's")
 check((await page.getByRole('link', { name: 'Inlay', exact: true }).getAttribute('href')) === '/', 'the Inlay wordmark leads to the landing page')
-check((await page.getByRole('navigation', { name: 'About Inlay' }).getByRole('link', { name: 'Privacy' }).getAttribute('href')) === '/privacy/', 'the app links to the privacy page')
+const privacyLink = page.getByRole('navigation', { name: 'About Inlay' }).getByRole('link', { name: 'Privacy' })
+check((await privacyLink.getAttribute('href')) === '/privacy/' && (await privacyLink.getAttribute('target')) === '_blank', 'the app links to the privacy page, in a new tab')
+check((await page.getByRole('navigation', { name: 'About Inlay' }).getByRole('link', { name: /Support/ }).count()) === 0, 'the sidebar footer leaves Support to the header')
 await shot(page, '01-empty')
 
 await page.getByRole('button', { name: 'Try a sample' }).click()
@@ -647,7 +649,10 @@ check((await page.locator('[data-rail]').count()) === 0, 'Trace mode has no tool
 await page.getByRole('tab', { name: /Edit/ }).click()
 check(await viewIs('Vector'), 'starting to edit switches to Vector, hiding the original')
 const rail = page.locator('[data-rail]')
-check((await rail.getByRole('radio').count()) === 8 && (await rail.getByRole('button', { name: 'Undo' }).count()) === 1, 'Edit mode shows the tool rail: Select, Nodes, Mirror, Fill, Pen, Shape, Eraser, Knife, Undo and Redo')
+check((await rail.getByRole('radio').count()) === 8 && (await rail.getByRole('button', { name: 'Undo' }).count()) === 0, 'Edit mode shows the tool rail: Select, Nodes, Mirror, Fill, Pen, Shape, Eraser and Knife')
+// The mode bar: the modes, then Split/Difference/Vector, then Undo and Redo.
+const modeBar = page.locator('[data-workspace]')
+check((await modeBar.getByRole('radiogroup', { name: 'Compare' }).count()) === 1 && (await modeBar.getByRole('group', { name: 'History' }).getByRole('button', { name: 'Undo' }).count()) === 1, 'the mode bar holds the compare views and Undo and Redo')
 await rail.getByRole('radio', { name: 'Nodes' }).click()
 check((await page.locator('#panel-edit h2').first().innerText()) === 'Nodes', 'the panel follows the rail’s tool')
 // Leaving Edit puts its tools away: back on Select, nothing selected, so Delete can't act unseen.
@@ -859,12 +864,15 @@ check(closed, 'Esc closes the shortcuts panel')
 const cut = await page.getByRole('radiogroup', { name: 'Image type' }).locator('.field-hint').evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent))
 check(cut.length === 0, `every preset's description fits (${cut.join(', ') || 'none cut off'})`)
 
-// Inlay is free: the header has a tip button (tipjar) to Ko-fi, in a new tab, and nothing to sign in to or buy.
-const tip = page.locator('header a.tipjar')
+// Inlay is free: the header has a tip button (tipjar) opening a menu of Ko-fi and the GitHub repo, each in a new tab, and nothing to sign in to or buy.
+const tip = page.locator('header button.tipjar')
+await tip.click()
+const tipLinks = await page.locator('.tipjar-list a').evaluateAll((els) => els.map((a) => `${a.getAttribute('href')} ${a.getAttribute('target')}`))
 check(
-  (await tip.count()) === 1 && (await tip.getAttribute('href')) === 'https://ko-fi.com/mtblck' && (await tip.getAttribute('target')) === '_blank' && (await tip.innerText()).includes('Support'),
-  'the header has a Support button linking to Ko-fi in a new tab',
+  (await tip.innerText()).includes('Support') && tipLinks.join() === 'https://ko-fi.com/mtblck _blank,https://github.com/mtblck/inlaytrace _blank' && (await page.locator('.tipjar-list').isVisible()),
+  `the header's Support button opens Ko-fi and the GitHub repo, in new tabs (${tipLinks.join(', ')})`,
 )
+await page.keyboard.press('Escape')
 check(apiRequests.length === 0, `the app never calls /api: no sign-in, credits or HD (${apiRequests.join(', ') || 'no calls'})`)
 
 // Header icons: the keyboard opens the same panel; the tooltip shows on keyboard focus; sun/moon switches theme.

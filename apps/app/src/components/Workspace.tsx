@@ -9,7 +9,6 @@
  */
 import { useSyncExternalStore, type ReactNode } from 'react'
 import type { Tool } from './Canvas'
-import { REDO_KEYS, UNDO_KEYS } from './Shortcuts'
 
 export type WorkMode = 'clean' | 'trace' | 'edit'
 
@@ -117,10 +116,10 @@ export const CLEAN_TOOLS = (removeBackground: boolean): RailTool<keyof typeof CL
 ]
 
 /**
- * The tool rail: the mode's tools, then Undo and Redo. A column beside the
- * canvas on a wide screen, a row in the mode bar on a phone.
+ * The tool rail: the mode's tools, in a column beside the canvas on a wide
+ * screen. Undo and Redo sit in the mode bar above it.
  */
-export function ToolRail<T extends string>(p: { tools: RailTool<T>[]; tool: T; onTool: (t: T) => void; canUndo: boolean; canRedo: boolean; onUndo: () => void; onRedo: () => void }) {
+export function ToolRail<T extends string>(p: { tools: RailTool<T>[]; tool: T; onTool: (t: T) => void }) {
   const btn = 'grid size-8 place-items-center lg:size-9 rounded-md disabled:cursor-not-allowed disabled:text-ink-faint'
   return (
     <div className="flex shrink-0 items-center gap-1 lg:h-full lg:flex-col lg:border-r lg:border-rule lg:px-1.5 lg:py-2" data-rail="">
@@ -141,14 +140,6 @@ export function ToolRail<T extends string>(p: { tools: RailTool<T>[]; tool: T; o
             <span className="sr-only">{t.label}</span>
           </button>
         ))}
-      </div>
-      <div role="group" aria-label="History" className="ml-auto flex gap-1 lg:mt-auto lg:ml-0 lg:flex-col">
-        <button className={`${btn} text-ink-muted hover:bg-paper-sunk hover:text-ink`} disabled={!p.canUndo} onClick={p.onUndo} aria-label="Undo" title={`Undo (${UNDO_KEYS})`}>
-          {icon('M6 4L3 7l3 3M3 7h7.5a4 4 0 010 8H8')}
-        </button>
-        <button className={`${btn} text-ink-muted hover:bg-paper-sunk hover:text-ink`} disabled={!p.canRedo} onClick={p.onRedo} aria-label="Redo" title={`Redo (${REDO_KEYS})`}>
-          {icon('M12 4l3 3-3 3M15 7H7.5a4 4 0 000 8H10')}
-        </button>
       </div>
     </div>
   )

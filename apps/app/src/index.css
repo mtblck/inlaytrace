@@ -245,6 +245,8 @@
     --tipjar-font-size: 13px;
     --tipjar-icon-size: 14px;
     --tipjar-shadow: none;
+    --tipjar-menu-radius: 10px;
+    --tipjar-menu-gap: 6px;
   }
 
   /* Over the canvas while it's tracing or optimising. Fades in after a beat, so a quick
@@ -388,5 +390,14 @@
   [data-phone-show='tune'] [data-phone~='tune'],
   [data-phone-show='export'] [data-phone~='export'] {
     display: block;
+  }
+}
+
+/* The header tip button's menu (Ko-fi and the GitHub repo) hangs from the button's right edge, at the
+   header's right. Unlayered, so it wins over tipjar's own (unlayered) stylesheet. */
+@supports (position-area: bottom) {
+  header .tipjar-list[data-position='inline'] {
+    position-area: bottom span-left;
+    box-shadow: 0 8px 18px -8px rgb(0 0 0 / 0.5);
   }
 }

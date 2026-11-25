@@ -346,13 +346,13 @@ export function MoreMenu(p: { theme: 'light' | 'dark'; onTheme: () => void; supp
             >
               {p.theme === 'dark' ? 'Use light theme' : 'Use dark theme'}
             </button>
-            <a role="menuitem" className={item} href="/docs/overview/">
+            <a role="menuitem" className={item} href="/docs/overview/" target="_blank" rel="noopener">
               Docs
             </a>
-            <a role="menuitem" className={item} href="/privacy/">
+            <a role="menuitem" className={item} href="/privacy/" target="_blank" rel="noopener">
               Privacy
             </a>
-            <a role="menuitem" className={item} href="https://github.com/mtblck/inlaytrace">
+            <a role="menuitem" className={item} href="https://github.com/mtblck/inlaytrace" target="_blank" rel="noopener">
               Source
             </a>
             <a role="menuitem" className={item} href={p.supportUrl} target="_blank" rel="noopener">
