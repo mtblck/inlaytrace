@@ -68,8 +68,7 @@ function inlayTile() {
     `<path d="${circle(SUN.x, SUN.y, SUN.r)}" fill="${C.slot}"/>` +
     `<path d="${backHill}" fill="${C.green}"/>` +
     `<path d="${frontHill}" fill="${C.ink}"/>` +
-    // The sun's shadow falls in the slot, then the sun itself, the one accent.
-    `<path d="${circle(SUN.x + lift.x * 0.4, SUN.y + lift.y * 0.4 + 6, SUN.r)}" fill="#000" fill-opacity="0.12"/>` +
+    // The sun, the one accent, lifted off its slot. No shadow: Inlay's output has none.
     `<path d="${circle(SUN.x + lift.x, SUN.y + lift.y, SUN.r)}" fill="${C.mark}"/>`
   )
 }
