@@ -4,7 +4,7 @@
 // "split" pattern), seen straight from above on a green cutting mat: the same
 // small landscape twice, once as a coarse pixel tile and once as inlaid
 // vector pieces, with the yellow sun (the one accent, the mark's own colour)
-// being set into its slot. Shapes in the vector tile share their edges
+// in place. No shadows: Inlay's output has none. Shapes in the vector tile share their edges
 // exactly, as the tracer's do.
 //
 //   BRAND_KIT=<brand-kit>/skills/logo/scripts node brand/portfolio/draw.mjs
@@ -18,7 +18,7 @@ const { circle, rect, svg, write } = await import(join(kit, 'brand.mjs'))
 const here = dirname(fileURLToPath(import.meta.url))
 
 const C = {
-  mat: '#23443a', matLine: '#2a4d42', paper: '#f5f6f2', slot: '#dde3df', green: '#23614c', ink: '#16201c',
+  mat: '#23443a', matLine: '#2a4d42', paper: '#f5f6f2', green: '#23614c', ink: '#16201c',
   mark: '#f2c230', ochre: '#c9a94a', onMat: '#b3c0b8',
 }
 
@@ -60,16 +60,13 @@ function pixelTile() {
   return [...byColour].map(([fill, d]) => `<path d="${d}" fill="${fill}"/>`).join('')
 }
 
-/** The inlay tile: the same picture as pieces, with the sun lifted out of its slot and about to drop in. */
+/** The inlay tile: the same picture as pieces that fit together exactly, the sun (the one accent) in its place. */
 function inlayTile() {
-  const lift = { x: 26, y: -30 }
   return (
     `<rect width="${T}" height="${T}" fill="${C.paper}"/>` +
-    `<path d="${circle(SUN.x, SUN.y, SUN.r)}" fill="${C.slot}"/>` +
     `<path d="${backHill}" fill="${C.green}"/>` +
     `<path d="${frontHill}" fill="${C.ink}"/>` +
-    // The sun, the one accent, lifted off its slot. No shadow: Inlay's output has none.
-    `<path d="${circle(SUN.x + lift.x, SUN.y + lift.y, SUN.r)}" fill="${C.mark}"/>`
+    `<path d="${circle(SUN.x, SUN.y, SUN.r)}" fill="${C.mark}"/>`
   )
 }
 
@@ -97,7 +94,7 @@ function scene(W, H, { size, gap, title }) {
 }
 
 export const alt =
-  'On a green cutting mat, the same small landscape of two hills and a sun appears twice, first as a coarse grid of square pixels and then as smooth pieces that fit together, with the yellow sun being lowered into its round slot.'
+  'On a green cutting mat, the same small landscape of two hills and a sun appears twice, first as a coarse grid of square pixels and then as smooth pieces that fit together, with the sun now a crisp yellow disc.'
 
 write(join(here, 'cover.svg'), scene(2400, 800, { title: alt, size: 580, gap: 200 }))
 write(join(here, 'cover-mobile.svg'), scene(1000, 800, { title: alt, size: 270, gap: 60 }))

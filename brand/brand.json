@@ -118,7 +118,7 @@
   "portfolio": {
     "cover": "portfolio/cover.svg",
     "mobile": "portfolio/cover-mobile.svg",
-    "alt": "On a green cutting mat, the same small landscape of two hills and a sun appears twice, first as a coarse grid of square pixels and then as smooth pieces that fit together, with the yellow sun being lowered into its round slot.",
+    "alt": "On a green cutting mat, the same small landscape of two hills and a sun appears twice, first as a coarse grid of square pixels and then as smooth pieces that fit together, with the sun now a crisp yellow disc.",
     "background": "#23443a"
   },
   "clearSpace": 0.25,
