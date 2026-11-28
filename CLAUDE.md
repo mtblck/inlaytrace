@@ -46,7 +46,7 @@ Marking it ready also triggers the Claude review workflow.
   the app reads its defaults from there and must pass `shapes` and `closeGaps` explicitly, or the preset's default wins.
   Re-score any preset change (`score`, and `score:photos` for Poster) before shipping.
 - **No GPL/AGPL in the bundle** (no Potrace, no `@imgly/*`); AI weights must be
-  MIT/BSD/Apache (`apps/app/public/models/NOTICE.txt`: U²-Net Apache, Real-ESRGAN BSD). Repo is MIT.
+  MIT/BSD/Apache (`apps/app/public/models/NOTICE.txt`: U²-Net Apache, Real-ESRGAN BSD). Repo is MIT, except `brand/` (the name and logos), which is all rights reserved (ADR 0007).
 - **Paths:** one Vercel project (`img-to-svg`) at inlaytrace.com: site at `/`, docs at `/docs/`, app at
   `/app/` (Vite `base`, built to the root's `dist/app`). The old `/tools/img-to-svg/(.*)` must keep
   redirecting (308, absolute) to `https://inlaytrace.com/app/$1`; `hosting:check` guards it, and

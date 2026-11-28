@@ -70,11 +70,8 @@ function inlayTile() {
   )
 }
 
-/** A tile placed at (x, y) scaled to `size`, with one soft shadow straight below it (top-down light). */
-const tile = (body, x, y, size) => {
-  const s = size / T
-  return `<rect x="${x + 10}" y="${y + 14}" width="${size}" height="${size}" fill="#000" fill-opacity="0.12"/>` + `<g transform="translate(${f(x)} ${f(y)}) scale(${f(s * 1e4) / 1e4})">${body}</g>`
-}
+/** A tile placed at (x, y) scaled to `size`, flat on the mat (no shadow). */
+const tile = (body, x, y, size) => `<g transform="translate(${f(x)} ${f(y)}) scale(${f((size / T) * 1e4) / 1e4})">${body}</g>`
 
 function scene(W, H, { size, gap, title }) {
   const cx = W / 2, cy = H / 2 - 10
