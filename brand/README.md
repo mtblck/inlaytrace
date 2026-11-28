@@ -15,8 +15,16 @@ typeface), outlined so it never depends on the font being installed.
   PDFs are vector, for print), `icons/` holds the favicons, app icons and
   manifest snippet, `social/` the link-preview image and avatar, and `templates/`
   the email signature, business card (print PDF with bleed), slide template
-  (`.pptx`) and social posts (square, portrait, story, Ko-fi cover, X header). The export
+  (`.pptx`) and social posts (square, portrait, story, X header), `web/` the
+  website palette (OKLCH scales and light and dark roles as CSS, Tailwind v4 and
+  design tokens, with a contrast report), and `portfolio/` the case-study and
+  Ko-fi covers (wide and phone), a square icon and their alt text. The export
   also writes `inlay-brand-kit.zip` of all of it; that one isn't committed.
+- `portfolio/draw.mjs` draws the covers (`draw.mjs` runs it): the same small
+  landscape as pixels and as inlaid pieces, on the cutting mat.
+- `LICENSE` and `TRADEMARKS.md`: the Inlay name, logos and everything here are
+  all rights reserved, not MIT like the code; `TRADEMARKS.md` says what anyone
+  may do with them without asking.
 
 The favicons and app icons in `apps/app/public/` and `apps/site/public/` are
 copied from `kit/icons/`.

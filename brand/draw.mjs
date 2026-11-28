@@ -57,6 +57,7 @@ for (const [layout, name] of [['horizontal', 'logo-horizontal'], ['stacked', 'lo
   write(out(`${name}-mono.svg`), svg({ w: m.w, h: m.h, title: 'Inlay', body: m.body }))
 }
 
+const { alt: PORTFOLIO_ALT } = await import('./portfolio/draw.mjs')
 write(out('brand.json'), JSON.stringify({
   name: 'Inlay',
   tagline: 'Trace images into vector shapes that fit together.',
@@ -83,6 +84,17 @@ write(out('brand.json'), JSON.stringify({
   contact: { name: 'Your Name', role: 'Role', email: 'you@inlaytrace.com' },
   // Templates sit on the mat green; the email logo is served by the site (apps/site/public/brand/).
   templates: { background: C.mat, email: { logoUrl: 'https://inlaytrace.com/brand/email-logo.png' } },
+  // Every part of the kit (brand-kit 1.7+); edit the list to make fewer.
+  exports: 'all',
+  // The website palette grows from the green the site already uses for buttons and links
+  // (Ink, the primary, is near-black and would give a grey brand scale).
+  palette: { brand: C.green },
+  // The direction the logo was locked under, so a later refresh starts from it.
+  direction: { words: ['precise', 'calm', 'crafted'], pairs: { tone: 'serious', era: 'modern', volume: 'quiet', finish: 'between' }, lives: 'web', weirdness: 2 },
+  // The brand's own LICENSE and TRADEMARKS.md (brand-kit 1.6+): the name and logos are not MIT.
+  legal: { owner: 'Matt Black', contact: 'hello@inlaytrace.com', codeLicense: 'MIT' },
+  // Case-study and Ko-fi art (brand-kit 1.8+), drawn by portfolio/draw.mjs.
+  portfolio: { cover: 'portfolio/cover.svg', mobile: 'portfolio/cover-mobile.svg', alt: PORTFOLIO_ALT, background: C.mat },
   clearSpace: 0.25,
   pngWidths: [512, 1024],
   out: 'kit',

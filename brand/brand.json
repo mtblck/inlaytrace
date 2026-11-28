@@ -91,6 +91,36 @@
       "logoUrl": "https://inlaytrace.com/brand/email-logo.png"
     }
   },
+  "exports": "all",
+  "palette": {
+    "brand": "#23614c"
+  },
+  "direction": {
+    "words": [
+      "precise",
+      "calm",
+      "crafted"
+    ],
+    "pairs": {
+      "tone": "serious",
+      "era": "modern",
+      "volume": "quiet",
+      "finish": "between"
+    },
+    "lives": "web",
+    "weirdness": 2
+  },
+  "legal": {
+    "owner": "Matt Black",
+    "contact": "hello@inlaytrace.com",
+    "codeLicense": "MIT"
+  },
+  "portfolio": {
+    "cover": "portfolio/cover.svg",
+    "mobile": "portfolio/cover-mobile.svg",
+    "alt": "On a green cutting mat, the same small landscape of two hills and a sun appears twice, first as a coarse grid of square pixels and then as smooth pieces that fit together, with the sun now a crisp yellow disc.",
+    "background": "#23443a"
+  },
   "clearSpace": 0.25,
   "pngWidths": [
     512,

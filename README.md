@@ -103,3 +103,7 @@ Inlay is free. If it has saved you time, you can [buy it a coffee on Ko-fi](http
 MIT. SVGO, fflate and paper.js are MIT. VTracer (MIT OR Apache-2.0) is only a
 benchmark in the scoring scripts, not part of the app or the package. Potrace
 (GPL) and the `@imgly` packages (AGPL) are deliberately not used.
+
+The code is MIT. The Inlay name and logos, and everything in `brand/` (and its
+copies in `apps/app/public/`, `apps/site/public/` and the site and app headers),
+are not; see [`brand/LICENSE`](brand/LICENSE) and [`brand/TRADEMARKS.md`](brand/TRADEMARKS.md).
